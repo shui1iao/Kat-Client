@@ -1,0 +1,14 @@
+/* Resource-only structure; shared card/table/Acrylic tokens stay authoritative. */
+:root .navcard[data-page="resources"] { --nav-icon:var(--ic-orange); }
+.content.page-resources { container:resources-content / inline-size; }
+.resources-page { display:flex; flex-direction:column; gap:16px; min-width:0; }
+.resources-page .res-head { min-height:56px; padding:12px 20px; gap:8px; border-bottom:1px solid var(--line); }
+.resources-page .res-row { grid-template-columns:72px minmax(0,1fr) 80px 72px 104px 28px; column-gap:16px; }
+.resources-page .res-list { overflow-x:hidden; scrollbar-gutter:auto; }
+.resources-page .resource-errors { padding:12px 20px; color:var(--bad); background:var(--bad-soft); border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
+.resources-page .resource-errors p { margin:0; }
+.resources-page .resource-errors p+p { margin-top:8px; }
+@container resources-content (width < 760px) {
+  .resources-page .res-row { grid-template-columns:58px minmax(0,1fr) 52px 60px 88px 28px; column-gap:8px; padding:0 12px; }
+  .resources-page .res-head { padding:12px; }
+}

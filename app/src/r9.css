@@ -1,0 +1,28 @@
+/* R9: existing variables/palette; only contracted cards, modal and alignment. */
+.live-subs.sub-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.live-subs .sub-card{padding:16px;min-width:0;min-height:0;margin:0;gap:0}
+.sub-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.sub-head>svg{flex:none;color:var(--text-2)}
+.sub-head h3{font-size:15px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;margin:0}
+.live-subs .sc-meta{display:flex;flex-direction:column;flex-wrap:nowrap;gap:6px;font-size:12px;color:var(--text-2)}
+.live-subs .sc-meta>span:nth-child(2){color:var(--text-3)}
+.sub-failure{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--bad);font-size:12px}
+.subscription-modal .form{display:flex;flex-direction:column;gap:16px}
+.subscription-modal .seg{align-self:flex-start}
+.subscription-modal .sub-secret{position:relative;display:flex;align-items:center}
+.sub-secret input{width:100%;padding-right:64px}
+.sub-secret-actions{position:absolute;right:6px;display:flex;gap:2px}
+.subscription-modal textarea{resize:vertical;min-height:132px}
+.sub-content-label{display:flex;justify-content:space-between;align-items:center;color:var(--text-2);font-size:12px}
+.sub-help,.probe-help,.modal-note{color:var(--text-2);font-size:12px;line-height:18px;margin:0}
+.modal-note{margin-right:auto;text-align:left}
+.subscription-modal .form-error{font-size:12px;margin:0}
+.settings-page{align-items:stretch}
+.main{position:relative}
+.main>.status-strip{position:absolute;z-index:40;top:12px;left:24px;right:24px;margin:0;box-shadow:var(--shadow)}
+
+.live-subs .sc-meta>span{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-basis:auto}
+.live-subs .sc-meta>span+span::before{content:none}
+
+.main>.status-strip{pointer-events:none}
+.main>.status-strip :is(.ib,.btn){pointer-events:auto}

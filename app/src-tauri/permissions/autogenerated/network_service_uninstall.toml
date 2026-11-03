@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-network-service-uninstall"
+description = "Enables the network_service_uninstall command without any pre-configured scope."
+commands.allow = ["network_service_uninstall"]
+
+[[permission]]
+identifier = "deny-network-service-uninstall"
+description = "Denies the network_service_uninstall command without any pre-configured scope."
+commands.deny = ["network_service_uninstall"]

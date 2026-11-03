@@ -1,0 +1,1 @@
+Twemoji Country Flags from country-flag-emoji-polyfill 0.1.10. Twitter Twemoji graphics: CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Copyright Twitter, Inc and other contributors. Font/polyfill author and license: see accompanying license. Bundled locally, no CDN. Font source https://github.com/talkjs/country-flag-emoji-polyfill

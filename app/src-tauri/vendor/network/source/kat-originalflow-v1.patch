@@ -1,0 +1,458 @@
+--- a/main.go
++++ b/main.go
+@@ -12,6 +12,7 @@
+ 	_ "github.com/xjasonlyu/tun2socks/v2/dns"
+ 	"github.com/xjasonlyu/tun2socks/v2/engine"
+ 	"github.com/xjasonlyu/tun2socks/v2/internal/version"
++	"github.com/xjasonlyu/tun2socks/v2/katflow"
+ 	"github.com/xjasonlyu/tun2socks/v2/log"
+ )
+ 
+@@ -39,6 +40,7 @@
+ 	flag.StringVar(&key.TUNPreUp, "tun-pre-up", "", "Execute a command before TUN device setup")
+ 	flag.StringVar(&key.TUNPostUp, "tun-post-up", "", "Execute a command after TUN device setup")
+ 	flag.BoolVarP(&versionFlag, "version", "v", false, "Show version and then quit")
++	katflow.Flags()
+ 	flag.Parse()
+ }
+ 
+@@ -59,6 +61,11 @@
+ 		}
+ 	}
+ 
++	if err := katflow.Start(); err != nil {
++		fmt.Fprintln(os.Stderr, "Kat original-flow channel unavailable")
++		os.Exit(1)
++	}
++	defer katflow.Stop()
+ 	engine.Insert(key)
+ 
+ 	engine.Start()
+--- a/proxy/socks5/socks5.go
++++ b/proxy/socks5/socks5.go
+@@ -4,9 +4,11 @@
+ 	"context"
+ 	"errors"
+ 	"fmt"
++	"github.com/xjasonlyu/tun2socks/v2/katflow"
+ 	"io"
+ 	"net"
+ 	"net/url"
++	"sync"
+ 
+ 	"github.com/xjasonlyu/tun2socks/v2/dialer"
+ 	M "github.com/xjasonlyu/tun2socks/v2/metadata"
+@@ -55,9 +57,16 @@
+ 	}
+ 	utils.SetKeepAlive(c)
+ 
+-	defer func(c net.Conn) {
+-		utils.SafeConnClose(c, err)
+-	}(c)
++	defer func() { utils.SafeConnClose(c, err) }()
++	if katflow.Enabled() {
++		closeFlow, e := katflow.Register(metadata, c, c.LocalAddr().String(), c.RemoteAddr().String())
++		if e != nil {
++			err = e
++			c.Close()
++			return nil, err
++		}
++		c = katflow.Wrap(c, closeFlow)
++	}
+ 
+ 	var user *socks5.User
+ 	if ss.user != "" {
+@@ -71,7 +80,7 @@
+ 	return c, err
+ }
+ 
+-func (ss *Socks5) DialUDP(*M.Metadata) (_ net.PacketConn, err error) {
++func (ss *Socks5) DialUDP(metadata *M.Metadata) (_ net.PacketConn, err error) {
+ 	if ss.unix {
+ 		return nil, fmt.Errorf("%w when unix domain socket is enabled", errors.ErrUnsupported)
+ 	}
+@@ -118,17 +127,19 @@
+ 		return nil, fmt.Errorf("client handshake: %w", err)
+ 	}
+ 
+-	pc, err := dialer.ListenPacket("udp", "")
++	bindLocal := ""
++	if katflow.Enabled() {
++		bindLocal = "127.0.0.1:0"
++	}
++	pc, err := dialer.ListenPacket("udp", bindLocal)
+ 	if err != nil {
+ 		return nil, fmt.Errorf("listen packet: %w", err)
+ 	}
+ 
+-	go func() {
+-		io.Copy(io.Discard, c)
+-		c.Close()
+-		// A UDP association terminates when the TCP connection that the UDP
+-		// ASSOCIATE request arrived on terminates. RFC1928
+-		pc.Close()
++	defer func() {
++		if err != nil && pc != nil {
++			pc.Close()
++		}
+ 	}()
+ 
+ 	bindAddr := addr.UDPAddr()
+@@ -144,14 +155,28 @@
+ 		bindAddr.IP = udpAddr.IP
+ 	}
+ 
+-	return &socksPacketConn{PacketConn: pc, rAddr: bindAddr, tcpConn: c}, nil
++	closeFlow := func() {}
++	if katflow.Enabled() {
++		var e error
++		closeFlow, e = katflow.Register(metadata, c, pc.LocalAddr().String(), bindAddr.String())
++		if e != nil {
++			pc.Close()
++			return nil, e
++		}
++	}
++	result := &socksPacketConn{PacketConn: pc, rAddr: bindAddr, tcpConn: c, closeFlow: closeFlow}
++	go func() { io.Copy(io.Discard, c); result.Close() }()
++	return result, nil
+ }
+ 
+ type socksPacketConn struct {
+ 	net.PacketConn
+ 
+-	rAddr   net.Addr
+-	tcpConn net.Conn
++	rAddr     net.Addr
++	tcpConn   net.Conn
++	closeFlow func()
++	closeOnce sync.Once
++	closeErr  error
+ }
+ 
+ func (pc *socksPacketConn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
+@@ -190,8 +215,14 @@
+ }
+ 
+ func (pc *socksPacketConn) Close() error {
+-	pc.tcpConn.Close()
+-	return pc.PacketConn.Close()
++	pc.closeOnce.Do(func() {
++		if pc.closeFlow != nil {
++			pc.closeFlow()
++		}
++		pc.tcpConn.Close()
++		pc.closeErr = pc.PacketConn.Close()
++	})
++	return pc.closeErr
+ }
+ 
+ func Parse(u *url.URL) (proxy.Proxy, error) {
+--- a/katflow/handles_other.go
++++ b/katflow/handles_other.go
+@@ -0,0 +1,11 @@
++//go:build !windows
++
++package katflow
++
++import (
++	"errors"
++	"time"
++)
++
++func openHandles() error      { return errors.New("Kat inherited flow channel requires Windows") }
++func readACK(time.Time) error { return errors.New("unsupported") }
+--- a/katflow/handles_windows.go
++++ b/katflow/handles_windows.go
+@@ -0,0 +1,43 @@
++package katflow
++
++import (
++	"errors"
++	"golang.org/x/sys/windows"
++	"os"
++	"syscall"
++	"time"
++	"unsafe"
++)
++
++var peek = windows.NewLazySystemDLL("kernel32.dll").NewProc("PeekNamedPipe")
++
++func openHandles() error {
++	for _, h := range []uint64{readHandle, writeHandle} {
++		typ, err := windows.GetFileType(windows.Handle(h))
++		if err != nil || typ != windows.FILE_TYPE_PIPE {
++			return errors.New("flow handle is not a pipe")
++		}
++	}
++	wire.read = os.NewFile(uintptr(readHandle), "kat-flow-ack")
++	wire.write = os.NewFile(uintptr(writeHandle), "kat-flow-register")
++	return nil
++}
++func readACK(deadline time.Time) error {
++	for time.Now().Before(deadline) {
++		var available uint32
++		r, _, _ := peek.Call(uintptr(readHandle), 0, 0, 0, uintptr(unsafe.Pointer(&available)), 0)
++		if r == 0 {
++			return errors.New("flow ack pipe closed")
++		}
++		if available > 0 {
++			b := []byte{0}
++			n, err := wire.read.Read(b)
++			if err == nil && n == 1 && b[0] == 1 {
++				return nil
++			}
++			return errors.New("flow registration refused")
++		}
++		time.Sleep(time.Millisecond)
++	}
++	return syscall.ETIMEDOUT
++}
+--- a/katflow/wire.go
++++ b/katflow/wire.go
+@@ -0,0 +1,147 @@
++// Package katflow is a Kat-only patch on the pinned upstream. It exposes no
++// listener. Metadata is sent solely over explicit inherited anonymous handles.
++package katflow
++
++import (
++	"encoding/binary"
++	"encoding/json"
++	"errors"
++	flag "github.com/spf13/pflag"
++	M "github.com/xjasonlyu/tun2socks/v2/metadata"
++	"io"
++	"net"
++	"sync"
++	"time"
++)
++
++var readHandle, writeHandle uint64
++var session string
++var acknowledge = readACK
++var wire struct {
++	sync.Mutex
++	seq         uint64
++	read, write io.ReadWriteCloser
++	dead        bool
++}
++
++func Flags() {
++	flag.Uint64Var(&readHandle, "kat-flow-read", 0, "Kat inherited acknowledgement handle")
++	flag.Uint64Var(&writeHandle, "kat-flow-write", 0, "Kat inherited registration handle")
++	flag.StringVar(&session, "kat-flow-session", "", "Kat flow session")
++	_ = flag.CommandLine.MarkHidden("kat-flow-read")
++	_ = flag.CommandLine.MarkHidden("kat-flow-write")
++	_ = flag.CommandLine.MarkHidden("kat-flow-session")
++}
++func Enabled() bool { return readHandle != 0 || writeHandle != 0 || session != "" }
++func Start() error {
++	if !Enabled() {
++		return nil
++	}
++	if readHandle == 0 || writeHandle == 0 || readHandle == writeHandle || len(session) != 64 {
++		return errors.New("invalid inherited flow handles")
++	}
++	return openHandles()
++}
++func Stop() { wire.Lock(); defer wire.Unlock(); failLocked() }
++func failLocked() {
++	wire.dead = true
++	if wire.read != nil {
++		wire.read.Close()
++	}
++	if wire.write != nil {
++		wire.write.Close()
++	}
++}
++
++type flow struct {
++	ID                 uint64 `json:"id"`
++	Network            string `json:"network"`
++	Source             string `json:"source"`
++	Destination        string `json:"destination"`
++	MidSource          string `json:"mid_source"`
++	MidDestination     string `json:"mid_destination"`
++	ControlSource      string `json:"control_source"`
++	ControlDestination string `json:"control_destination"`
++}
++
++func exchangeLocked(msg any) error {
++	if wire.dead || wire.read == nil || wire.write == nil {
++		return errors.New("original-flow channel closed")
++	}
++	b, err := json.Marshal(msg)
++	if err != nil || len(b) > 2048 {
++		return errors.New("invalid flow message")
++	}
++	frame := make([]byte, 4+len(b))
++	binary.LittleEndian.PutUint32(frame, uint32(len(b)))
++	copy(frame[4:], b)
++	// One outstanding request, smaller than the inherited pipe buffer. The
++	// preceding ACK proves the server consumed its entire preceding frame.
++	if n, err := wire.write.Write(frame); err != nil || n != len(frame) {
++		failLocked()
++		return errors.New("flow registration write failed")
++	}
++	if err := acknowledge(time.Now().Add(2 * time.Second)); err != nil {
++		failLocked()
++		return err
++	}
++	return nil
++}
++func Register(m *M.Metadata, c net.Conn, midSource, midDestination string) (func(), error) {
++	if !Enabled() {
++		return func() {}, nil
++	}
++	wire.Lock()
++	defer wire.Unlock()
++	wire.seq++
++	id := wire.seq
++	f := flow{id, m.Network.String(), m.SourceAddress(), m.DestinationAddress(), midSource, midDestination, c.LocalAddr().String(), c.RemoteAddr().String()}
++	if err := exchangeLocked(struct {
++		Op      string `json:"op"`
++		Version uint32 `json:"version"`
++		Session string `json:"session"`
++		Flow    flow   `json:"flow"`
++	}{"register", 1, session, f}); err != nil {
++		return nil, err
++	}
++	var once sync.Once
++	return func() {
++		once.Do(func() {
++			wire.Lock()
++			defer wire.Unlock()
++			_ = exchangeLocked(struct {
++				Op      string `json:"op"`
++				Version uint32 `json:"version"`
++				Session string `json:"session"`
++				ID      uint64 `json:"id"`
++			}{"close", 1, session, id})
++		})
++	}, nil
++}
++
++type registeredConn struct {
++	net.Conn
++	close func()
++	once  sync.Once
++	err   error
++}
++
++func Wrap(c net.Conn, close func()) net.Conn { return &registeredConn{Conn: c, close: close} }
++func (c *registeredConn) Close() error {
++	c.once.Do(func() { c.close(); c.err = c.Conn.Close() })
++	return c.err
++}
++
++// Preserve the upstream TCP half-close contract across the registration wrapper.
++func (c *registeredConn) CloseRead() error {
++	if v, ok := c.Conn.(interface{ CloseRead() error }); ok {
++		return v.CloseRead()
++	}
++	return nil
++}
++func (c *registeredConn) CloseWrite() error {
++	if v, ok := c.Conn.(interface{ CloseWrite() error }); ok {
++		return v.CloseWrite()
++	}
++	return nil
++}
+--- a/katflow/wire_test.go
++++ b/katflow/wire_test.go
+@@ -0,0 +1,96 @@
++package katflow
++
++import (
++	"encoding/binary"
++	"encoding/json"
++	"errors"
++	M "github.com/xjasonlyu/tun2socks/v2/metadata"
++	"io"
++	"net"
++	"net/netip"
++	"testing"
++	"time"
++)
++
++type memory struct {
++	b      []byte
++	closed bool
++}
++
++func (m *memory) Write(b []byte) (int, error) { m.b = append(m.b, b...); return len(b), nil }
++func (m *memory) Read(b []byte) (int, error)  { return 0, io.EOF }
++func (m *memory) Close() error                { m.closed = true; return nil }
++
++type socket struct {
++	net.Conn
++	closed bool
++}
++
++func (s *socket) LocalAddr() net.Addr  { return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 1234} }
++func (s *socket) RemoteAddr() net.Addr { return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 7891} }
++func (s *socket) Close() error         { s.closed = true; return nil }
++func TestRegisterACKCloseBeforePortRelease(t *testing.T) {
++	oldAck := acknowledge
++	defer func() { acknowledge = oldAck; readHandle = 0; writeHandle = 0; session = "" }()
++	readHandle = 1
++	writeHandle = 2
++	session = "s"
++	w := &memory{}
++	wire.read = &memory{}
++	wire.write = w
++	wire.dead = false
++	wire.seq = 0
++	c := &socket{}
++	acknowledge = func(time.Time) error {
++		if len(w.b) < 4 || c.closed {
++			t.Fatal("ACK/order")
++		}
++		return nil
++	}
++	m := &M.Metadata{Network: M.TCP, SrcIP: netip.MustParseAddr("192.0.2.1"), SrcPort: 555, DstIP: netip.MustParseAddr("1.1.1.1"), DstPort: 443}
++	closeFlow, err := Register(m, c, c.LocalAddr().String(), c.RemoteAddr().String())
++	if err != nil {
++		t.Fatal(err)
++	}
++	n := binary.LittleEndian.Uint32(w.b)
++	var f struct {
++		Flow flow `json:"flow"`
++	}
++	if err := json.Unmarshal(w.b[4:4+n], &f); err != nil || f.Flow.Source != "192.0.2.1:555" || f.Flow.MidSource != "127.0.0.1:1234" {
++		t.Fatal(f, err)
++	}
++	wrapped := Wrap(c, closeFlow)
++	wrapped.Close()
++	wrapped.Close()
++	if !c.closed {
++		t.Fatal("port not released")
++	}
++	rest := w.b[4+n:]
++	n = binary.LittleEndian.Uint32(rest)
++	var op struct {
++		Op string `json:"op"`
++		ID uint64 `json:"id"`
++	}
++	json.Unmarshal(rest[4:4+n], &op)
++	if op.Op != "close" || op.ID != f.Flow.ID || len(rest) != int(4+n) {
++		t.Fatal(op)
++	}
++}
++func TestFailedACKInvalidatesChannel(t *testing.T) {
++	old := acknowledge
++	defer func() { acknowledge = old; readHandle = 0; writeHandle = 0; session = "" }()
++	readHandle = 1
++	writeHandle = 2
++	session = "s"
++	r, w := &memory{}, &memory{}
++	wire.read = r
++	wire.write = w
++	wire.dead = false
++	acknowledge = func(time.Time) error { return errors.New("timeout") }
++	wire.Lock()
++	err := exchangeLocked(map[string]int{"version": 1})
++	wire.Unlock()
++	if err == nil || !wire.dead || !r.closed || !w.closed {
++		t.Fatal(err)
++	}
++}

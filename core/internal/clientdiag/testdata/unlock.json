@@ -1,0 +1,324 @@
+[
+  {
+    "service": "ChatGPT",
+    "want": "unlocked",
+    "evidence": "Typed successful official anonymous compliance policy plus valid service trace; anonymous regional acceptance, not full Web login",
+    "pages": [
+      {
+        "url": "https://api.openai.com/compliance/cookie_requirements",
+        "body": "{\"requires_cookie_consent\":false}",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      },
+      {
+        "url": "https://chat.openai.com/cdn-cgi/trace",
+        "body": "ip=203.0.113.9\nloc=JP\n",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "ChatGPT",
+    "want": "blocked",
+    "evidence": "Observed 2026-11-02 official anonymous compliance negative structure; no sentinel/device session",
+    "pages": [
+      {
+        "url": "https://api.openai.com/compliance/cookie_requirements",
+        "body": "{\"error\":{\"code\":\"unsupported_country_region_territory\",\"type\":\"request_forbidden\"}}",
+        "status": 403,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "ChatGPT",
+    "want": "challenge",
+    "evidence": "Cloudflare challenge is not a region verdict",
+    "pages": [
+      {
+        "url": "https://api.openai.com/compliance/cookie_requirements",
+        "body": "<title>Just a moment</title>cf-chl-test",
+        "status": 403,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Netflix",
+    "want": "unlocked",
+    "evidence": "Anonymous requestCountry ALLOW plus corresponding title metadata; no licensed-title gate",
+    "pages": [
+      {
+        "url": "https://www.netflix.com/title/80057281",
+        "body": "<script>netflix.reactContext = {\"models\": {\"geo\": {\"data\": {\"requestCountry\": {\"id\": \"US\", \"status\": \"ALLOW\"}}}, \"nmTitleGQL\": {\"data\": {\"metaData\": {\"videoId\": 80057281, \"isOriginal\": true, \"isAvailable\": true}}}}};</script>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Netflix",
+    "want": "blocked",
+    "evidence": "Explicit requestCountry DENY is a regional denial, not a claim about originals-only",
+    "pages": [
+      {
+        "url": "https://www.netflix.com/title/80057281",
+        "body": "<script>netflix.reactContext = {\"models\": {\"geo\": {\"data\": {\"requestCountry\": {\"id\": \"US\", \"status\": \"DENY\"}}}, \"nmTitleGQL\": {\"data\": {\"metaData\": {\"videoId\": 80057281, \"isOriginal\": true, \"isAvailable\": true}}}}};</script>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Netflix",
+    "want": "blocked",
+    "evidence": "Country DENY and neither original nor licensed available",
+    "pages": [
+      {
+        "url": "https://www.netflix.com/title/80057281",
+        "body": "<script>netflix.reactContext = {\"models\": {\"geo\": {\"data\": {\"requestCountry\": {\"id\": \"US\", \"status\": \"DENY\"}}}, \"nmTitleGQL\": {\"data\": {\"metaData\": {\"videoId\": 80057281, \"isOriginal\": true, \"isAvailable\": false}}}}};</script>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Netflix",
+    "want": "unlocked",
+    "evidence": "HK ALLOW proves anonymous service availability regardless of another licensed title catalogue gap",
+    "pages": [
+      {
+        "url": "https://www.netflix.com/title/80057281",
+        "body": "<script>netflix.reactContext = {\"models\": {\"geo\": {\"data\": {\"requestCountry\": {\"id\": \"HK\", \"status\": \"ALLOW\"}}}, \"nmTitleGQL\": {\"data\": {\"metaData\": {\"videoId\": 80057281, \"isOriginal\": true, \"isAvailable\": true}}}}};</script>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Disney+",
+    "want": "unlocked",
+    "evidence": "Observed public visitor location joined to THAT country product SKU",
+    "pages": [
+      {
+        "url": "https://www.disneyplus.com/",
+        "body": "<script>window.langRegionRedirectProps = {\"location\": \"HK\", \"hasContent\": true, \"countriesConfig\": {\"HK\": {\"commerce\": {\"defaultProduct\": {\"NU\": {\"skuList\": [\"disney_plus_monthly_hk_web\"]}}}}, \"CN\": {\"group\": \"APAC\"}}};</script>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Disney+",
+    "want": "blocked",
+    "evidence": "Official same-service unavailable redirect",
+    "pages": [
+      {
+        "url": "https://www.disneyplus.com/",
+        "body": "",
+        "status": 302,
+        "location": "https://www.disneyplus.com/welcome/unavailable",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Disney+",
+    "want": "unknown",
+    "evidence": "Country map for another visitor is not a positive",
+    "pages": [
+      {
+        "url": "https://www.disneyplus.com/",
+        "body": "<script>window.langRegionRedirectProps = {\"location\": \"CN\", \"hasContent\": true, \"countriesConfig\": {\"US\": {\"commerce\": {\"defaultProduct\": {\"NU\": {\"skuList\": [\"sku\"]}}}}, \"CN\": {\"group\": \"APAC\"}}};</script>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "ChatGPT",
+    "want": "unknown",
+    "evidence": "Bare successful empty JSON is not anonymous service availability",
+    "pages": [
+      {
+        "url": "https://api.openai.com/compliance/cookie_requirements",
+        "body": "{}",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "ChatGPT",
+    "want": "unknown",
+    "evidence": "Unknown JSON error is not an unsupported country",
+    "pages": [
+      {
+        "url": "https://api.openai.com/compliance/cookie_requirements",
+        "body": "{\"error\":{\"code\":\"bad_request\"}}",
+        "status": 403,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Netflix",
+    "want": "unknown",
+    "evidence": "Generic success page has no request-scoped Netflix metadata",
+    "pages": [
+      {
+        "url": "https://www.netflix.com/title/80057281",
+        "body": "<h1>Netflix</h1>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "ChatGPT",
+    "want": "unlocked",
+    "evidence": "Consent required=true is a valid regional policy, not denial",
+    "pages": [
+      {
+        "url": "https://api.openai.com/compliance/cookie_requirements",
+        "body": "{\"requires_cookie_consent\":true,\"error\":null}",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      },
+      {
+        "url": "https://chat.openai.com/cdn-cgi/trace",
+        "body": "ip=203.0.113.9\nloc=DE\n",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "ChatGPT",
+    "want": "unknown",
+    "evidence": "Unknown non-null error cannot be masked by a consent field",
+    "pages": [
+      {
+        "url": "https://api.openai.com/compliance/cookie_requirements",
+        "body": "{\"requires_cookie_consent\":false,\"error\":{\"message\":\"unknown\"}}",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Gemini",
+    "want": "unknown",
+    "evidence": "Structural excerpt of public 2026-11-03 app response (not complete raw body): build marker, sign-in and empty orchestrator are not anonymous acceptance",
+    "pages": [
+      {
+        "url": "https://gemini.google.com/app?hl=en",
+        "body": "<title>Google Gemini</title><script>window.WIZ_global_data = {\"cfb2h\":\"boq_gemini-web-uiserver_20261102.01_p1\",\"eptZe\":\"/_/BardChatUi/\"};</script><a>Sign in</a><chat-app-orchestrator id=\"app-root\"></chat-app-orchestrator>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Gemini",
+    "want": "blocked",
+    "evidence": "Synthetic explicit visitor region-denial sentence, NOT a captured Google response",
+    "pages": [
+      {
+        "url": "https://gemini.google.com/app?hl=en",
+        "body": "<h1>Gemini isn't available in your country yet.</h1>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Gemini",
+    "want": "challenge",
+    "evidence": "Synthetic verification precedes region-denial text",
+    "pages": [
+      {
+        "url": "https://gemini.google.com/app?hl=en",
+        "body": "<p>Our systems have detected unusual traffic from your computer network.</p><h1>Gemini isn't available in your country yet.</h1>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Gemini",
+    "want": "unknown",
+    "evidence": "A country marker and blocklist complement are not Gemini functionality",
+    "pages": [
+      {
+        "url": "https://gemini.google.com/app?hl=en",
+        "body": "<script>const data=[null,2,1,200,\"USA\"];</script><h1>Google Gemini</h1>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Gemini",
+    "want": "unknown",
+    "evidence": "Hidden/template/bundle denial text is not a visitor message",
+    "pages": [
+      {
+        "url": "https://gemini.google.com/app?hl=en",
+        "body": "<script>const text=\"Gemini isn't available in your country yet\"</script><template><h1>Gemini isn't available in your country yet</h1></template><div hidden><h1>Gemini isn't available in your country yet</h1></div>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Gemini",
+    "want": "unknown",
+    "evidence": "A generic HTTP rejection with words about country is not a region denial",
+    "pages": [
+      {
+        "url": "https://gemini.google.com/app?hl=en",
+        "body": "<h1>Gemini isn't available in your country yet.</h1>",
+        "status": 403,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Gemini",
+    "want": "unknown",
+    "evidence": "An ordinary login page is not anonymous functional availability",
+    "pages": [
+      {
+        "url": "https://gemini.google.com/app?hl=en",
+        "body": "<h1>Sign in</h1><button>Continue with Google</button>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  }
+]

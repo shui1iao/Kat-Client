@@ -1,0 +1,27 @@
+//go:build !windows
+
+package clientcore
+
+import (
+	"os"
+	"strconv"
+	"strings"
+)
+
+// processMemoryBytes reports resident set size from /proc when available.
+func processMemoryBytes() (uint64, bool) {
+	b, err := os.ReadFile("/proc/self/status")
+	if err != nil {
+		return 0, false
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if f := strings.Fields(line); len(f) >= 2 && f[0] == "VmRSS:" {
+			kb, err := strconv.ParseUint(f[1], 10, 64)
+			if err != nil {
+				return 0, false
+			}
+			return kb * 1024, true
+		}
+	}
+	return 0, false
+}

@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "tray-menu-controls"
+description = "Read the confirmed tray projection or select its current enabled item; never arbitrary actions."
+commands.allow = ["tray_menu_state", "tray_menu_select"]

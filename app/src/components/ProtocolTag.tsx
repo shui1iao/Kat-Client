@@ -1,0 +1,3 @@
+import type {CSSProperties} from 'react';
+export function protocolInfo(type:string){const t=type.toLowerCase();const names:Record<string,string>={ss:'Shadowsocks',shadowsocks:'Shadowsocks',anytls:'AnyTLS',vless:'VLESS',trojan:'Trojan',hysteria:'Hysteria',hysteria2:'Hysteria2',tuic:'TUIC',socks5:'SOCKS5',http:'HTTP'};const color=t==='ss'||t==='shadowsocks'?'#3B82F6':t==='anytls'?'#10B981':t==='vless'?'#8B5CF6':t==='trojan'?'#F97316':['hysteria','hysteria2','tuic'].includes(t)?'#EC4899':'#64748B';return {label:names[t]??type??'—',color};}
+export function ProtocolTag({type}:{type:string}){const p=protocolInfo(type);return <span className="ktag proto protocol-tag" data-proto={type} style={{'--tag-color':p.color} as CSSProperties}>{p.label||'—'}</span>;}

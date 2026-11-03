@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "tray-menu-local",
+  "description": "Only the fixed packaged tray-menu page; no core, shell, file, generic window or event grants.",
+  "local": true,
+  "windows": ["tray-menu"],
+  "permissions": ["tray-menu-controls"]
+}

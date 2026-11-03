@@ -1,0 +1,1 @@
+Original public crates for MPL obligations and crates with incomplete packaged license files. Checksums are pinned by Cargo.lock; these are unmodified .crate source archives from the verified Cargo cache, not application source or user data.

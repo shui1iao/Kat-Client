@@ -1,0 +1,40 @@
+use super::*;
+// Exact netapi::guid_text production form (8-4-4-16, lower hex), not the 36-char registry form.
+const G1:&str="00000000-0000-0000-0000000000000001";const G2:&str="00000000-0000-0000-0000000000000002";const G0:&str="00000000-0000-0000-00000000000000aa";
+#[derive(Default)]struct Fake{ms:u64,round:u64,alias_at:u64,pending:u64,split:bool,error:u32,change:u8,queries:u64,binds:u64,ticks:u64,late:bool,abort:Option<&'static str>,gid:Option<&'static str>,orphan:u64,gap:u64}
+impl Io for Fake{
+ fn elapsed(&self)->Duration{Duration::from_millis(self.ms)}
+ fn alive(&mut self)->Result<()>{if let Some(c)=self.abort{return Err(Error::new(c,"Synthetic abort"));}Ok(())}
+ fn alias(&mut self)->Result<u64>{if self.ms<self.alias_at{return Err(Error::new("TUN_NOT_READY","Synthetic absent"));}Ok(if self.change==1&&self.queries>0{8}else{7})}
+ fn guid(&mut self,_:u64)->Result<String>{if self.orphan>0&&self.ms<self.orphan{return Ok(G0.into());}if self.orphan>0&&self.ms<self.orphan+self.gap{return Err(Error::new("INTERFACE_IDENTITY","Synthetic vanished"));}Ok(if self.change==2&&self.queries>0{G2}else{self.gid.unwrap_or(G1)}.into())}
+ fn identity(&mut self,_:u64)->Result<Option<String>>{if self.queries>0{if self.change==3{return Ok(None);}if self.change==4{return Err(invalid());}}Ok(Some(self.gid.unwrap_or(G1).into()))}
+ fn bind(&mut self,_:u64,_:&str)->Result<()>{self.binds+=1;Ok(())}
+ fn query(&mut self,l:u64,f:u16)->std::result::Result<(u64,IfSettings),u32>{self.queries+=1;if f==2{self.round+=1;}if self.late{self.ms=10000;}if self.error!=0{return Err(self.error);}if self.round<=self.pending||self.split&&f==23&&self.round==1{return Err(1168);}Ok((if self.change==5{8}else{l},IfSettings{family:if self.change==6{0}else{f},mtu:1500+self.round as u32,metric:20,automatic_metric:true,dad_transmits:1}))}
+ fn preexisting(&self)->Option<(u64,String)>{if self.orphan>0{Some((7,G0.into()))}else{None}}
+ fn tick(&mut self,d:Duration){assert!(d<=Duration::from_millis(100));self.ms+=d.as_millis()as u64;self.ticks+=1;}
+}
+#[test]fn immediate_both_ready_no_extra_tick(){let mut io=Fake::default();let r=wait(&mut io).unwrap();assert_eq!(r.luid,7);assert_eq!(r.originals.map(|s|s.family),[2,23]);assert_eq!((io.queries,io.binds,io.ticks),(2,1,0));}
+#[test]fn rebuild_1168_then_zero_uses_successful_round(){let mut io=Fake{pending:2,..Fake::default()};let r=wait(&mut io).unwrap();assert_eq!(r.originals.map(|s|s.mtu),[1503,1503]);assert_eq!((io.ms,io.binds,io.queries),(200,1,6));}
+#[test]fn split_family_does_not_mix_snapshots(){let mut io=Fake{split:true,..Fake::default()};let r=wait(&mut io).unwrap();assert_eq!(r.originals.map(|s|s.mtu),[1502,1502]);assert_eq!(io.queries,4);}
+#[test]fn permanent_1168_stops_at_original_ten_seconds(){let mut io=Fake{pending:u64::MAX,..Fake::default()};assert_eq!(wait(&mut io).err().unwrap().code,"INTERFACE_QUERY");assert_eq!(io.ms,10000);assert_eq!(io.binds,1);assert_eq!(io.queries,200);}
+#[test]fn alias_never_appears_has_original_error_and_budget(){let mut io=Fake{alias_at:10001,..Fake::default()};assert_eq!(wait(&mut io).err().unwrap().code,"TUN_NOT_READY");assert_eq!((io.ms,io.binds,io.queries),(10000,0,0));}
+#[test]fn alias_at_9900_does_not_reset_family_budget(){let mut io=Fake{alias_at:9900,pending:u64::MAX,..Fake::default()};assert_eq!(wait(&mut io).err().unwrap().code,"INTERFACE_QUERY");assert_eq!((io.ms,io.queries),(10000,2));}
+#[test]fn late_zero_is_not_admitted(){let mut io=Fake{late:true,..Fake::default()};assert_eq!(wait(&mut io).err().unwrap().code,"INTERFACE_QUERY");assert_eq!(io.queries,1);}
+#[test]fn access5_invalid87_and_other_errors_fail_immediately(){for code in [5,87,31]{let mut io=Fake{error:code,..Fake::default()};assert_eq!(wait(&mut io).err().unwrap().code,"INTERFACE_QUERY");assert_eq!((io.ms,io.queries,io.ticks),(0,1,0));}}
+#[test]fn alias_guid_absent_unknown_and_returned_keys_are_not_adopted(){for change in 1..=6{let mut io=Fake{change,..Fake::default()};assert_eq!(wait(&mut io).err().unwrap().code,"INTERFACE_IDENTITY");assert_eq!(io.binds,1);assert_eq!(io.ticks,0);}}
+#[test]fn cancellation_and_lifetime_errors_fail_closed(){for code in ["PIPE_IO","CLIENT_EXITED","TUN_BRIDGE_EXITED"]{let mut io=Fake{abort:Some(code),..Fake::default()};assert_eq!(wait(&mut io).err().unwrap().code,code);assert_eq!((io.binds,io.queries),(0,0));}}
+#[test]fn actual_engine_wiring_and_cleanup_contract_stay_narrow(){let e=include_str!("windows/engine.rs");assert!(e.contains("crate::tun_ready::wait(&mut ReadyAdapter"));assert!(e.contains("for original in ready.originals"));assert!(e.contains("super::service::stop_requested()"));assert!(e.contains("WaitForSingleObject(p.gui.0,0)"));assert!(e.contains("WaitForSingleObject(p.core.0,0)"));assert!(e.contains("netapi::interface_snapshot(l,f)"));assert!(e.contains("crate::transaction::write_ahead(||self.checkpoint(),||netapi::set_interface(l,&installed))?"));let n=include_str!("windows/netapi.rs");let set=n.split("pub fn set_interface").nth(1).unwrap().split("pub fn dns").next().unwrap();assert!(set.contains("GetIpInterfaceEntry(&mut r)}!=0{return Err"));assert!(!set.contains("1168"));let cleanup=e.split("pub fn cleanup").nth(1).unwrap().split("pub fn disable").next().unwrap();assert!(!cleanup.contains("tun_ready"));assert!(cleanup.contains("Err(e)=>{error.get_or_insert(e);}"));let svc=include_str!("windows/service.rs");assert!(svc.contains("pub(super) fn stop_requested()->bool{STOP.load(Ordering::SeqCst)}"));}
+fn production_text(d1:u32,d2:u16,d3:u16,d4:[u8;8])->String{format!("{:08x}-{:04x}-{:04x}-{}",d1,d2,d3,hex::encode(d4))}
+#[test]fn production_guid_text_is_admitted_and_malformed_rejected(){
+ let n=include_str!("windows/netapi.rs");assert!(n.contains(r#"pub fn guid_text(g:GUID)->String{format!("{:08x}-{:04x}-{:04x}-{}",g.data1,g.data2,g.data3,hex::encode(g.data4))}"#));
+ assert!(include_str!("windows/engine.rs").contains("fn guid(&mut self,l:u64)->Result<String>{netapi::guid(l).map(netapi::guid_text)}"));
+ let real:&'static str=Box::leak(production_text(0x1234abcd,0x5678,0x9abc,[0xde,0xad,0xbe,0xef,1,2,3,4]).into_boxed_str());assert_eq!(real,"1234abcd-5678-9abc-deadbeef01020304");
+ let mut io=Fake{gid:Some(real),..Fake::default()};let r=wait(&mut io).unwrap();assert_eq!(r.luid,7);assert_eq!((io.binds,io.queries,io.ticks),(1,2,0));
+ for bad in ["","00000000-0000-0000-0000000000000000","1234abcd-5678-9abc-dead-beef01020304","1234ABCD-5678-9abc-deadbeef01020304","1234abcd-5678-9abc-deadbeef0102030","1234abcd-5678-9abc-deadbeef010203045","1234abcd_5678-9abc-deadbeef01020304","1234abcd-5678-9abc-deadbeef0102030g"]{let mut io=Fake{gid:Some(bad),..Fake::default()};assert_eq!(wait(&mut io).err().unwrap().code,"INTERFACE_IDENTITY");assert_eq!((io.binds,io.queries),(0,0));}
+}
+#[cfg(windows)]#[test]fn real_windows_guid_text_passes_gate(){let g=crate::windows::netapi::guid_text(windows_sys::core::GUID{data1:0x1234abcd,data2:0x5678,data3:0x9abc,data4:[0xde,0xad,0xbe,0xef,1,2,3,4]});assert_eq!(g,"1234abcd-5678-9abc-deadbeef01020304");let mut io=Fake{gid:Some(Box::leak(g.into_boxed_str())),..Fake::default()};assert_eq!(wait(&mut io).unwrap().luid,7);}
+// Bero 2026-10-29 sample: after Off the killed bridge's Wintun adapter stays (same alias/LUID, old GUID, no IP rows)
+// until the next bridge's create removes it; the new adapter may reuse the LUID with a new GUID.
+#[test]fn orphan_of_previous_bridge_is_not_bound_and_new_adapter_is(){let mut io=Fake{orphan:500,gap:300,..Fake::default()};let r=wait(&mut io).unwrap();assert_eq!(r.luid,7);assert_eq!((io.binds,io.ms),(1,800));}
+#[test]fn orphan_never_replaced_stays_bounded_not_ready(){let mut io=Fake{orphan:u64::MAX/2,..Fake::default()};assert_eq!(wait(&mut io).err().unwrap().code,"TUN_NOT_READY");assert_eq!((io.binds,io.queries,io.ms),(0,0,10000));}
+#[test]fn engine_captures_preexisting_identity_before_spawning_bridge(){let e=include_str!("windows/engine.rs");let cap=e.find("let preexisting=netapi::alias_luid(&name)").unwrap();let spawn=e.find("job::spawn_bridge(&self.root,&name,port,&pipes)").unwrap();assert!(cap<spawn);assert!(e.contains("started:Instant::now(),preexisting})?"));}

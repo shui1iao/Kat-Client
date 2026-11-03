@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-tray-sync"
+description = "Enables the tray_sync command without any pre-configured scope."
+commands.allow = ["tray_sync"]
+
+[[permission]]
+identifier = "deny-tray-sync"
+description = "Denies the tray_sync command without any pre-configured scope."
+commands.deny = ["tray_sync"]

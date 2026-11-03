@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-local",
+  "description": "Only the local main WebView. No shell, file, process or remote grants.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "host-controls",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
+}

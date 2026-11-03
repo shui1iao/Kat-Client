@@ -1,0 +1,68 @@
+/* One window material: sidebar, toolbar and content gaps. Native translucency
+   is exposed ONLY by the existing verified DWM gate; an ordinary/unsupported
+   window keeps one solid canvas. No component blur or native changes.
+   Round 7: content cards are opaque surfaces again (user 2026-11-02); card,
+   inset and popover tokens live in hig.css. */
+:root:not([data-theme="light"]), :root[data-theme="light"] {
+  --window-material:var(--canvas);
+  --card-lift:none; --card-lift-hover:none;
+  --mask:rgba(0,0,0,.36);
+}
+:root[data-theme="light"] { --mask:rgba(15,23,42,.18); }
+:root[data-native-acrylic="enabled"] { --window-material:rgba(22,31,48,.52); }
+:root[data-native-acrylic="enabled"][data-theme="light"] { --window-material:rgba(245,246,248,.52); }
+:root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"] { --window-material:rgba(22,31,48,.72); }
+:root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"][data-theme="light"] { --window-material:rgba(245,246,248,.72); }
+
+:root, body, #root { background:transparent; }
+:root .app { background:var(--window-material); }
+:root :is(.body,.workspace,.main,.content,.sidebar,.titlebar,.topbar) { background:transparent; }
+/* Heads/rows nested in an opaque card never add a second wash. Input fields,
+   selected members, warning messages, switches and chart data keep theirs. */
+:root .content :is(.pc-head,.pc-body,
+  .live-node-head,.live-node-row,.live-rule-head,.live-rule-row,.conn-th,
+  .safe-log-head,.safe-log,.res-th,.kernel-log-head,.flow-detail,.gutter,
+  .ge-list,.ge-preview,.dns-policy-block,.subscription-attempts li,
+  .subscription-diagnostic pre) { background:transparent; }
+:root .content :is(.live-node-row,.live-rule-row,.safe-log):hover { background:var(--row-hover); }
+/* Preserve active subscription/member markers as state rather than panel fill. */
+:root .content .sub-card.is-active { box-shadow:inset 0 0 0 1.5px var(--accent); }
+
+/* Remove decorative dividers by actual containers, never by clearing --line or
+   every element's border. Field edges, focus, selected/danger states stay. */
+:root :is(.titlebar,.topbar,.sidebar,.status-strip,.nav-sec) { border:0; box-shadow:none; }
+:root .sidebar-collapsed .nav-sec+.nav-sec { border-top:0; }
+:root .content :is(.card-h,.cfg-h,.rules-head,.conn-head,.res-head,.pc-body,
+  .live-node-head,.live-node-row,.live-rule-head,.live-rule-row,.conn-row,
+  .safe-log-head,.safe-log,.res-row,.kernel-log-head,.kernel-log-row,
+  .set-row,.setting-row-group,.sniff-row-group,.active-bottom,
+  .distribution-totals,.kernel-file,.flow-detail,.vrow,.backup-row,.gutter,
+  .diagnostic-summary,.import-result,.kh-grid,.kh-grid>div,.conn-list li,
+  .dns-policy-table th,.dns-policy-table td) { border:0; }
+:root .content :is(.dns-policy-block,.ge-list,.ge-preview) { border:0; box-shadow:none; }
+:root .settings-page .card>.row-actions { border-top:0; }
+:root .content .diagnostic-table :is(th,td) { background:transparent; border:0; }
+:root .modal :is(header,footer,.ge-h,.ge-pin,.group-advanced,.pe-section,
+  .pe-member-head,.pe-member-row) { border:0; }
+:root .modal :is(.ge-list,.ge-preview,.dns-policy-block) { background:transparent; border:0; }
+:root .chart-tip .chart-tip-total { border-top:0; }
+
+/* Forced colors is the explicit accessibility exception to borderless chrome.
+   These selectors also win if a stale native marker survives an event frame. */
+@media (forced-colors:active) {
+  :root, :root[data-theme],
+  :root[data-native-acrylic="enabled"][data-native-acrylic-focus],
+  :root[data-native-acrylic="enabled"][data-native-acrylic-focus][data-theme] {
+    --window-material:Canvas; --card:Canvas; --pop:Canvas; --hig-card:Canvas; --hig-pop:Canvas;
+    --inset-bg:Canvas; --inset-hover:Canvas; --row-hover:Canvas; --hig-inset:Canvas; --hig-selected:Canvas;
+  }
+  :root, body, #root, :root .app { background:Canvas; }
+  :root .content :is(.card,.pcard,.sub-card,.quick-import),
+  :root :is(.modal,.kat-pop,.tip,.score-tooltip,.toast),
+  :root .sidebar .side-status.kernel-card,
+  :root .top-controls :is(.mode-seg,.tgl.net-row) { background:Canvas; border:1px solid ButtonText; box-shadow:none; }
+  :root .sidebar .kernel-card.is-current { border-color:Highlight; }
+  :root :is(.content,.modal) :is(.inp,.search,.btn),
+  :root .sidebar .side-status .ss-control { border:1px solid ButtonText; }
+  :root:not([data-input="pointer"]) :focus-visible { outline:2px solid Highlight; outline-offset:2px; }
+}

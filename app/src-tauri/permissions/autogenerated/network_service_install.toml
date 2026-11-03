@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-network-service-install"
+description = "Enables the network_service_install command without any pre-configured scope."
+commands.allow = ["network_service_install"]
+
+[[permission]]
+identifier = "deny-network-service-install"
+description = "Denies the network_service_install command without any pre-configured scope."
+commands.deny = ["network_service_install"]

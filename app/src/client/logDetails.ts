@@ -1,0 +1,5 @@
+import type {ConnLogEntry,ConnectionsReply} from './types';
+export function mergeConnectionLogs(old:ConnLogEntry[],incoming:ConnLogEntry[]){let out=[...old];for(const e of incoming){if(e.ended&&e.flow_id&&out.some(x=>x.flow_id===e.flow_id)){out=out.map(x=>x.flow_id===e.flow_id?{...x,...(x.outcome==='ok'&&e.outcome!=='ok'?{outcome:e.outcome,code:e.code,error_text:e.error_text,error_stage:e.error_stage}:{}),up:e.up,down:e.down,start:e.start,end:e.end,duration_ms:e.duration_ms,ended:true}:x)}else out.unshift(e)}return out.slice(0,2000);}
+export function flowLog(e:ConnLogEntry,list:ConnectionsReply|null){if(!e.flow_id||!list)return e;const f=[...list.active,...list.closed].find(x=>x.flow_id===e.flow_id);return f?{...e,up:f.up,down:f.down,start:f.start,end:'end' in f&&typeof f.end==='string'?f.end:undefined,duration_ms:f.duration_ms}:e;}
+export const inboundLabel=(s?:string)=>({tun:'TUN',system_proxy:'系统代理(HTTP)',socks:'SOCKS',http:'HTTP'}[s??'']??'—');
+export const kernelLevelVisible=(entry:string,level:string)=>level==='all'||['debug','info','warn','error'].indexOf(entry)>=['debug','info','warn','error'].indexOf(level);

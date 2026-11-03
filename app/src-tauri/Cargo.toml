@@ -1,0 +1,66 @@
+[package]
+name = "kat-windows-host"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+default-run = "kat-desktop"
+autotests = false
+
+[lib]
+name = "kat_host"
+
+[features]
+default = []
+real-core-integration = []
+desktop = ["dep:tauri", "custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "net"] }
+sha2 = "0.10"
+hex = "0.4"
+
+[target.'cfg(windows)'.dependencies]
+tauri = { version = "=2.12.5", optional = true, features = ["tray-icon", "custom-protocol"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_IO", "Win32_System_Services", "Win32_System_Registry", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_RemoteDesktop", "Win32_System_Environment", "Win32_Storage_FileSystem", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinInet", "Win32_Networking_WinSock", "Win32_Graphics_Gdi", "Win32_UI_HiDpi", "Win32_UI_Controls_Dialogs", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+
+[build-dependencies]
+tauri-build = { version = "=2.7.4", features = [] }
+
+[[bin]]
+name = "kat-desktop"
+path = "src/main.rs"
+required-features = ["desktop"]
+
+[[bin]]
+name = "kat-ipc-test-peer"
+path = "tests/support/peer.rs"
+
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+
+[[bin]]
+name = "kat-proxy-watchdog"
+path = "src/bin/proxy-watchdog.rs"
+
+[[bin]]
+name="kat-network-service"
+path="src/bin/network-service.rs"
+
+[[test]]
+name="supervisor"
+path="tests/supervisor.rs"
+
+[[test]]
+name="real-core"
+path="tests/real_core.rs"
+required-features=["real-core-integration"]
+
+[[bin]]
+name="kat-install-helper"
+path="src/bin/install-helper.rs"
