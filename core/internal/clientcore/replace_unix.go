@@ -4,7 +4,7 @@ package clientcore
 
 import (
 	"context"
-	"os"
+	"github.com/shui1iao/Kat/internal/userio"
 )
 
 // Keep the pre-existing single-rename semantics on non-Windows platforms.
@@ -15,5 +15,5 @@ func replaceAtomicFile(ctx context.Context, tmp, path string, unchanged []func()
 	if e := ctx.Err(); e != nil {
 		return e
 	}
-	return os.Rename(tmp, path)
+	return userio.Rename(tmp, path)
 }

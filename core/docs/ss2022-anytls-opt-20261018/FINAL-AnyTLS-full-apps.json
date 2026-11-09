@@ -1,0 +1,78 @@
+[
+  {
+    "app": "sing-box",
+    "protocol": "anytls",
+    "method": null,
+    "tls": true,
+    "obfs": "none",
+    "uot_mode": "nonconnect",
+    "tcp": "PASS",
+    "reuse_physical_tcp_before_after": [
+      1,
+      1
+    ],
+    "two_distinct_target_reuse": "PASS",
+    "udp": "PASS",
+    "sequential_streams": "PASS",
+    "concurrent_streams": "PASS",
+    "physical_tcp_after_concurrency": 4,
+    "status": "PASS"
+  },
+  {
+    "app": "sing-box",
+    "protocol": "anytls",
+    "method": null,
+    "tls": true,
+    "obfs": "uot-connect",
+    "uot_mode": "connect",
+    "tcp": "PASS",
+    "reuse_physical_tcp_before_after": [
+      1,
+      1
+    ],
+    "two_distinct_target_reuse": "PASS",
+    "udp_frontend": "sing-box direct inbound fixed target (not SOCKS source remapping)",
+    "udp": "PASS",
+    "sequential_streams": "PASS",
+    "concurrent_streams": "PASS",
+    "physical_tcp_after_concurrency": 5,
+    "status": "PASS"
+  },
+  {
+    "app": "mihomo",
+    "protocol": "anytls",
+    "method": null,
+    "tls": true,
+    "obfs": "none",
+    "uot_mode": "nonconnect",
+    "tcp": "PASS",
+    "reuse_physical_tcp_before_after": [
+      1,
+      1
+    ],
+    "two_distinct_target_reuse": "PASS",
+    "udp": "PASS",
+    "sequential_streams": "PASS",
+    "concurrent_streams": "PASS",
+    "physical_tcp_after_concurrency": 5,
+    "status": "PASS"
+  },
+  {
+    "app": "xray",
+    "protocol": "anytls",
+    "obfs": "none",
+    "status": "NOT_SUPPORTED_BY_APP"
+  },
+  {
+    "app": "xray",
+    "protocol": "snell",
+    "obfs": "none",
+    "status": "NOT_SUPPORTED_BY_APP"
+  },
+  {
+    "app": "xray",
+    "protocol": "snell",
+    "obfs": "http",
+    "status": "NOT_SUPPORTED_BY_APP"
+  }
+]

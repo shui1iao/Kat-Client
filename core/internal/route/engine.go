@@ -32,9 +32,13 @@ type Metadata struct {
 	Protocol  string // sniffed: tls | http | quic
 	SniffHost string // sniffed domain; used for domain rules when IP is set
 	// Internal trusted attribution; never accepted from proxy request headers.
-	ProcessName   string
-	ProcessStatus string                       // known | unknown | ambiguous | unsupported | denied | changed | closed
-	ProcessLookup func() (name, status string) // lazy internal provider; never decoded from proxy data
+	// Windows desktop only: unresolved process metadata skips an undecidable top-level rule.
+	SkipUnavailableProcess bool
+	ProcessSkipped         func(ProcessUnavailableError)
+	ProcessName            string
+	ProcessStatus          string                              // known | unknown | ambiguous | unsupported | denied | changed | closed
+	ProcessCause           func() (cause string, win32 uint32) // same lookup result only; no proxy input
+	ProcessLookup          func() (name, status string)        // lazy internal provider; never decoded from proxy data
 }
 
 // Kind is the routing outcome class.
@@ -342,7 +346,14 @@ type query struct {
 	processName, processStatus string
 	processErr                 error
 	processLookup              func() (string, string)
+	processCause               func() (string, uint32)
+	cause                      string
+	win32                      uint32
+	processElapsed             uint64
 	processLoaded              bool
+	skipUnavailableProcess     bool
+	processSkipped             func(ProcessUnavailableError)
+	skipped                    map[int]bool
 }
 
 func (q *query) srcInfo() *ipInfo {
@@ -365,7 +376,10 @@ func (e *Engine) eval(q *query, start int, x *ipInfo) verdict {
 		case triTrue:
 			return r.v
 		case triUnknown:
-			q.processErr = &ProcessUnavailableError{Rule: i + 1, Status: safeProcessStatus(q.processStatus)}
+			if q.skipProcess(i + 1) {
+				continue
+			}
+			q.processErr = &ProcessUnavailableError{Rule: i + 1, Status: safeProcessStatus(q.processStatus), Cause: q.cause, Win32: q.win32}
 			return verdict{kind: Reject, rule: i + 1}
 		}
 	}
@@ -387,7 +401,10 @@ func (e *Engine) preDNS(q *query) (verdict, int) {
 			return e.rules[i].v, -1
 		case triUnknown:
 			if !e.needsIP(e.rules[i].c) {
-				q.processErr = &ProcessUnavailableError{Rule: i + 1, Status: safeProcessStatus(q.processStatus)}
+				if q.skipProcess(i + 1) {
+					continue
+				}
+				q.processErr = &ProcessUnavailableError{Rule: i + 1, Status: safeProcessStatus(q.processStatus), Cause: q.cause, Win32: q.win32}
 			}
 			return verdict{}, i
 		}
@@ -449,7 +466,16 @@ func toDecision(v verdict) Decision {
 // match where the first non-reject candidate decides. For an IP destination a
 // sniffed domain (SniffHost) is used by the domain conditions.
 func (e *Engine) Decide(ctx context.Context, m Metadata, resolve Resolver) (Decision, error) {
-	q := query{port: m.Port, network: m.Network, srcPort: m.SrcPort, inPort: m.InPort, inName: m.InName, inType: m.InType, protocol: m.Protocol, processName: m.ProcessName, processStatus: m.ProcessStatus, processLookup: m.ProcessLookup}
+	return e.decideDNS(ctx, m, resolve, resolve, false)
+}
+
+// DecideClientDNS preserves ordered/per-candidate evaluation, but separates an
+// already-decided Direct target lookup from rule-IP DNS, with fail-closed IP DNS.
+func (e *Engine) DecideClientDNS(ctx context.Context, m Metadata, resolve, directResolve Resolver, strict bool) (Decision, error) {
+	return e.decideDNS(ctx, m, resolve, directResolve, strict)
+}
+func (e *Engine) decideDNS(ctx context.Context, m Metadata, resolve, directResolve Resolver, strict bool) (Decision, error) {
+	q := query{port: m.Port, network: m.Network, srcPort: m.SrcPort, inPort: m.InPort, inName: m.InName, inType: m.InType, protocol: m.Protocol, processName: m.ProcessName, processStatus: m.ProcessStatus, processLookup: m.ProcessLookup, processCause: m.ProcessCause, skipUnavailableProcess: m.SkipUnavailableProcess, processSkipped: m.ProcessSkipped}
 	if m.Source.IsValid() {
 		q.src = m.Source.WithZone("").Unmap()
 	}
@@ -485,7 +511,7 @@ func (e *Engine) Decide(ctx context.Context, m Metadata, resolve Resolver) (Deci
 		if v.kind != Direct {
 			return toDecision(v), nil
 		}
-		ips, err := e.lookup(ctx, resolve, q.host)
+		ips, err := e.lookup(ctx, directResolve, q.host)
 		if err != nil {
 			return Decision{Kind: Direct, Rule: v.rule}, err
 		}
@@ -493,6 +519,9 @@ func (e *Engine) Decide(ctx context.Context, m Metadata, resolve Resolver) (Deci
 	}
 	ips, err := e.lookup(ctx, resolve, q.host)
 	if err != nil {
+		if strict {
+			return Decision{Kind: Reject, Rule: stop + 1}, err
+		}
 		// IP conditions cannot match; a non-direct outcome still applies.
 		v = e.eval(&q, stop, nil)
 		if q.processErr != nil {

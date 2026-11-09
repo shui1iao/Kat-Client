@@ -44,6 +44,13 @@ func ValidateSubscriptionSetWithDependencies(s RuleSetOptions, b []byte, deps Su
 		return 0, errTooLarge
 	}
 	env := parseEnv{geoip: deps.GeoIP, asn: deps.ASN, geosite: deps.Geosite}
+	src := &source{kind: "rule_set", name: s.Name, path: s.Path, stamp: "rule_set|" + s.Format + "|" + s.Behavior + "|" + env.String()}
+	key := cacheKey(src, b)
+	if s.Path != "" {
+		if d, ok := cacheGet(s.Path, key).(*setData); ok && d != nil && d.skipped == 0 {
+			return d.entries, nil
+		}
+	}
 	// Preflight line formats with the actual runtime condition parser. Preserve
 	// every invalid entry's position rather than allowing parseLines to skip it.
 	var lines []string
@@ -155,12 +162,21 @@ func ValidateSubscriptionSetWithDependencies(s RuleSetOptions, b []byte, deps Su
 	if len(issues) > 0 {
 		return 0, &SubscriptionSetValidationError{Issues: issues}
 	}
-	d, err := parseRuleSetAs(s.Format, s.Behavior, b, maxSetEntries, env)
+	var d *setData
+	var err error
+	if s.Format == FormatYAML {
+		d, err = parseLines(s.Behavior, dialMihom, lines, maxSetEntries, env)
+	} else {
+		d, err = parseRuleSetAs(s.Format, s.Behavior, b, maxSetEntries, env)
+	}
 	if err != nil {
 		return 0, err
 	}
 	if d.skipped != 0 {
 		return 0, &SubscriptionSetValidationError{Issues: []SubscriptionSetIssue{{Resource: s.Name, Code: "invalid_format"}}}
+	}
+	if s.Path != "" {
+		cachePut(s.Path, key, d)
 	}
 	return d.entries, nil
 }

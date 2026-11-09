@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/shui1iao/Kat/internal/userio"
 	"io"
 	"net/http"
 	"net/url"
@@ -245,7 +246,7 @@ func (p *providerRT) loadLocal() (provider.Result, error) {
 			return res, provider.ErrDependency
 		}
 	}
-	st, _ := os.Stat(path)
+	st, _ := userio.Stat(path)
 	p.mu.Lock()
 	p.res, p.hash, p.loaded = res, sha256.Sum256(b), true
 	p.source = "file"
@@ -262,7 +263,7 @@ func (p *providerRT) loadLocal() (provider.Result, error) {
 func readLimited(path string) ([]byte, error) {
 	// File providers and cache entries are finite regular files, not FIFOs
 	// or devices whose open/read can outlive every refresh/Stop deadline.
-	st, e := os.Stat(path)
+	st, e := userio.Stat(path)
 	if e != nil {
 		return nil, e
 	}

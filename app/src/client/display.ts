@@ -40,7 +40,7 @@ export const durationStr = (ms: number | null | undefined) => {
 export const clockStr = (iso: string | null | undefined) => {
   if (!iso) return '—';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleTimeString('zh-CN', { hour12: false });
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleTimeString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' });
 };
 
 export function policySlices(targets:CoreStatus['traffic']['rule_targets']){

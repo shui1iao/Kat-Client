@@ -3,6 +3,7 @@ package clientcore
 import (
 	"context"
 	"errors"
+	"github.com/shui1iao/Kat/internal/userio"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,7 +18,7 @@ var documentFormats = []DocumentFormat{FormatJSON, FormatYAML, FormatYML}
 func documentCandidates(workspace string) ([]DocumentFormat, error) {
 	var found []DocumentFormat
 	for _, f := range documentFormats {
-		if _, err := os.Lstat(filepath.Join(workspace, f.filename())); err == nil {
+		if _, err := userio.Lstat(filepath.Join(workspace, f.filename())); err == nil {
 			found = append(found, f)
 		} else if !os.IsNotExist(err) {
 			return nil, err
@@ -40,12 +41,12 @@ func exclusiveDocumentWrite(path string, b []byte) error {
 	return exclusiveDocumentWriteContext(context.Background(), path, b)
 }
 func exclusiveDocumentWriteContext(ctx context.Context, path string, b []byte) error {
-	f, err := os.CreateTemp(filepath.Dir(path), ".kat-write-*")
+	f, err := userio.CreateTemp(filepath.Dir(path), ".kat-write-*")
 	if err != nil {
 		return err
 	}
 	tmp := f.Name()
-	defer os.Remove(tmp)
+	defer userio.Remove(tmp)
 	if err = f.Chmod(0600); err == nil {
 		_, err = f.Write(b)
 	}
@@ -60,13 +61,13 @@ func exclusiveDocumentWriteContext(ctx context.Context, path string, b []byte) e
 		err = ctx.Err()
 	}
 	if err == nil {
-		err = os.Link(tmp, path)
+		err = userio.Link(tmp, path)
 	}
 	return err
 }
 
 func matchesSource(path, text string, info os.FileInfo) bool {
-	st, err := os.Lstat(path)
+	st, err := userio.Lstat(path)
 	if err != nil || !st.Mode().IsRegular() || info == nil || !os.SameFile(st, info) || st.Size() != info.Size() || !st.ModTime().Equal(info.ModTime()) {
 		return false
 	}
@@ -74,7 +75,7 @@ func matchesSource(path, text string, info os.FileInfo) bool {
 	if err != nil || string(b) != text {
 		return false
 	}
-	after, err := os.Lstat(path)
+	after, err := userio.Lstat(path)
 	return err == nil && os.SameFile(st, after) && st.Size() == after.Size() && st.ModTime().Equal(after.ModTime())
 }
 func (h *Host) checkSourceLocked() *Error {
@@ -121,7 +122,7 @@ func (h *Host) saveDocumentContextLocked(ctx context.Context, d document) (*docu
 		return tx, nil
 	}
 	// A copy (not a hard link) isolates the backup from outside in-place writes.
-	f, err := os.CreateTemp(h.workspace, ".kat-conversion-backup-*."+string(h.doc.format))
+	f, err := userio.CreateTemp(h.workspace, ".kat-conversion-backup-*."+string(h.doc.format))
 	if err != nil {
 		return nil, fail("save_failed", "text", "Cannot back up accepted source; file and runtime unchanged")
 	}
@@ -137,11 +138,11 @@ func (h *Host) saveDocumentContextLocked(ctx context.Context, d document) (*docu
 		err = ce
 	}
 	if err != nil {
-		os.Remove(tx.backup)
+		userio.Remove(tx.backup)
 		return nil, fail("save_failed", "text", "Cannot back up accepted source; file and runtime unchanged")
 	}
 	if e := h.checkSourceLocked(); e != nil {
-		os.Remove(tx.backup)
+		userio.Remove(tx.backup)
 		return nil, e
 	}
 	if tx.converted {
@@ -150,7 +151,7 @@ func (h *Host) saveDocumentContextLocked(ctx context.Context, d document) (*docu
 		err = atomicWriteContext(ctx, tx.target, []byte(d.text), func() bool { return ctx.Err() == nil && matchesSource(h.path, h.doc.text, h.sourceInfo) })
 	}
 	if err != nil {
-		os.Remove(tx.backup)
+		userio.Remove(tx.backup)
 		if ctx.Err() != nil {
 			return nil, requestCanceled()
 		}
@@ -164,7 +165,7 @@ func (h *Host) saveDocumentContextLocked(ctx context.Context, d document) (*docu
 		return nil, fail("save_failed", "text", "Cannot save document; runtime unchanged")
 	}
 	tx.changed = true
-	tx.targetInfo, err = os.Lstat(tx.target)
+	tx.targetInfo, err = userio.Lstat(tx.target)
 	if err == nil && !matchesSource(tx.target, d.text, tx.targetInfo) {
 		err = errors.New("destination changed")
 	}
@@ -172,7 +173,7 @@ func (h *Host) saveDocumentContextLocked(ctx context.Context, d document) (*docu
 		if !matchesSource(h.path, h.doc.text, h.sourceInfo) {
 			err = errors.New("source changed")
 		} else {
-			err = os.Remove(h.path)
+			err = userio.Remove(h.path)
 			tx.removed = err == nil
 		}
 	}
@@ -208,7 +209,7 @@ func (tx *documentSave) rollback() error {
 				return err
 			}
 			var err error
-			h.sourceInfo, err = os.Lstat(h.path)
+			h.sourceInfo, err = userio.Lstat(h.path)
 			if err != nil {
 				return err
 			}
@@ -218,7 +219,7 @@ func (tx *documentSave) rollback() error {
 		if !matchesSource(tx.target, tx.next.text, tx.targetInfo) {
 			return errors.New("target changed")
 		}
-		if err := os.Remove(tx.target); err != nil {
+		if err := userio.Remove(tx.target); err != nil {
 			return err
 		}
 	} else {
@@ -229,12 +230,12 @@ func (tx *documentSave) rollback() error {
 			return err
 		}
 		var err error
-		h.sourceInfo, err = os.Lstat(h.path)
+		h.sourceInfo, err = userio.Lstat(h.path)
 		if err != nil {
 			return err
 		}
 	}
-	_ = os.Remove(tx.backup)
+	_ = userio.Remove(tx.backup)
 	return nil
 }
 func (tx *documentSave) accept() {
@@ -243,6 +244,6 @@ func (tx *documentSave) accept() {
 	// Only an unsuccessful rollback retains it for manual recovery. The core
 	// remains independent of the native host's bounded user-visible backups.
 	if tx.changed {
-		_ = os.Remove(tx.backup)
+		_ = userio.Remove(tx.backup)
 	}
 }

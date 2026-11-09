@@ -4,7 +4,7 @@ use serde_json::Value;
 pub const MAX_FRAME: usize = 2 * 1024 * 1024;
 pub const MAX_INFLIGHT: usize = 16;
 pub const PUBLIC_METHODS: &[&str] = &[
-    "hello", "document.get", "document.validate", "document.apply",
+    "rules.test", "hello", "document.get", "document.validate", "document.apply",
     "core.start", "core.stop", "core.reload", "status", "probe.node", "probe.group",
     "import.parse", "subscription.preview", "subscription.cancel", "subscription.select", "subscription.status", "subscription.migrate", "logs.get",
     "diagnostics.network", "icon.cached", "icon.get", "group.filter_preview", "probe.all", "connections.close", "connections.list", "logs.connections", "logs.kernel", "dns.query", "dns.cache.clear", "resources.list", "resources.refresh",
@@ -19,17 +19,76 @@ pub struct Response {
     #[serde(default)] pub result: Option<Value>,
     #[serde(default)] pub error: Option<Error>,
 }
+// A present JSON null is Some(Value::Null); a missing field uses None.
+// Keep the derived struct visitor: duplicate fields (including repeated nulls)
+// and unknown fields are rejected without building a second generic Value tree.
+fn present_result<'de,D:serde::Deserializer<'de>>(d:D)->std::result::Result<Option<Value>,D::Error>{Value::deserialize(d).map(Some)}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ResponseFrame {
+    id:String, ok:bool,
+    #[serde(default,deserialize_with="present_result")] result:Option<Value>,
+    #[serde(default)] error:Option<Error>,
+}
+#[derive(Deserialize)]#[serde(deny_unknown_fields)]
+struct StreamGuard {id:String,ok:bool,error:StreamGuardError}
+#[derive(Deserialize)]#[serde(deny_unknown_fields)]
+struct StreamGuardError {code:String,message:String,transport:StreamGuardDetail}
+#[derive(Deserialize)]#[serde(deny_unknown_fields)]
+struct StreamGuardDetail {branch:StreamGuardBranch,#[serde(default)]native:Option<u32>,#[serde(default)]limit:Option<u64>}
+#[derive(Deserialize)]#[serde(rename_all="snake_case")]
+enum StreamGuardBranch {Read,Write,FrameLimit}
 impl Response {
+    fn stream_failure(frame:&[u8])->Option<Error>{
+        if frame.len()>MAX_FRAME||frame.iter().copied().find(|b|!b.is_ascii_whitespace())!=Some(b'{'){return None;}
+        let g:StreamGuard=serde_json::from_slice(frame).ok()?;
+        if !g.id.is_empty()||g.ok||g.error.code!="frame_too_large"||g.error.message!="Frame exceeds limit or input failed"||g.error.transport.native==Some(0){return None;}
+        use crate::transport_diagnostics::{Detail,Branch};
+        let (branch,code)=match g.error.transport.branch{
+            StreamGuardBranch::Read if g.error.transport.limit.is_none()=>(Branch::Read,"CORE_READ"),
+            StreamGuardBranch::Write if g.error.transport.limit.is_none()=>(Branch::Write,"CORE_WRITE"),
+            StreamGuardBranch::FrameLimit if g.error.transport.limit==Some(MAX_FRAME as u64)&&g.error.transport.native.is_none()=>(Branch::FrameLimit,"FRAME_TOO_LARGE"),
+            _=>return None,
+        };
+        let mut d=Detail::new(branch);d.frame_len=Some(frame.len()as u64);d.id_len=Some(0);d.native=g.error.transport.native;d.remote_branch=Some(branch);d.remote_native=d.native;d.limit=g.error.transport.limit;
+        let mut e=Error::new(code,"Core stream transport failed");e.os_error=d.native;Some(e.transport(d))
+    }
     pub fn parse(frame: &[u8]) -> Result<Self> {
         if frame.len() > MAX_FRAME { return Err(Error::new("FRAME_TOO_LARGE", "Core frame limit exceeded")); }
-        let shape:Value=serde_json::from_slice(frame).map_err(|_|Error::new("CORE_PROTOCOL","Invalid core protocol frame"))?;
-        let r: Self = serde_json::from_slice(frame).map_err(|_| Error::new("CORE_PROTOCOL", "Invalid core protocol frame"))?;
-        if r.id.is_empty() || r.id.len() > 128 || (r.ok&&!shape.as_object().is_some_and(|m|m.contains_key("result"))) || (r.ok && r.error.is_some()) || (!r.ok && (r.error.is_none() || r.result.is_some())) {
+        let wire:ResponseFrame=serde_json::from_slice(frame).map_err(|_|Error::new("CORE_PROTOCOL","Invalid core protocol frame"))?;
+        // The old generic shape check required an object for successful replies.
+        // Serde structs can also decode sequences; keep those legacy error-frame
+        // semantics without broadening successful replies or parsing JSON twice.
+        let object_frame=frame.iter().copied().find(|b|!b.is_ascii_whitespace())==Some(b'{');
+        let result_present=object_frame&&wire.result.is_some();
+        // Preserve the original Option<Value> semantics for explicit null in
+        // both success and error frames, after recording field presence.
+        let r=Self{id:wire.id,ok:wire.ok,result:wire.result.filter(|v|!v.is_null()),error:wire.error};
+        if r.id.is_empty() || r.id.len() > 128 || (r.ok&&!result_present) || (r.ok && r.error.is_some()) || (!r.ok && (r.error.is_none() || r.result.is_some())) {
             return Err(Error::new("CORE_PROTOCOL", "Invalid core response shape"));
         }
         if r.error.as_ref().and_then(|e|e.reason.as_ref()).is_some_and(|v|!crate::error::subscription_reason(v)){return Err(Error::new("CORE_PROTOCOL","Invalid subscription reason"));}
         if r.error.as_ref().and_then(|e|e.detail.as_ref()).is_some_and(|d|!d.valid()){return Err(Error::new("CORE_PROTOCOL","Invalid safe error detail"));}
+        if r.error.as_ref().and_then(|e|e.tun.as_ref()).is_some_and(|d|!d.valid()){return Err(Error::new("CORE_PROTOCOL","Invalid safe TUN detail"));}
+        if r.error.as_ref().and_then(|e|e.transport.as_ref()).is_some_and(|d|!d.valid()){return Err(Error::new("CORE_PROTOCOL","Invalid safe transport detail"));}
         Ok(r)
+    }
+    pub fn parse_observed(frame:&[u8])->Result<Self>{
+        if let Some(e)=Self::stream_failure(frame){return Err(e);}
+        Self::parse(frame).map_err(|e|{
+            use crate::transport_diagnostics::{Detail,Branch,Shape,JsonCategory};
+            let branch=match e.message.as_str(){"Invalid core response shape"=>Branch::ResponseShape,"Invalid subscription reason"=>Branch::SubscriptionReason,"Invalid safe error detail"=>Branch::ResourceDetail,"Invalid safe TUN detail"=>Branch::TunDetail,"Invalid safe transport detail"=>Branch::TransportDetail,_=>if e.code=="FRAME_TOO_LARGE"{Branch::FrameLimit}else{Branch::JsonDecode}};
+            let mut d=Detail::new(branch);d.frame_len=Some(frame.len()as u64);
+            if branch==Branch::FrameLimit{d.limit=Some(MAX_FRAME as u64);}
+            match serde_json::from_slice::<ResponseFrame>(frame){
+                Err(json)=>{d.json_category=Some(match json.classify(){serde_json::error::Category::Io=>JsonCategory::Io,serde_json::error::Category::Syntax=>JsonCategory::Syntax,serde_json::error::Category::Data=>JsonCategory::Data,serde_json::error::Category::Eof=>JsonCategory::Eof});d.line=Some(json.line()as u64);d.column=Some(json.column()as u64);},
+                Ok(w)=>{d.id_len=Some(w.id.len()as u64);d.request_id=w.id.strip_prefix('h').and_then(|v|v.parse::<u64>().ok()).filter(|n|*n<=9007199254740991);
+                    if branch==Branch::ResponseShape{d.shape=if w.id.is_empty(){Some(Shape::IdEmpty)}else if w.id.len()>128{d.limit=Some(128);Some(Shape::IdLength)}else if w.ok&&w.result.is_none(){Some(Shape::ResultMissing)}else if w.ok&&w.error.is_some(){Some(Shape::SuccessError)}else if !w.ok&&w.error.is_none(){Some(Shape::ErrorMissing)}else{Some(Shape::ErrorWithResult)};}
+                    if let Some(remote)=w.error.and_then(|v|v.transport).filter(|v|v.valid()){d.remote_branch=Some(remote.branch);d.remote_native=remote.native;}
+                }
+            }
+            e.transport(d)
+        })
     }
     pub fn result(self) -> Result<Value> {
         if self.ok { Ok(self.result.unwrap_or(Value::Null)) }
@@ -117,5 +176,20 @@ pub fn request_timeout(method:&str)->std::time::Duration{std::time::Duration::fr
   assert!(validate_public("dns.cache.clear",&serde_json::json!({})).is_ok());
   assert_eq!(request_timeout("dns.cache.clear").as_secs(),15);
   assert!(validate_public("network.egress.set",&serde_json::json!({})).is_err());
+ }
+}
+
+#[cfg(test)]mod transport_guard_tests{
+ use super::*;
+ #[test]fn typed_stream_guard_is_always_terminal_not_response_shape(){
+  let v=serde_json::json!({"id":"","ok":false,"error":{"code":"frame_too_large","message":"Frame exceeds limit or input failed","transport":{"branch":"read","native":996}}});
+  let b=serde_json::to_vec(&v).unwrap();let e=Response::parse_observed(&b).unwrap_err();assert_eq!(e.code,"CORE_READ");assert_eq!(e.os_error,Some(996));assert_eq!(e.transport.unwrap().frame_len,Some(b.len()as u64));
+  assert!(Response::parse(&b).is_err());
+  for key in ["extra","result"]{let mut bad=v.clone();bad[key]=serde_json::Value::Null;assert_eq!(Response::parse_observed(&serde_json::to_vec(&bad).unwrap()).unwrap_err().code,"CORE_PROTOCOL");}
+  for field in ["native","limit"]{let mut bad=v.clone();bad["error"]["transport"][field]=serde_json::json!(0);assert_eq!(Response::parse_observed(&serde_json::to_vec(&bad).unwrap()).unwrap_err().code,"CORE_PROTOCOL");}
+ }
+ #[test]fn normal_unknown_shape_still_rejected_and_safe_serde_facts_survive(){
+  let e=Response::parse_observed(br#"{"id":"h1","ok":true}"#).unwrap_err();assert_eq!(e.code,"CORE_PROTOCOL");let d=e.transport.unwrap();assert_eq!(d.branch,crate::transport_diagnostics::Branch::ResponseShape);assert_eq!(d.shape,Some(crate::transport_diagnostics::Shape::ResultMissing));
+  let e=Response::parse_observed(br#"{"id":1,"ok":true,"result":{}}"#).unwrap_err();assert_eq!(e.transport.unwrap().json_category,Some(crate::transport_diagnostics::JsonCategory::Data));
  }
 }

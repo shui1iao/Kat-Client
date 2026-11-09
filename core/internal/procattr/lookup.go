@@ -1,5 +1,5 @@
-// Package procattr accepts only actual local socket tuples or the private
-// SYSTEM bridge registration channel. No proxy header is an identity source.
+// Package procattr accepts only trusted local/original socket tuples and the
+// accepted HTTP socket registry. No proxy header is an identity source.
 package procattr
 
 import (
@@ -15,13 +15,16 @@ type Query struct {
 	Source, Destination, ControlSource, ControlDestination, Target netip.AddrPort
 }
 type Identity struct {
-	SourceAddr  string `json:"-"`
-	InboundKind string `json:"-"`
-	Name        string `json:"name"`
-	Path        string `json:"path,omitempty"`
-	Status      string `json:"status"`
-	PID         uint32 `json:"pid,omitempty"`
-	Stamp       uint64 `json:"stamp,omitempty"`
+	Cause        string `json:"-"`
+	Win32        uint32 `json:"-"`
+	SessionEpoch uint64 `json:"-"`
+	SourceAddr   string `json:"-"`
+	InboundKind  string `json:"-"`
+	Name         string `json:"name"`
+	Path         string `json:"path,omitempty"`
+	Status       string `json:"status"`
+	PID          uint32 `json:"pid,omitempty"`
+	Stamp        uint64 `json:"stamp,omitempty"`
 }
 type Row struct {
 	Source, Destination netip.AddrPort
@@ -31,6 +34,7 @@ type Row struct {
 func unique(rows []Row, q Query) (uint32, string) {
 	var pid uint32
 	count := 0
+	wildcard := false
 	for _, r := range rows {
 		match := r.Source == q.Source
 		if q.Network == "udp" {
@@ -41,6 +45,7 @@ func unique(rows []Row, q Query) (uint32, string) {
 		if match {
 			count++
 			pid = r.PID
+			wildcard = r.Source.Addr().IsUnspecified()
 		}
 	}
 	if count > 1 {
@@ -48,6 +53,12 @@ func unique(rows []Row, q Query) (uint32, string) {
 	}
 	if count == 0 || pid == 0 {
 		return 0, "closed"
+	}
+	// A UDP owner table has NO remote endpoint or socket-generation proof.
+	// Do not prefer an exact bind over another wildcard/reuse candidate. Even
+	// a singleton wildcard cannot prove which interface's packet it owns.
+	if q.Network == "udp" && wildcard {
+		return 0, "unknown"
 	}
 	return pid, "known"
 }
@@ -72,10 +83,11 @@ type key struct{ source, destination netip.AddrPort }
 
 var httpFlows struct {
 	sync.Mutex
-	m map[key]*Origin
+	m            map[key]*Origin
+	observations map[key]*HTTPObservation
 }
 
-func RegisterHTTP(c net.Conn, o *Origin) net.Conn {
+func RegisterHTTP(c net.Conn, o *Origin, observations ...*HTTPObservation) net.Conn {
 	if o == nil {
 		return c
 	}
@@ -85,16 +97,27 @@ func RegisterHTTP(c net.Conn, o *Origin) net.Conn {
 		httpFlows.m = map[key]*Origin{}
 	}
 	httpFlows.m[k] = o
+	var observation *HTTPObservation
+	if len(observations) > 0 {
+		observation = observations[0]
+	}
+	if observation != nil {
+		if httpFlows.observations == nil {
+			httpFlows.observations = map[key]*HTTPObservation{}
+		}
+		httpFlows.observations[k] = observation
+	}
 	httpFlows.Unlock()
-	return &httpConn{Conn: c, k: k, o: o}
+	return &httpConn{Conn: c, k: k, o: o, observation: observation}
 }
 
 type httpConn struct {
 	net.Conn
-	k    key
-	o    *Origin
-	once sync.Once
-	err  error
+	k           key
+	o           *Origin
+	observation *HTTPObservation
+	once        sync.Once
+	err         error
 }
 
 func (c *httpConn) Close() error {
@@ -102,6 +125,9 @@ func (c *httpConn) Close() error {
 		httpFlows.Lock()
 		if httpFlows.m[c.k] == c.o {
 			delete(httpFlows.m, c.k)
+			if httpFlows.observations[c.k] == c.observation {
+				delete(httpFlows.observations, c.k)
+			}
 		}
 		httpFlows.Unlock()
 		c.err = c.Conn.Close()
@@ -140,28 +166,63 @@ func Addr(a net.Addr) netip.AddrPort {
 	return netip.AddrPortFrom(v.Addr().Unmap(), v.Port())
 }
 
+// unavailableIdentity never carries partial/stale process evidence.
+func unavailableIdentity(status string) Identity {
+	return Identity{Status: status, Cause: SafeCause("process:" + status)}
+}
+
+func withoutProcessEvidence(id Identity) Identity {
+	if id.Status == "known" {
+		return id
+	}
+	out := unavailableIdentity(id.Status)
+	if id.Cause != "" {
+		out.Cause = SafeCause(id.Cause)
+	}
+	out.Win32 = id.Win32
+	return out
+}
+
+func processCreatedBefore(created, before uint64) bool {
+	return created != 0 && created <= before
+}
+
+// Both times belong to the same retained handle, which must still be alive.
+func processProofCurrent(created, current uint64, alive bool) bool {
+	return created != 0 && created == current && alive
+}
+
 // resolveCurrent is shared by the native adapter and injected-system tests.
 // The proof holds a process handle until the second owner snapshot completes.
 func resolveCurrent(q Query, rows func(Query) ([]Row, string), prove func(uint32) (Identity, func() bool, func())) Identity {
 	first, status := rows(q)
 	if status != "known" {
-		return Identity{Status: status}
+		return unavailableIdentity(status)
 	}
 	pid, status := unique(first, q)
 	if status != "known" {
-		return Identity{Status: status}
+		return unavailableIdentity(status)
 	}
 	id, valid, close := prove(pid)
 	if close != nil {
 		defer close()
 	}
 	if id.Status != "known" {
-		return id
+		return withoutProcessEvidence(id)
+	}
+	if id.PID != pid || id.Stamp == 0 {
+		return unavailableIdentity("changed")
 	}
 	second, status := rows(q)
+	if status != "known" {
+		return unavailableIdentity(status)
+	}
 	pid2, state := unique(second, q)
-	if status != "known" || state != "known" || pid2 != pid || valid == nil || !valid() {
-		return Identity{PID: pid, Status: "changed"}
+	if state == "ambiguous" || state == "unknown" {
+		return unavailableIdentity(state)
+	}
+	if state != "known" || pid2 != pid || valid == nil || !valid() {
+		return unavailableIdentity("changed")
 	}
 	return id
 }

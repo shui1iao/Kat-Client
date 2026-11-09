@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	A "github.com/shui1iao/Kat/internal/anytls"
+	"github.com/shui1iao/Kat/internal/route"
 	"github.com/shui1iao/Kat/internal/ss"
 	"io"
 	"net"
@@ -49,6 +50,8 @@ const (
 	failFallback     // Trojan fallback address unreachable
 	failBindListen   // SOCKS5 BIND: no free port in the range
 	failBindTimeout  // SOCKS5 BIND: no connection before the timeout
+	failProcess
+	failDecision
 	failureKinds
 )
 
@@ -68,6 +71,7 @@ var failureLabels = [failureKinds]string{
 	"stage=admission reason=source_banned", "stage=admission reason=source_not_allowed",
 	"stage=admission reason=per_ip_limit", "stage=fallback reason=connect_failed",
 	"stage=bind reason=no_free_port", "stage=bind reason=timeout",
+	"stage=process reason=process_unavailable", "stage=route reason=route_failed",
 }
 
 type failureBucket struct {
@@ -141,7 +145,7 @@ func quietFailure(e error) bool {
 	if errors.As(e, &h) && h.EmptyEOF() {
 		return true
 	}
-	return e == nil || errors.Is(e, io.EOF) || errors.Is(e, net.ErrClosed) || errors.Is(e, os.ErrClosed) || errors.Is(e, context.Canceled) || errors.Is(e, io.ErrClosedPipe) || errors.Is(e, syscall.ECONNRESET) || errors.Is(e, syscall.EPIPE)
+	return e == nil || errors.Is(e, io.EOF) || errors.Is(e, net.ErrClosed) || errors.Is(e, os.ErrClosed) || errors.Is(e, context.Canceled) || errors.Is(e, io.ErrClosedPipe) || errors.Is(e, syscall.ECONNRESET) || errors.Is(e, syscall.ECONNABORTED) || errors.Is(e, syscall.EPIPE)
 }
 func anyTLSFailure(e error) (failureKind, bool) {
 	if quietFailure(e) || errors.Is(e, A.ErrStreamClosed) {
@@ -178,10 +182,17 @@ func (s *Server) resolutionFailure(e error) {
 	if quietFailure(e) {
 		return
 	}
-	if errors.Is(e, errRouteReject) {
+	var process *route.ProcessUnavailableError
+	var dns *net.DNSError
+	switch {
+	case errors.As(e, &process):
+		s.failure(failProcess, "outbound", -1)
+	case errors.Is(e, errRouteReject):
 		s.failure(failRoute, "outbound", -1)
-	} else {
+	case errors.Is(e, errDNS) || errors.As(e, &dns) || errors.Is(e, route.ErrNoAddress):
 		s.failure(failDNS, "outbound", -1)
+	default:
+		s.failure(failDecision, "outbound", -1)
 	}
 }
 

@@ -1,14 +1,15 @@
 package kernel
 
 // Ordinary DNS is answered inside the existing SOCKS data plane. The SYSTEM
-// service, adapter DNS addresses, routes, lease and rollback journal are NOT
-// changed. While controlled egress is installed, TCP/UDP destination port 53
+// service configures only its owned TUN DNS peer; upstream queries use a
+// separate owner/scope-bound transport. While controlled egress is installed, TCP/UDP destination port 53
 // is handled before originalResolver's legacy physical passthrough. Resolver
 // upstream sockets use the physical egress hook and cannot re-enter this gate.
 import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"github.com/shui1iao/Kat/internal/outbound"
 	"golang.org/x/net/dns/dnsmessage"
 	"io"
 	"mime"
@@ -21,10 +22,11 @@ import (
 type dnsWireEntry struct {
 	wire           []byte
 	added, expires time.Time
+	epoch          uint64
 }
 
 func (s *Server) controlledDNS(a Address) bool {
-	return a.Port == 53 && s.cfg.clientIPv6 != nil && s.cfg.clientEgress != nil
+	return a.Port == 53 && s.cfg.clientIPv6 != nil && s.cfg.clientEgress.active()
 }
 func dnsRequest(w []byte) (dnsmessage.Message, error) {
 	var m dnsmessage.Message
@@ -39,7 +41,31 @@ func dnsRequest(w []byte) (dnsmessage.Message, error) {
 func dnsGatewayReply(m dnsmessage.Message, code dnsmessage.RCode) dnsmessage.Message {
 	return dnsmessage.Message{Header: dnsmessage.Header{ID: m.ID, Response: true, RecursionDesired: m.RecursionDesired, RecursionAvailable: true, RCode: code}, Questions: m.Questions}
 }
-func (r *internalDNS) gateway(ctx context.Context, wire []byte, tcp bool) ([]byte, error) {
+func (r *internalDNS) gateway(ctx context.Context, wire []byte, tcp bool) (response []byte, result error) {
+	started := time.Now()
+	cacheHit := false
+	mode := "custom"
+	if len(r.upstreams) == 0 {
+		mode = "system"
+	}
+	defer func() {
+		category, native := outbound.Category(result)
+		if result == nil {
+			var m dnsmessage.Message
+			if m.Unpack(response) == nil {
+				if m.RCode == dnsmessage.RCodeNameError {
+					category = "nxdomain"
+				} else if m.RCode != dnsmessage.RCodeSuccess {
+					category = "dns"
+				} else if len(m.Answers) == 0 {
+					category = "nodata"
+				}
+			}
+		}
+		r.observe(ctx, outbound.Diagnostic{Stage: "dns_exchange", Category: category, Protocol: mode, Native: native, ElapsedMS: outbound.Known(uint64(time.Since(started).Milliseconds())), CacheHit: &cacheHit})
+	}()
+	ctx, cancelScope, epoch := r.dnsScope(ctx)
+	defer cancelScope()
 	m, e := dnsRequest(wire)
 	if e != nil {
 		return nil, e
@@ -66,6 +92,9 @@ func (r *internalDNS) gateway(ctx context.Context, wire []byte, tcp bool) ([]byt
 		return dnsDownstream(m, b, tcp), e
 	}
 	p := r.policy(name)
+	if p == r && r.local != nil && localDNSName(name) {
+		return r.local.gateway(ctx, wire, tcp)
+	}
 	// One bounded worker per admitted connection/association; never per packet.
 	select {
 	case p.slots <- struct{}{}:
@@ -77,7 +106,7 @@ func (r *internalDNS) gateway(ctx context.Context, wire []byte, tcp bool) ([]byt
 	p.mu.Lock()
 	entry, hit := p.wireCache[key]
 	p.mu.Unlock()
-	if hit && entry.expires.After(p.now()) {
+	if hit && entry.epoch == epoch && epoch == p.dnsEpoch() && entry.expires.After(p.now()) {
 		var cached dnsmessage.Message
 		if cached.Unpack(entry.wire) == nil {
 			cached.ID = m.ID
@@ -93,7 +122,11 @@ func (r *internalDNS) gateway(ctx context.Context, wire []byte, tcp bool) ([]byt
 					}
 				}
 			}
+			cacheHit = true
 			b, e := cached.Pack()
+			if epoch != p.dnsEpoch() {
+				return nil, context.Canceled
+			}
 			return dnsDownstream(m, b, tcp), e
 		}
 	}
@@ -101,7 +134,8 @@ func (r *internalDNS) gateway(ctx context.Context, wire []byte, tcp bool) ([]byt
 	// Preserve the existing custom -> physical/system fallback chain. No public
 	// resolver is invented for system-only clients, and selected rule chains do
 	// not silently leak to the system resolver when they fail.
-	if p == r || len(upstreams) == 0 {
+	useSystem := !p.protected && (p == r || len(upstreams) == 0) && p.systemQuery != nil
+	if !p.protected && (p == r || len(upstreams) == 0) && p.systemQuery == nil {
 		for _, ip := range r.physical {
 			if r.disableIPv6 && ip.Unmap().Is6() {
 				continue
@@ -116,13 +150,24 @@ func (r *internalDNS) gateway(ctx context.Context, wire []byte, tcp bool) ([]byt
 	if !has {
 		deadline = time.Now().Add(5 * time.Second)
 	}
-	for i, u := range upstreams {
+	attempts := len(upstreams)
+	if useSystem {
+		attempts++
+	}
+	for i := 0; i < attempts; i++ {
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
 			break
 		}
-		attempt, cancel := context.WithTimeout(ctx, remaining/time.Duration(len(upstreams)-i))
-		b, e := u.rawQuery(attempt, wire, q, m.ID)
+		attempt, cancel := context.WithTimeout(ctx, remaining/time.Duration(attempts-i))
+		var b []byte
+		var e error
+		if i < len(upstreams) {
+			b, e = upstreams[i].rawQuery(attempt, wire, q, m.ID)
+		} else {
+			b, e = p.systemQuery(attempt, wire)
+			p.observeError(ctx, "dns_exchange", "system", e, started)
+		}
 		cancel()
 		if e != nil {
 			continue
@@ -139,7 +184,7 @@ func (r *internalDNS) gateway(ctx context.Context, wire []byte, tcp bool) ([]byt
 				}
 			}
 		}
-		if p.capacity > 0 && ttl > 0 && !answer.Truncated && answer.RCode == dnsmessage.RCodeSuccess && len(answer.Answers) > 0 {
+		if epoch == p.dnsEpoch() && ctx.Err() == nil && p.capacity > 0 && ttl > 0 && !answer.Truncated && answer.RCode == dnsmessage.RCodeSuccess && len(answer.Answers) > 0 {
 			p.mu.Lock()
 			if len(p.wireCache) >= p.capacity {
 				for k, v := range p.wireCache {
@@ -150,8 +195,11 @@ func (r *internalDNS) gateway(ctx context.Context, wire []byte, tcp bool) ([]byt
 					break
 				}
 			}
-			p.wireCache[key] = dnsWireEntry{append([]byte(nil), b...), p.now(), p.now().Add(time.Duration(ttl) * time.Second)}
+			p.wireCache[key] = dnsWireEntry{append([]byte(nil), b...), p.now(), p.now().Add(time.Duration(ttl) * time.Second), epoch}
 			p.mu.Unlock()
+		}
+		if epoch != p.dnsEpoch() || ctx.Err() != nil {
+			return nil, context.Canceled
 		}
 		return dnsDownstream(m, b, tcp), nil
 	}
@@ -214,7 +262,9 @@ func validWireReply(b []byte, id uint16, q dnsmessage.Question) (bool, error) {
 	return false, nil
 }
 
-func (u *dnsUpstream) rawQuery(ctx context.Context, wire []byte, q dnsmessage.Question, id uint16) ([]byte, error) {
+func (u *dnsUpstream) rawQuery(ctx context.Context, wire []byte, q dnsmessage.Question, id uint16) (response []byte, result error) {
+	started := time.Now()
+	defer func() { u.resolver.observeError(ctx, "dns_exchange", u.ep.scheme, result, started) }()
 	var b []byte
 	var e error
 	switch u.ep.scheme {
@@ -248,6 +298,7 @@ func (u *dnsUpstream) rawQuery(ctx context.Context, wire []byte, q dnsmessage.Qu
 		return nil, e
 	}
 	if tc {
+		u.resolver.observe(ctx, outbound.Diagnostic{Stage: "dns_fallback", Category: "truncated_tcp", Protocol: u.ep.scheme})
 		if u.ep.scheme != "udp" {
 			return nil, errDNS
 		}
@@ -297,7 +348,7 @@ func (s *Server) dnsTCP(parent context.Context) net.Conn {
 	}()
 	return client
 }
-func (s *Server) ClearDNSCache() (int, error) {
+func (s *Server) ClearDNSCache(closeIdle ...bool) (int, error) {
 	if s.core.ctx.Err() != nil {
 		return 0, ErrCoreNotRunning
 	}
@@ -316,7 +367,22 @@ func (s *Server) ClearDNSCache() (int, error) {
 	}
 	count := 0
 	for _, g := range live {
+		if len(closeIdle) > 0 && closeIdle[0] {
+			g.dns.close()
+		}
 		count += g.dns.clearCache()
+		if g.directDNS != nil {
+			if len(closeIdle) > 0 && closeIdle[0] {
+				g.directDNS.close()
+			}
+			count += g.directDNS.clearCache()
+		}
+		if g.bootstrapDNS != nil {
+			if len(closeIdle) > 0 && closeIdle[0] {
+				g.bootstrapDNS.close()
+			}
+			count += g.bootstrapDNS.clearCache()
+		}
 		g.unref()
 	}
 	return count, nil
@@ -330,5 +396,5 @@ func (s *Server) answerDNS(ctx context.Context, wire []byte, tcp bool) ([]byte, 
 		return nil, ErrCoreNotRunning
 	}
 	defer g.unref()
-	return g.dns.gateway(ctx, wire, tcp)
+	return g.answerClientDNS(ctx, wire, tcp)
 }

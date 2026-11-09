@@ -1,0 +1,20 @@
+[
+  {
+    "protocol": "shadowsocks",
+    "method": "2022-blake3-aes-128-gcm",
+    "app": "complete sing-box1.14.3",
+    "scope": "single TCP/UDP entrance smoke only",
+    "status": "PASS",
+    "TCP": "2056 exact bytes",
+    "UDP": "3x131 exact bytes/source"
+  },
+  {
+    "protocol": "anytls",
+    "method": null,
+    "app": "complete sing-box1.14.3",
+    "scope": "single TCP/UDP entrance smoke only",
+    "status": "PASS",
+    "TCP": "2056 exact bytes",
+    "UDP": "3x131 exact bytes/source"
+  }
+]

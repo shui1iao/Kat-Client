@@ -30,7 +30,24 @@ func (h *Host) Request(ctx context.Context, method string, params json.RawMessag
 	if ctx.Err() != nil {
 		return nil, requestCanceled()
 	}
+	if h.tunSession != nil && method != "network.egress.get" && (method == "network.egress.set" || method == "network.egress.pause" || method == "network.egress.dns.refresh") {
+		return nil, fail("TUN_ENGINE_RETIRED", "network.egress", "Physical lifecycle is owned by core TUN Manager")
+	}
 	switch method {
+	case "network.tun.prepare":
+		return h.tunPrepare(ctx, params)
+	case "network.tun.commit":
+		return h.tunCommit(ctx, params)
+	case "network.tun.disable":
+		return h.tunDisable(ctx, params)
+	case "network.tun.status":
+		return h.tunStatus(params)
+	case "host.prepare-update":
+		return h.prepareHandover(ctx, params)
+	case "host.resume-update":
+		return h.resumeUpdate(params)
+	case "rules.test":
+		return h.testRules(params)
 	case "diagnostics.network":
 		return h.diagnosticsNetwork(ctx, params)
 	case "icon.cached":
@@ -80,11 +97,14 @@ func (h *Host) Request(ctx context.Context, method string, params json.RawMessag
 		if e := decodeParams(params, &struct{}{}); e != nil {
 			return nil, e
 		}
-		caps := []string{"document.v1", "local.http.v1", "local.socks.v1", "probe.http.v1", "subscription.full.v1", "logs.v1"}
+		caps := []string{"document.v1", "local.http.v1", "local.socks.v1", "probe.http.v1", "subscription.full.v1", "logs.v1", "host.prepare-update.v1", "host.handover.v1"}
 		if clientegress.Supported {
-			caps = append(caps, "network.egress.v1")
+			caps = append(caps, "network.egress.v3")
 		}
-		return map[string]any{"protocol": 1, "core_version": kernel.Version, "build_commit": BuildCommit, "capabilities": caps}, nil
+		if h.tunSession != nil {
+			caps = append(caps, "host.elevated.v1", "network.tun-core.v1")
+		}
+		return map[string]any{"protocol": 1, "core_version": kernel.Version, "build_commit": BuildCommit, "instance": logInstance, "capabilities": caps}, nil
 	case "document.get":
 		if e := decodeParams(params, &struct{}{}); e != nil {
 			return nil, e
@@ -191,25 +211,60 @@ func (h *Host) Request(ctx context.Context, method string, params json.RawMessag
 		return h.cancelSubscription(params)
 	case "import.parse":
 		return h.importParse(ctx, params)
+	case "network.egress.dns.refresh":
+		var p struct {
+			Revision    uint64 `json:"revision"`
+			Fingerprint string `json:"fingerprint"`
+		}
+		if e := decodeParams(params, &p); e != nil {
+			return nil, e
+		}
+		if p.Revision == 0 || len(p.Fingerprint) != 64 {
+			return nil, fail("invalid_params", "dns", "DNS revision identifiers required")
+		}
+		return h.refreshDNS(ctx, p.Revision, p.Fingerprint)
 	case "network.egress.get":
 		if e := decodeParams(params, &struct{}{}); e != nil {
 			return nil, e
 		}
 		return h.EgressGet(), nil
+	case "network.egress.pause":
+		h.mu.Lock()
+		if h.egress == nil {
+			h.egress = clientegress.Blocked()
+			h.egressOptions = h.egress.Options.Clone()
+			h.egressSwitch.Replace(h.egress)
+		}
+		if h.egress.Ready() {
+			h.egressSwitch.Pause()
+		}
+		h.cancelBootstrapLocked()
+		h.logs.record(kernel.ClientLogEvent{Time: time.Now(), Level: "info", Event: "egress_waiting", Generation: h.egressGeneration})
+		v := h.egressViewLocked()
+		h.mu.Unlock()
+		return v, nil
 	case "network.egress.set":
 		var p struct {
-			Enabled *bool    `json:"enabled"`
-			IPv4    *uint32  `json:"ipv4_if_index"`
-			IPv6    *uint32  `json:"ipv6_if_index"`
-			DNS     []string `json:"bootstrap_dns"`
+			MetricDigest  string                     `json:"metric_digest"`
+			GatewayDigest string                     `json:"gateway_digest"`
+			AddressDigest string                     `json:"address_digest"`
+			Schema        int                        `json:"schema"`
+			Enabled       *bool                      `json:"enabled"`
+			IPv4          *uint32                    `json:"ipv4_if_index"`
+			IPv6          *uint32                    `json:"ipv6_if_index"`
+			LUID4         *uint64                    `json:"ipv4_luid"`
+			LUID6         *uint64                    `json:"ipv6_luid"`
+			DNS           []clientegress.DNSEndpoint `json:"system_dns"`
+			Identity      string                     `json:"identity"`
+			Fingerprint   string                     `json:"fingerprint"`
 		}
 		if e := decodeParams(params, &p); e != nil {
 			return nil, e
 		}
-		if p.Enabled == nil || p.DNS == nil {
-			return nil, fail("invalid_params", "params", "enabled and bootstrap_dns required")
+		if p.Schema != clientegress.Schema || p.Enabled == nil || p.DNS == nil {
+			return nil, fail("invalid_params", "params", "egress schema 3, enabled and system_dns required")
 		}
-		return h.EgressSet(clientegress.Options{Enabled: *p.Enabled, IPv4: p.IPv4, IPv6: p.IPv6, DNS: p.DNS})
+		return h.EgressSet(clientegress.Options{MetricDigest: p.MetricDigest, GatewayDigest: p.GatewayDigest, AddressDigest: p.AddressDigest, Schema: p.Schema, Enabled: *p.Enabled, IPv4: p.IPv4, IPv6: p.IPv6, LUID4: p.LUID4, LUID6: p.LUID6, DNS: p.DNS, Identity: p.Identity, Fingerprint: p.Fingerprint})
 	default:
 		return nil, fail("unknown_method", "method", "Unknown core method")
 	}

@@ -1,6 +1,8 @@
 /** Display-only boundary. Never echo an unknown exception, source excerpt, URL,
  * credential or OS path. Machine codes stay available; transport is unchanged. */
 const messages: Record<string, string> = {
+ advanced_dns_retired:'此配置包含已停用的高级 DNS，请选择系统 DNS 或自定义 DNS 后保存',NETWORK_INTENT_PENDING:'网络状态已提交，但开启意图未能保存；请重试保存，当前网络未被撤销',PROXY_CONFLICT:'系统代理被其它程序更改，已保留外部设置',WAITING_NETWORK:'等待网络',LOG_WRITE_FAILED:'精简日志有丢弃或写入失败，网络业务未因此停止',LOG_COLLECTION_FAILED:'部分精简日志未能收集',LOG_HISTORY_TRUNCATED:'导出仅包含有界的最近精简历史',egress_stale:'出口修订已变化，正在等待可信网络快照',
+
  diagnostic_cache_failed:'检测结果保存失败，已保留上次结果', diagnostic_busy:'已有检测正在运行，请稍候', not_running:'内核未运行，请先启动内核',
  DNS_UNSUPPORTED:'网卡的 DNS 地址都无法用于 TUN（如仅有 fe80:: 本地地址），请在网络设置中配置一个可用的 DNS',
  probe_busy:'正在测速，请等待当前测速完成',
@@ -29,6 +31,8 @@ const messages: Record<string, string> = {
   SERVICE_NOT_READY: '网络服务尚未就绪，请检查服务状态', SERVICE_FAILED: '网络服务操作失败，请查看诊断记录',
   SERVICE_PROTOCOL: '网络服务协议不匹配', SERVICE_IDENTITY: '网络服务身份校验失败', SERVICE_BINDING: '网络服务连接校验失败',
   UAC_DENIED: 'Windows 授权已取消或未获批准，本次操作未完成',
+  TUN_WAITING_AUTHORIZATION: '恢复或开启 TUN 需要 Windows 管理员授权，请点击重试确认或重新开启 TUN',
+  UAC_FAILED: 'Windows 管理员授权未完成，请重试授权',
   INSTALL_TIMEOUT: '等待服务变更结果超时，请先检查服务状态', INSTALL_FAILED: '服务安装或卸载未完成，请查看诊断记录',
   INSTALL_INTERRUPTED: '服务变更被中断，请先检查服务状态',
   CORE_MISSING: '找不到内核文件', CORE_NOT_READY: '内核尚未就绪', CORE_UNAVAILABLE: '内核暂不可用', CORE_EXITED: '内核已退出',
@@ -101,6 +105,13 @@ export function errorLocation(error: unknown, text?: string): { line?: number; c
   }
   return { ...(line && line > 0 ? { line } : {}), ...(column && column > 0 ? { column } : {}), ...(position !== undefined ? { position } : {}) };
 }
+const tunStages=new Set(["make_session", "make_running", "make_ingress", "make_config", "make_identity", "make_token_open", "make_token_user", "make_token_check", "make_creation", "prepare_guard", "journal_begin", "journal_accept", "physical_snapshot", "physical_policy", "device_open", "device_identity", "device_bind", "settings_install", "egress_reconcile", "physical_watch", "data_start", "data_ready", "commit_guard", "commit_health", "commit_snapshot", "commit_policy", "commit_identity", "route_install", "commit_final_health", "os_read", "wal_write", "os_apply", "os_readback", "journal_commit", "service_identity", "service_connect", "service_encode", "service_write", "service_read", "service_frame", "service_decode", "service_request", "service_peer", "service_lease", "service_core", "service_active", "service_verify", "journal_owner", "journal_validate", "journal_replay", "journal_busy", "journal_legacy", "journal_alias", "alias_guard", "alias_remove", "alias_wait", "tun_authorization", "core_handover", "base_recovery", "journal_guid", "journal_save", "journal_read", "journal_write", "journal_replace", "dll_path", "dll_ancestor_pin", "dll_pin", "dll_read", "dll_hash", "dll_load", "dll_exports", "adapter_create", "adapter_luid", "adapter_guid", "adapter_session", "adapter_event", "core_prepare", "core_commit", "active_failure"]);
+const tunCodes=new Set(["ACL_CREATE", "ACL_OWNER", "ACL_SET", "ACL_VERIFY", "ACL_WRITABLE", "ACTION_DENIED", "ADAPTER_LIMIT", "ADAPTER_REMAINS", "ADAPTER_UNSTABLE", "ADDRESS_FAMILY", "ADDRESS_LIMIT", "ADDRESS_QUERY", "ALREADY_RUNNING", "CALLER_DENIED", "CORE_ELEVATED_SPAWN", "CORE_ENVIRONMENT", "CORE_EXIT_CODE", "CORE_EXIT_WAIT", "CORE_FENCE", "CORE_GRACEFUL_REQUIRED", "CORE_IDENTITY", "CORE_INGRESS", "CORE_MEDIUM_TOKEN", "CORE_NOT_READY", "CORE_PIPE_PEER", "CORE_PREACTIVATION_EXIT", "CORE_RESUME", "CORE_STILL_ACTIVE", "CORE_TOKEN", "DATA_FAILED", "DATA_NOT_READY", "DATA_STOPPED", "DNS_LIMIT", "DNS_OWNER_UNAVAILABLE", "DNS_PEER_CONFLICT", "DNS_REVISION", "DNS_SCOPE", "DNS_UNSUPPORTED", "EGRESS_BIND_UNSAFE", "EGRESS_CHANGED", "EGRESS_INVALID", "EGRESS_SCHEMA", "GUI_ELEVATED", "HANDOVER_NOT_READY", "HANDOVER_OLD_ALIVE", "HANDOVER_OLD_EXIT", "HANDOVER_PROOF", "HANDOVER_STATE", "HELPER_HANDLE", "HELPER_WAIT", "HOST_PATH", "IDENTITY", "INSTALL_BINDING", "INSTALL_LOCATION", "INSTALL_PACKAGE", "INSTALL_REGISTRATION", "INSTALL_RELAUNCH", "INSTALL_RELAUNCH_REQUIRED", "INTERFACE_LIMIT", "INTERFACE_QUERY", "JOURNAL_ABSENT", "JOURNAL_ACK", "JOURNAL_ACTION", "JOURNAL_ADAPTER", "JOURNAL_ADDRESS", "JOURNAL_BEFORE", "JOURNAL_BUSY", "JOURNAL_DNS", "JOURNAL_FIELDS", "JOURNAL_FOREIGN", "JOURNAL_GUID", "JOURNAL_IDENTITY", "JOURNAL_INTERFACE", "JOURNAL_INVALID", "JOURNAL_LIMIT", "JOURNAL_READ", "JOURNAL_READBACK", "JOURNAL_REPLACE", "JOURNAL_REPLAY", "JOURNAL_REWRITE", "JOURNAL_ROUTE", "JOURNAL_SCHEMA", "JOURNAL_SEQUENCE", "JOURNAL_TRAILING_DATA", "JOURNAL_UNCERTAIN", "JOURNAL_VALUE", "JOURNAL_WRITE", "LAUNCH_ACTIVE", "LAUNCH_ARGS", "LAUNCH_BUSY", "LAUNCH_IDENTITY", "LAUNCH_LEASE", "LAUNCH_RANDOM", "LAUNCH_WORKSPACE", "LEASE_INVALID", "LEGACY_ADAPTER_PRESENT", "LEGACY_RECOVERY_REQUIRED", "OS_READBACK", "OS_RESOURCE_FOREIGN", "OWN_INTERFACE_NOT_READY", "PHYSICAL_OWNER_CHANGED", "PIPE_ACL", "PIPE_CONNECT", "PIPE_CREATE", "PIPE_EOF", "PIPE_IO", "PIPE_LIMIT", "PIPE_PROTOCOL", "PIPE_TIMEOUT", "PROCESS_IDENTITY", "PROCESS_PATH", "RECOVERY_COMPARTMENT", "RECOVERY_CONFLICT", "RECOVERY_OS", "RECOVERY_PENDING", "RECOVERY_READBACK", "ROUTE_LIMIT", "ROUTE_QUERY", "SERVICE_FAILED", "SERVICE_IDENTITY", "SERVICE_NOT_READY", "SERVICE_REJECTED", "SETTINGS_INVALID", "TUN_ADDRESS_CONFLICT", "TUN_BUSY", "TUN_CANCELED", "TUN_COLLISION", "TUN_CONFIG", "TUN_DEVICE_IDENTITY", "TUN_NATIVE", "TUN_OPERATION_FAILED", "TUN_PLATFORM_UNSUPPORTED", "TUN_PREPARED_STALE", "TUN_SAME_ADMIN_REQUIRED", "TUN_TIMEOUT", "TUN_UNKNOWN", "UAC_INTERRUPTED", "TUN_WAITING_AUTHORIZATION", "UAC_FAILED", "UNTRUSTED_PATH", "VENDOR_INTEGRITY", "WAITING_NETWORK", "WINTUN_ACL", "WINTUN_ACL_OWNER", "WINTUN_ACL_TYPE", "WINTUN_ACL_WRITABLE", "WINTUN_API", "WINTUN_CREATE", "WINTUN_EVENT", "WINTUN_FINAL_PATH", "WINTUN_GUID", "WINTUN_INTEGRITY", "WINTUN_LOAD", "WINTUN_LUID", "WINTUN_PACKET_SIZE", "WINTUN_PATH_IDENTITY", "WINTUN_QUERY", "WINTUN_RUNTIME_PATH", "WINTUN_SESSION", "WINTUN_SIZE", "WINTUN_UNTRUSTED_PATH", "WINTUN_WAIT"]);
+function tunDiagnostic(d:any):string {
+ if(!d||!tunStages.has(d.stage)||!tunCodes.has(d.code))return '';
+ const n=Number.isInteger(d.native)&&d.native>0&&d.native<=4294967295?d.native:'unknown';
+ return `TUN 首错：stage=${d.stage} · code=${d.code} · native=${n}${typeof d.recorded==='boolean'?' · ProgramData记录='+d.recorded:''}`;
+}
 export function errorText(error: unknown, sourceText?: string): string {
   if (error == null || error === '') return '';
   let raw = typeof error === 'string' ? error : '';
@@ -113,7 +124,7 @@ export function errorText(error: unknown, sourceText?: string): string {
   if (existing) code ||= safeCode(existing[1]);
   if (existing && code && /[\u3400-\u9fff]/.test(raw)) return redact(raw.split('\n')[0]).slice(0, 520);
   const path = safePath(obj?.path);
-  const diagnostic=resourceDiagnostic(obj?.detail);
+  const diagnostic=transportDiagnostic(obj?.transport)||tunDiagnostic(obj?.tun)||resourceDiagnostic(obj?.detail);
   const loc = diagnostic ? {} : errorLocation(obj ?? raw, sourceText);
   let message = diagnostic || (code && messages[code]);
   if (!message) {
@@ -185,4 +196,16 @@ export function subscriptionAttemptLines(diagnostic:string):string[]{
   const route=subscriptionRoutes[a?.route];if(!route)return [];
   const n=a.http_status,status=Number.isInteger(n)&&n>=100&&n<=599?`HTTP ${n}`:subscriptionCategories[a.category]??subscriptionStages[a.stage];return status?[route+' · '+status]:[];
  });}catch{return [];}
+}
+
+/** Finite transport facts only; never print payload, decoder text or arbitrary keys. */
+export function transportDiagnostic(d:any):string{
+ const branches=['frame_limit','json_decode','response_shape','subscription_reason','resource_detail','tun_detail','transport_detail','id_unmatched','truncated_eof','eof','read','write','timeout'];
+ const shapes=['id_empty','id_length','result_missing','success_error','error_missing','error_with_result'];
+ const numbers=['frame_len','observed_bytes','limit','id_len','request_id','line','column','native','remote_native'];
+ const allowed=['branch','shape','json_category','remote_branch',...numbers];
+ if(!d||typeof d!=='object'||Array.isArray(d)||!branches.includes(d.branch)||Object.keys(d).some(k=>!allowed.includes(k)))return '';
+ if(d.shape!==undefined&&!shapes.includes(d.shape)||d.json_category!==undefined&&!['io','syntax','data','eof'].includes(d.json_category)||d.remote_branch!==undefined&&!branches.includes(d.remote_branch))return '';
+ for(const k of numbers)if(d[k]!==undefined&&(!Number.isSafeInteger(d[k])||d[k]<0||(['native','remote_native'].includes(k)&&(d[k]===0||d[k]>0xffffffff))))return '';
+ return '内核传输失败 · '+['branch','shape','json_category',...numbers,'remote_branch'].filter(k=>d[k]!==undefined).map(k=>`${k}=${d[k]}`).join(' ');
 }

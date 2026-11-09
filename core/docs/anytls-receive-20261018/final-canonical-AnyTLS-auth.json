@@ -1,0 +1,146 @@
+[
+  {
+    "app": "sing-box",
+    "metadata_profile": "default-empty",
+    "cli_exit": 0,
+    "diagnostics": {
+      "vision_read_direct": 0,
+      "vision_write_direct": 0,
+      "http_early_data": 0,
+      "xhttp_h1": 0,
+      "xhttp_h2": 0,
+      "xhttp_packet_up": 0,
+      "xhttp_stream_up": 0,
+      "xhttp_stream_one": 0
+    },
+    "status": "PASS",
+    "target_accepts": 1,
+    "client_metadata_configured": false
+  },
+  {
+    "app": "sing-box",
+    "metadata_profile": "explicit",
+    "cli_exit": 0,
+    "diagnostics": {
+      "vision_read_direct": 0,
+      "vision_write_direct": 0,
+      "http_early_data": 0,
+      "xhttp_h1": 0,
+      "xhttp_h2": 0,
+      "xhttp_packet_up": 0,
+      "xhttp_stream_up": 0,
+      "xhttp_stream_one": 0
+    },
+    "status": "PASS",
+    "target_accepts": 1,
+    "client_metadata_configured": true
+  },
+  {
+    "app": "sing-box",
+    "metadata_profile": "wrong-password",
+    "cli_exit": 0,
+    "diagnostics": {
+      "vision_read_direct": 0,
+      "vision_write_direct": 0,
+      "http_early_data": 0,
+      "xhttp_h1": 0,
+      "xhttp_h2": 0,
+      "xhttp_packet_up": 0,
+      "xhttp_stream_up": 0,
+      "xhttp_stream_one": 0
+    },
+    "status": "PASS",
+    "target_accepts": 0,
+    "client_metadata_configured": false
+  },
+  {
+    "app": "sing-box",
+    "metadata_profile": "wrong-ca",
+    "cli_exit": 0,
+    "diagnostics": {
+      "vision_read_direct": 0,
+      "vision_write_direct": 0,
+      "http_early_data": 0,
+      "xhttp_h1": 0,
+      "xhttp_h2": 0,
+      "xhttp_packet_up": 0,
+      "xhttp_stream_up": 0,
+      "xhttp_stream_one": 0
+    },
+    "status": "PASS",
+    "target_accepts": 0,
+    "client_metadata_configured": false
+  },
+  {
+    "app": "mihomo",
+    "metadata_profile": "default-empty",
+    "cli_exit": 0,
+    "diagnostics": {
+      "vision_read_direct": 0,
+      "vision_write_direct": 0,
+      "http_early_data": 0,
+      "xhttp_h1": 0,
+      "xhttp_h2": 0,
+      "xhttp_packet_up": 0,
+      "xhttp_stream_up": 0,
+      "xhttp_stream_one": 0
+    },
+    "status": "PASS",
+    "target_accepts": 1,
+    "client_metadata_configured": false
+  },
+  {
+    "app": "mihomo",
+    "metadata_profile": "explicit",
+    "cli_exit": 0,
+    "diagnostics": {
+      "vision_read_direct": 0,
+      "vision_write_direct": 0,
+      "http_early_data": 0,
+      "xhttp_h1": 0,
+      "xhttp_h2": 0,
+      "xhttp_packet_up": 0,
+      "xhttp_stream_up": 0,
+      "xhttp_stream_one": 0
+    },
+    "status": "PASS",
+    "target_accepts": 1,
+    "client_metadata_configured": true
+  },
+  {
+    "app": "mihomo",
+    "metadata_profile": "wrong-password",
+    "cli_exit": 0,
+    "diagnostics": {
+      "vision_read_direct": 0,
+      "vision_write_direct": 0,
+      "http_early_data": 0,
+      "xhttp_h1": 0,
+      "xhttp_h2": 0,
+      "xhttp_packet_up": 0,
+      "xhttp_stream_up": 0,
+      "xhttp_stream_one": 0
+    },
+    "status": "PASS",
+    "target_accepts": 0,
+    "client_metadata_configured": false
+  },
+  {
+    "app": "mihomo",
+    "metadata_profile": "wrong-ca",
+    "cli_exit": 0,
+    "diagnostics": {
+      "vision_read_direct": 0,
+      "vision_write_direct": 0,
+      "http_early_data": 0,
+      "xhttp_h1": 0,
+      "xhttp_h2": 0,
+      "xhttp_packet_up": 0,
+      "xhttp_stream_up": 0,
+      "xhttp_stream_one": 0
+    },
+    "status": "PASS",
+    "target_accepts": 0,
+    "client_metadata_configured": false
+  }
+]

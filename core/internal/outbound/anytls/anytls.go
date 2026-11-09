@@ -443,14 +443,17 @@ func (o *Outbound) removeSession(s *session) {
 // dialSession connects through under, completes TLS and sends the
 // authentication packet (packet 0). Settings ride with the first SYN.
 func (o *Outbound) dialSession(ctx context.Context) (*session, error) {
+	diagnosticStarted := time.Now()
 	route := &sessionRoute{}
 	ctx = context.WithValue(ctx, sessionRouteKey{}, route)
 	raw, e := o.under.DialTCP(ctx, o.server)
 	if e != nil {
+		outbound.ReportError(ctx, "anytls", "connect", e, diagnosticStarted)
 		return nil, fmt.Errorf("anytls: dial server: %w", e)
 	}
 	tc, e := tlsclient.Handshake(ctx, raw, o.tls, o.fp)
 	if e != nil {
+		outbound.ReportError(ctx, "anytls", "tls", e, diagnosticStarted)
 		_ = raw.Close()
 		return nil, fmt.Errorf("anytls: tls handshake: %w", e)
 	}
@@ -467,6 +470,7 @@ func (o *Outbound) dialSession(ctx context.Context) (*session, error) {
 	_ = tc.SetWriteDeadline(time.Time{})
 	if e != nil {
 		_ = tc.Close()
+		outbound.ReportError(ctx, "anytls", "auth", e, diagnosticStarted)
 		return nil, fmt.Errorf("anytls: send authentication: %w", e)
 	}
 	settings := "v=2\nclient=kat\npadding-md5=" + scheme.md5
@@ -494,3 +498,13 @@ func (o *Outbound) sessionCount() (busy, idle int) {
 }
 
 var _ outbound.Outbound = (*Outbound)(nil)
+
+func SafeFailure(e error) string {
+	if errors.Is(e, errProtocol) {
+		return "protocol"
+	}
+	if errors.Is(e, errNoResponse) {
+		return "unknown"
+	}
+	return ""
+}

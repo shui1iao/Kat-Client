@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"github.com/shui1iao/Kat/internal/userio"
 	"io"
 	"io/fs"
 	"net"
@@ -92,7 +93,7 @@ func dataClass(err error) string {
 }
 
 func readLimited(path string, max int) ([]byte, os.FileInfo, error) {
-	f, err := os.Open(path)
+	f, err := userio.Open(path)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -252,24 +253,24 @@ func (e *Engine) updateWithCommit(ctx context.Context, s *source, commit func(fu
 }
 
 func writeAtomic(path string, b []byte) (err error) {
-	if err = os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err = userio.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	// A unique temporary name: an engine of a superseded generation may
 	// still be finishing a download of the same source.
-	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp*")
+	f, err := userio.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp*")
 	if err != nil {
 		return err
 	}
 	tmp := f.Name()
 	if err = f.Chmod(0o644); err != nil {
 		f.Close()
-		os.Remove(tmp)
+		userio.Remove(tmp)
 		return err
 	}
 	defer func() {
 		if err != nil {
-			os.Remove(tmp)
+			userio.Remove(tmp)
 		}
 	}()
 	if _, err = f.Write(b); err != nil {
@@ -283,7 +284,7 @@ func writeAtomic(path string, b []byte) (err error) {
 	if err = f.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	return userio.Rename(tmp, path)
 }
 
 // download fetches the source over https through the via outbound with

@@ -166,3 +166,144 @@ async fn process_restart_case(mode:&str){
 #[tokio::test]async fn restart_normal_child_exit_restores_all_intents(){process_restart_case("normal").await;}
 #[tokio::test]async fn restart_exit_timeout_kills_only_owned_child_and_restores_all_intents(){process_restart_case("exit-timeout").await;}
 #[tokio::test]async fn restart_unresponsive_core_ipc_still_respawns_and_restores_all_intents(){process_restart_case("ipc-unresponsive").await;}
+
+#[cfg(test)]mod quit_pending_cleanup_tests{
+ use kat_host::{error::{Error,Result},lifecycle::{self,QuitOps,QUIT_CLEANUP_NOTICE,QUIT_CLEANUP_TIMEOUT}};
+ use std::{sync::{Mutex,atomic::{AtomicBool,AtomicUsize,Ordering}},time::Duration};
+ struct PendingQuitFixture{
+  initial_pending:bool,
+  polls_until_complete:usize,
+  poll_error:Option<&'static str>,
+  budget:(Duration,Duration),
+  polls:AtomicUsize,
+  stopped:AtomicBool,
+  notices:Mutex<Vec<bool>>,
+  events:Mutex<Vec<&'static str>>,
+ }
+ impl PendingQuitFixture{
+  fn new(initial_pending:bool,polls_until_complete:usize,budget:(Duration,Duration))->Self{
+   Self{initial_pending,polls_until_complete,poll_error:None,budget,polls:AtomicUsize::new(0),stopped:AtomicBool::new(false),notices:Mutex::new(Vec::new()),events:Mutex::new(Vec::new())}
+  }
+ }
+ impl QuitOps for PendingQuitFixture{
+  async fn cleanup(&self)->Result<()>{
+   self.events.lock().unwrap().push("cleanup");
+   if self.initial_pending{Err(Error::new("RECOVERY_PENDING","Core TUN cleanup is incomplete"))}else{Ok(())}
+  }
+  fn set_cleanup_waiting(&self,waiting:bool){
+   self.notices.lock().unwrap().push(waiting);
+   self.events.lock().unwrap().push(if waiting{"notice_on"}else{"notice_off"});
+  }
+  async fn poll_cleanup_pending(&self)->Result<bool>{
+   let n=self.polls.fetch_add(1,Ordering::SeqCst)+1;
+   self.events.lock().unwrap().push("poll");
+   if let Some(code)=self.poll_error{return Err(Error::new(code,"retained cleanup error"));}
+   Ok(n<self.polls_until_complete)
+  }
+  fn cleanup_wait_budget(&self)->(Duration,Duration){self.budget}
+  async fn stop_core(&self){
+   self.stopped.store(true,Ordering::SeqCst);
+   self.events.lock().unwrap().push("stop_core");
+  }
+ }
+ #[tokio::test]
+ async fn quit_without_pending_exits_immediately_without_waiting_notice(){
+  let f=PendingQuitFixture::new(false,0,(Duration::from_millis(200),Duration::from_millis(10)));
+  lifecycle::quit(&f).await.unwrap();
+  assert!(f.stopped.load(Ordering::SeqCst));
+  assert_eq!(f.polls.load(Ordering::SeqCst),0);
+  assert!(f.notices.lock().unwrap().is_empty());
+  assert_eq!(*f.events.lock().unwrap(),vec!["cleanup","stop_core"]);
+ }
+ #[tokio::test]
+ async fn quit_pending_waits_shows_notice_and_exits_when_complete(){
+  assert_eq!(QUIT_CLEANUP_NOTICE,"正在完成网络清理…");
+  assert_eq!(QUIT_CLEANUP_TIMEOUT,Duration::from_secs(300));
+  let f=PendingQuitFixture::new(true,4,(Duration::from_secs(2),Duration::from_millis(10)));
+  lifecycle::quit(&f).await.unwrap();
+  assert!(f.stopped.load(Ordering::SeqCst));
+  assert_eq!(f.polls.load(Ordering::SeqCst),4);
+  assert_eq!(*f.notices.lock().unwrap(),vec![true,false]);
+  assert_eq!(*f.events.lock().unwrap(),vec!["cleanup","poll","notice_on","poll","poll","poll","notice_off","stop_core"]);
+ }
+ #[tokio::test]
+ async fn quit_pending_timeout_reports_recovery_pending_without_stopping_core(){
+  let f=PendingQuitFixture::new(true,usize::MAX,(Duration::from_millis(45),Duration::from_millis(10)));
+  let err=lifecycle::quit(&f).await.unwrap_err();
+  assert_eq!(err.code,"RECOVERY_PENDING");
+  assert!(!f.stopped.load(Ordering::SeqCst));
+  assert!(f.polls.load(Ordering::SeqCst)>=2);
+  assert_eq!(*f.notices.lock().unwrap(),vec![true,false]);
+  assert!(!f.events.lock().unwrap().contains(&"stop_core"));
+  let mut f_err=PendingQuitFixture::new(true,usize::MAX,(Duration::from_secs(2),Duration::from_millis(10)));
+  f_err.poll_error=Some("TUN_OPERATION_FAILED");
+  let err2=lifecycle::quit(&f_err).await.unwrap_err();
+  assert_eq!(err2.code,"TUN_OPERATION_FAILED");
+  assert!(!f_err.stopped.load(Ordering::SeqCst));
+ }
+}
+
+#[tokio::test]
+async fn logs_get_has_dedicated_admission_when_general_inflight_full() {
+ let s = peer().await;
+ let mut handles = Vec::new();
+ for _ in 0..16 {
+  let a = s.clone();
+  handles.push(tokio::spawn(async move { a.request("hang", Value::Null, T).await }));
+ }
+ tokio::time::sleep(Duration::from_millis(20)).await;
+ assert_eq!(s.request("echo", Value::Null, T).await.unwrap_err().code, "CORE_BUSY");
+ let logs = tokio::time::timeout(Duration::from_millis(500), s.request("logs.get", json!({"after": 0, "limit": 500}), Duration::from_secs(3))).await.unwrap().unwrap();
+ assert_eq!(logs, json!({"after": 0, "limit": 500}));
+ for h in handles { h.abort(); let _ = h.await; }
+ s.shutdown().await;
+}
+
+#[tokio::test]
+async fn stage5_update_shutdown_ack_exact_exit_and_eof_not_healthy() {
+ use kat_host::{core_process::CoreProcess, supervisor::Life};
+
+ // 1. Valid persistence ACK + exact handle exit 0 succeeds, and cancelled update recovers cleanly.
+ let mut cmd = tokio::process::Command::new(env!("CARGO_BIN_EXE_kat-ipc-test-peer"));
+ cmd.arg("stage5-update-fixture").arg("ok");
+ let core = CoreProcess::spawn(cmd).await.unwrap();
+ let old_pid = core.pid();
+ core.prepare_update_shutdown(Duration::from_secs(2)).await.unwrap();
+ core.resume_after_update_failure().await.unwrap();
+ assert_ne!(core.pid(), old_pid, "cancelled update after old core exit0 must spawn replacement core");
+ assert!(matches!(*core.life().borrow(), Life::Ready));
+ core.shutdown().await;
+
+ // 2. Persistence error -> prepare_update_shutdown fails -> resume_after_update_failure resumes same child.
+ let mut cmd = tokio::process::Command::new(env!("CARGO_BIN_EXE_kat-ipc-test-peer"));
+ cmd.arg("stage5-update-fixture").arg("save-failed");
+ let core = CoreProcess::spawn(cmd).await.unwrap();
+ let same_pid = core.pid();
+ let err = core.prepare_update_shutdown(Duration::from_secs(2)).await.unwrap_err();
+ assert_eq!(err.code, "CORE_UPDATE_HISTORY_FAILED");
+ core.resume_after_update_failure().await.unwrap();
+ assert_eq!(core.pid(), same_pid, "in-place resume must keep the same alive core process");
+ core.shutdown().await;
+
+ // 3. Pipe EOF before persistence ACK is rejected (pipe EOF is never success/health).
+ let mut cmd = tokio::process::Command::new(env!("CARGO_BIN_EXE_kat-ipc-test-peer"));
+ cmd.arg("stage5-update-fixture").arg("eof-before-ack");
+ let core = CoreProcess::spawn(cmd).await.unwrap();
+ let err = core.prepare_update_shutdown(Duration::from_secs(2)).await.unwrap_err();
+ assert_eq!(err.code, "CORE_UPDATE_PREPARE_FAILED");
+ assert!(matches!(*core.life().borrow(), Life::Exited(_)), "pipe EOF must mark core Exited, never healthy");
+
+ // 4. Persistence ACK followed by nonzero exit code is rejected.
+ let mut cmd = tokio::process::Command::new(env!("CARGO_BIN_EXE_kat-ipc-test-peer"));
+ cmd.arg("stage5-update-fixture").arg("nonzero-exit");
+ let core = CoreProcess::spawn(cmd).await.unwrap();
+ let err = core.prepare_update_shutdown(Duration::from_secs(2)).await.unwrap_err();
+ assert_eq!(err.code, "CORE_UPDATE_EXIT_NONZERO");
+
+ // 5. Persistence ACK + stdin EOF without exact process handle exit times out without force-killing.
+ let mut cmd = tokio::process::Command::new(env!("CARGO_BIN_EXE_kat-ipc-test-peer"));
+ cmd.arg("stage5-update-fixture").arg("hang-exit");
+ let core = CoreProcess::spawn(cmd).await.unwrap();
+ let err = core.prepare_update_shutdown(Duration::from_millis(250)).await.unwrap_err();
+ assert_eq!(err.code, "CORE_UPDATE_EXIT_TIMEOUT");
+}

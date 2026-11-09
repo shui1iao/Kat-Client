@@ -33,7 +33,7 @@ type documentCounts struct {
 }
 
 func (d document) validation() any {
-	return map[string]any{"valid": true, "format": d.format,
+	return map[string]any{"advanced_dns": d.advancedDNS, "valid": true, "format": d.format,
 		"ports": map[string]int{"http": d.client.HTTPPort, "socks": d.client.SOCKSPort}, "counts": d.counts}
 }
 

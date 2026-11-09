@@ -8,10 +8,13 @@ import (
 	"errors"
 	"github.com/shui1iao/Kat/internal/kernel"
 	"github.com/shui1iao/Kat/internal/outbound"
+	"github.com/shui1iao/Kat/internal/tunplatform"
+	"github.com/shui1iao/Kat/internal/userio"
 	"io"
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"time"
 	"unicode/utf8"
@@ -22,11 +25,13 @@ const maxDocument = 1 << 20
 const initialDocument = `{"schema_version":1,"client":{"mode":"rule","global_group":"","probe_url":"https://www.gstatic.com/generate_204","http_port":7890,"socks_port":7891,"ipv6":false},"kernel":{}}` + "\n"
 
 type Error struct {
-	Code    string          `json:"code"`
-	Reason  string          `json:"reason,omitempty"`
-	Message string          `json:"message"`
-	Path    string          `json:"path,omitempty"`
-	Detail  *ResourceDetail `json:"detail,omitempty"`
+	Transport *TransportDiagnostic `json:"transport,omitempty"`
+	Code    string                  `json:"code"`
+	Reason  string                  `json:"reason,omitempty"`
+	Message string                  `json:"message"`
+	Path    string                  `json:"path,omitempty"`
+	Detail  *ResourceDetail         `json:"detail,omitempty"`
+	Tun     *tunplatform.Diagnostic `json:"tun,omitempty"`
 }
 
 func (e *Error) Error() string { return e.Code + ": " + e.Message }
@@ -42,25 +47,28 @@ type ClientSniff struct {
 	Timeout             string `json:"timeout,omitempty"`
 }
 type Client struct {
-	IPv6              bool            `json:"ipv6"`
-	CloseOnSwitch     *bool           `json:"close_on_switch,omitempty"`
-	Sniff             *ClientSniff    `json:"sniff,omitempty"`
-	Mode              string          `json:"mode"`
-	GlobalGroup       string          `json:"global_group"`
-	ProbeURL          string          `json:"probe_url"`
-	HTTPPort          int             `json:"http_port"`
-	SOCKSPort         int             `json:"socks_port"`
-	ProbeTimeout      kernel.Duration `json:"probe_timeout,omitempty"`
-	ProbeRoundTimeout kernel.Duration `json:"probe_round_timeout,omitempty"`
-	UnifiedDelay      *bool           `json:"unified_delay,omitempty"`
-	ProbeConcurrency  int             `json:"probe_concurrency,omitempty"`
+	TunDNS            *kernel.ClientDNSOptions `json:"tun_dns,omitempty"`
+	IPv6              bool                     `json:"ipv6"`
+	CloseOnSwitch     *bool                    `json:"close_on_switch,omitempty"`
+	Sniff             *ClientSniff             `json:"sniff,omitempty"`
+	Mode              string                   `json:"mode"`
+	GlobalGroup       string                   `json:"global_group"`
+	ProbeURL          string                   `json:"probe_url"`
+	HTTPPort          int                      `json:"http_port"`
+	SOCKSPort         int                      `json:"socks_port"`
+	ProbeTimeout      kernel.Duration          `json:"probe_timeout,omitempty"`
+	ProbeRoundTimeout kernel.Duration          `json:"probe_round_timeout,omitempty"`
+	UnifiedDelay      *bool                    `json:"unified_delay,omitempty"`
+	ProbeConcurrency  int                      `json:"probe_concurrency,omitempty"`
 }
 type document struct {
-	text   string
-	format DocumentFormat
-	counts documentCounts
-	client Client
-	config kernel.Config
+	advancedDNS bool
+	ruleRouting *kernel.RoutingOptions // accepted rule-mode projection; never the editor draft
+	text        string
+	format      DocumentFormat
+	counts      documentCounts
+	client      Client
+	config      kernel.Config
 }
 
 // Reject duplicate keys before UI and kernel decoders can disagree.
@@ -181,16 +189,35 @@ func parseDocument(text, workspace string, formats ...DocumentFormat) (document,
 		}
 	}
 	cb := bytes.TrimSpace(root.Client)
-	if len(cb) == 0 || cb[0] != '{' || json.Unmarshal(cb, &out.client) != nil {
+	var clientFields map[string]json.RawMessage
+	if len(cb) == 0 || cb[0] != '{' || json.Unmarshal(cb, &clientFields) != nil {
 		return out, fail("invalid_document", "client", "Expected client object")
 	}
-	var clientFields map[string]json.RawMessage
-	_ = json.Unmarshal(cb, &clientFields)
+	if runtime.GOOS == "windows" {
+		var kernelFields map[string]json.RawMessage
+		_ = json.Unmarshal(root.Kernel, &kernelFields)
+		out.advancedDNS = advancedDNSFields(clientFields, kernelFields)
+		if out.advancedDNS {
+			safeClient := map[string]json.RawMessage{}
+			for k, v := range clientFields {
+				if k != "tun_dns" {
+					safeClient[k] = v
+				}
+			}
+			cb, _ = json.Marshal(safeClient)
+		}
+	}
+	if json.Unmarshal(cb, &out.client) != nil {
+		return out, fail("invalid_document", "client", "Expected client object")
+	}
 	if v, ok := clientFields["ipv6"]; ok && string(v) != "true" && string(v) != "false" {
 		return out, fail("invalid_document", "client.ipv6", "Expected boolean")
 	}
 	if v, ok := clientFields["close_on_switch"]; ok && string(v) != "true" && string(v) != "false" {
 		return out, fail("invalid_document", "client.close_on_switch", "Expected boolean")
+	}
+	if e := validateTunDNS(cb); e != nil {
+		return out, e
 	}
 	if e := validateSniff(cb); e != nil {
 		return out, e
@@ -213,7 +240,16 @@ func parseDocument(text, workspace string, formats ...DocumentFormat) (document,
 	if json.Unmarshal(root.Kernel, &raw) != nil || raw == nil {
 		return out, fail("invalid_document", "kernel", "Expected real Kat kernel object")
 	}
-	if format != FormatJSON {
+	if runtime.GOOS == "windows" {
+		out.advancedDNS = advancedDNSFields(clientFields, raw)
+		// Retired inputs are kept in out.text only. They never execute, even when
+		// latent/empty; the accepted enable/apply boundary requires explicit choice.
+		if out.advancedDNS {
+			sanitizeDNSProjection(raw)
+			out.client.TunDNS = nil
+		}
+	}
+	if format != FormatJSON && !out.advancedDNS {
 		if e := preserveYAMLDNSPolicy(text, raw); e != nil {
 			return out, fail("invalid_document", "kernel.dns.nameserver-policy", "Invalid ordered DNS policy")
 		}
@@ -261,7 +297,7 @@ func parseDocument(text, workspace string, formats ...DocumentFormat) (document,
 	c.Stats.Persist = &off
 	for _, p := range c.Providers {
 		if p.Type == "file" {
-			if st, e := os.Stat(p.Path); e == nil && !st.Mode().IsRegular() {
+			if st, e := userio.Stat(p.Path); e == nil && !st.Mode().IsRegular() {
 				return out, fail("invalid_kernel", "kernel.providers", "File provider must reference a regular file")
 			}
 		}
@@ -276,6 +312,7 @@ func parseDocument(text, workspace string, formats ...DocumentFormat) (document,
 			c.Providers[i].Path = filepath.Join(workspace, "providers", c.Providers[i].Name+".cache")
 		}
 	}
+	out.ruleRouting = c.Routing
 	switch cl.Mode {
 	case "global":
 		found := false
@@ -299,15 +336,21 @@ func parseDocument(text, workspace string, formats ...DocumentFormat) (document,
 	if e != nil {
 		return out, fail("invalid_kernel", "kernel", "Invalid runtime projection")
 	}
-	// Only desktop projection defaults to physical/system DNS. Explicit source
-	// upstreams (including old custom values) and server defaults are untouched.
-	if c.DNS == nil {
-		c.DNS = &kernel.DNSOptions{Server: "system"}
-	} else if c.DNS.Server == "" && len(c.DNS.Servers) == 0 && c.DNS.CacheEntries == nil {
-		v := *c.DNS
-		v.Server = "system"
-		c.DNS = &v
+	detour := ""
+	if out.ruleRouting != nil {
+		detour = out.ruleRouting.Final
 	}
+	if cl.Mode == "global" {
+		detour = cl.GlobalGroup
+	}
+	// Capture the original DNS settings before projecting the desktop's system
+	// default. Hosts/rules/cache alone do not select a root upstream, and the
+	// original cache value stays available to explicit per-domain upstreams.
+	tunDNS := cl.TunDNS
+	if out.advancedDNS {
+		tunDNS = nil
+	}
+	c.SetClientDNSConfig(c.DNS, tunDNS, cl.Mode, detour)
 	c.SetClientIPv6(cl.IPv6)
 	c.SetClientUnifiedDelay(cl.UnifiedDelay == nil || *cl.UnifiedDelay)
 	ownedGroups := map[string]bool{}
@@ -351,7 +394,7 @@ func parseDocument(text, workspace string, formats ...DocumentFormat) (document,
 	return out, nil
 }
 func privateRegular(path string) error {
-	st, e := os.Lstat(path)
+	st, e := userio.Lstat(path)
 	if e != nil {
 		return e
 	}
@@ -367,7 +410,7 @@ func readPrivate(path string, limit int64) ([]byte, error) {
 	if e := privateRegular(path); e != nil {
 		return nil, e
 	}
-	f, e := os.Open(path)
+	f, e := userio.Open(path)
 	if e != nil {
 		return nil, e
 	}
@@ -382,17 +425,17 @@ func atomicWrite(path string, b []byte, unchanged ...func() bool) error {
 	return atomicWriteContext(context.Background(), path, b, unchanged...)
 }
 func atomicWriteContext(ctx context.Context, path string, b []byte, unchanged ...func() bool) error {
-	if st, e := os.Lstat(path); e == nil && (!st.Mode().IsRegular() || rejectReparse(path) != nil) {
+	if st, e := userio.Lstat(path); e == nil && (!st.Mode().IsRegular() || rejectReparse(path) != nil) {
 		return errors.New("nonregular destination")
 	} else if e != nil && !os.IsNotExist(e) {
 		return e
 	}
-	f, e := os.CreateTemp(filepath.Dir(path), ".kat-write-*")
+	f, e := userio.CreateTemp(filepath.Dir(path), ".kat-write-*")
 	if e != nil {
 		return e
 	}
 	tmp := f.Name()
-	defer os.Remove(tmp)
+	defer userio.Remove(tmp)
 	if e = f.Chmod(0600); e == nil {
 		_, e = f.Write(b)
 	}

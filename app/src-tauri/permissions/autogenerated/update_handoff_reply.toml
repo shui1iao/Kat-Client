@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-update-handoff-reply"
+description = "Enables the update_handoff_reply command without any pre-configured scope."
+commands.allow = ["update_handoff_reply"]
+
+[[permission]]
+identifier = "deny-update-handoff-reply"
+description = "Denies the update_handoff_reply command without any pre-configured scope."
+commands.deny = ["update_handoff_reply"]

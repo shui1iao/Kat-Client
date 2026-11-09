@@ -1,9 +1,11 @@
-# Kat-Client v0.1.0
+# Kat-Client v0.2.0
 
-Windows x64，接受candidate24功能基线，仅统一正式版本/发布元数据。下载Kat-Setup-x64.exe；对应源码Kat-Source.tar.gz，校验见SHA256SUMS.txt。
+Windows x64 客户端正式版 `v0.2.0`（内置 Windows Core `v0.8.0`，`sequence: 1794300000`）。下载安装包 `Kat-Setup-x64.exe`；对应源码归档 `Kat-Source.zip` / `Kat-Source.tar.gz`，完整校验值见 `SHA256SUMS.txt`。
 
-**未签名，Windows安装/升级/UAC/TUN及恢复未实机验收。** 本次Linux交叉构建和NSIS离线组包通过；Linux可执行宿主测试243通过、6失败（既有托盘字符串/菜单预期及旧权限集合断言，与当前独立tray-menu权限边界不一致），没有修托盘功能或以交叉构建冒充实机通过。
+## 主要更新（v0.2.0 / Windows Core v0.8.0）
+- **双通道签名更新与本地包校验**：支持客户端与 Windows Core 独立在线更新检查与 Ed25519 签名清单校验（`key_id: 0afa646ee76f17d8`），安装器内置 `kat-package-auth.json` 及签名并在组包前通过 `update_manifest::verify_package` 离线门禁校验；通过 `Kat-Setup-x64.exe` 安装后检查同版本同 `sequence` 公开版本时正常识别为“已是最新版本”。
+- **六角色映像绑定与提权辅助**：完整包含 `kat-desktop.exe`、`kat-client-core.exe`、`kat-network-service.exe`、`kat-proxy-watchdog.exe`、`kat-elevate-helper.exe`、`kat-install-helper.exe` 六个 Windows x64 组件，映像 SHA-256 与 `sequence` 严格绑定。
+- **Windows Core v0.8.0（TUN / UDP / 进程归属与生命周期演进）**：合入 UDP EIM+EIF、有界原始元组进程归属、单计费器/DNS 生命周期与 TUN 平台清理恢复改进（内核源码指纹 `c40a0ccbf0f83239ec8ab75dc306f71056090ebf666dc5c160e4256dcf9efe63`）。
 
-core仍0.7.1/c24，非Kat-Server 0.7.2；BuildCommit是原接受core源码指纹截断，不是Git commit。安装映像hash绑定，不支持任意替换core。本版未增加自动更新、热安装、Gemini新修或新规则测试功能。
-
-Source-available：自研代码保留所有权利，公开不授予通用使用修改再分发许可；第三方/上游继续适用原许可。公共树不含历史分析/私有运行材料，实际编译源码完整对应新构建；见SOURCE-MANIFEST.json和BUILD-IDENTITY.json。
+## 权利与源码说明
+Source-available：Kat 自研代码保留所有权利，公开源码不授予通用使用、修改或再分发许可；第三方与上游代码继续适用各自原许可（见 `RIGHTS.md`）。实际编译源码与构建产物对应关系见 `SOURCE-MANIFEST.json` 和 `BUILD-IDENTITY.json`。

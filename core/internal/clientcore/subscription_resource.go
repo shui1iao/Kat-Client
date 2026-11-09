@@ -2,6 +2,7 @@ package clientcore
 
 import (
 	"bytes"
+	"github.com/shui1iao/Kat/internal/userio"
 	"io"
 	"os"
 )
@@ -13,7 +14,7 @@ func readSubscriptionResource(path string, limit int64) ([]byte, error) {
 	if limit <= 0 || limit > 64<<20 {
 		return nil, errResourceLimit
 	}
-	before, err := os.Lstat(path)
+	before, err := userio.Lstat(path)
 	if err != nil {
 		return nil, err
 	}

@@ -90,12 +90,14 @@ func (s *Outbound) UDP() bool    { return s.udp && s.under.UDP() }
 // lazily with the first Write (or before the first Read/CloseWrite, for
 // server-first protocols), so salt+headers+first payload share one write.
 func (s *Outbound) DialTCP(ctx context.Context, dst outbound.Addr) (net.Conn, error) {
+	diagnosticStarted := time.Now()
 	addr, e := appendAddr(nil, dst)
 	if e != nil {
 		return nil, e
 	}
 	c, e := s.under.DialTCP(ctx, s.server)
 	if e != nil {
+		outbound.ReportError(ctx, "shadowsocks", "connect", e, diagnosticStarted)
 		return nil, e
 	}
 	if s.obfs != nil {
@@ -503,4 +505,14 @@ func parseAddr(b []byte) (outbound.Addr, int, error) {
 // Destination rejection and ambiguous EOF/timeouts deliberately do not match.
 func IsProxyFailure(err error) bool {
 	return errors.Is(err, errAuth) || errors.Is(err, errFormat) || errors.Is(err, errTime) || errors.Is(err, errSalt)
+}
+
+func SafeFailure(e error) string {
+	switch {
+	case errors.Is(e, errAuth), errors.Is(e, errSalt):
+		return "authentication_integrity"
+	case errors.Is(e, errFormat), errors.Is(e, errTime), errors.Is(e, errAddress), errors.Is(e, errExhaust), errors.Is(e, errTooLarge):
+		return "protocol"
+	}
+	return ""
 }

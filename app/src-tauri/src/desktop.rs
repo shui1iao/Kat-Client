@@ -1,8 +1,10 @@
+#[path="desktop_update.rs"]
+mod software_updates;
 use crate::{error::{Error, Result}, protocol::validate_public, core_process::CoreProcess as Supervisor, supervisor::Life, windows::network::{NetworkController, NetworkStatus}};
 use serde_json::Value;
 use std::{sync::{Arc, atomic::{AtomicBool, Ordering}}, time::Duration};
 use tauri::{Manager, Emitter, tray::TrayIconBuilder};
-pub(super) struct Host { pub(super) tray_state:std::sync::Mutex<crate::tray_controls::MenuState>, tray:std::sync::Mutex<Option<tauri::tray::TrayIcon>>, core: Option<Supervisor>, core_error: Error, network: Arc<NetworkController>, quitting: AtomicBool, restarting:AtomicBool, app_restarting:AtomicBool, installing:AtomicBool, events:std::sync::Mutex<crate::safe_log::Ring>, settings:std::sync::Mutex<crate::preferences::DesktopPreferences>, settings_lock:std::sync::Mutex<()>, window_memory:std::sync::Mutex<crate::window_geometry::Persistence>, pending_maximize:AtomicBool, control:tokio::sync::Mutex<()>, store:crate::user_store::Store, _instance:std::sync::Mutex<Option<crate::windows::identity::Handle>> }
+pub(super) struct Host { pub(super) tray_state:std::sync::Mutex<crate::tray_controls::MenuState>, tray:std::sync::Mutex<Option<tauri::tray::TrayIcon>>, core: Option<Supervisor>, core_error: Error, network: Arc<NetworkController>, quitting: AtomicBool, restarting:AtomicBool, app_restarting:AtomicBool, installing:AtomicBool, events:Arc<std::sync::Mutex<crate::safe_log::Ring>>, settings:std::sync::Mutex<crate::preferences::DesktopPreferences>, settings_lock:std::sync::Mutex<()>, window_memory:std::sync::Mutex<crate::window_geometry::Persistence>, pending_maximize:AtomicBool, control:tokio::sync::Mutex<()>, store:crate::user_store::Store, _instance:std::sync::Mutex<Option<crate::windows::identity::Handle>> }
 impl Host{
  fn record<T>(&self,event:crate::safe_log::HostEvent,result:&Result<T>){self.events.lock().unwrap().record(event,result.as_ref().err().map(|e|e.code.as_str()));}
  fn tray_native_busy(&self)->bool{self.installing.load(Ordering::SeqCst)||self.quitting.load(Ordering::SeqCst)||self.restarting.load(Ordering::SeqCst)||self.app_restarting.load(Ordering::SeqCst)}
@@ -38,11 +40,30 @@ async fn core_request(state: tauri::State<'_, Host>, method: String, params: Opt
     state.ensure_not_app_restarting()?;
     let core = state.core.as_ref().ok_or_else(|| state.core_error.clone())?;
     // Endpoint-changing document mutations must first remove our OS redirects. UI re-fetches actual switches.
-    if ["core.stop", "document.apply", "core.reload"].contains(&method.as_str()) { let result=state.network.core_mutation(&method,params,Duration::from_secs(15)).await;state.record(crate::safe_log::HostEvent::Core,&result);return result; }
+    if ["core.stop", "document.apply", "core.reload"].contains(&method.as_str()) { let id=state.events.lock().unwrap().begin(&method);let started=std::time::Instant::now();let result=state.network.core_mutation(&method,params,Duration::from_secs(15)).await;state.events.lock().unwrap().operation(crate::safe_log::HostEvent::Core,&method,id,crate::log_context::Phase::Complete,result.as_ref().err().map(|e|e.code.as_str()),started.elapsed().as_millis().min(u64::MAX as u128)as u64,result.as_ref().err().map(|_|id));return result; }
     let timeout = crate::protocol::request_timeout(&method);
+    let operation=if !matches!(method.as_str(),"logs.get"|"logs.connections"|"logs.kernel"|"status"|"document.get"){Some((state.events.lock().unwrap().begin(&method),std::time::Instant::now()))}else{None};
     let result=core.request_public(&method, params, timeout).await;
-    if method!="logs.get"&&method!="status"&&method!="document.get"{state.record(crate::safe_log::HostEvent::Core,&result);}result
+    if let Some((id,started))=operation{state.events.lock().unwrap().operation(crate::safe_log::HostEvent::Core,&method,id,crate::log_context::Phase::Complete,result.as_ref().err().map(|e|e.code.as_str()),started.elapsed().as_millis().min(u64::MAX as u128)as u64,result.as_ref().err().map(|_|id));}result
 }
+#[tauri::command]
+async fn update_recover(app:tauri::AppHandle)->Result<()>{software_updates::recover(&app).await}
+#[tauri::command]
+fn update_state(app:tauri::AppHandle)->software_updates::View{software_updates::view(&app)}
+#[tauri::command]
+fn update_check(app:tauri::AppHandle)->Result<()>{software_updates::check(app)}
+#[tauri::command]
+fn update_download(app:tauri::AppHandle,offer:String)->Result<()>{software_updates::download(app,offer)}
+#[tauri::command]
+fn update_install(app:tauri::AppHandle,offer:String)->Result<()>{software_updates::install(&app,&offer)}
+#[tauri::command]
+fn update_cancel(app:tauri::AppHandle,offer:String)->Result<()>{software_updates::cancel(&app,&offer)}
+#[tauri::command]
+fn update_settings(app:tauri::AppHandle,auto_check:bool)->Result<()>{software_updates::settings(&app,auto_check)}
+#[tauri::command]
+fn update_handoff_reply(app:tauri::AppHandle,nonce:String,accepted:bool)->Result<()>{software_updates::answer(&app,&nonce,accepted)}
+#[tauri::command]
+fn update_dismiss(app:tauri::AppHandle){software_updates::dismiss(&app)}
 // One normal-user operation, no new core or privileged service method.
 async fn restart_kernel(app:&tauri::AppHandle,state:&Host)->Result<()>{
  state.ensure_not_app_restarting()?;
@@ -62,18 +83,31 @@ async fn core_restart(app:tauri::AppHandle,state:tauri::State<'_,Host>)->Result<
 #[tauri::command]
 async fn network_status(state: tauri::State<'_, Host>) -> Result<NetworkStatus> { state.network.status().await }
 #[tauri::command]
-async fn system_proxy_set(state: tauri::State<'_, Host>, enabled: bool) -> Result<NetworkStatus> { let _control=state.control.lock().await;state.ensure_not_app_restarting()?;let result=state.network.proxy_set(enabled).await;state.record(crate::safe_log::HostEvent::Proxy,&result);let status=result?;{let _intent=state.settings_lock.lock().unwrap();crate::preferences::set_intent(&state.store,Some(enabled),None)?;}Ok(status) }
+async fn system_proxy_set(state: tauri::State<'_, Host>, enabled: bool) -> Result<NetworkStatus> { let _control=state.control.lock().await;state.ensure_not_app_restarting()?;
+ let id=state.events.lock().unwrap().begin("proxy.set");let started=std::time::Instant::now();let result:Result<NetworkStatus>=async{let status=state.network.proxy_set(enabled).await?;{let _intent=state.settings_lock.lock().unwrap();crate::preferences::set_intent(&state.store,Some(enabled),None).map_err(|_|Error::new("NETWORK_INTENT_PENDING","网络状态已提交，但开启意图未能保存；请重试保存，当前网络未被撤销"))?;}Ok(status)}.await;state.events.lock().unwrap().operation(crate::safe_log::HostEvent::Proxy,"proxy.set",id,crate::log_context::Phase::Complete,result.as_ref().err().map(|e|e.code.as_str()),started.elapsed().as_millis().min(u64::MAX as u128)as u64,result.as_ref().err().map(|_|id));result }
+
 #[tauri::command]
-async fn tun_set(state: tauri::State<'_, Host>, enabled: bool) -> Result<NetworkStatus> { let _control=state.control.lock().await;state.ensure_not_app_restarting()?;let result=state.network.tun_set(enabled).await;state.record(crate::safe_log::HostEvent::Tun,&result);let status=result?;{let _intent=state.settings_lock.lock().unwrap();crate::preferences::set_intent(&state.store,None,Some(enabled))?;}Ok(status) }
+async fn tun_set(app: tauri::AppHandle, state: tauri::State<'_, Host>, enabled: bool) -> Result<NetworkStatus> { let _control=state.control.lock().await;state.ensure_not_app_restarting()?;
+ let id=state.events.lock().unwrap().begin("tun.set");let started=std::time::Instant::now();let result:Result<NetworkStatus>=async{
+  let off_intent=if !enabled{let _intent=state.settings_lock.lock().unwrap();crate::preferences::set_intent(&state.store,None,Some(false)).map_err(|_|Error::new("NETWORK_INTENT_PENDING","TUN关闭意图未能保存；已继续尝试真实清理，请重试保存"))}else{Ok(())};
+  let status=state.network.tun_set(enabled).await?;off_intent?;
+  if enabled{let _intent=state.settings_lock.lock().unwrap();crate::preferences::set_intent(&state.store,None,Some(true)).map_err(|_|Error::new("NETWORK_INTENT_PENDING","网络状态已提交，但开启意图未能保存；请重试保存，当前网络未被撤销"))?;}
+  Ok(status)}.await;if result.is_ok()||!enabled{software_updates::set_startup_tun_pending(&app,false);}state.events.lock().unwrap().operation(crate::safe_log::HostEvent::Tun,"tun.set",id,crate::log_context::Phase::Complete,result.as_ref().err().map(|e|e.code.as_str()),started.elapsed().as_millis().min(u64::MAX as u128)as u64,result.as_ref().err().map(|_|id));result }
+
 #[tauri::command]
-async fn network_service_install(_state:tauri::State<'_,Host>)->Result<NetworkStatus>{Err(Error::new("INSTALL_USE_SETUP","Use Kat Setup to install or update; exit the current GUI normally first"))}
+async fn network_service_install(_state:tauri::State<'_,Host>)->Result<NetworkStatus>{Err(Error::new("INSTALL_USE_SETUP","请使用 Kat Setup 安装或更新；新版支持安全交接，旧版首次升级需正常退出"))}
 
 #[tauri::command]
 async fn network_service_uninstall(state: tauri::State<'_, Host>) -> Result<NetworkStatus> { let _control=state.control.lock().await;state.ensure_not_app_restarting()?;let r=state.network.install(true).await;state.record(crate::safe_log::HostEvent::Service,&r);r }
 #[tauri::command]
 fn desktop_settings_get(state:tauri::State<'_,Host>)->Result<crate::preferences::SettingsReply>{let _lock=state.settings_lock.lock().unwrap();crate::windows::autostart::get(&state.store)}
 #[tauri::command]
-fn desktop_settings_set(state:tauri::State<'_,Host>,patch:crate::preferences::Patch)->Result<crate::preferences::SettingsReply>{let _lock=state.settings_lock.lock().unwrap();state.ensure_not_app_restarting()?;let result=crate::windows::autostart::set(&state.store,patch);state.record(crate::safe_log::HostEvent::Settings,&result);let reply=result?;*state.settings.lock().unwrap()=reply.preferences.clone();if !reply.preferences.remember_window{state.window_memory.lock().unwrap().debounce.cancel();}Ok(reply)}
+async fn desktop_settings_set(state:tauri::State<'_,Host>,patch:crate::preferences::Patch)->Result<crate::preferences::SettingsReply>{state.ensure_not_app_restarting()?;
+ let days=patch.log_retention_days;
+ let reply={let _lock=state.settings_lock.lock().unwrap();let result=crate::windows::autostart::set(&state.store,patch);state.record(crate::safe_log::HostEvent::Settings,&result);let reply=result?;*state.settings.lock().unwrap()=reply.preferences.clone();if !reply.preferences.remember_window{state.window_memory.lock().unwrap().debounce.cancel();}reply};
+ if let Some(days)=days{crate::safe_archive::retention(days)?;if crate::windows::scm::query()?.1{crate::windows::service_client::call(crate::service_protocol::ServiceRequest::LogRetention{days}).await?;}}
+ Ok(reply)
+}
 // Projection only: no native copy of selected/fixed/configuration is written.
 #[tauri::command(rename_all="snake_case")]
 fn tray_sync(window:tauri::WebviewWindow,state:tauri::State<'_,Host>,snapshot:Option<crate::tray_controls::Snapshot>,listener_ready:Option<bool>,delivery_ack:Option<String>)->Result<()>{
@@ -110,7 +144,9 @@ fn tray_menu_select(app:tauri::AppHandle,window:tauri::WebviewWindow,state:tauri
  if id.len()>128||revision.len()>20{return Err(Error::new("INVALID_PARAMS","Invalid tray selection"));}
  let result=(||{
   if !window.is_visible().unwrap_or(false){return Err(Error::new("ACTION_DENIED","托盘菜单已关闭，请重新打开后选择"));}
-  if id!="show"&&state.tray_native_busy(){return Err(Error::new("CORE_BUSY","生命周期操作尚未完成，请查看主窗口"));}
+  if id=="show"{let _=crate::tray_popup::hide(&app);show_main(&app);return Ok(());}
+  if id=="quit"{let _=crate::tray_popup::hide(&app);quit(app.clone());return Ok(());}
+  if state.tray_native_busy(){return Err(Error::new("CORE_BUSY","生命周期操作尚未完成，请查看主窗口"));}
   let delivery={
    // Same mutex owns snapshot, revision, ID resolution and event admission.
    let mut current=state.tray_state.lock().unwrap();current.native_busy(state.tray_native_busy());let delivery=current.select(&revision,&id)?;
@@ -143,21 +179,21 @@ pub(super) fn tray_feedback(app:&tauri::AppHandle,error:Error){
  // Before the main listener exists an event alone is not visible feedback.
  if !ready{crate::windows::installed_handoff::message(&error.message);}
 }
-fn show_tray_popup(app:&tauri::AppHandle,_rect:tauri::Rect,point:tauri::PhysicalPosition<f64>){
+fn show_tray_popup(app:&tauri::AppHandle,rect:tauri::Rect,point:tauri::PhysicalPosition<f64>){
  let a=app.clone();let _=app.run_on_main_thread(move||{
   // Reserve/cancel on the same UI queue as geometry applies and dismissals.
   let epoch={let state=a.state::<Host>();let mut current=state.tray_state.lock().unwrap();
    current.popup_epoch=current.popup_epoch.wrapping_add(1);current.popup=None;current.popup_epoch};
   if let Some(w)=a.get_webview_window(crate::tray_popup::LABEL){let _=w.hide();}
   // Tauri documents WebView2 creation deadlocks in synchronous event handlers.
-  tauri::async_runtime::spawn_blocking(move||open_tray_popup(&a,point,epoch));
+  tauri::async_runtime::spawn_blocking(move||open_tray_popup(&a,rect,point,epoch));
  });
 }
-fn open_tray_popup(app:&tauri::AppHandle,point:tauri::PhysicalPosition<f64>,epoch:u64){
+fn open_tray_popup(app:&tauri::AppHandle,rect:tauri::Rect,point:tauri::PhysicalPosition<f64>,epoch:u64){
  let window=crate::tray_popup::ensure(app);let a=app.clone();
  let _=app.run_on_main_thread(move||{
   if a.state::<Host>().tray_state.lock().unwrap().popup_epoch!=epoch{return;}
-  let result=window.and_then(|w|crate::tray_popup::prepare(&a,&w,point,epoch));
+  let result=window.and_then(|w|crate::tray_popup::prepare(&a,&w,rect,point,epoch));
   if let Err(e)=result{let _=crate::tray_popup::hide(&a);tray_feedback(&a,e);return;}
   tauri::async_runtime::spawn(async move{
    // Hidden WebView timers may be throttled. Two stable samples before and
@@ -193,20 +229,27 @@ async fn backup_list(state:tauri::State<'_,Host>)->Result<crate::backups::Backup
 #[tauri::command]
 async fn backup_read(state:tauri::State<'_,Host>,id:String)->Result<crate::backups::BackupRead>{let _guard=state.control.lock().await;let result=async{let b=crate::backups::read(&state.store,&id)?;let c=state.core.as_ref().ok_or_else(||state.core_error.clone())?;let v=c.request("document.validate",serde_json::json!({"text":b.text,"format":b.format}),Duration::from_secs(5)).await?;crate::document::ValidatedDocument::from_reply(&b.text,b.format,&v)?;Ok(b)}.await;state.record(crate::safe_log::HostEvent::Backups,&result);result}
 #[tauri::command]
+async fn document_preserve_dns(state:tauri::State<'_,Host>,text:String,format:crate::document::DocumentFormat)->Result<crate::backups::Saved>{let _control=state.control.lock().await;state.ensure_not_app_restarting()?;let core=state.core.as_ref().ok_or_else(||state.core_error.clone())?;let reply=core.request("document.validate",serde_json::json!({"text":text,"format":format}),Duration::from_secs(5)).await?;if reply["advanced_dns"]!=true{return Err(Error::new("INVALID_PARAMS","Only retired DNS source can be preserved by this operation"));}let validated=crate::document::ValidatedDocument::from_reply(&text,format,&reply)?;crate::backups::snapshot_validated(&state.store,&validated)?;Ok(crate::backups::Saved{saved:true})}
+#[tauri::command]
 fn workspace_open(state:tauri::State<'_,Host>)->Result<crate::backups::Opened>{let result=crate::windows::dialogs::workspace_open(&state.store);state.record(crate::safe_log::HostEvent::Workspace,&result);result}
 async fn diagnostic(state:&Host)->crate::diagnostics::DiagnosticReply{
  let mut reply=crate::diagnostics::DiagnosticReply::new(state.events.lock().unwrap().entries());
  match state.network.status().await{Ok(v)=>match serde_json::to_value(v){Ok(v)=>reply.network(&v),Err(_)=>reply.error("DIAGNOSTIC_FIELD_REJECTED")},Err(e)=>reply.error(&e.code)}
+ reply.host_events=state.events.lock().unwrap().entries();
  if let Some(c)=&state.core{
   reply.from_core(&c.snapshot()).await;
  }else{reply.error(&state.core_error.code);}
+ reply.history=Some(crate::safe_archive::snapshot());
+ match crate::windows::service_client::call(crate::service_protocol::ServiceRequest::SafeHistory).await{Ok(v)=>{match serde_json::from_value::<crate::safe_archive::Snapshot>(v){Ok(s)if s.entries.len()<=16&&s.entries.iter().all(crate::safe_log::valid_persistent)=>reply.service_history=Some(s),_=>reply.error("DIAGNOSTIC_FIELD_REJECTED")}},Err(e)=>{if !matches!(e.code.as_str(),"SERVICE_NOT_READY"){reply.error("LOG_COLLECTION_FAILED");}}}
+ if reply.history.as_ref().is_some_and(|s|s.write_failures>0||s.dropped>0)||reply.service_history.as_ref().is_some_and(|s|s.write_failures>0||s.dropped>0){reply.error("LOG_WRITE_FAILED");}
  reply
 }
 #[tauri::command]
 async fn diagnostics_get(state:tauri::State<'_,Host>)->Result<crate::diagnostics::DiagnosticReply>{Ok(diagnostic(&state).await)}
 #[tauri::command]
-async fn diagnostics_export(app:tauri::AppHandle,state:tauri::State<'_,Host>)->Result<crate::backups::Saved>{let path=select_file(app,crate::windows::dialogs::Kind::DiagnosticExport).await?;if path.is_none(){return Ok(crate::backups::Saved{saved:false});}let reply=diagnostic(&state).await;let bytes=serde_json::to_vec_pretty(&reply).map_err(|_|Error::new("DIAGNOSTIC_FIELD_REJECTED","Cannot encode safe diagnostics"))?;let result=crate::windows::dialogs::save(path,&bytes,1024*1024);state.record(crate::safe_log::HostEvent::Diagnostics,&result);result}
+async fn diagnostics_export(app:tauri::AppHandle,state:tauri::State<'_,Host>)->Result<crate::backups::Saved>{let path=select_file(app,crate::windows::dialogs::Kind::DiagnosticExport).await?;if path.is_none(){return Ok(crate::backups::Saved{saved:false});}let mut reply=diagnostic(&state).await;reply.bound_export();let bytes=serde_json::to_vec_pretty(&reply).map_err(|_|Error::new("DIAGNOSTIC_FIELD_REJECTED","Cannot encode safe diagnostics"))?;let result=crate::windows::dialogs::save(path,&bytes,1024*1024);state.record(crate::safe_log::HostEvent::Diagnostics,&result);result}
 // Fixed normal-user placement only. Errors are diagnostic; never propagate into network/exit recovery.
+pub(super) fn prepare_uac_window(app:&tauri::AppHandle){show_main(app);if let Some(w)=app.get_webview_window("main"){crate::windows::identity::set_uac_owner(w.hwnd().map(|h|h.0 as isize).unwrap_or(0));}}
 fn save_window_now(app:&tauri::AppHandle){
  let state=app.state::<Host>();let mut memory=state.window_memory.lock().unwrap();memory.debounce.cancel();
  if !state.settings.lock().unwrap().remember_window{return;}
@@ -272,10 +315,8 @@ fn restart_app(app:tauri::AppHandle)->Result<()>{
  if state.app_restarting.compare_exchange(false,true,Ordering::SeqCst,Ordering::SeqCst).is_err(){show_main(&app);return Err(Error::new("CORE_BUSY","应用重启已在进行，请勿重复操作"));}
  let admitted=(||{
   if state.installing.load(Ordering::SeqCst){return Err(Error::new("INSTALL_BUSY","安装操作尚未完成，暂不能重启应用"));}
-  if state.quitting.load(Ordering::SeqCst)||state.restarting.load(Ordering::SeqCst){return Err(Error::new("CORE_BUSY","退出或内核重启尚未完成，暂不能重启应用"));}
-  let _control=state.control.try_lock().map_err(|_|Error::new("CORE_BUSY","原生操作尚未完成，请稍后重启应用"))?;
+  if state.quitting.load(Ordering::SeqCst){return Err(Error::new("CORE_BUSY","退出尚未完成，暂不能重启应用"));}
   let _settings=state.settings_lock.try_lock().map_err(|_|Error::new("CORE_BUSY","桌面设置尚未保存完成，请稍后重启应用"))?;
-  if state.tray_state.lock().unwrap().snapshot.busy{return Err(Error::new("CORE_BUSY","请先保存或取消草稿，并等待当前操作完成后再重启应用"));}
   // Validate, but never rewrite, the persisted intent used by normal startup.
   crate::preferences::intent(&state.store)?;
   crate::windows::identity::require_normal_user()?;
@@ -294,12 +335,14 @@ fn restart_app(app:tauri::AppHandle)->Result<()>{
  tauri::async_runtime::spawn(async move{
   let state=app.state::<Host>();
   let result=async{
-   // Refuse, rather than enqueue behind a new/unfinished native mutation.
-   let _control=state.control.try_lock().map_err(|_|Error::new("CORE_BUSY","原生操作尚未完成，应用重启已取消"))?;
-   if state.installing.load(Ordering::SeqCst)||state.quitting.load(Ordering::SeqCst)||state.restarting.load(Ordering::SeqCst){return Err(Error::new("CORE_BUSY","另一个生命周期操作尚未完成，应用重启已取消"));}
-   if state.tray_state.lock().unwrap().snapshot.busy{return Err(Error::new("CORE_BUSY","请先保存或取消草稿，并等待当前操作完成后再重启应用"));}
-   if let Err(e)=crate::lifecycle::prepare_app_restart(state.network.as_ref()).await{
-    let _=app.emit("network-recovery-required",e.code.clone());return Err(e);
+   if let Ok(_control)=tokio::time::timeout(Duration::from_secs(3),state.control.lock()).await{
+    if crate::lifecycle::prepare_app_restart(state.network.as_ref()).await.is_err(){
+     let _=crate::windows::proxy::restore();
+     if let Some(c)=&state.core{let _=c.snapshot().terminate(Duration::from_secs(2)).await;}
+    }
+   }else{
+    let _=crate::windows::proxy::restore();
+    if let Some(c)=&state.core{let _=c.snapshot().terminate(Duration::from_secs(2)).await;}
    }
    let a=app.clone();
    app.run_on_main_thread(move||{
@@ -308,7 +351,7 @@ fn restart_app(app:tauri::AppHandle)->Result<()>{
     // Tauri process::restart spawns before exit(0). Release the non-inheritable
     // singleton only after owned network/core/monitor cleanup has succeeded.
     // This explicit terminal path does not rely on ExitRequested for cleanup.
-    a.cleanup_before_exit();drop(instance.take());
+    crate::safe_archive::flush();a.cleanup_before_exit();drop(instance.take());
     tauri::process::restart(&env);
    }).map_err(|_|Error::new("WINDOW_FAILED","无法安排应用重启，窗口已保留；网络和内核可能已停止，请检查状态后重试"))?;
    Ok(())
@@ -332,14 +375,14 @@ fn quit(app: tauri::AppHandle) {
         let state=app.state::<Host>();
         let _control=state.control.lock().await;
         if state.app_restarting.load(Ordering::SeqCst){state.quitting.store(false,Ordering::SeqCst);return;}
-        let result=crate::lifecycle::quit(state.network.as_ref()).await;state.record(crate::safe_log::HostEvent::Quit,&result);
+        let result=crate::lifecycle::quit(state.network.as_ref()).await;state.record(crate::safe_log::HostEvent::Quit,&result);crate::safe_log::component("component.exited",crate::log_context::Component::Gui,"quit",crate::log_context::Phase::Exit,result.as_ref().err().map(|e|e.code.as_str()),None);
         if let Err(e) = result {
             state.quitting.store(false, Ordering::SeqCst);
-            let _=app.emit("network-recovery-required", e.code);
+            let _=app.emit("network-recovery-required", crate::tun_diagnostics::safe_event(&e));
             show_main(&app);
             return;
         }
-        app.exit(0);
+        crate::safe_archive::flush();app.exit(0);
     });
 }
 #[tauri::command]
@@ -363,15 +406,18 @@ pub fn run() {
     match crate::windows::installed_handoff::receive(){Ok(true)=>{},Ok(false)=>return,Err(_)=>{crate::windows::installed_handoff::message("网络服务已安装，但自动打开已安装版失败。原窗口若仍在运行会予以保留；否则请从开始菜单打开 Kat（不要以管理员运行）。");return;}}
     let built=tauri::Builder::default()
 
-    .invoke_handler(tauri::generate_handler![core_request, core_restart, network_status, system_proxy_set, tun_set, network_service_install, network_service_uninstall, window_action, desktop_settings_get, desktop_settings_set, tray_sync, document_import, document_export, backup_list, backup_read, workspace_open, diagnostics_get, diagnostics_export, tray_menu_state, tray_menu_select])
+    .invoke_handler(tauri::generate_handler![update_recover,update_state,update_check,update_download,update_install,update_cancel,update_settings,update_handoff_reply,update_dismiss,core_request, core_restart, network_status, system_proxy_set, tun_set, network_service_install, network_service_uninstall, window_action, desktop_settings_get, desktop_settings_set, tray_sync, document_import, document_export, backup_list, backup_read, document_preserve_dns, workspace_open, diagnostics_get, diagnostics_export, tray_menu_state, tray_menu_select])
     .setup(move |app| {
         if let Err(e)=crate::windows::identity::require_normal_user(){if e.code=="GUI_ELEVATED"{crate::windows::identity::leave_elevated_launch();}return Err(Box::<dyn std::error::Error>::from(e));}
         // Static, local-only tray capability; main-local/host-controls are unchanged.
         app.add_capability(include_str!("../capabilities/tray-menu.json"))?;
+        crate::windows::update_handoff::ensure_start_allowed()?;
         let instance=match crate::windows::identity::single_instance(){Ok(i)=>i,Err(e)if e.code=="ALREADY_RUNNING"=>{crate::windows::identity::wake_existing();if installed_handoff{crate::windows::installed_handoff::message("网络服务已安装，但另一 Kat 实例占用了当前用户入口。请先退出其它 Kat 窗口，再从开始菜单打开已安装版；不会启动第二个网络控制器。");}std::process::exit(0);},Err(e)=>return Err(e.into())};
         let workspace=app.path().app_local_data_dir()?;
         let store=crate::user_store::Store::new(workspace.clone())?;
+        app.manage(software_updates::State::new(&store)?);
         let loaded=crate::preferences::load(&store);let settings_error=loaded.as_ref().err().cloned();let settings=loaded.unwrap_or_default();
+        crate::safe_archive::init_user(&store,settings.log_retention_days);
         let intent=crate::preferences::intent(&store);let intent_error=intent.as_ref().err().cloned();let last=intent.unwrap_or_default();
         let (core, core_error)=tauri::async_runtime::block_on(async {
             let result=async {
@@ -382,9 +428,32 @@ pub fn run() {
             match result { Ok(c)=>(Some(c),Error::new("CORE_UNAVAILABLE","Core unavailable")), Err(e)=>(None,e) }
         });
         let network=Arc::new(NetworkController::new(workspace,core.clone())?);
+        let events=network.events.clone();
         let n=network.clone(); let handle=app.handle().clone();
-        tauri::async_runtime::spawn(network.clone().monitor());
-        app.manage(Host {tray_state:std::sync::Mutex::new(crate::tray_controls::MenuState::default()),tray:std::sync::Mutex::new(None),core,core_error,network,quitting:AtomicBool::new(false),restarting:AtomicBool::new(false),app_restarting:AtomicBool::new(false),installing:AtomicBool::new(false),events:std::sync::Mutex::new(crate::safe_log::Ring::default()),settings:std::sync::Mutex::new(settings.clone()),settings_lock:std::sync::Mutex::new(()),window_memory:std::sync::Mutex::new(crate::window_geometry::Persistence::default()),pending_maximize:AtomicBool::new(false),control:tokio::sync::Mutex::new(()),store,_instance:std::sync::Mutex::new(Some(instance))});
+        let quit_handle=handle.clone();network.set_quit_notice(move|waiting|{let _=quit_handle.emit("quit-cleanup-pending",waiting);if waiting{show_main(&quit_handle);}});
+        let monitor_handle=handle.clone();tauri::async_runtime::spawn(network.clone().monitor(move|e|{let _=monitor_handle.emit("network-recovery-required",crate::tun_diagnostics::safe_event(&e));let _=monitor_handle.emit("network-changed",());}));
+        if let Some(c)=core.clone(){let e=events.clone();tauri::async_runtime::spawn(async move{
+            let(mut instance,mut after)=(0u64,0u64);let mut changes=c.life();
+            loop{
+                // Mark the owner notification before checking the exact child, so a new
+                // publication between snapshot and wait cannot be lost. Never poll a dead child.
+                changes.borrow_and_update();let child=c.snapshot();let mut life=child.life();
+                if matches!(*life.borrow(),Life::Exited(_)){
+                    if !child.same_instance(&c.snapshot()){continue;}
+                    if changes.changed().await.is_err(){break;}continue;
+                }
+                tokio::select!{_ = tokio::time::sleep(Duration::from_millis(500))=>{},r=life.changed()=>{if r.is_err(){break;}continue;}}
+                if c.in_transition()||child.update_pending()||!child.same_instance(&c.snapshot())||matches!(*life.borrow(),Life::Exited(_)){continue;}
+                let result=async{let v=child.request("logs.get",serde_json::json!({"instance":instance,"after":after,"limit":500}),Duration::from_secs(3)).await?;let current=v["instance"].as_u64().ok_or_else(||Error::new("CORE_LOGS_REJECTED","Missing log instance"))?;let entries=crate::safe_log::core_entries(&v).map_err(|_|Error::new("CORE_LOGS_REJECTED","Invalid safe core events"))?;if current!=instance{instance=current;after=0;}for entry in entries{if entry.seq>after{after=entry.seq;crate::safe_archive::enqueue(&entry);}}Ok::<(),Error>(())}.await;
+                if let Err(err)=result{
+                    // The supervisor records the first terminal error and its primary once.
+                    // Do not re-label it as a new collection failure every 500 ms.
+                    if !c.in_transition()&&!child.update_pending()&&child.same_instance(&c.snapshot())&&!matches!(*life.borrow(),Life::Exited(_))&&!matches!(err.code.as_str(),"CORE_EXITED"|"CORE_UPDATE_IN_PROGRESS"|"CORE_MUTATION_UNCERTAIN"){e.lock().unwrap().record(crate::safe_log::HostEvent::Diagnostics,Some("LOG_COLLECTION_FAILED"));}
+                }
+            }
+        });}
+        let retention_network=network.clone();let retention_days=settings.log_retention_days;tauri::async_runtime::spawn(async move{if crate::windows::scm::query().is_ok_and(|(_,running,_)|running){let _=crate::windows::service_client::call(crate::service_protocol::ServiceRequest::LogRetention{days:retention_days}).await;}let _=retention_network;});
+        app.manage(Host {tray_state:std::sync::Mutex::new(crate::tray_controls::MenuState::default()),tray:std::sync::Mutex::new(None),core,core_error,network,quitting:AtomicBool::new(false),restarting:AtomicBool::new(false),app_restarting:AtomicBool::new(false),installing:AtomicBool::new(false),events,settings:std::sync::Mutex::new(settings.clone()),settings_lock:std::sync::Mutex::new(()),window_memory:std::sync::Mutex::new(crate::window_geometry::Persistence::default()),pending_maximize:AtomicBool::new(false),control:tokio::sync::Mutex::new(()),store,_instance:std::sync::Mutex::new(Some(instance))});
         // Stable generation watcher. A delayed old-generation exit may never
         // tear down networking after a newer explicit restart has restored it.
         // App restart owns its cleanup through relaunch; do not queue another
@@ -394,24 +463,31 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {loop {
                 if matches!(*life.borrow(),Life::Exited(_)) {
                     let state=handle.state::<Host>();let _control=state.control.lock().await;
-                    if !state.app_restarting.load(Ordering::SeqCst)&&matches!(*c.life().borrow(),Life::Exited(_)){let _=n.cleanup().await;let _=handle.emit("network-changed",());}
+                    if !state.app_restarting.load(Ordering::SeqCst)&&!state.quitting.load(Ordering::SeqCst)&&!state.restarting.load(Ordering::SeqCst)&&!state.installing.load(Ordering::SeqCst)&&matches!(*c.life().borrow(),Life::Exited(_)){
+                     let original=match c.life().borrow().clone(){Life::Exited(e)=>Some(e),_=>None};
+                     let recovered=if n.has_owned_tun_session(){n.recover_failed_core().await}else{n.cleanup().await};
+                     if let Some(e)=original{let _=handle.emit("network-recovery-required",crate::tun_diagnostics::safe_event(&e));}
+                     if let Err(e)=recovered{state.record::<()>(crate::safe_log::HostEvent::Recovery,&Err(e.clone()));let _=handle.emit("network-recovery-required",crate::tun_diagnostics::safe_event(&e));}
+                     let _=handle.emit("network-changed",());
+                    }
                 }
                 if life.changed().await.is_err(){break;}
             }});
         }
-        app.state::<Host>().events.lock().unwrap().record(crate::safe_log::HostEvent::Started,None);
+        app.state::<Host>().events.lock().unwrap().record(crate::safe_log::HostEvent::Started,None);crate::safe_log::component("component.started",crate::log_context::Component::Gui,"startup",crate::log_context::Phase::Commit,None,None);crate::safe_log::component("component.ready",crate::log_context::Component::Gui,"startup",crate::log_context::Phase::Complete,None,None);
         let config=app.config().app.windows.first().ok_or("Missing main window configuration")?;
         let window=tauri::WebviewWindowBuilder::from_config(app,config)?
           .on_page_load(|w,payload|{if matches!(payload.event(),tauri::webview::PageLoadEvent::Started){w.state::<Host>().tray_state.lock().unwrap().listener_ready=false;}})
           .transparent(true)
           .on_navigation(|url| url.scheme()=="tauri" || (url.scheme()=="http" && url.host_str()==Some("tauri.localhost")))
           .icon(tauri::image::Image::new_owned(include_bytes!("../icons/icon-32.rgba").to_vec(),32,32))?
-          .visible((installed_handoff||crate::preferences::initially_visible(&settings,settings_error.is_some()||intent_error.is_some()||app.state::<Host>().core.is_none())) && !settings.remember_window).build()?;
+          .visible((installed_handoff||crate::preferences::initially_visible(&settings,settings_error.is_some()||intent_error.is_some()||app.state::<Host>().core.is_none())||last.tun) && !settings.remember_window).build()?;
+        crate::windows::identity::set_uac_owner(window.hwnd().map(|h|h.0 as isize).unwrap_or(0));
         crate::acrylic::install(&window);
         if settings.remember_window{
           let result=crate::windows::window_state::restore(&window,&app.state::<Host>().store);
           match result{Ok((maximized,error))=>{app.state::<Host>().pending_maximize.store(maximized,Ordering::SeqCst);if let Some(e)=error{app.state::<Host>().record::<()>(crate::safe_log::HostEvent::Settings,&Err(e));}},Err(e)=>{app.state::<Host>().record::<()>(crate::safe_log::HostEvent::Settings,&Err(e));}}
-          if installed_handoff||crate::preferences::initially_visible(&settings,settings_error.is_some()||intent_error.is_some()||app.state::<Host>().core.is_none()){show_main(app.handle());}
+          if installed_handoff||crate::preferences::initially_visible(&settings,settings_error.is_some()||intent_error.is_some()||app.state::<Host>().core.is_none())||last.tun{show_main(app.handle());}
         }
         window.on_window_event({let a=app.handle().clone();move |e| match e{
           tauri::WindowEvent::CloseRequested{api,..}=>{api.prevent_close();if a.state::<Host>().installing.load(Ordering::SeqCst){show_main(&a);return;}save_window_now(&a);if a.state::<Host>().settings.lock().unwrap().close_action==crate::preferences::CloseAction::Quit{quit(a.clone());}else{let _=close_to_tray(&a);}},
@@ -421,18 +497,23 @@ pub fn run() {
           let state=a.state::<Host>();let _control=state.control.lock().await;
           let result=if let Some(e)=settings_error.or(intent_error){Err(e)}else if state.core.is_none(){Err(state.core_error.clone())}else{
             let migration=crate::windows::autostart::migrate_owned(&state.store);
-            let recovery=match migration{Ok(())=>state.network.cleanup().await,Err(e)=>Err(e)};
-            if let Err(e)=recovery{Err(e)}else{crate::lifecycle::startup(state.network.as_ref(),crate::preferences::startup_plan(last)).await}
+            let recovery=match migration{Ok(())=>crate::lifecycle::trace("startup.cleanup",state.network.cleanup()).await,Err(e)=>Err(e)};
+            if let Err(e)=recovery{Err(e)}else{match software_updates::keep_core_stopped(&state.store){Ok(true)=>Ok(false),Ok(false)=>crate::lifecycle::startup_base(state.network.as_ref(),crate::preferences::startup_plan(last)).await,Err(e)=>Err(e)}}
           };
-          state.record(crate::safe_log::HostEvent::Startup,&result);
-          if let Err(e)=result{let _=a.emit("network-recovery-required",e.code);show_main(&a);}
+          let need_tun=matches!(result,Ok(true));
+          if !need_tun{state.record(crate::safe_log::HostEvent::Startup,&result);}
+          if let Err(e)=&result{let _=a.emit("network-recovery-required",crate::tun_diagnostics::safe_event(e));show_main(&a);}
+          drop(_control);
+          let _=a.emit("network-changed",());
+          if need_tun{software_updates::set_startup_tun_pending(&a,true);}
+          let _=software_updates::confirm_install(a.clone());
         });
         Ok(())
     })
     .build(tauri::generate_context!());
     let built=match built{Ok(a)=>a,Err(_)=>{crate::windows::installed_handoff::message("Kat 窗口初始化失败，请从开始菜单或 Program Files 已安装目录以普通身份重新打开 Kat。");return;}};
     built.run(|app,event| match event{
-      tauri::RunEvent::Ready=>{if !ensure_tray(app){minimize_reachable(app);}},
+      tauri::RunEvent::Ready=>{if !ensure_tray(app){minimize_reachable(app);}software_updates::start(app.clone());},
       tauri::RunEvent::ExitRequested{api,..}=>{if !app.state::<Host>().quitting.load(Ordering::SeqCst){api.prevent_exit();quit(app.clone());}},_=>{}
     });
 }

@@ -1,0 +1,40 @@
+import {createServer} from 'vite';
+import {mkdir,writeFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import assert from 'node:assert/strict';
+import {chromium} from '/opt/kat-windows-client-20261028/tools/node_modules/playwright-core/index.mjs';
+import {installTransport,installDailyTransport} from './daily-transport.mjs';
+const app=resolve(import.meta.dirname,'..'),evidence=resolve(app,'../.k2-analysis/screenshots');await mkdir(evidence,{recursive:true});
+const server=await createServer({root:app,configFile:false,cacheDir:resolve(app,'../.k2-analysis/vite-cache'),server:{host:'127.0.0.1',port:0},logLevel:'warn'});await server.listen();const base='http://127.0.0.1:'+server.httpServer.address().port;
+const browser=await chromium.launch({executablePath:'/usr/bin/chromium',headless:true,args:['--no-sandbox','--disable-dev-shm-usage','--disable-background-networking']});
+function networkFixture(){
+ const state=window.__TEST,d=JSON.parse(state.text);delete d.kernel.providers;for(const g of d.kernel.groups??[])delete g.use;d.client.ipv6=false;
+ d.kernel.dns={server:'system',cache_entries:0,rules:[{match:'domain_suffix',domain:'example.com',servers:['1.1.1.1','8.8.8.8']},{match:'domain',domain:'intranet.example.net',servers:['192.0.2.53']}],hosts:{'*.example.org':['192.0.2.10','2001:db8::10'],'nas.example.net':['192.0.2.20']}};state.text=JSON.stringify(d,null,2)+'\n';
+ const old=window.__TAURI_INTERNALS__.invoke;window.__TAURI_INTERNALS__.invoke=async(command,args={})=>{if(command==='core_request'&&args.method==='dns.cache.clear'){state.calls.push({command,method:args.method});if(state.clearFailure){state.clearFailure=false;throw {code:'TEST_FAILURE',message:'受控缓存清除失败'}}return {cleared:7}}return old(command,args)};
+}
+const errors=[],external=[],checks=[];
+async function context(theme){const ctx=await browser.newContext({viewport:{width:1280,height:800},colorScheme:theme});await ctx.addInitScript(installTransport);await ctx.addInitScript(installDailyTransport);await ctx.addInitScript(networkFixture);const page=await ctx.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(!r.url().startsWith(base+'/')&&!r.url().startsWith('data:'))external.push(r.url())});await page.goto(base+'/#settings');await page.getByRole('switch',{name:'IPv6',exact:true}).waitFor();return {ctx,page};}
+async function assertDNSMatchSegment(modal){
+ const bounds=await modal.locator('.seg').evaluate(el=>{const r=el.getBoundingClientRect(),field=el.parentElement.getBoundingClientRect(),buttons=[...el.querySelectorAll('button')];return {x:r.x,width:r.width,height:r.height,fieldX:field.x,fieldWidth:field.width,buttonsWidth:buttons.reduce((n,b)=>n+b.getBoundingClientRect().width,0)}});
+ assert.equal(bounds.height,32);assert.equal(bounds.x,bounds.fieldX);assert.ok(bounds.width<bounds.fieldWidth-100);assert.ok(Math.abs(bounds.width-bounds.buttonsWidth-4)<1);
+ return bounds;
+}
+try{
+ if(process.env.K2_MODAL_ONLY==='1'){
+  const {ctx,page}=await context('light');await page.locator('.dns-card').scrollIntoViewIfNeeded();await page.getByRole('region',{name:'域名分流',exact:true}).getByRole('button',{name:'添加',exact:true}).click();
+  const modal=page.getByRole('dialog',{name:'添加域名分流',exact:true});await modal.getByLabel('域名',{exact:true}).fill('example.net');await modal.getByLabel('DNS 服务器',{exact:true}).fill('1.1.1.1\nhttps://dns.example.net/dns-query');await page.waitForTimeout(350);
+  const segment=await assertDNSMatchSegment(modal);assert.equal(Math.round((await modal.boundingBox()).width),560);await page.screenshot({path:resolve(evidence,'dns-policy-modal.png')});
+  assert.deepEqual(errors,[]);assert.deepEqual(external,[]);const result={passed:true,scope:'K2 review: only DNS policy modal, Hytron Chromium 1280x800 isolated IPC',segment,errors,external};await writeFile(resolve(evidence,'dns-policy-modal-results.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));await ctx.close();
+ }else{
+ const {ctx,page}=await context('light');const dns=page.locator('.dns-card'),policy=page.getByRole('region',{name:'域名分流',exact:true}),hosts=page.getByRole('region',{name:'Hosts',exact:true});
+ const sw=page.getByRole('switch',{name:'IPv6',exact:true});await sw.scrollIntoViewIfNeeded();assert.equal(await sw.getAttribute('aria-checked'),'false');await page.waitForTimeout(350);await page.screenshot({path:resolve(evidence,'settings-network-ipv6.png')});
+ const before=await page.evaluate(()=>window.__TEST.text);await sw.click();await page.waitForFunction(()=>JSON.parse(window.__TEST.text).client.ipv6===true);assert.deepEqual(JSON.parse(await page.evaluate(()=>window.__TEST.text)).kernel,JSON.parse(before).kernel);await sw.click();await page.waitForFunction(()=>JSON.parse(window.__TEST.text).client.ipv6===false);checks.push('IPv6 immediate save toggles only client.ipv6, false/true/false');
+ await dns.scrollIntoViewIfNeeded();await page.getByRole('button',{name:'清除缓存',exact:true}).click();await page.getByRole('status').filter({hasText:'已清除 7 条'}).waitFor();await page.waitForTimeout(350);await page.screenshot({path:resolve(evidence,'settings-dns.png')});await page.waitForTimeout(2100);assert.equal(await page.getByText('已清除 7 条',{exact:true}).count(),0);checks.push('cache clear IPC returns count, inline feedback disappears after 2s');
+ await policy.getByRole('button',{name:'添加',exact:true}).click();const pm=page.getByRole('dialog',{name:'添加域名分流',exact:true});await pm.getByLabel('域名',{exact:true}).fill('example.net');await pm.getByLabel('DNS 服务器',{exact:true}).fill('1.1.1.1\nhttps://dns.example.net/dns-query');await page.waitForTimeout(350);await page.screenshot({path:resolve(evidence,'dns-policy-modal.png')});assert.equal(Math.round((await pm.boundingBox()).width),560);await assertDNSMatchSegment(pm);await pm.getByRole('button',{name:'保存',exact:true}).click();await pm.waitFor({state:'hidden'});await page.waitForFunction(()=>JSON.parse(window.__TEST.text).kernel.dns.rules.length===3);checks.push('560px segmented policy modal adds ordered multiple DNS servers');
+ const handles=policy.locator('.rule-grip');await handles.nth(2).dragTo(handles.nth(0));await page.waitForFunction(()=>JSON.parse(window.__TEST.text).kernel.dns.rules[0].domain==='example.net');checks.push('policy drag handle reorders accepted rules');
+ await hosts.getByRole('button',{name:'添加',exact:true}).click();const hm=page.getByRole('dialog',{name:'添加 Hosts',exact:true});await hm.getByLabel('域名',{exact:true}).fill('*.example.net');await hm.getByLabel('地址',{exact:true}).fill('192.0.2.30\n2001:db8::30');await page.waitForTimeout(350);await page.screenshot({path:resolve(evidence,'hosts-modal.png')});await hm.getByRole('button',{name:'保存',exact:true}).click();await hm.waitFor({state:'hidden'});await page.waitForFunction(()=>JSON.parse(window.__TEST.text).kernel.dns.hosts['*.example.net']?.length===2);checks.push('Hosts wildcard/multi-family save and disabled IPv6 row note');
+ await page.evaluate(()=>{window.__TEST.clearFailure=true});await page.getByRole('button',{name:'清除缓存',exact:true}).click();const failure=page.getByRole('alertdialog');await failure.waitFor();await page.waitForTimeout(350);const rect=await failure.boundingBox();assert.ok(Math.abs(rect.x+rect.width/2-640)<4&&Math.abs(rect.y+rect.height/2-400)<4);checks.push('cache clear failure opens centered error dialog');await ctx.close();
+ const dark=await context('dark');await dark.page.locator('.dns-card').scrollIntoViewIfNeeded();await dark.page.waitForTimeout(350);await dark.page.screenshot({path:resolve(evidence,'dark-settings-dns.png')});await dark.ctx.close();
+ assert.deepEqual(errors,[]);assert.deepEqual(external,[]);await writeFile(resolve(evidence,'browser-results.json'),JSON.stringify({passed:true,scope:'Hytron Chromium 1280x800, isolated test IPC; no Windows/native operations',checks,errors,external},null,2));console.log(JSON.stringify({passed:true,checks,errors,external},null,2));
+}
+}finally{await browser.close();await server.close();}

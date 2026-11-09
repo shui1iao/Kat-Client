@@ -1,4 +1,6 @@
 pub mod error;
+pub mod transport_diagnostics;
+pub mod tun_diagnostics;
 pub mod protocol;
 pub mod supervisor;
 #[cfg(windows)]
@@ -12,6 +14,7 @@ pub mod service_protocol;
 pub mod transaction;
 pub mod apply_policy;
 
+pub mod firewall_rule;
 pub mod installer_result;
 
 pub mod user_store;
@@ -21,6 +24,9 @@ pub mod lifecycle;
 
 pub mod backups;
 pub mod safe_log;
+pub mod log_context;
+pub mod safe_archive;
+pub mod crash_private;
 
 pub mod diagnostics;
 
@@ -38,14 +44,13 @@ mod wintun_query;
 #[cfg(test)]
 mod tun_monitor_tests;
 
-#[cfg(any(windows,test))]
-mod tun_ready;
+
 
 pub mod installed_handoff;
 
 pub mod install_location;
 
-pub mod original_flow;
+
 
 pub mod service_read_acl;
 
@@ -71,3 +76,18 @@ pub mod core_process;
 
 #[cfg(any(all(windows, feature = "desktop"), test))]
 mod acrylic;
+
+pub mod update_key;
+pub mod update_manifest;
+pub mod update_check;
+
+pub mod elevated_protocol;
+pub mod elevation_launch;
+
+pub mod watchdog_control;
+
+#[cfg(windows)]
+pub use windows::core_tun_recovery::journal as core_tun_journal;
+#[cfg(not(windows))]
+#[path = "windows/core_tun_journal.rs"]
+pub mod core_tun_journal;

@@ -12,9 +12,10 @@ type KernelLogEntry struct {
 	kernel.KernelLogEvent
 }
 type KernelLogsReply struct {
-	Entries []KernelLogEntry `json:"entries"`
-	NextSeq uint64           `json:"next_seq"`
-	Dropped uint64           `json:"dropped"`
+	Instance uint64           `json:"instance"`
+	Entries  []KernelLogEntry `json:"entries"`
+	NextSeq  uint64           `json:"next_seq"`
+	Dropped  uint64           `json:"dropped"`
 }
 type kernelLogRing struct {
 	mu           sync.Mutex
@@ -58,7 +59,10 @@ func kernelRank(s string) int {
 func (r *kernelLogRing) read(after uint64, limit int, level string) KernelLogsReply {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	out := KernelLogsReply{Entries: []KernelLogEntry{}, NextSeq: after, Dropped: r.dropped}
+	if after > r.seq {
+		after = 0
+	}
+	out := KernelLogsReply{Instance: logInstance, Entries: []KernelLogEntry{}, NextSeq: after, Dropped: r.dropped}
 	if after >= r.seq {
 		return out
 	}
@@ -80,9 +84,10 @@ func (r *kernelLogRing) read(after uint64, limit int, level string) KernelLogsRe
 }
 func (h *Host) getKernelLogs(raw json.RawMessage) (any, *Error) {
 	var p struct {
-		After json.RawMessage `json:"after"`
-		Limit json.RawMessage `json:"limit"`
-		Level string          `json:"level"`
+		Instance uint64          `json:"instance,omitempty"`
+		After    json.RawMessage `json:"after"`
+		Limit    json.RawMessage `json:"limit"`
+		Level    string          `json:"level"`
 	}
 	if e := decodeParams(raw, &p); e != nil {
 		return nil, e
@@ -97,6 +102,9 @@ func (h *Host) getKernelLogs(raw json.RawMessage) (any, *Error) {
 	}
 	if p.Level != "" && !validKernelLevel(p.Level) {
 		return nil, fail("invalid_params", "params.level", "Expected debug/info/warn/error")
+	}
+	if p.Instance != 0 && p.Instance != logInstance {
+		after = 0
 	}
 	return h.kernelLogs.read(after, limit, p.Level), nil
 }

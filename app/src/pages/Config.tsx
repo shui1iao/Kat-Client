@@ -7,7 +7,7 @@ import { errorText, errorLocation } from '../lib/errors';
 import { yamlHighlightRanges, yamlKeyOffset } from '../client/yaml';
 import { useConfirmation } from '../components/Confirm';
 import { host } from '../client/ipc';
-import { stageDraft, exportSaved, filenameOnly, savedDocumentFilename } from '../client/daily';
+import { networkDraft, patchNetwork, stageDraft, exportSaved, filenameOnly, savedDocumentFilename } from '../client/daily';
 import type { BackupInfo, BackupList, DocumentFormat, ImportedDocument, SaveReply } from '../client/types';
 import { backupTime, backupSize } from '../lib/format';
 import { Icon } from '../components/Icon';
@@ -77,9 +77,17 @@ export function Config({ c }: { c: Client }) {
   const ta = useRef<HTMLTextAreaElement>(null);
   const [hl, setHl] = useState<number | null>(null);
   const dirty = c.doc.dirty;
+  const [dnsChoice,setDNSChoice]=useState<''|'system'|'custom'>(''),[dnsServers,setDNSServers]=useState(''),[dnsError,setDNSError]=useState('');
   let v: any = null;
   try { v=parseDocument(text,format); } catch { /* A valid-JSON but invalid-schema draft remains editable. */ }
 
+  const advancedDNS=!!v&&networkDraft(v).advanced_dns;
+  const resolveDNS=async()=>{setDNSError('');try{if(!dnsChoice)throw new Error('此配置包含已停用的高级 DNS，请选择系统 DNS 或自定义 DNS 后保存');const original=c.doc.draft,format=c.doc.draftFormat,revision=c.doc.revision;
+   const value=networkDraft(parseDocument(original,format));value.advanced_dns=false;value.dns_mode=dnsChoice;value.servers=dnsServers.split('\n').map(s=>s.trim()).filter(Boolean);const changed=new Set<keyof typeof value>(['dns_mode','servers','advanced_dns']);
+   const next=editDocument(original,d=>patchNetwork(d,value,changed),format);
+   if(!await c.run('files',()=>host<SaveReply>('document_preserve_dns',{text:original,format})))return;
+   if(c.doc.revision!==revision)throw new Error('草稿已变化，请重新选择 DNS');c.doc.setDraft(next,format);await c.save();
+  }catch(e){setDNSError(errorText(e));}};
   const sync = () => {
     const t = ta.current, w = wrap.current;
     if (!t || !w) return;
@@ -144,9 +152,10 @@ export function Config({ c }: { c: Client }) {
           <span className="src-meta num">{lines.length} 行 · {formatName} {parsed.ok ? <em className="ok">有效</em> : <em className="bad">无效</em>}</span>
           <div className="save-actions">
             <button className="btn" disabled={c.doc.saving || filesBusy || !dirty} onClick={() => { c.doc.cancel(); setHl(null); }}>取消更改</button>
-            <button className="btn primary" disabled={!parsed.ok || c.doc.saving || filesBusy || !dirty} onClick={() => void c.save()}>{c.doc.saving ? '保存中' : '保存'}</button>
+            <button className="btn primary" disabled={!parsed.ok || c.doc.saving || filesBusy || !dirty} onClick={() => void (advancedDNS?resolveDNS():c.save())}>{c.doc.saving ? '保存中' : '保存'}</button>
           </div>
         </header>
+        {advancedDNS&&<div className="setting-row-group"><div className="form-error" role="alert">此配置包含已停用的高级 DNS，请选择系统 DNS 或自定义 DNS 后保存</div><label className="set-row" htmlFor="legacy-dns-choice"><b>DNS 模式</b><select className="inp sm" id="legacy-dns-choice" value={dnsChoice} disabled={c.doc.saving||filesBusy} onChange={e=>setDNSChoice(e.target.value as 'system'|'custom')}><option value="" disabled>请选择 DNS</option><option value="system">系统 DNS</option><option value="custom">自定义 DNS</option></select></label>{dnsChoice==='custom'&&<label><span>DNS 服务器（每行一个）</span><textarea className="inp" value={dnsServers} onChange={e=>setDNSServers(e.target.value)} aria-label="自定义 DNS 服务器"/></label>}{dnsError&&<div className="form-error" role="alert">{dnsError}</div>}</div>}
         <div className="source-toolbar">
           <div className="file-tools"><button className="btn sm" disabled={!c.connected||filesBusy||c.doc.saving} onClick={()=>void importFile()}>导入配置 / Clash YAML</button><button className="btn sm" disabled={!c.hasHost||!c.connected||filesBusy||c.doc.saving} onClick={()=>void exportFile()}>导出已保存配置</button><button className="btn sm" disabled={!c.hasHost||c.busy.has('workspace')} onClick={()=>void c.run('workspace',async()=>{const r=await host<{opened:boolean}>('workspace_open');})}>配置目录</button></div>
           <div className="src-tools">

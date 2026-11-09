@@ -1,0 +1,13 @@
+protocol,variant,repeat,PSS_MiB,FD,physical
+vless,baseline-054,1,41.10546875,7,0
+vless,plain-tls-c1,2,33.0830078125,7,0
+vless,plain-tls-c1,3,33.0908203125,7,0
+vless,baseline-054,4,40.7939453125,7,0
+vless,baseline-054,5,40.7392578125,7,0
+vless,plain-tls-c1,6,33.0537109375,7,0
+vless,plain-tls-c1,7,33.0791015625,7,0
+vless,baseline-054,8,41.1025390625,7,0
+vless,baseline-054,9,40.3466796875,7,0
+vless,plain-tls-c1,10,33.068359375,7,0
+vless,plain-tls-c1,11,33.0654296875,7,0
+vless,baseline-054,12,41.123046875,7,0

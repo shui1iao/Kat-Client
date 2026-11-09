@@ -1,0 +1,249 @@
+{
+	"Path": "proxy-kernel",
+	"Main": true,
+	"Dir": "/opt/proxy-kernel",
+	"GoMod": "/opt/proxy-kernel/go.mod",
+	"GoVersion": "1.26.9"
+}
+{
+	"Path": "github.com/andybalholm/brotli",
+	"Version": "v1.0.6",
+	"Time": "2023-02-25T16:50:08Z",
+	"Indirect": true,
+	"Dir": "/root/go/pkg/mod/github.com/andybalholm/brotli@v1.0.6",
+	"GoMod": "/root/go/pkg/mod/cache/download/github.com/andybalholm/brotli/@v/v1.0.6.mod",
+	"GoVersion": "1.12",
+	"Sum": "h1:Yf9fFpf49Zrxb9NlQaluyE92/+X7UVHlhMNJN2sxfOI=",
+	"GoModSum": "h1:fO7iG3H7G2nSZ7m0zPUDn85XEX2GTukHGRSepvi9Eig="
+}
+{
+	"Path": "github.com/bwesterb/go-ristretto",
+	"Version": "v1.2.3",
+	"Time": "2023-03-16T16:56:11Z",
+	"Indirect": true
+}
+{
+	"Path": "github.com/cloudflare/circl",
+	"Version": "v1.6.3",
+	"Time": "2026-01-22T20:12:37Z",
+	"Indirect": true,
+	"Dir": "/root/go/pkg/mod/github.com/cloudflare/circl@v1.6.3",
+	"GoMod": "/root/go/pkg/mod/cache/download/github.com/cloudflare/circl/@v/v1.6.3.mod",
+	"GoVersion": "1.22.0",
+	"Sum": "h1:9GPOhQGF9MCYUeXyMYlqTR6a5gTrgR/fBLXvUgtVcg8=",
+	"GoModSum": "h1:2eXP6Qfat4O/Yhh8BznvKnJ+uzEoTQ6jVKJRn81BiS4="
+}
+{
+	"Path": "github.com/coder/websocket",
+	"Version": "v1.8.14",
+	"Time": "2025-09-05T08:16:22Z",
+	"Dir": "/root/go/pkg/mod/github.com/coder/websocket@v1.8.14",
+	"GoMod": "/root/go/pkg/mod/cache/download/github.com/coder/websocket/@v/v1.8.14.mod",
+	"GoVersion": "1.23",
+	"Sum": "h1:9L0p0iKiNOibykf283eHkKUHHrpG7f65OE3BhhO7v9g=",
+	"GoModSum": "h1:NX3SzP+inril6yawo5CQXx8+fk145lPDC6pumgx0mVg="
+}
+{
+	"Path": "github.com/creack/pty",
+	"Version": "v1.1.9",
+	"Time": "2019-09-25T15:36:33Z",
+	"Indirect": true,
+	"GoMod": "/root/go/pkg/mod/cache/download/github.com/creack/pty/@v/v1.1.9.mod",
+	"GoVersion": "1.13",
+	"GoModSum": "h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E="
+}
+{
+	"Path": "github.com/juju/ratelimit",
+	"Version": "v1.0.2",
+	"Time": "2019-10-02T06:26:51Z",
+	"Indirect": true,
+	"Dir": "/root/go/pkg/mod/github.com/juju/ratelimit@v1.0.2",
+	"GoMod": "/root/go/pkg/mod/cache/download/github.com/juju/ratelimit/@v/v1.0.2.mod",
+	"Sum": "h1:sRxmtRiajbvrcLQT7S+JbqU0ntsb9W2yhSdNN8tWfaI=",
+	"GoModSum": "h1:qapgC/Gy+xNh9UxzV13HGGl/6UXNN+ct+vwSgWNm/qk="
+}
+{
+	"Path": "github.com/klauspost/compress",
+	"Version": "v1.18.7",
+	"Time": "2026-06-30T09:38:05Z",
+	"Indirect": true,
+	"Dir": "/root/go/pkg/mod/github.com/klauspost/compress@v1.18.7",
+	"GoMod": "/root/go/pkg/mod/cache/download/github.com/klauspost/compress/@v/v1.18.7.mod",
+	"GoVersion": "1.24",
+	"Sum": "h1:aUyZsS4kH3QTKurYhAOwAHxllVPnOthb3vPfnF1Ehjw=",
+	"GoModSum": "h1:cwPg85FWrGar70rWktvGQj8/hthj3wpl0PGDogxkrSQ="
+}
+{
+	"Path": "github.com/klauspost/cpuid/v2",
+	"Version": "v2.0.9",
+	"Time": "2021-07-30T06:58:55Z",
+	"Indirect": true,
+	"Dir": "/root/go/pkg/mod/github.com/klauspost/cpuid/v2@v2.0.9",
+	"GoMod": "/root/go/pkg/mod/cache/download/github.com/klauspost/cpuid/v2/@v/v2.0.9.mod",
+	"GoVersion": "1.13",
+	"Sum": "h1:lgaqFMSdTdQYdZ04uHyN2d/eKdOMyi2YLSvlQIBFYa4=",
+	"GoModSum": "h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa0213Md/qVLRg="
+}
+{
+	"Path": "github.com/kr/pretty",
+	"Version": "v0.3.1",
+	"Time": "2022-08-29T23:03:05Z",
+	"Indirect": true,
+	"Dir": "/root/go/pkg/mod/github.com/kr/pretty@v0.3.1",
+	"GoMod": "/root/go/pkg/mod/cache/download/github.com/kr/pretty/@v/v0.3.1.mod",
+	"GoVersion": "1.12",
+	"Sum": "h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=",
+	"GoModSum": "h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk="
+}
+{
+	"Path": "github.com/kr/text",
+	"Version": "v0.2.0",
+	"Time": "2020-02-14T20:31:06Z",
+	"Indirect": true,
+	"Dir": "/root/go/pkg/mod/github.com/kr/text@v0.2.0",
+	"GoMod": "/root/go/pkg/mod/cache/download/github.com/kr/text/@v/v0.2.0.mod",
+	"Sum": "h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=",
+	"GoModSum": "h1:eLer722TekiGuMkidMxC/pM04lWEeraHUUmBw8l2grE="
+}
+{
+	"Path": "github.com/pires/go-proxyproto",
+	"Version": "v0.11.0",
+	"Time": "2026-02-06T13:49:20Z",
+	"Indirect": true,
+	"Dir": "/root/go/pkg/mod/github.com/pires/go-proxyproto@v0.11.0",
+	"GoMod": "/root/go/pkg/mod/cache/download/github.com/pires/go-proxyproto/@v/v0.11.0.mod",
+	"GoVersion": "1.24",
+	"Sum": "h1:gUQpS85X/VJMdUsYyEgyn59uLJvGqPhJV5YvG68wXH4=",
+	"GoModSum": "h1:ZKAAyp3cgy5Y5Mo4n9AlScrkCZwUy0g3Jf+slqQVcuU="
+}
+{
+	"Path": "github.com/pkg/diff",
+	"Version": "v0.0.0-20210226163009-20ebb0f2a09e",
+	"Time": "2021-02-26T16:30:09Z",
+	"Indirect": true,
+	"GoMod": "/root/go/pkg/mod/cache/download/github.com/pkg/diff/@v/v0.0.0-20210226163009-20ebb0f2a09e.mod",
+	"GoVersion": "1.15",
+	"GoModSum": "h1:pJLUxLENpZxwdsKMEsNbx1VGcRFpLqf3715MtcvvzbA="
+}
+{
+	"Path": "github.com/refraction-networking/utls",
+	"Version": "v1.8.2",
+	"Time": "2026-01-12T23:56:33Z",
+	"Indirect": true,
+	"Dir": "/root/go/pkg/mod/github.com/refraction-networking/utls@v1.8.2",
+	"GoMod": "/root/go/pkg/mod/cache/download/github.com/refraction-networking/utls/@v/v1.8.2.mod",
+	"GoVersion": "1.24",
+	"Sum": "h1:j4Q1gJj0xngdeH+Ox/qND11aEfhpgoEvV+S9iJ2IdQo=",
+	"GoModSum": "h1:jkSOEkLqn+S/jtpEHPOsVv/4V4EVnelwbMQl4vCWXAM="
+}
+{
+	"Path": "github.com/rogpeppe/go-internal",
+	"Version": "v1.9.0",
+	"Time": "2022-08-22T10:17:05Z",
+	"Indirect": true,
+	"Dir": "/root/go/pkg/mod/github.com/rogpeppe/go-internal@v1.9.0",
+	"GoMod": "/root/go/pkg/mod/cache/download/github.com/rogpeppe/go-internal/@v/v1.9.0.mod",
+	"GoVersion": "1.17",
+	"Sum": "h1:73kH8U+JUqXU8lRuOHeVHaa/SZPifC7BkcraZVejAe8=",
+	"GoModSum": "h1:WtVeX8xhTBvf0smdhujwtBcq4Qrzq/fJaraNFVN+nFs="
+}
+{
+	"Path": "github.com/xtls/reality",
+	"Version": "v0.0.0-20260322125925-9234c772ba8f",
+	"Replace": {
+		"Path": "./third_party/reality",
+		"Dir": "/opt/proxy-kernel/third_party/reality",
+		"GoMod": "/opt/proxy-kernel/third_party/reality/go.mod",
+		"GoVersion": "1.24.0"
+	},
+	"Dir": "/opt/proxy-kernel/third_party/reality",
+	"GoMod": "/opt/proxy-kernel/third_party/reality/go.mod",
+	"GoVersion": "1.24.0"
+}
+{
+	"Path": "golang.org/x/crypto",
+	"Version": "v0.57.0",
+	"Time": "2026-09-08T18:05:01Z",
+	"Dir": "/root/go/pkg/mod/golang.org/x/crypto@v0.57.0",
+	"GoMod": "/root/go/pkg/mod/cache/download/golang.org/x/crypto/@v/v0.57.0.mod",
+	"GoVersion": "1.26.0",
+	"Sum": "h1:3ZVCjf8Ggz7zneR/EHRVx68Ctf+2pmIMP2UFhh9cC6M=",
+	"GoModSum": "h1:Fdz0i5U6CoizGwLda9DttjSk6qlZo25zYNtR+ycvuZA="
+}
+{
+	"Path": "golang.org/x/mod",
+	"Version": "v0.41.0",
+	"Time": "2026-08-24T20:56:42Z",
+	"Indirect": true
+}
+{
+	"Path": "golang.org/x/net",
+	"Version": "v0.60.0",
+	"Time": "2026-10-08T17:22:58Z",
+	"Dir": "/root/go/pkg/mod/golang.org/x/net@v0.60.0",
+	"GoMod": "/root/go/pkg/mod/cache/download/golang.org/x/net/@v/v0.60.0.mod",
+	"GoVersion": "1.26.0",
+	"Sum": "h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU=",
+	"GoModSum": "h1:2DA/G1UfVbCpQPeWTmMPGY7Cs2PkBkwu743bVX5PIVg="
+}
+{
+	"Path": "golang.org/x/sync",
+	"Version": "v0.23.0",
+	"Time": "2026-08-31T03:04:41Z",
+	"Indirect": true
+}
+{
+	"Path": "golang.org/x/sys",
+	"Version": "v0.48.0",
+	"Time": "2026-08-31T19:43:43Z",
+	"Indirect": true,
+	"Dir": "/root/go/pkg/mod/golang.org/x/sys@v0.48.0",
+	"GoMod": "/root/go/pkg/mod/cache/download/golang.org/x/sys/@v/v0.48.0.mod",
+	"GoVersion": "1.26.0",
+	"Sum": "h1:bbX/i/6MgT9BVLM9RT1thmxL04yeTAhbEz4SyadbXoo=",
+	"GoModSum": "h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og="
+}
+{
+	"Path": "golang.org/x/term",
+	"Version": "v0.46.0",
+	"Time": "2026-09-08T16:27:41Z",
+	"Indirect": true
+}
+{
+	"Path": "golang.org/x/text",
+	"Version": "v0.42.0",
+	"Time": "2026-09-08T16:29:55Z",
+	"Indirect": true,
+	"Dir": "/root/go/pkg/mod/golang.org/x/text@v0.42.0",
+	"GoMod": "/root/go/pkg/mod/cache/download/golang.org/x/text/@v/v0.42.0.mod",
+	"GoVersion": "1.26.0",
+	"Sum": "h1:JbOZXgfeCPU9gacVtYliJqOhD+zhrEqK4LfdpmlUZqI=",
+	"GoModSum": "h1:ojzP1Z+2QtioaF8DTtO8K5q7JWVVYwZKenzujK0Zd0E="
+}
+{
+	"Path": "golang.org/x/tools",
+	"Version": "v0.49.0",
+	"Time": "2026-08-13T14:53:26Z",
+	"Indirect": true
+}
+{
+	"Path": "gopkg.in/check.v1",
+	"Version": "v1.0.0-20201130134442-10cb98267c6c",
+	"Time": "2020-11-30T13:44:42Z",
+	"Indirect": true,
+	"Dir": "/root/go/pkg/mod/gopkg.in/check.v1@v1.0.0-20201130134442-10cb98267c6c",
+	"GoMod": "/root/go/pkg/mod/cache/download/gopkg.in/check.v1/@v/v1.0.0-20201130134442-10cb98267c6c.mod",
+	"GoVersion": "1.11",
+	"Sum": "h1:Hei/4ADfdWqJk1ZMxUNpqntNwaWcugrBjAiHlqqRiVk=",
+	"GoModSum": "h1:JHkPIbrfpd72SG/EVd6muEfDQjcINNoR0C8j2r3qZ4Q="
+}
+{
+	"Path": "lukechampine.com/blake3",
+	"Version": "v1.4.1",
+	"Time": "2025-05-08T12:37:30Z",
+	"Dir": "/root/go/pkg/mod/lukechampine.com/blake3@v1.4.1",
+	"GoMod": "/root/go/pkg/mod/cache/download/lukechampine.com/blake3/@v/v1.4.1.mod",
+	"GoVersion": "1.22",
+	"Sum": "h1:I3Smz7gso8w4/TunLKec6K2fn+kyKtDxr/xcQEN84Wg=",
+	"GoModSum": "h1:QFosUxmjB8mnrWFSNwKmvxHpfY72bmD2tQ0kBMM3kwo="
+}

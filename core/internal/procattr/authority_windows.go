@@ -3,8 +3,10 @@ package procattr
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
+	"reflect"
 	"unsafe"
 )
 
@@ -136,14 +138,14 @@ func pinnedHash(h windows.Handle, info *windows.ByHandleFileInformation, expecte
 // Pins remain live through the existing SCM/process/token/pipe/tuple checks.
 // Schema1 keeps the legacy protected same-root policy. Schema2 separates the
 // ordinary app role from the strict fixed system Runtime trust anchor.
-func pinInstallation(exe string) (string, func(), error) {
+func acquireInstallation(exe string) (*installationGuard, error) {
 	record, runtime, err := machineRecord()
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	service, plans, err := installationPins(record, exe, runtime)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 	var handles []windows.Handle
 	release := func() {
@@ -151,11 +153,17 @@ func pinInstallation(exe string) (string, func(), error) {
 			windows.CloseHandle(h)
 		}
 	}
-	fail := func() (string, func(), error) { release(); return "", nil, unavailable() }
+	fail := func(native ...error) (*installationGuard, error) {
+		release()
+		if len(native) > 0 {
+			return nil, attributionError("pin", native[0])
+		}
+		return nil, unavailable()
+	}
 	for _, p := range plans {
 		name, e := windows.UTF16PtrFromString(p.path)
 		if e != nil {
-			return fail()
+			return fail(e)
 		}
 		if p.volume && windows.GetDriveType(name) != windows.DRIVE_FIXED {
 			return fail()
@@ -171,12 +179,12 @@ func pinInstallation(exe string) (string, func(), error) {
 		}
 		h, e := windows.CreateFile(name, access, share, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_BACKUP_SEMANTICS|windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
 		if e != nil {
-			return fail()
+			return fail(e)
 		}
 		handles = append(handles, h)
 		var info windows.ByHandleFileInformation
-		if windows.GetFileInformationByHandle(h, &info) != nil {
-			return fail()
+		if e := windows.GetFileInformationByHandle(h, &info); e != nil {
+			return fail(e)
 		}
 		final := make([]uint16, 32768)
 		n, e := windows.GetFinalPathNameByHandle(h, &final[0], uint32(len(final)), 0)
@@ -194,5 +202,48 @@ func pinInstallation(exe string) (string, func(), error) {
 			return fail()
 		}
 	}
-	return service, release, nil
+	return &installationGuard{record: record, runtime: runtime, expected: service, plans: plans, handles: handles, release: release}, nil
+}
+
+type installationGuard struct {
+	record            installationRecord
+	runtime, expected string
+	plans             []installationPin
+	handles           []windows.Handle
+	release           func()
+}
+
+func pinInstallation(exe string) (string, func(), error) {
+	g, e := acquireInstallation(exe)
+	if e != nil {
+		return "", nil, e
+	}
+	return g.expected, g.release, nil
+}
+
+// Content and role path replacement are prevented by the held no-write/no-
+// delete-share pins. Re-read approval + recheck ACL/object metadata every use;
+// this is NOT a TTL cache of a released installation authorization.
+func (g *installationGuard) check() error {
+	record, runtime, e := machineRecord()
+	if e != nil || runtime != g.runtime || !reflect.DeepEqual(record, g.record) {
+		return errors.New("installation approval changed")
+	}
+	for i, p := range g.plans {
+		h := g.handles[i]
+		var info windows.ByHandleFileInformation
+		if windows.GetFileInformationByHandle(h, &info) != nil {
+			return unavailable()
+		}
+		final := make([]uint16, 32768)
+		n, e := windows.GetFinalPathNameByHandle(h, &final[0], uint32(len(final)), 0)
+		typ, te := windows.GetFileType(h)
+		if e != nil || te != nil || n == 0 || int(n) >= len(final) || !pinObjectMatches(p, info.FileAttributes&windows.FILE_ATTRIBUTE_DIRECTORY != 0, info.FileAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0, typ == windows.FILE_TYPE_DISK, info.NumberOfLinks, windows.UTF16ToString(final[:n])) {
+			return unavailable()
+		}
+		if p.aclKind != "" && checkedACL(h, windows.SE_FILE_OBJECT, p.aclKind, false, p.volume) != nil {
+			return unavailable()
+		}
+	}
+	return nil
 }

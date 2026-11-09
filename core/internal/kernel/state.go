@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/shui1iao/Kat/internal/userio"
 	"io"
 	"os"
 	"path/filepath"
@@ -197,7 +198,7 @@ func (k *core) loadSelections() {
 	if path == "" {
 		return
 	}
-	f, e := os.Open(path)
+	f, e := userio.Open(path)
 	if errors.Is(e, os.ErrNotExist) {
 		return
 	}
@@ -256,10 +257,10 @@ func (k *core) saveSelectionsLocked() error {
 
 func writeFileAtomic(path string, b []byte) error {
 	dir := filepath.Dir(path)
-	if e := os.MkdirAll(dir, 0o700); e != nil {
+	if e := userio.MkdirAll(dir, 0o700); e != nil {
 		return e
 	}
-	tmp, e := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
+	tmp, e := userio.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
 	if e != nil {
 		return e
 	}
@@ -272,13 +273,13 @@ func writeFileAtomic(path string, b []byte) error {
 		e = c
 	}
 	if e == nil {
-		e = os.Chmod(name, 0o600)
+		e = userio.Chmod(name, 0o600)
 	}
 	if e == nil {
-		e = os.Rename(name, path)
+		e = userio.Rename(name, path)
 	}
 	if e != nil {
-		os.Remove(name)
+		userio.Remove(name)
 	}
 	return e
 }

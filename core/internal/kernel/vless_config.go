@@ -7,10 +7,11 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"github.com/shui1iao/Kat/internal/userio"
 	VX "github.com/shui1iao/Kat/internal/vlessx"
 	VT "github.com/shui1iao/Kat/internal/vtransport"
 	"net/netip"
-	"os"
+
 	"reflect"
 	"regexp"
 	"strings"
@@ -107,7 +108,7 @@ func (o *RealityOptions) config(l Limits) (VX.RealityConfig, error) {
 	if o.MaxSessions < 1 || o.MaxSessions > 4096 {
 		return fail()
 	}
-	ca, e := os.ReadFile(o.DecoyCA)
+	ca, e := userio.ReadFile(o.DecoyCA)
 	if e != nil {
 		return fail()
 	}

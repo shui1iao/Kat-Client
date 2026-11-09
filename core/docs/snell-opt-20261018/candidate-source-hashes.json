@@ -1,0 +1,5 @@
+{
+  "internal/snell/record.go": "b5ae5b3d0ee1ff84e96e50a64f8ff75d0d95c86670c68f18c4c5d1282e29d7f2",
+  "internal/snell/write_workspace.go": "149694456b1f799c028900d92d11c18a1203eb7ad2fedafae3293f728235c08d",
+  "internal/snell/write_workspace_test.go": "a9faade1657bffaeba05094014c047b36e49533df636d777229238cb6c4b8185"
+}

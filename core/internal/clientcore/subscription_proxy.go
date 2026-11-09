@@ -60,12 +60,18 @@ func dialBootstrap(ctx context.Context, address string, p *bootstrapProxy, polic
 		return nil, dl("proxy_connect", "proxy_unsupported")
 	}
 	return dialBootstrapIO(ctx, address, p, policy, resolve, nil, func(ctx context.Context, d *net.Dialer, address string) (net.Conn, error) {
+		if s := hostEgress(ctx); s != nil {
+			return dialHostEgress(ctx, s, "tcp", address)
+		}
 		return d.DialContext(ctx, "tcp", address)
 	}, verifyBootstrapPeer)
 }
 func dialBootstrapIO(ctx context.Context, address string, p *bootstrapProxy, policy *clientegress.Policy, _ func(context.Context, string) ([]netip.Addr, error), _ []int, dial func(context.Context, *net.Dialer, string) (net.Conn, error), verify func(net.Conn) error) (net.Conn, error) {
 	if !validBootstrap(p) {
 		return nil, dl("proxy_connect", "proxy_unsupported")
+	}
+	if e := checkHostEgress(ctx); e != nil {
+		return nil, e
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -95,7 +101,9 @@ func dialBootstrapIO(ctx context.Context, address string, p *bootstrapProxy, pol
 	if ip, e := netip.ParseAddr(p.Host); e == nil {
 		peers = []netip.Addr{ip.Unmap()}
 	} else {
-		if policy != nil {
+		if s := hostEgress(ctx); s != nil {
+			peers, e = s.Bootstrap(ctx, ipNetwork(ctx), p.Host)
+		} else if policy != nil {
 			if !policy.Ready() {
 				return nil, dl("connect", "egress_unavailable")
 			}

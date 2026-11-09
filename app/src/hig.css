@@ -463,3 +463,95 @@
   #root .content .kernel-log-card .btn.kernel-follow { box-shadow:none; }
   :root .kat-tip { background:Canvas; color:CanvasText; border-color:CanvasText; box-shadow:none; }
 }
+
+/* Candidate25: compact software updates, R10 controls/tokens remain authoritative. */
+#root .software-update-card .update-help { margin:0; font:400 12px/18px var(--font); color:var(--text-3); }
+#root .software-update-card .update-row { display:flex; align-items:center; gap:12px; padding:16px 0 0; min-width:0; }
+#root .software-update-card .update-row-info { flex:1; min-width:0; }
+#root .software-update-card .update-row-title { display:flex; align-items:baseline; gap:10px; font:500 13px/20px var(--font); color:var(--text); }
+#root .software-update-card .update-row-title b { font-weight:500; }
+#root .software-update-card .update-row-title .num { font-weight:400; color:var(--text-2); overflow-wrap:anywhere; }
+#root .software-update-card .update-message { margin-top:4px; font:400 12px/18px var(--font); color:var(--text-2); overflow-wrap:anywhere; }
+#root .software-update-card .update-message.is-error { color:var(--danger-text); }
+#root .software-update-card .update-row-action { flex:none; }
+#root .software-update-card .update-progress { height:4px; margin-top:8px; border-radius:4px; overflow:hidden; background:var(--track); }
+#root .software-update-card .update-progress i { display:block; height:100%; background:var(--accent-fill); border-radius:inherit; }
+#root .software-update-card .update-download-bytes { margin-top:4px; font-size:12px; line-height:18px; color:var(--text-3); }
+#root .software-update-card .update-last { margin-top:16px; }
+#root .software-update-card .form-error { margin-top:12px; }
+#root .modal .update-version { margin:0; font-size:14px; font-weight:500; color:var(--text); }
+#root .software-update-confirm .form>p { margin:0; overflow-wrap:anywhere; }
+#root .update-notice { gap:8px; max-width:calc(100vw - 32px); }
+#root .update-notice .ib { width:28px; height:28px; }
+#root .update-notice .link-btn { height:28px; padding:0 6px; font:500 12px/16px var(--font); color:var(--accent-text); }
+@media(forced-colors:active) { #root .software-update-card .update-progress { border:1px solid CanvasText; } #root .software-update-card .update-progress i { background:Highlight; } }
+
+/* Rule inspector: controller-defined 640px dialog; no global editor changes. */
+#root .modal.rule-inspector { width:min(640px,calc(100vw - 32px)); max-width:calc(100vw - 32px); }
+/* Chromium fieldset uses an anonymous layout box; make the explicit body
+   the only middle scroller, preserving the existing R10 4/24/20 padding. */
+#root .rule-inspector>.form { display:contents; }
+#root .rule-inspector .rule-inspector-body { display:flex; flex-direction:column; flex:1 1 auto; gap:16px; min-width:0; min-height:0; overflow-y:auto; scrollbar-gutter:stable; padding:4px 24px 20px; }
+#root .rule-inspector .rule-inspector-body>* { flex:none; }
+#root .rule-inspector :is(input.inp,select.inp), #root .rule-inspector .rule-inspector-input-row>.btn { height:36px; min-height:36px; }
+#root .rule-inspector .rule-inspector-body p { margin:0; }
+#root .rule-inspector .rule-inspector-meta { display:flex; align-items:center; flex-wrap:wrap; gap:8px 16px; font:400 12px/18px var(--font); color:var(--text-2); }
+#root .rule-inspector .rule-inspector-meta>span:first-child { color:var(--text-3); }
+#root .rule-inspector .rule-inspector-mode-note { margin-top:8px; font:400 12px/18px var(--font); color:var(--warn); overflow-wrap:anywhere; }
+#root .rule-inspector .rule-inspector-target, #root .rule-inspector .rule-inspector-field { display:flex; flex-direction:column; gap:6px; min-width:0; }
+#root .rule-inspector :is(.rule-inspector-target,.rule-inspector-field)>label { display:block; color:var(--text-2); font:400 13px/20px var(--font); }
+#root .rule-inspector .rule-inspector-input-row { display:flex; align-items:start; gap:8px; min-width:0; }
+#root .rule-inspector .rule-inspector-input-row>.inp { flex:1; min-width:0; }
+#root .rule-inspector .rule-inspector-input-row>.btn { flex:none; }
+#root .rule-inspector .rule-inspector-help { font:400 12px/18px var(--font); color:var(--text-3); }
+#root .rule-inspector .rule-inspector-draft { padding:8px 10px; border-radius:8px; background:var(--hig-inset); font:400 12px/18px var(--font); color:var(--text-2); }
+#root .rule-inspector .rule-inspector-disclosure { gap:6px; }
+#root .rule-inspector .rule-inspector-disclosure>span { margin-left:4px; font-weight:400; color:var(--text-3); }
+#root .rule-inspector .rule-inspector-conditions { margin-top:12px; display:flex; flex-direction:column; gap:12px; }
+#root .rule-inspector .rule-inspector-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 16px; }
+#root .rule-inspector .rule-inspector-field>.inp { width:100%; min-width:0; }
+#root .rule-inspector .field-error { font:400 12px/18px var(--font); color:var(--danger-text); overflow-wrap:anywhere; }
+#root .rule-inspector .rule-inspector-result { min-width:0; padding:16px; border:1px solid var(--hig-card-line); border-radius:10px; background:var(--hig-inset); }
+#root .rule-inspector .rule-inspector-empty { color:var(--text-3); font:400 13px/20px var(--font); }
+#root .rule-inspector .rule-inspector-conclusion { display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+#root .rule-inspector .rule-inspector-conclusion.is-empty { margin-bottom:0; }
+#root .rule-inspector .rule-inspector-result-title { display:flex; align-items:center; gap:8px; color:var(--text-2); font:500 13px/20px var(--font); }
+#root .rule-inspector .rule-inspector-result-title>svg { flex:none; color:var(--ok); }
+#root .rule-inspector .rule-inspector-conclusion.is-unknown .rule-inspector-result-title, #root .rule-inspector .rule-inspector-conclusion.is-unknown .rule-inspector-result-title>svg { color:var(--warn); }
+#root .rule-inspector .rule-inspector-policy { display:flex; align-items:baseline; flex-wrap:wrap; gap:6px; color:var(--text); font:600 16px/24px var(--font); overflow-wrap:anywhere; }
+#root .rule-inspector .rule-inspector-policy>span { font:400 13px/20px var(--font); color:var(--text-2); }
+#root .rule-inspector .rule-inspector-policy>i { display:inline-block; align-self:center; width:6px; height:6px; border-radius:50%; flex:none; }
+#root .rule-inspector .rule-inspector-missing { margin-bottom:12px; font:400 13px/20px var(--font); color:var(--text-2); }
+#root .rule-inspector .rule-inspector-missing>span { color:var(--text-3); }
+#root .rule-inspector .rule-inspector-missing>ul { list-style:none; padding:0; margin:6px 0 0; display:flex; flex-direction:column; gap:4px; }
+#root .rule-inspector .rule-inspector-missing li { display:flex; align-items:baseline; gap:8px; overflow-wrap:anywhere; }
+#root .rule-inspector .rule-inspector-details { display:grid; grid-template-columns:96px minmax(0,1fr); gap:10px 16px; margin:0; font:400 13px/20px var(--font); }
+#root .rule-inspector .rule-inspector-details dt { margin:0; color:var(--text-3); }
+#root .rule-inspector .rule-inspector-details dd { margin:0; min-width:0; color:var(--text); overflow-wrap:anywhere; }
+#root .rule-inspector .rule-inspector-details code { display:block; margin-top:4px; color:var(--text-2); background:none; padding:0; }
+#root .rule-inspector .rule-inspector-mono, #root .rule-inspector .rule-inspector-details code { font:400 13px/20px var(--mono); overflow-wrap:anywhere; }
+#root .rule-inspector .rule-inspector-resources { list-style:none; margin:0; padding:0; }
+#root .rule-inspector .rule-inspector-warnings { margin-top:12px; display:flex; flex-direction:column; gap:8px; color:var(--text-2); font:400 12px/18px var(--font); }
+#root .rule-inspector .rule-inspector-warnings>p, #root .rule-inspector .rule-inspector-admission { display:flex; align-items:start; gap:6px; overflow-wrap:anywhere; }
+#root .rule-inspector .rule-inspector-warnings svg, #root .rule-inspector .rule-inspector-admission svg { flex:none; margin-top:2px; color:var(--text-3); }
+#root .rule-inspector p.rule-inspector-admission { margin-top:12px; font:400 12px/18px var(--font); color:var(--warn); }
+#root .rule-inspector .rule-inspector-result-end { display:flex; align-items:start; justify-content:space-between; gap:12px; margin-top:12px; color:var(--text-3); font:400 12px/18px var(--font); }
+#root .rule-inspector .rule-inspector-result-end>.link-btn { flex:none; }
+@media(max-width:480px) {
+ #root .rule-inspector .rule-inspector-input-row { flex-direction:column; align-items:stretch; }
+ #root .rule-inspector .rule-inspector-input-row>.inp { flex:none; width:100%; }
+ #root .rule-inspector .rule-inspector-input-row>.btn { width:100%; }
+ #root .rule-inspector .rule-inspector-grid { grid-template-columns:minmax(0,1fr); }
+ #root .rule-inspector .rule-inspector-details { grid-template-columns:minmax(0,1fr); row-gap:4px; }
+ #root .rule-inspector .rule-inspector-details dt:not(:first-child) { margin-top:6px; }
+ #root .rule-inspector .rule-inspector-result-end { flex-direction:column; gap:8px; }
+}
+
+/* One bounded counterfactual, subordinate to the unchanged unknown result. */
+#root .rule-inspector .rule-inspector-conditional { margin-top:12px; padding-top:12px; border-top:1px solid var(--hig-card-line); display:flex; flex-direction:column; gap:8px; min-width:0; color:var(--text-2); font:400 13px/20px var(--font); }
+#root .rule-inspector .rule-inspector-conditional h4 { margin:0; color:var(--text-2); font:600 12px/18px var(--font); }
+#root .rule-inspector .rule-inspector-conditional p { color:var(--text-2); font:400 13px/20px var(--font); overflow-wrap:anywhere; }
+#root .rule-inspector .rule-inspector-conditional-result>span { color:var(--text-3); }
+#root .rule-inspector p.rule-inspector-conditional-rule, #root .rule-inspector p.rule-inspector-conditional-note { color:var(--text-3); font:400 12px/18px var(--font); }
+#root .rule-inspector .rule-inspector-conditional .rule-inspector-warnings { margin-top:0; }
+#root .rule-inspector .rule-inspector-input-details { margin-top:12px; }

@@ -1,7 +1,7 @@
 import {handleTrayAction,selectGroupMember,traySnapshot,type TrayAPI} from './tray';
 import {hasUnsavedFormDrafts} from '../lib/formDraft';
 import {connectionRates,withConnectionSnapshot} from './presentation';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { watchNetworkEvents } from './networkEvents';
 import {hydrateIcons,cachedIcon} from './iconCache';
@@ -16,6 +16,8 @@ export interface Sample { at: number; down: number; up: number }
 export function useClient() {
   const [, redraw] = useState(0);
   const [status, setStatus] = useState<CoreStatus | null>(null);
+  // Process reachability is separate from a healthy core's stopped engine.
+  const coreReachable = useRef(false);
   const [desktop, setDesktop] = useState<DesktopSettingsReply | null>(null);
   const [network, setNetwork] = useState<NetworkStatus | null>(null);
   const [error, setErrorState] = useState('');
@@ -29,13 +31,14 @@ export function useClient() {
   const [samples, setSamples] = useState<Sample[]>([]);
   const [kernelRestarting,setKernelRestarting]=useState(false);
   const [appRestarting,setAppRestarting]=useState(false);
+  const [quitCleanupPending,setQuitCleanupPending]=useState(false);
   const appRestartingRef=useRef(false);
   const [legacyNotices,setLegacyNotices]=useState<Record<string,string>>({});
  const [probingAll,setProbingAll]=useState(false);
  const [subscriptionResults,setSubscriptionResults]=useState<Record<string,SubscriptionStatus>>({});
  const subscriptionResultsRef=useRef(subscriptionResults);subscriptionResultsRef.current=subscriptionResults;
  const showSubscriptionFailure=(e:unknown)=>{const text=subscriptionFailureText(e);setErrorState(text);setErrorQueue(q=>[...q,text]);};
- async function refreshSubscriptionResults(){try{const r=await core<Record<string,SubscriptionStatus>>('subscription.status');if(mounted.current){subscriptionResultsRef.current=r;setSubscriptionResults(r);}}catch{/* older host cannot provide persisted attempt details */}}
+ async function refreshSubscriptionResults(){if(!coreReachable.current)return;try{const r=await core<Record<string,SubscriptionStatus>>('subscription.status');if(mounted.current){subscriptionResultsRef.current=r;setSubscriptionResults(r);}}catch{/* older host cannot provide persisted attempt details */}}
  const [subscriptionNotices,setSubscriptionNotices]=useState<Record<string,string>>({});
   const subscriptionPause=useRef(0),subscriptionAttempts=useRef(new Map<string,number>());
   const pauseSubscriptions=(paused:boolean)=>{subscriptionPause.current=Math.max(0,subscriptionPause.current+(paused?1:-1));};
@@ -69,10 +72,11 @@ export function useClient() {
           s=await core<CoreStatus>('status');
         }
       }
-    } catch(e) { if(active(life)&&request===statusRequest.current){observeUncertain(e);setStatus(null);}throw e; }
+    } catch(e) { if(active(life)&&request===statusRequest.current){observeUncertain(e);coreReachable.current=false;setStatus(null);}throw e; }
     if(!active(life)||request!==statusRequest.current)return s;
     const next={at:Date.now(),items:s.runtime.state==='running'?s.connections.items:[]};
     setConnectionSpeeds(connectionRates(lastConnections.current,next));lastConnections.current=next;
+    coreReachable.current=true;
     setStatus(s);
     if (s.traffic?.down_rate != null && s.traffic?.up_rate != null) setSamples(old => [...old, { at: Date.now(), down: s.traffic.down_rate!, up: s.traffic.up_rate! }].filter(x => x.at > Date.now() - 3600000).slice(-1801));
     return s;
@@ -143,18 +147,17 @@ export function useClient() {
     const id = setInterval(async () => {
       if (!live || polling) return; polling = true;
       try {
-        try { await refreshStatus(); } catch { /* refresh owns ordering and failure projection */ }
+        await Promise.allSettled([refreshStatus(), refreshNetwork()]);
         if(!live)return;
-        try { await refreshNetwork(); } catch { /* refresh owns ordering and failure projection */ }
         // Do not await the get: normal read-only polling continues while it is in flight.
-        if(live&&doc.uncertain)void reconcileAccepted().catch(()=>{ /* keep gate and draft; next existing poll may read again */ });
+        if(live&&coreReachable.current&&doc.uncertain)void reconcileAccepted().catch(()=>{ /* keep gate and draft; next existing poll may read again */ });
       } finally { polling = false; }
     }, 2000);
     return () => { live = false;mounted.current=false;lifetime.current++;statusRequest.current++;networkRequest.current++;clearInterval(id); };
   }, []);
   useEffect(()=> {
     if (!hasHost()) return;
-    return watchNetworkEvents(listen, setError, () => { void refreshNetwork().catch(()=>{});void refreshStatus().catch(()=>{}); },setKernelRestarting);
+    return watchNetworkEvents(listen, setError, () => { void refreshNetwork().catch(()=>{});void refreshStatus().catch(()=>{}); },setKernelRestarting,setQuitCleanupPending);
   }, []);
   useEffect(()=>{
     if(!hasHost())return;let live=true;const stops:Array<()=>void>=[];
@@ -240,9 +243,12 @@ export function useClient() {
   // A download occupies only its own subscription job, not the document or
   // network controls. Core's single staged candidate is serialized separately.
   async function startSubscription(params:Record<string,unknown>,key:string,automatic=false,onFailure?:(text:string)=>boolean,confirm=false){
+   if(automatic&&!coreReachable.current)return;
+   let skippedUnavailable=false;
    let result:{done?:boolean;confirmation?:{preview:SubscriptionPreview;revision:number};error?:string}|undefined;
    await run('subscription:'+key,async()=>{
     const work=subscriptionTail.current.then(async()=>{
+     if(automatic&&!coreReachable.current){skippedUnavailable=true;return;}
      const approved=confirm?reviewRef.current[key]:undefined;
      const r=await backgroundSubscription(doc,{preview:p=>core<SubscriptionPreview>('subscription.preview',p),cancel:token=>core('subscription.cancel',{token})},params,approved);
      result=r;
@@ -252,15 +258,16 @@ export function useClient() {
     });
     subscriptionTail.current=work.catch(()=>{});await work;
    },e=>{const text=subscriptionFailureText(e);result={error:text};setSubscriptionNotices(old=>({...old,[key]:text}));if(!automatic){if((e as any)?.code==='invalid_params'&&onFailure?.(text))return;showSubscriptionFailure(e);}});
+   if(skippedUnavailable)return result;
    subscriptionAttempts.current.set(key,Date.now()/1000);
    await refreshSubscriptionResults();
    return result;
   }
-  const clearSubscriptionReview=(key:string)=>{const r=reviewRef.current[key];if(r?.preview.token)void core('subscription.cancel',{token:r.preview.token}).catch(()=>{});setSubscriptionReviews(old=>{const n={...old};delete n[key];return n;});};
+  const clearSubscriptionReview=(key:string)=>{const r=reviewRef.current[key];if(r?.preview.token)void core('subscription.cancel',{token:r.preview.token}).catch(()=>{});const next={...reviewRef.current};delete next[key];reviewRef.current=next;setSubscriptionReviews(old=>{const n={...old};delete n[key];return n;});if(r)setSubscriptionNotices(old=>{if(!old[key]?.includes('订阅变化需要确认'))return old;const n={...old};delete n[key];return n;});};
   useEffect(()=>{
    if(!hasHost())return;
    const timer=setInterval(()=>{
-    if(!mounted.current||appRestartingRef.current||subscriptionPause.current||doc.editing||doc.saved===null||doc.installing||doc.uncertain)return;
+    if(!mounted.current||!coreReachable.current||appRestartingRef.current||subscriptionPause.current||doc.editing||doc.saved===null||doc.installing||doc.uncertain)return;
     const now=Date.now()/1000,sub=dueSubscriptions(doc.source,now,subscriptionAttempts.current,subscriptionResultsRef.current,jobs.current)[0];if(!sub)return;
     void startSubscription({id:sub.id,download_mode:sub.download_mode??'auto',full_only:true},sub.id,true);
    },30000);return()=>clearInterval(timer);
@@ -289,17 +296,24 @@ export function useClient() {
   };
   let projectedSource=doc.source,projectedStatus=status;
   if(Object.keys(selections).length){
-    if(projectedSource){projectedSource=structuredClone(projectedSource);for(const [group,p]of Object.entries(selections)){const g=projectedSource.kernel.groups?.find(g=>g.name===group);if(g){if(p.unpin)delete g.fixed;else if(g.type==='select')g.selected=p.member;else g.fixed=p.member;}}}
+    if(projectedSource){
+      // Only selection fields are projected; accepted rules/subscription snapshots
+      // and all untouched groups stay read-only and need no deep copy.
+      const kernel={...projectedSource.kernel};
+      if(kernel.groups){kernel.groups=[...kernel.groups];for(const [group,p]of Object.entries(selections)){const i=kernel.groups.findIndex(g=>g.name===group);if(i>=0){const g={...kernel.groups[i]};if(p.unpin)delete g.fixed;else if(g.type==='select')g.selected=p.member;else g.fixed=p.member;kernel.groups[i]=g;}}}
+      projectedSource={...projectedSource,kernel};
+    }
     if(projectedStatus)projectedStatus={...projectedStatus,groups:projectedStatus.groups.map(g=>{const p=selections[g.name];return p&&!p.unpin?{...g,current:p.member}:g;})};
   }
-  const labels=originalNames(doc.source),label=(name:string|null|undefined)=>name?labels.get(name)??name:'—';
+  const labels=useMemo(()=>originalNames(doc.source),[doc.source]),label=(name:string|null|undefined)=>name?labels.get(name)??name:'—';
   // Host owns its app-restarting flag. Do not echo our own accepted restart as
   // an external snapshot busy condition into its second pre-cleanup check.
-  const trayProjectionBlocked=()=>kernelRestarting||doc.dirty||!!doc.draftFilename||doc.editing||doc.saving||doc.uncertain||doc.installing||jobs.current.has('save')||jobs.current.has('network')||jobs.current.has('core');
+  const trayProjectionBlocked=()=>kernelRestarting||doc.saving||doc.uncertain||doc.installing||jobs.current.has('save')||jobs.current.has('network')||jobs.current.has('core');
   const trayBlocked=()=>appRestartingRef.current||trayProjectionBlocked();
-  const lifecycleBlocked=()=>trayBlocked()||hasUnsavedFormDrafts()||subscriptionPause.current>0||jobs.current.size>0||Object.keys(reviewRef.current).length>0||errorQueue.length>0;
+  // Quitting restores OS network and exits; never block quit on drafts/background jobs.
+  const lifecycleBlocked=(action?:'quit'|'restart_core'|'restart_app')=>action==='quit'?false:action==='restart_app'?(appRestartingRef.current||kernelRestarting||doc.saving||doc.installing||jobs.current.has('save')):(appRestartingRef.current||kernelRestarting||doc.saving||doc.installing||jobs.current.has('save')||jobs.current.has('core'));
   const restartApp=async()=>{
-    if(lifecycleBlocked()){reportOperationError(Error('请先保存或取消当前草稿，或等待操作完成，再重启应用'));return false;}
+    if(lifecycleBlocked('restart_app')){reportOperationError(Error('正在保存配置或执行网络操作，请稍后再试'));return false;}
     return run('app-restart',async()=>{
       // Lock locally before IPC; success is only native acceptance. Async
       // failure unlocks through app-restarting/app-restart-failed above.
@@ -311,7 +325,8 @@ export function useClient() {
   const trayAPI=useRef<TrayAPI|null>(null);trayAPI.current={blocked:trayBlocked,lifecycleBlocked,restartCore,restartApp,quit:()=>run('window',()=>host('window_action',{action:'quit'}),reportOperationError),mode:m=>edit(d=>{d.client.mode=m},reportOperationError),select:selectMember,network:(cmd,enabled)=>os(cmd,{enabled}),show:()=>host('window_action',{action:'show'}),error:reportOperationError};
   const trayListenerReady=useRef(false);
   const trayState=JSON.stringify(traySnapshot(projectedSource,projectedStatus,network,trayProjectionBlocked(),label));
-  const trayStateRef=useRef(JSON.parse(trayState));trayStateRef.current=JSON.parse(trayState);
+  const trayPayload=useMemo(()=>JSON.parse(trayState) as ReturnType<typeof traySnapshot>,[trayState]);
+  const trayStateRef=useRef(trayPayload);trayStateRef.current=trayPayload;
   useEffect(()=>{
     if(!hasHost())return;let live=true;const stops:Array<()=>void>=[];
     const keep=(stop:()=>void)=>{if(live)stops.push(stop);else stop();};
@@ -335,7 +350,7 @@ export function useClient() {
     }).catch(e=>{trayListenerReady.current=false;for(const stop of stops.splice(0))stop();if(live)reportOperationError(e);});
     return()=>{live=false;trayListenerReady.current=false;for(const stop of stops.splice(0))stop();void host('tray_sync',{listener_ready:false}).catch(()=>{});};
   },[]);
-  useEffect(()=>{if(hasHost())void host('tray_sync',{snapshot:JSON.parse(trayState),listener_ready:trayListenerReady.current}).catch(()=>{/* native tray errors must not alter confirmed configuration */});},[trayState]);
-  return { selectMember,kernelRestarting,appRestarting,restartCore,restartApp,reportOperationError, subscriptionResults,showSubscriptionFailure,selectSubscription,updateAllSubscriptions, connectionSpeeds,label, startSubscription,subscriptionReviews,clearSubscriptionReview,errorQueue,dismissError, updateSubscription,legacyNotices, migrate, probeAll, probeAllProgress, probeGroupProgress, groupProbing, memberProbing, probeLocked, cancelProbeGroup, pauseSubscriptions, subscriptionNotices, desktop, refreshDesktop, setPreferences, doc, source: projectedSource, status:projectedStatus, network, busy, error:doc.uncertain?errorText('CORE_MUTATION_UNCERTAIN'):error, samples, hasHost: hasHost(), connected: doc.saved !== null, edit, save, run, probe, os, control, connect, setError, refreshStatus, refreshNetwork };
+  useEffect(()=>{if(hasHost())void host('tray_sync',{snapshot:trayPayload,listener_ready:trayListenerReady.current}).catch(()=>{/* native tray errors must not alter confirmed configuration */});},[trayState]);
+  return { selectMember,kernelRestarting,appRestarting,quitCleanupPending,restartCore,restartApp,reportOperationError, subscriptionResults,showSubscriptionFailure,selectSubscription,updateAllSubscriptions, connectionSpeeds,label, startSubscription,subscriptionReviews,clearSubscriptionReview,errorQueue,dismissError, updateSubscription,legacyNotices, migrate, probeAll, probeAllProgress, probeGroupProgress, groupProbing, memberProbing, probeLocked, cancelProbeGroup, pauseSubscriptions, subscriptionNotices, desktop, refreshDesktop, setPreferences, doc, source: projectedSource, status:projectedStatus, network, busy, error:doc.uncertain?errorText('CORE_MUTATION_UNCERTAIN'):error, samples, hasHost: hasHost(), connected: doc.saved !== null, edit, save, run, probe, os, control, connect, setError, refreshStatus, refreshNetwork };
 }
 export type Client = ReturnType<typeof useClient>;

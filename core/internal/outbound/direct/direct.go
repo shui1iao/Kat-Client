@@ -19,9 +19,15 @@ import (
 // Options configures the direct dialer. All fields may be zero.
 type Options struct {
 	DisableIPv6 bool
+	// PacketSource selects the local source BEFORE net.ListenUDP binds a remote
+	// socket. It must not bind itself. nil keeps the configured/default source;
+	// errors abort creation without falling back to a wildcard socket.
+	PacketSource func(network string, configured netip.Addr) (netip.Addr, error)
 	// PacketControl is client-only physical binding for REMOTE datagrams.
 	// Literal loopback continues to use separate ordinary local sockets.
 	PacketControl func(network string, c *net.UDPConn) error
+	PacketRelease func(*net.UDPConn)
+	DialContext   func(context.Context, string, string) (net.Conn, error)
 	PacketFailure func()
 	// Resolve resolves a domain name (kernel-injected, uses Kat's dns settings).
 	// nil uses the system resolver.
@@ -101,6 +107,7 @@ func (d *Outbound) resolve(ctx context.Context, host string) ([]netip.Addr, erro
 
 // DialTCP resolves dst (when it is a name) and dials the candidates in order.
 func (d *Outbound) DialTCP(ctx context.Context, dst outbound.Addr) (net.Conn, error) {
+	started := time.Now()
 	if dst.Port == 0 {
 		return nil, errZeroPort
 	}
@@ -111,6 +118,7 @@ func (d *Outbound) DialTCP(ctx context.Context, dst outbound.Addr) (net.Conn, er
 	}
 	ips, e := d.resolve(ctx, dst.Host)
 	if e != nil {
+		outbound.ReportError(ctx, "direct", "dns_lookup", e, started)
 		return nil, e
 	}
 	if d.o.Guard != nil {
@@ -128,11 +136,16 @@ func (d *Outbound) DialTCP(ctx context.Context, dst outbound.Addr) (net.Conn, er
 	outbound.ObserveDial(ctx, ips, netip.Addr{})
 	var last error
 	for _, ip := range ips {
-		c, e := (&net.Dialer{ControlContext: d.o.Control}).DialContext(ctx, "tcp", netip.AddrPortFrom(ip, dst.Port).String())
+		dial := (&net.Dialer{ControlContext: d.o.Control}).DialContext
+		if d.o.DialContext != nil {
+			dial = d.o.DialContext
+		}
+		c, e := dial(ctx, "tcp", netip.AddrPortFrom(ip, dst.Port).String())
 		if e == nil {
 			outbound.ObserveDial(ctx, ips, ip)
 			return c, nil
 		}
+		outbound.ReportError(ctx, "direct", "connect", e, started)
 		last = e
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
@@ -145,12 +158,13 @@ func (d *Outbound) DialTCP(ctx context.Context, dst outbound.Addr) (net.Conn, er
 }
 
 // ListenPacket returns a PacketConn that can send to IPv4 and IPv6 targets.
-// Only datagrams from an exact IP:port previously written to are delivered.
+// Ordinary callers accept exact previously written peers. The trusted TUN
+// adapter explicitly requests EIF; every outbound datagram still passes Guard.
 func (d *Outbound) ListenPacket(ctx context.Context) (outbound.PacketConn, error) {
 	if e := ctx.Err(); e != nil {
 		return nil, e
 	}
-	p := &packetConn{observe: func(ips []netip.Addr, ip netip.Addr) { outbound.ObserveDial(ctx, ips, ip) }, d: d, sent: map[netip.AddrPort]struct{}{}, names: map[string]netip.Addr{}, in: make(chan datagram, inboxSize), closed: make(chan struct{})}
+	p := &packetConn{eif: outbound.EndpointIndependent(ctx), observe: func(ips []netip.Addr, ip netip.Addr) { outbound.ObserveDial(ctx, ips, ip) }, d: d, sent: map[netip.AddrPort]struct{}{}, names: map[string]netip.Addr{}, in: make(chan datagram, inboxSize), closed: make(chan struct{}), failure: make(chan error, 1)}
 	if g := d.o.Guard; g != nil {
 		p.guard = func(ip netip.Addr) bool { return g(ctx, ip) }
 	}
@@ -161,6 +175,12 @@ func (d *Outbound) ListenPacket(ctx context.Context) (outbound.PacketConn, error
 	bind6 := d.o.BindIPv6
 	if !bind6.IsValid() {
 		bind6 = netip.IPv6Unspecified()
+	}
+	// In controlled EIF mode, unused ordinary sockets must not expose a
+	// wildcard/unbound ingress alongside the actual physical-owner socket.
+	// Keep only the existing narrow loopback exemption on these sockets.
+	if p.eif && d.o.PacketControl != nil {
+		bind4, bind6 = netip.MustParseAddr("127.0.0.1"), netip.IPv6Loopback()
 	}
 	var e4, e6 error
 	p.v4, e4 = net.ListenUDP("udp4", net.UDPAddrFromAddrPort(netip.AddrPortFrom(bind4.Unmap(), 0)))
@@ -191,10 +211,11 @@ func (d *Outbound) ListenPacket(ctx context.Context) (outbound.PacketConn, error
 }
 
 const (
-	inboxSize   = 64
-	maxSent     = 4096
-	maxNames    = 64
-	maxDatagram = 65535
+	inboxSize         = 64
+	maxSent           = 4096
+	maxNames          = 64
+	maxDatagram       = 65535
+	maxEIFQueuedBytes = 256 << 10
 )
 
 type datagram struct {
@@ -203,6 +224,8 @@ type datagram struct {
 }
 
 type packetConn struct {
+	failure          chan error
+	eif              bool
 	d                *Outbound
 	observe          func([]netip.Addr, netip.Addr)
 	candidates       []netip.Addr
@@ -211,12 +234,13 @@ type packetConn struct {
 	v4, v6           *net.UDPConn
 	guard            func(netip.Addr) bool
 
-	mu        sync.Mutex
-	sent      map[netip.AddrPort]struct{}
-	order     []netip.AddrPort
-	names     map[string]netip.Addr
-	rdeadline time.Time
-	rchanged  chan struct{}
+	queuedBytes int // mu; EIF payload budget in addition to inbox slot limit
+	mu          sync.Mutex
+	sent        map[netip.AddrPort]struct{}
+	order       []netip.AddrPort
+	names       map[string]netip.Addr
+	rdeadline   time.Time
+	rchanged    chan struct{}
 
 	in        chan datagram
 	closed    chan struct{}
@@ -225,6 +249,9 @@ type packetConn struct {
 }
 
 func (p *packetConn) allowed(src netip.AddrPort) bool {
+	if p.eif {
+		return true
+	}
 	p.mu.Lock()
 	_, ok := p.sent[src]
 	p.mu.Unlock()
@@ -248,6 +275,10 @@ func (p *packetConn) reader(s *net.UDPConn) {
 			}
 			// Transient errors (e.g. ICMP-induced) must not end the session.
 			if errors.Is(e, net.ErrClosed) {
+				select {
+				case p.failure <- e:
+				default:
+				}
 				return
 			}
 			time.Sleep(10 * time.Millisecond)
@@ -257,15 +288,32 @@ func (p *packetConn) reader(s *net.UDPConn) {
 		if !p.allowed(src) {
 			continue
 		}
-		b := append([]byte(nil), buf[:n]...)
-		select {
-		case p.in <- datagram{b, src}:
-		case <-p.closed:
-			return
-		default:
-			// Inbox full: drop, like a full socket buffer.
-		}
+		p.enqueue(buf[:n], src)
 	}
+}
+
+// Reserve bytes before copying: a full inbox never retains another large
+// datagram. Both slot and payload bounds apply to the trusted EIF adapter.
+func (p *packetConn) enqueue(payload []byte, src netip.AddrPort) bool {
+	n := len(payload)
+	p.mu.Lock()
+	if p.eif && n > maxEIFQueuedBytes-p.queuedBytes {
+		p.mu.Unlock()
+		return false
+	}
+	p.queuedBytes += n
+	p.mu.Unlock()
+	b := append([]byte(nil), payload...)
+	select {
+	case p.in <- datagram{b, src}:
+		return true
+	case <-p.closed:
+	default:
+	}
+	p.mu.Lock()
+	p.queuedBytes -= n
+	p.mu.Unlock()
+	return false
 }
 
 func (p *packetConn) ReadFrom(b []byte) (int, outbound.Addr, error) {
@@ -291,8 +339,14 @@ func (p *packetConn) ReadFrom(b []byte) (int, outbound.Addr, error) {
 		case <-p.closed:
 			stopTimer(t)
 			return 0, outbound.Addr{}, net.ErrClosed
+		case e := <-p.failure:
+			stopTimer(t)
+			return 0, outbound.Addr{}, e
 		case g := <-p.in:
 			stopTimer(t)
+			p.mu.Lock()
+			p.queuedBytes -= len(g.b)
+			p.mu.Unlock()
 			n := copy(b, g.b)
 			return n, outbound.Addr{Host: g.src.Addr().String(), Port: g.src.Port()}, nil
 		case <-timer:
@@ -347,6 +401,11 @@ func (p *packetConn) target(dst outbound.Addr) (netip.AddrPort, error) {
 	p.mu.Unlock()
 	for _, ip := range ips {
 		if ip.Is4() && p.v4 != nil || ip.Is6() && p.v6 != nil {
+			if p.d.o.PacketControl != nil && !ip.IsLoopback() {
+				if _, e := p.remoteSocket(ip.Is6()); e != nil {
+					continue
+				}
+			}
 			p.mu.Lock()
 			if len(p.names) >= maxNames {
 				clear(p.names)
@@ -382,7 +441,7 @@ func (p *packetConn) WriteTo(b []byte, dst outbound.Addr) (int, error) {
 	if p.d.o.PacketControl != nil && !t.Addr().IsLoopback() {
 		s, e = p.remoteSocket(t.Addr().Is6())
 		if e != nil {
-			if p.d.o.PacketFailure != nil {
+			if p.d.o.PacketFailure != nil && !errors.Is(e, net.ErrClosed) && e.Error() != "physical family unavailable" && e.Error() != "no controlled physical interface for address family" && e.Error() != "ipv6_disabled" {
 				p.d.o.PacketFailure()
 			}
 			return 0, e
@@ -417,9 +476,15 @@ func (p *packetConn) Close() error {
 		close(p.closed)
 		if p.remote4 != nil {
 			p.remote4.Close()
+			if p.d.o.PacketRelease != nil {
+				p.d.o.PacketRelease(p.remote4)
+			}
 		}
 		if p.remote6 != nil {
 			p.remote6.Close()
+			if p.d.o.PacketRelease != nil {
+				p.d.o.PacketRelease(p.remote6)
+			}
 		}
 		p.mu.Unlock()
 		if p.v4 != nil {
@@ -430,7 +495,16 @@ func (p *packetConn) Close() error {
 		}
 	})
 	p.wg.Wait()
-	return nil
+	for {
+		select {
+		case g := <-p.in:
+			p.mu.Lock()
+			p.queuedBytes -= len(g.b)
+			p.mu.Unlock()
+		default:
+			return nil
+		}
+	}
 }
 
 func (p *packetConn) SetReadDeadline(t time.Time) error {
@@ -473,6 +547,13 @@ func (p *packetConn) remoteSocket(ipv6 bool) (*net.UDPConn, error) {
 	if *slot != nil {
 		return *slot, nil
 	}
+	if source := p.d.o.PacketSource; source != nil {
+		selected, err := source(network, bind)
+		if err != nil {
+			return nil, err
+		}
+		bind = selected
+	}
 	if !bind.IsValid() {
 		if ipv6 {
 			bind = netip.IPv6Unspecified()
@@ -493,4 +574,24 @@ func (p *packetConn) remoteSocket(ipv6 bool) (*net.UDPConn, error) {
 	p.wg.Add(1)
 	go p.reader(c)
 	return c, nil
+}
+
+// LocalEndpoints is exact socket metadata, NOT an Internet-observed NAT port.
+func (p *packetConn) LocalEndpoints() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var a []string
+	for _, c := range []*net.UDPConn{p.remote4, p.remote6} {
+		if c != nil {
+			a = append(a, c.LocalAddr().String())
+		}
+	}
+	if len(a) == 0 {
+		for _, c := range []*net.UDPConn{p.v4, p.v6} {
+			if c != nil {
+				a = append(a, c.LocalAddr().String())
+			}
+		}
+	}
+	return a
 }

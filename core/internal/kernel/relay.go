@@ -100,7 +100,13 @@ func (c *activityStream) CloseWrite() error { return closeWrite(c.Conn) }
 func (s *Server) relay(ctx context.Context, a, b net.Conn) error {
 	return s.relayIdle(ctx, a, b, s.cfg.Limits.TCPIdle.value())
 }
-func (s *Server) relayIdle(ctx context.Context, a, b net.Conn, idle time.Duration) error {
+func (s *Server) relayIdle(ctx context.Context, a, b net.Conn, idle time.Duration) (result error) {
+	observedStart := time.Now()
+	defer func() {
+		if !quietFailure(result) {
+			s.runtimeFailure(ctx, "relay", "unknown", result, observedStart)
+		}
+	}()
 	if idle > 0 {
 		var last atomic.Int64
 		last.Store(time.Now().UnixNano())
@@ -163,7 +169,7 @@ func (s *Server) relayIdle(ctx context.Context, a, b net.Conn, idle time.Duratio
 	}
 	select {
 	case e := <-done:
-		if err == nil {
+		if err == nil && !quietFailure(e) {
 			err = e
 		}
 	case <-ctx.Done():

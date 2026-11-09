@@ -22,18 +22,20 @@ pub fn dispatch()->Option<i32>{
  let requested=if (args.len()==2||deferred)&&args[0]=="--setup-install"{crate::install_location::validate(&args[1])?;Some(args[1].clone())}else if uninstall{None}else{return Err(Error::new("INSTALL_ARGS","Invalid setup bridge arguments"));};
  // This ordinary process owns the existing per-SID GUI lock throughout UAC and
  // file replacement. Existing GUIs must exit normally; none are killed.
- let _instance=identity::single_instance()?;
+ let session=if uninstall{None}else{Some(super::update_handoff::Session::begin("client",None)?)};
+ let _uninstall_instance=if uninstall{Some(super::update_handoff::acquire_single_instance_with_takeover()?.0)}else{None};
  let old=install_location::discover()?;
  if let (Some(p),Some(r))=(&old,&requested){crate::install_location::select(p.to_str(),r)?;}
  if uninstall&&old.is_none(){return Err(Error::new("INSTALL_DISCOVERY","Application not installed"));}
  let app_root=if uninstall{old.as_ref().unwrap().clone()}else{std::path::PathBuf::from(requested.as_ref().unwrap())};
  let (mut links,foreign)=shortcuts::prepare_with_desktop(&app_root,uninstall,if deferred{shortcuts::desktop_default(old.is_none())?}else{true})?;
  if let Err(e)=service_client::setup_elevate(uninstall,requested.as_deref()){
+  if session.as_ref().is_some_and(|s|s.was_running){if let Ok(mut p)=installed_handoff::prepare(){let _=p.commit();}}
   if let Err(r)=links.rollback(){return Err(crate::installer_update::rollback_errors(&crate::installer_update::at("operation",e),&crate::installer_update::at("recover_apps",r)));}return Err(e);
  }
  links.commit();
  if foreign{warning=Some(crate::setup_feedback::FOREIGN_SHORTCUT.to_string());}
- if uninstall||deferred{return Ok(());}
+ if uninstall||deferred&&!session.as_ref().is_some_and(|s|s.was_running){return Ok(());}
  let mut pending=installed_handoff::prepare().map_err(|_|Error::new("INSTALL_HANDOFF_FAILED","Application installed; cannot launch installed GUI"))?;pending.commit()?;
  Ok(())
  })();

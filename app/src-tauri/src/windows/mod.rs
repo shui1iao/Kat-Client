@@ -6,8 +6,9 @@ pub mod netapi;
 pub mod security;
 pub mod pipe;
 pub mod job;
-pub mod engine;
+#[path="legacy_tun_recovery.rs"]pub mod engine;
 pub mod scm;
+pub mod firewall;
 pub mod installer;
 pub mod service;
 pub mod service_client;
@@ -27,10 +28,16 @@ pub mod install_location;
 pub mod installed_app;
 #[cfg(feature="desktop")]pub mod setup_bridge;
 
-pub mod flow_channel;
-
-mod process_lookup;
+// c50 has no legacy bridge registration/session endpoints.
 
 mod service_acl;
 
 mod self_read;
+
+pub mod update_handoff;
+pub mod update_install;
+#[cfg(feature="desktop")]pub mod update_bridge;
+
+pub mod elevated;
+pub(crate) mod elevated_stderr;
+pub mod core_tun_recovery;

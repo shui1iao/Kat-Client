@@ -105,7 +105,7 @@ func (r *internalDNS) host(name string) ([]netip.Addr, bool) {
 	}
 	return out, true
 }
-func (r *internalDNS) configureIO(disabled bool, bootstrap func(context.Context, string, string) ([]netip.Addr, error), dial dnsDial, physical []netip.Addr) {
+func (r *internalDNS) configureIO(disabled bool, bootstrap func(context.Context, string, string) ([]netip.Addr, error), dial dnsDial, physical []netip.Addr, system ...func(context.Context, []byte) ([]byte, error)) {
 	r.disableIPv6 = disabled
 	r.bootstrap = func(ctx context.Context, network, host string) ([]netip.Addr, error) {
 		if disabled {
@@ -128,12 +128,15 @@ func (r *internalDNS) configureIO(disabled bool, bootstrap func(context.Context,
 	}
 	r.dial = dial
 	for _, p := range r.rules {
-		p.resolver.configureIO(disabled, bootstrap, dial, physical)
+		p.resolver.configureIO(disabled, bootstrap, dial, physical, system...)
 	}
-	// TUN's existing original physical DNS addresses are kept unchanged. System
-	// wire fallback uses these literal servers and the same bound socket hooks,
-	// never Windows' resolver (which would loop back through TUN).
+	// Keep legacy target metadata for non-opted-in internal callers. Production
+	// desktop system wire I/O uses SystemQuery, never this flattened address set
+	// or Windows' resolver (which could loop back through the TUN peer).
 	r.physical = append([]netip.Addr(nil), physical...)
+	if len(system) > 0 {
+		r.systemQuery = system[0]
+	}
 }
 func (r *internalDNS) clearCache() int {
 	r.mu.Lock()

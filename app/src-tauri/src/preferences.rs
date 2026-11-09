@@ -10,12 +10,13 @@ fn bypass_text<'de,D:serde::Deserializer<'de>>(d:D)->std::result::Result<String,
  pub launch_at_login:bool,pub start_hidden:bool,pub close_action:CloseAction,
  pub remember_window:bool,pub tray_click:TrayClick,
  pub proxy_bypass_mode:ProxyBypassMode,pub proxy_bypass:String,
- pub diagnostic_urls:Vec<String>,
+ pub diagnostic_urls:Vec<String>,pub log_retention_days:u32,
 }
 // Compatibility only: consume and discard the two retired keys before the same
 // strict current-settings parser. They are not read as preferences or serialized.
 #[derive(Deserialize)]#[serde(remote="DesktopPreferences",deny_unknown_fields)]
 struct CurrentPreferences {
+ #[serde(default="default_retention",deserialize_with="retention_days")]log_retention_days:u32,
  launch_at_login:bool,start_hidden:bool,close_action:CloseAction,
  #[serde(default)]remember_window:bool,#[serde(default)]tray_click:TrayClick,
  #[serde(default,deserialize_with="diagnostic_urls")]diagnostic_urls:Vec<String>,
@@ -28,16 +29,17 @@ impl<'de> Deserialize<'de> for DesktopPreferences {
   CurrentPreferences::deserialize(value).map_err(serde::de::Error::custom)
  }
 }
-impl Default for DesktopPreferences{fn default()->Self{Self{launch_at_login:false,start_hidden:false,close_action:CloseAction::Tray,remember_window:false,tray_click:TrayClick::Show,proxy_bypass_mode:ProxyBypassMode::Inherit,proxy_bypass:String::new(),diagnostic_urls:Vec::new()}}}
+impl Default for DesktopPreferences{fn default()->Self{Self{launch_at_login:false,start_hidden:false,close_action:CloseAction::Tray,remember_window:false,tray_click:TrayClick::Show,proxy_bypass_mode:ProxyBypassMode::Inherit,proxy_bypass:String::new(),diagnostic_urls:Vec::new(),log_retention_days:7}}}
 impl DesktopPreferences{pub fn custom_bypass(&self)->Option<&str>{match self.proxy_bypass_mode{ProxyBypassMode::Inherit=>None,ProxyBypassMode::Custom=>Some(&self.proxy_bypass)}}}
 #[derive(Debug,Default,Clone,Serialize,Deserialize)]#[serde(deny_unknown_fields)]pub struct Patch{
+ #[serde(default,deserialize_with="present_retention")]pub log_retention_days:Option<u32>,
  #[serde(default,deserialize_with="present_diagnostic_urls")]pub diagnostic_urls:Option<Vec<String>>,
  #[serde(default,deserialize_with="present")]pub launch_at_login:Option<bool>,#[serde(default,deserialize_with="present")]pub start_hidden:Option<bool>,#[serde(default,deserialize_with="present")]pub close_action:Option<CloseAction>,
  #[serde(default,deserialize_with="present")]pub remember_window:Option<bool>,#[serde(default,deserialize_with="present")]pub tray_click:Option<TrayClick>,#[serde(default,deserialize_with="present")]pub proxy_bypass_mode:Option<ProxyBypassMode>,#[serde(default,deserialize_with="present_bypass")]pub proxy_bypass:Option<String>,
 }
 fn present<'de,D:serde::Deserializer<'de>,T:serde::Deserialize<'de>>(d:D)->std::result::Result<Option<T>,D::Error>{T::deserialize(d).map(Some)}
 fn present_bypass<'de,D:serde::Deserializer<'de>>(d:D)->std::result::Result<Option<String>,D::Error>{bypass_text(d).map(Some)}
-impl Patch{pub fn apply(self,mut p:DesktopPreferences)->DesktopPreferences{if let Some(v)=self.diagnostic_urls{p.diagnostic_urls=v;}if let Some(v)=self.launch_at_login{p.launch_at_login=v;}if let Some(v)=self.start_hidden{p.start_hidden=v;}if let Some(v)=self.close_action{p.close_action=v;}if let Some(v)=self.remember_window{p.remember_window=v;}if let Some(v)=self.tray_click{p.tray_click=v;}if let Some(v)=self.proxy_bypass_mode{p.proxy_bypass_mode=v;}if let Some(v)=self.proxy_bypass{p.proxy_bypass=v;}p}}
+impl Patch{pub fn apply(self,mut p:DesktopPreferences)->DesktopPreferences{if let Some(v)=self.log_retention_days{p.log_retention_days=v;}if let Some(v)=self.diagnostic_urls{p.diagnostic_urls=v;}if let Some(v)=self.launch_at_login{p.launch_at_login=v;}if let Some(v)=self.start_hidden{p.start_hidden=v;}if let Some(v)=self.close_action{p.close_action=v;}if let Some(v)=self.remember_window{p.remember_window=v;}if let Some(v)=self.tray_click{p.tray_click=v;}if let Some(v)=self.proxy_bypass_mode{p.proxy_bypass_mode=v;}if let Some(v)=self.proxy_bypass{p.proxy_bypass=v;}p}}
 #[derive(Debug,PartialEq,Eq)]pub enum TrayAction{Show,Hide,Ignore}
 // Only a left-button release is an activation. DoubleClick and button-down are never a second action.
 pub fn tray_action(mode:TrayClick,left_release:bool,visible:bool,minimized:bool)->TrayAction{if !left_release{TrayAction::Ignore}else if mode==TrayClick::Toggle&&visible&&!minimized{TrayAction::Hide}else{TrayAction::Show}}
@@ -48,7 +50,8 @@ pub fn load(s:&Store)->Result<DesktopPreferences>{s.load("desktop-settings.json"
 pub fn save(s:&Store,p:&DesktopPreferences)->Result<()>{{if !valid_bypass(&p.proxy_bypass)||!valid_diagnostic_urls(&p.diagnostic_urls){return Err(Error::new("SETTINGS_INVALID","Invalid proxy bypass text"));}s.save("desktop-settings.json",p,SETTINGS_LIMIT)}}
 pub fn intent(s:&Store)->Result<NetworkIntent>{Ok(s.load("desktop-network-intent.json",1024)?.unwrap_or_default())}
 pub fn set_intent(s:&Store,system_proxy:Option<bool>,tun:Option<bool>)->Result<()>{let mut i=intent(s)?;if let Some(v)=system_proxy{i.system_proxy=v;}if let Some(v)=tun{i.tun=v;}s.save("desktop-network-intent.json",&i,1024)}
-// Explicit actions update one requested switch only after success; cleanup never calls set_intent.
+// Explicit enable/proxy actions persist after success. Explicit TUN OFF records
+// the requested OFF even while cleanup is pending; cleanup itself never changes intent.
 #[derive(Debug,PartialEq,Eq)]pub enum StartupPlan{StartCore,Restore(NetworkIntent)}
 pub fn startup_plan(i:NetworkIntent)->StartupPlan{if i.system_proxy||i.tun{StartupPlan::Restore(i)}else{StartupPlan::StartCore}}
 #[derive(Debug,PartialEq,Eq)]pub enum RunChange{Keep,Set(String),Remove}
@@ -100,3 +103,7 @@ pub fn valid_diagnostic_urls(urls:&[String])->bool{urls.len()<=16&&urls.iter().a
 fn diagnostic_urls<'de,D:serde::Deserializer<'de>>(d:D)->std::result::Result<Vec<String>,D::Error>{let urls=Vec::<String>::deserialize(d)?;if !valid_diagnostic_urls(&urls){return Err(serde::de::Error::custom("Expected at most 16 HTTPS diagnostic URLs"));}Ok(urls)}
 fn present_diagnostic_urls<'de,D:serde::Deserializer<'de>>(d:D)->std::result::Result<Option<Vec<String>>,D::Error>{diagnostic_urls(d).map(Some)}
 #[cfg(test)]mod k3_preferences{use super::*;#[test]fn strict_urls_and_persistence(){for v in [serde_json::json!(null),serde_json::json!(["http://a"]),serde_json::json!(["https://a/#x"]),serde_json::json!(["https://u:p@a"]),serde_json::json!(["https://a/\n"])]{assert!(serde_json::from_value::<Patch>(serde_json::json!({"diagnostic_urls":v})).is_err());}let p=serde_json::from_value::<Patch>(serde_json::json!({"diagnostic_urls":["https://example.org/path?q=1"]})).unwrap().apply(DesktopPreferences::default());assert_eq!(serde_json::from_value::<DesktopPreferences>(serde_json::to_value(&p).unwrap()).unwrap(),p);}}
+
+fn default_retention()->u32{7}
+fn retention_days<'de,D:serde::Deserializer<'de>>(d:D)->std::result::Result<u32,D::Error>{let v=u32::deserialize(d)?;if ![1,7,30].contains(&v){return Err(serde::de::Error::custom("Expected 1, 7 or 30 days"));}Ok(v)}
+fn present_retention<'de,D:serde::Deserializer<'de>>(d:D)->std::result::Result<Option<u32>,D::Error>{retention_days(d).map(Some)}

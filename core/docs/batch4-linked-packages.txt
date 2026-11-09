@@ -1,0 +1,71 @@
+proxy-kernel/internal/anytls proxy-kernel 
+golang.org/x/sys/cpu golang.org/x/sys v0.48.0
+golang.org/x/crypto/blake2b golang.org/x/crypto v0.57.0
+golang.org/x/crypto/argon2 golang.org/x/crypto v0.57.0
+proxy-kernel/internal/snell proxy-kernel 
+golang.org/x/crypto/internal/alias golang.org/x/crypto v0.57.0
+golang.org/x/crypto/chacha20 golang.org/x/crypto v0.57.0
+golang.org/x/crypto/internal/poly1305 golang.org/x/crypto v0.57.0
+golang.org/x/crypto/chacha20poly1305 golang.org/x/crypto v0.57.0
+golang.org/x/crypto/hkdf golang.org/x/crypto v0.57.0
+github.com/klauspost/cpuid/v2 github.com/klauspost/cpuid/v2 v2.0.9
+lukechampine.com/blake3/guts lukechampine.com/blake3 v1.4.1
+lukechampine.com/blake3/bao lukechampine.com/blake3 v1.4.1
+lukechampine.com/blake3 lukechampine.com/blake3 v1.4.1
+proxy-kernel/internal/ss proxy-kernel 
+github.com/cloudflare/circl/sign github.com/cloudflare/circl v1.6.3
+github.com/cloudflare/circl/sign/internal/dilithium/params github.com/cloudflare/circl v1.6.3
+github.com/cloudflare/circl/sign/internal/dilithium github.com/cloudflare/circl v1.6.3
+github.com/cloudflare/circl/internal/sha3 github.com/cloudflare/circl v1.6.3
+github.com/cloudflare/circl/simd/keccakf1600 github.com/cloudflare/circl v1.6.3
+github.com/cloudflare/circl/sign/mldsa/mldsa65/internal github.com/cloudflare/circl v1.6.3
+github.com/cloudflare/circl/sign/mldsa/mldsa65 github.com/cloudflare/circl v1.6.3
+github.com/juju/ratelimit github.com/juju/ratelimit v1.0.2
+github.com/pires/go-proxyproto github.com/pires/go-proxyproto v0.11.0
+github.com/andybalholm/brotli github.com/andybalholm/brotli v1.0.6
+github.com/klauspost/compress github.com/klauspost/compress v1.18.7
+github.com/klauspost/compress/fse github.com/klauspost/compress v1.18.7
+github.com/klauspost/compress/internal/cpuinfo github.com/klauspost/compress v1.18.7
+github.com/klauspost/compress/internal/le github.com/klauspost/compress v1.18.7
+github.com/klauspost/compress/huff0 github.com/klauspost/compress v1.18.7
+github.com/klauspost/compress/internal/snapref github.com/klauspost/compress v1.18.7
+github.com/klauspost/compress/zstd/internal/xxhash github.com/klauspost/compress v1.18.7
+github.com/klauspost/compress/zstd github.com/klauspost/compress v1.18.7
+github.com/refraction-networking/utls/dicttls github.com/refraction-networking/utls v1.8.2
+github.com/refraction-networking/utls/internal/boring github.com/refraction-networking/utls v1.8.2
+github.com/refraction-networking/utls/internal/byteorder github.com/refraction-networking/utls v1.8.2
+github.com/refraction-networking/utls/internal/fips140tls github.com/refraction-networking/utls v1.8.2
+golang.org/x/crypto/cryptobyte/asn1 golang.org/x/crypto v0.57.0
+golang.org/x/crypto/cryptobyte golang.org/x/crypto v0.57.0
+github.com/refraction-networking/utls/internal/helper github.com/refraction-networking/utls v1.8.2
+github.com/refraction-networking/utls/internal/hkdf github.com/refraction-networking/utls v1.8.2
+github.com/refraction-networking/utls/internal/hpke github.com/refraction-networking/utls v1.8.2
+github.com/refraction-networking/utls/internal/quicvarint/protocol github.com/refraction-networking/utls v1.8.2
+github.com/refraction-networking/utls/internal/quicvarint github.com/refraction-networking/utls v1.8.2
+github.com/refraction-networking/utls/internal/tls12 github.com/refraction-networking/utls v1.8.2
+github.com/refraction-networking/utls/internal/tls13 github.com/refraction-networking/utls v1.8.2
+golang.org/x/crypto/sha3 golang.org/x/crypto v0.57.0
+github.com/refraction-networking/utls github.com/refraction-networking/utls v1.8.2
+github.com/xtls/reality/fips140tls github.com/xtls/reality v0.0.0-20260322125925-9234c772ba8f
+github.com/xtls/reality/hpke github.com/xtls/reality v0.0.0-20260322125925-9234c772ba8f
+github.com/xtls/reality/tls12 github.com/xtls/reality v0.0.0-20260322125925-9234c772ba8f
+github.com/xtls/reality/tls13 github.com/xtls/reality v0.0.0-20260322125925-9234c772ba8f
+golang.org/x/crypto/curve25519 golang.org/x/crypto v0.57.0
+github.com/xtls/reality github.com/xtls/reality v0.0.0-20260322125925-9234c772ba8f
+proxy-kernel/internal/vlessx proxy-kernel 
+github.com/coder/websocket/internal/errd github.com/coder/websocket v1.8.14
+github.com/coder/websocket/internal/util github.com/coder/websocket v1.8.14
+github.com/coder/websocket github.com/coder/websocket v1.8.14
+golang.org/x/text/transform golang.org/x/text v0.42.0
+golang.org/x/text/unicode/bidi golang.org/x/text v0.42.0
+golang.org/x/text/secure/bidirule golang.org/x/text v0.42.0
+golang.org/x/text/unicode/norm golang.org/x/text v0.42.0
+golang.org/x/net/idna golang.org/x/net v0.60.0
+golang.org/x/net/http/httpguts golang.org/x/net v0.60.0
+golang.org/x/net/http2/hpack golang.org/x/net v0.60.0
+golang.org/x/net/internal/httpcommon golang.org/x/net v0.60.0
+golang.org/x/net/internal/httpsfv golang.org/x/net v0.60.0
+golang.org/x/net/http2 golang.org/x/net v0.60.0
+proxy-kernel/internal/vtransport proxy-kernel 
+proxy-kernel/internal/kernel proxy-kernel 
+proxy-kernel/cmd/proxy-kernel proxy-kernel 

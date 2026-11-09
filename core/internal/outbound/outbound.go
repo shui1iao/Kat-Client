@@ -16,9 +16,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/shui1iao/Kat/internal/userio"
 	"net"
 	"net/netip"
-	"os"
+
 	"strconv"
 	"strings"
 	"time"
@@ -214,7 +215,7 @@ func (o *TLSOptions) ClientConfig(defaultServerName string) (*tls.Config, error)
 	}
 	c := &tls.Config{ServerName: name, MinVersion: tls.VersionTLS12, NextProtos: append([]string(nil), o.ALPN...)}
 	if o.CA != "" {
-		pem, e := os.ReadFile(o.CA)
+		pem, e := userio.ReadFile(o.CA)
 		if e != nil || len(pem) > 1<<20 {
 			return nil, errTLSOptions
 		}

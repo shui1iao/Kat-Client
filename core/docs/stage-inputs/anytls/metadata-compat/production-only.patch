@@ -1,0 +1,16 @@
+--- a/config.go
++++ b/config.go
+@@ -205,9 +205,10 @@
+ 	if e != nil || version < 1 || version > 255 {
+ 		return 0, "", ErrProtocol
+ 	}
+-	if values["client"] == "" {
+-		return 0, "", ErrProtocol
+-	}
++	// client is informational software metadata, not an authentication identity.
++	// The protocol describes a string but specifies no nonempty constraint or
++	// omission failure. Empty or absent metadata remains unknown; never invent
++	// a client name. Key/UTF-8/length/duplicate checks above still apply.
+ 	fp := values["padding-md5"]
+ 	decoded, e := hex.DecodeString(fp)
+ 	if e != nil || len(decoded) != 16 || strings.ToLower(fp) != fp {

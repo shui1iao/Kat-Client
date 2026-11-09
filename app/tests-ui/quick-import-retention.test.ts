@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {subscriptionFailureText,errorText} from '../src/lib/errors.ts';
+test('quick import network failure retains preservation guidance through modal formatting',()=>{assert.match(errorText(subscriptionFailureText({code:'subscription_network',message:'下载超时'})),/下载超时.*原配置已保留/);const text=subscriptionFailureText({code:'subscription_native_config'});assert.match(errorText(text),/Kat原生配置请在配置页载入草稿.*原配置已保留/);});

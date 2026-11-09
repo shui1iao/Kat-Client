@@ -16,6 +16,7 @@ import (
 	"github.com/shui1iao/Kat/internal/outbound"
 	"github.com/shui1iao/Kat/internal/outbound/direct"
 	"github.com/shui1iao/Kat/internal/outbound/group"
+	"github.com/shui1iao/Kat/internal/procattr"
 	"github.com/shui1iao/Kat/internal/route"
 	"github.com/shui1iao/Kat/internal/stats"
 )
@@ -125,6 +126,10 @@ func withHops(ctx context.Context, h *hops) context.Context {
 type underlay struct{ d outbound.Dialer }
 
 func strip(ctx context.Context) context.Context {
+	ctx = outbound.WithEndpointIndependent(ctx, false)
+	// Carrier traffic is not the protected DNS target itself.
+	ctx = context.WithValue(ctx, protectedDNSKey{}, false)
+	ctx = context.WithValue(ctx, bootstrapDNSKey{}, true)
 	// A typed nil hop recorder marks an already-stripped underlay context.
 	// Protocol hops never reattach a client observer; avoid three redundant
 	// value contexts per subsequent hop (a typed nil interface is not nil).
@@ -259,6 +264,9 @@ func (s *Server) setupStats() {
 	for _, in := range s.cfg.Inbounds {
 		ins = append(ins, inboundKeyName(in))
 	}
+	if s.cfg.clientIPv6 != nil {
+		ins = append(ins, "tun")
+	}
 	outs = append(outs, "direct", "reject")
 	for _, o := range s.cfg.Outbounds {
 		outs = append(outs, o.Name)
@@ -302,22 +310,24 @@ func (s *Server) chainCounters(chain []string) []*stats.Counter {
 // ---- flows (one proxied TCP connection or one UDP association) ----
 
 type flow struct {
-	diagnostic *ClientDiagnostic
+	diagnostic      *ClientDiagnostic
+	httpObservation *procattr.HTTPObservation
 
-	s       *Server
-	id      uint64
-	network string
-	in      *stats.Counter
-	inKey   string
-	src     netip.Addr
-	start   time.Time
-	up      atomic.Uint64
-	down    atomic.Uint64
-	cancel  context.CancelFunc
-	killed  atomic.Bool
-	ended   atomic.Bool
-	host    string
-	details FlowDetails
+	s           *Server
+	id          uint64
+	network     string
+	in          *stats.Counter
+	inKey       string
+	src         netip.Addr
+	start       time.Time
+	up          atomic.Uint64
+	down        atomic.Uint64
+	cancel      context.CancelFunc
+	killed      atomic.Bool
+	ended       atomic.Bool
+	host        string
+	details     FlowDetails
+	detailsOnce sync.Once
 
 	// TCP: set once by route() before the relay starts, read lock-free after.
 	meters []*stats.Counter
@@ -330,6 +340,7 @@ type flow struct {
 	lastCode      string
 	eventRecorded bool
 	result        string
+	dnsFailure    string              // controlled DNS only: a later datagram cannot erase it
 	seen          map[string]struct{} // UDP: targets already counted as a rule hit
 }
 
@@ -376,7 +387,9 @@ func (s *Server) newFlow(ctx context.Context, network string, target Address) (*
 	if network == "tcp" {
 		s.tcpFlows.Add(1)
 	}
-	return f, context.WithValue(ctx, flowKey{}, f)
+	ctx = context.WithValue(ctx, flowKey{}, f)
+	f.scheduleDetails(ctx, target)
+	return f, ctx
 }
 
 // end unregisters the flow and writes its access line.
@@ -387,8 +400,11 @@ func (f *flow) end(result string) {
 	s := f.s
 	f.mu.Lock()
 	recorded := f.eventRecorded
+	if f.dnsFailure != "" {
+		result = f.dnsFailure
+	}
 	f.mu.Unlock()
-	if !recorded && result != "ok" {
+	if !recorded && result != "ok" && result != "idle" {
 		ci := f.info(time.Now())
 		f.emitConnection(ci.Target, ci.Rule, ci.Chain, "error", result)
 	}
@@ -401,8 +417,11 @@ func (f *flow) end(result string) {
 			f.mu.Unlock()
 			if outcome == "" {
 				outcome = "ok"
+				if result == "idle" {
+					outcome, code = "idle", "udp_no_datagrams"
+				}
 			}
-			if outcome == "ok" && result != "ok" {
+			if outcome == "ok" && result != "ok" && result != "idle" {
 				outcome = "error"
 				code = result
 			}
@@ -509,6 +528,18 @@ type udpRoute struct {
 	meters []*stats.Counter
 }
 
+// udpRouteFor builds accounting only: no hit/event before successful TUN send.
+func (f *flow) udpRouteFor(rule int, chain []string) *udpRoute {
+	rc, _ := f.s.ruleCounter(rule)
+	r := &udpRoute{}
+	if rc != nil {
+		r.rule = &rc.Counter
+		r.meters = append(r.meters, &rc.Counter)
+	}
+	r.meters = append(r.meters, f.s.chainCounters(chain)...)
+	return r
+}
+
 // udpDecided counts a rule hit for a newly seen UDP target and returns the
 // meters for its datagrams; it also keeps the latest target/rule/chain for
 // the details view.
@@ -516,13 +547,8 @@ func (f *flow) udpDecided(target Address, rule int, chain []string) *udpRoute {
 	if f == nil {
 		return nil
 	}
+	r := f.udpRouteFor(rule, chain)
 	rc, key := f.s.ruleCounter(rule)
-	r := &udpRoute{}
-	if rc != nil {
-		r.rule = &rc.Counter
-		r.meters = append(r.meters, &rc.Counter)
-	}
-	r.meters = append(r.meters, f.s.chainCounters(chain)...)
 	t := target.String()
 	f.mu.Lock()
 	if f.seen == nil {
@@ -551,6 +577,37 @@ func (f *flow) udpDecided(target Address, rule int, chain []string) *udpRoute {
 		f.emitConnection(t, key, chain, outcome, code)
 	}
 	return r
+}
+
+// udpDNS identifies the internal DNS gateway without inventing a business
+// rule hit/outbound or doing display-only process attribution. Descriptive
+// fields share the same lock as info/emitConnection and asynchronous details.
+func (f *flow) udpDNS(target Address, code string, err error) {
+	if f == nil {
+		return
+	}
+	f.setError(err)
+	f.mu.Lock()
+	first := f.target == ""
+	if first {
+		f.target = target.String()
+	}
+	f.ruleKey, f.chain = "dns", []string{"dns"}
+	if code != "" && f.dnsFailure == "" {
+		f.dnsFailure = code
+	}
+	if code != "" && f.s.connectionSink != nil {
+		f.details.ErrorStage = "dns"
+		if code == "dns_response_failed" {
+			f.details.ErrorStage = "response"
+		}
+	}
+	f.mu.Unlock()
+	if code != "" {
+		f.emitConnection(target.String(), "dns", []string{"dns"}, "error", code)
+	} else if first {
+		f.emitConnection(target.String(), "dns", []string{"dns"}, "ok", "")
+	}
 }
 
 func (f *flow) udpUp(r *udpRoute, n int) {

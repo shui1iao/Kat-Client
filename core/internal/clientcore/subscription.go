@@ -11,8 +11,9 @@ import (
 	"fmt"
 	"github.com/oschwald/maxminddb-golang"
 	"github.com/shui1iao/Kat/internal/outbound/group"
+	"github.com/shui1iao/Kat/internal/userio"
 	"net"
-	"os"
+
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -185,7 +186,7 @@ func (h *Host) cancelSubscription(raw json.RawMessage) (any, *Error) {
 		if pending.Token == p.Token {
 			h.expireFullPendingLocked(pending)
 			if pending.Dir != "" {
-				os.RemoveAll(pending.Dir)
+				userio.RemoveAll(pending.Dir)
 			}
 			delete(h.fullCandidates, id)
 			if h.fullPending == pending {
@@ -198,13 +199,13 @@ func (h *Host) cancelSubscription(raw json.RawMessage) (any, *Error) {
 func (h *Host) clearFullPendingLocked() {
 	for id, p := range h.fullCandidates {
 		if p.Dir != "" {
-			os.RemoveAll(p.Dir)
+			userio.RemoveAll(p.Dir)
 		}
 		delete(h.fullCandidates, id)
 	}
 	if h.fullPending != nil {
 		if h.fullPending.Dir != "" {
-			os.RemoveAll(h.fullPending.Dir)
+			userio.RemoveAll(h.fullPending.Dir)
 		}
 		h.fullPending = nil
 	}
@@ -230,6 +231,11 @@ func (h *Host) previewSubscription(ctx context.Context, raw json.RawMessage) (an
 		return nil, e
 	}
 	h.mu.Lock()
+	h.syncTUNEgressLocked()
+	if !h.hostEgressReadyLocked() {
+		h.mu.Unlock()
+		return nil, resourceError(ctx, "subscription", 0, "download", "connect", "egress_unavailable", nil)
+	}
 	base := h.doc
 	policy := h.egress
 	generation := h.egressGeneration
@@ -243,11 +249,13 @@ func (h *Host) previewSubscription(ctx context.Context, raw json.RawMessage) (an
 			h.mu.Unlock()
 			return nil, resourceError(context.WithValue(ctx, bootstrapKey{}, availableProxy), "subscription", 0, "download", "connect", "egress_unavailable", nil)
 		}
-		var stop func()
-		ctx, stop = h.bootstrapContextLocked(ctx)
-		bootstrapLife = h.bootstrapLife
-		defer stop()
 	}
+	// All routes (including ordinary nil-policy direct and kernel fallback)
+	// share this lifecycle, not only requests carrying a Windows proxy hint.
+	var stop func()
+	ctx, stop = h.bootstrapContextLocked(ctx)
+	bootstrapLife = h.bootstrapLife
+	defer stop()
 	root, e := sourceJSON(base)
 	dynamicNames := []string{}
 	written := map[string]bool{}
@@ -869,7 +877,7 @@ func (h *Host) previewSubscription(ctx context.Context, raw json.RawMessage) (an
 		}
 		h.mu.Unlock()
 		if !keep && ownedDir != "" {
-			os.RemoveAll(ownedDir)
+			userio.RemoveAll(ownedDir)
 		}
 	}()
 	if ownedDir != "" {
@@ -1024,6 +1032,7 @@ func (h *Host) previewSubscription(ctx context.Context, raw json.RawMessage) (an
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	h.syncTUNEgressLocked()
 	// Publication is the linearization point. Stage writes/validation can block
 	// after the earlier cancellation check. Check the captured lifecycle itself
 	// under the same lock as stop/egress changes, not just its asynchronous
@@ -1048,7 +1057,7 @@ func (h *Host) previewSubscription(ctx context.Context, raw json.RawMessage) (an
 	if prior := h.fullCandidates[id]; prior != nil {
 		h.expireFullPendingLocked(prior)
 		if prior.Dir != "" && prior.Dir != ownedDir {
-			os.RemoveAll(prior.Dir)
+			userio.RemoveAll(prior.Dir)
 		}
 	}
 	h.fullPending = &subscriptionPending{Token: preview.Token, Base: base.text, Text: text, Dir: ownedDir, ID: id, Format: base.format, Created: time.Now(), Refresh: true}

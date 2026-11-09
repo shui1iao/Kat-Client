@@ -14,6 +14,7 @@ import (
 	"github.com/shui1iao/Kat/internal/outbound"
 	"github.com/shui1iao/Kat/internal/outbound/group"
 	"github.com/shui1iao/Kat/internal/procattr"
+	"github.com/shui1iao/Kat/internal/userio"
 	"golang.org/x/net/proxy"
 	"io"
 	"net"
@@ -116,10 +117,10 @@ func iconURL(raw string) bool {
 }
 func (h *Host) iconDir() (string, error) {
 	dir := filepath.Join(h.workspace, "icons")
-	if st, e := os.Lstat(dir); e == nil && (!st.IsDir() || st.Mode()&os.ModeSymlink != 0) {
+	if st, e := userio.Lstat(dir); e == nil && (!st.IsDir() || st.Mode()&os.ModeSymlink != 0) {
 		return "", errors.New("icon cache refused")
 	}
-	if e := os.MkdirAll(dir, 0700); e != nil {
+	if e := userio.MkdirAll(dir, 0700); e != nil {
 		return "", e
 	}
 	if e := rejectReparse(dir); e != nil {
@@ -131,11 +132,11 @@ func (h *Host) iconDir() (string, error) {
 	return dir, nil
 }
 func readIcon(path string) (string, time.Time) {
-	st, e := os.Lstat(path)
+	st, e := userio.Lstat(path)
 	if e != nil || !st.Mode().IsRegular() || rejectReparse(path) != nil || st.Size() > maxIconBytes {
 		return "", time.Time{}
 	}
-	f, e := os.Open(path)
+	f, e := userio.Open(path)
 	if e != nil {
 		return "", time.Time{}
 	}
@@ -157,18 +158,25 @@ func readIcon(path string) (string, time.Time) {
 func (h *Host) fetchIcon(ctx context.Context, raw string) ([]byte, error) {
 	ctx, done := h.ipContext(ctx)
 	defer done()
-	if h.iconFetch != nil {
-		return h.iconFetch(ctx, raw)
-	} // network-only test seam
 	h.mu.Lock()
+	h.syncTUNEgressLocked()
+	if !h.hostEgressReadyLocked() {
+		h.mu.Unlock()
+		return nil, dl("connect", "egress_unavailable")
+	}
+	ctx, stopBootstrap := h.bootstrapContextLocked(ctx)
+	defer stopBootstrap()
 	running := h.server != nil
 	policy := h.egress
 	expected, _ := ctx.Value(iconExpectedKey{}).(*bootstrapEgress)
 	stale := bootstrapFrom(ctx) != nil && (expected == nil || expected.Generation != h.egressGeneration || expected.Enabled != (h.egress != nil))
 	h.mu.Unlock()
-	if stale {
+	if stale || checkHostEgress(ctx) != nil {
 		return nil, dl("connect", "egress_unavailable")
 	}
+	if h.iconFetch != nil {
+		return h.iconFetch(ctx, raw)
+	} // network-only test seam
 	if !running {
 		if bootstrapFrom(ctx) != nil {
 			c, cancel := context.WithTimeout(ctx, 6*time.Second)
@@ -273,6 +281,7 @@ func (h *Host) getIcon(ctx context.Context, raw json.RawMessage) (any, *Error) {
 	// Resolve group label from accepted source only; never log asserted WebView text.
 	var bootstrapLife context.Context
 	h.mu.Lock()
+	h.syncTUNEgressLocked()
 	label := ""
 	for _, g := range h.doc.config.Groups {
 		if g.Name == p.Group {

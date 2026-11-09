@@ -2,6 +2,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Error {
     pub code: String,
+    #[serde(default,skip_serializing_if="Option::is_none")] pub transport:Option<crate::transport_diagnostics::Detail>,
+    #[serde(default,skip_serializing_if="Option::is_none")] pub elevation:Option<crate::elevation_launch::Report>,
+    #[serde(default,skip_serializing_if="Option::is_none")] pub os_error:Option<u32>,
+    #[serde(default,skip_serializing_if="Option::is_none")] pub tun:Option<crate::tun_diagnostics::Detail>,
     #[serde(default,skip_serializing_if="Option::is_none")] pub reason:Option<String>,
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -10,11 +14,15 @@ pub struct Error {
 }
 impl Error {
     pub fn new(code: &str, message: &str) -> Self {
-        Self { code: code.into(), message: message.into(), path: None, detail:None, reason:None }
+        Self { code: code.into(), transport:None, elevation:None, os_error:None, message: message.into(), path: None, detail:None, reason:None, tun:None }
     }
-    pub fn io(code: &str, _err: &std::io::Error) -> Self {
-        // OS errors may contain private paths or configuration; never forward them.
-        Self::new(code, "Operating system operation failed")
+    pub fn transport(mut self,detail:crate::transport_diagnostics::Detail)->Self{if detail.valid(){self.transport=Some(detail);}self}
+    pub fn native(mut self,code:u32)->Self{self.os_error=Some(code);self}
+    pub fn io(code: &str, err: &std::io::Error) -> Self {
+        // Only fixed transport categories retain the numeric native code, never OS text.
+        let mut e=Self::new(code, "Operating system operation failed");
+        e.os_error=err.raw_os_error().map(|n|n as u32);
+        e
     }
 }
 impl std::fmt::Display for Error {

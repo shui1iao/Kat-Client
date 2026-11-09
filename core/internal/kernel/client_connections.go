@@ -77,7 +77,7 @@ func (f *flow) emitConnection(target, rule string, chain []string, outcome, code
 	ci := f.info(time.Now())
 	f.s.connectionSink(ConnectionEvent{FlowDetails: ci.FlowDetails, Start: ci.Start, Up: ci.Up, Down: ci.Down, DurationMS: ci.DurationMS, Time: time.Now(), Network: f.network, Source: source, Target: target, Host: host, Rule: rule, Chain: append([]string{}, chain...), Outcome: outcome, Code: code})
 }
-func (f *flow) connectionOutcome(err error) {
+func (f *flow) connectionOutcome(err error, establishedStage ...string) {
 	if f == nil {
 		return
 	}
@@ -87,15 +87,24 @@ func (f *flow) connectionOutcome(err error) {
 		f.details.RemoteDNS = true
 	}
 	f.mu.Unlock()
-	ci := f.info(time.Now())
 	outcome, code := "ok", ""
 	if err != nil {
 		code = dialResult(err)
+		if len(establishedStage) > 0 {
+			switch establishedStage[0] {
+			case "response", "initial_write", "relay":
+				code = establishedStage[0] + "_failed"
+				f.mu.Lock()
+				f.details.ErrorStage = establishedStage[0]
+				f.mu.Unlock()
+			}
+		}
 		outcome = "error"
 		if code == "rejected" || code == "blocked" {
 			outcome = "rejected"
 		}
 	}
+	ci := f.info(time.Now())
 	f.emitConnection(ci.Target, ci.Rule, ci.Chain, outcome, code)
 }
 func (f *flow) sniffHost(ctx context.Context) {
@@ -122,6 +131,17 @@ func (f *flow) udpFailure(target Address, rule int, chain []string, code string,
 		return
 	}
 	_, key := f.s.ruleCounter(rule)
+	f.mu.Lock()
+	if f.target == "" && target.Port != 0 {
+		f.target = target.String()
+	}
+	if f.ruleKey == "" && key != "" {
+		f.ruleKey = key
+	}
+	if len(f.chain) == 0 && len(chain) > 0 {
+		f.chain = append([]string(nil), chain...)
+	}
+	f.mu.Unlock()
 	outcome := "error"
 	if code == "blocked" || code == "rejected" {
 		outcome = "rejected"

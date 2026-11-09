@@ -154,6 +154,28 @@ func (s *core) statsView() StatsView {
 	return v
 }
 
+// ClientStatusView contains only the statistics consumed by client status.
+// The management API continues to use the full StatsView above.
+type ClientStatusView struct {
+	UptimeMS   int64
+	UpRate     float64
+	DownRate   float64
+	TCP        int64
+	UDP        int64
+	Cumulative stats.ClientSnapshot
+	Providers  []ProviderView
+}
+
+func (s *Server) ClientStatusView() ClientStatusView {
+	k := s.core
+	up, down, _ := k.reg.Rate()
+	return ClientStatusView{
+		UptimeMS: time.Since(k.started).Milliseconds(), UpRate: up, DownRate: down,
+		TCP: k.tcpFlows.Load(), UDP: k.counters.UDP.Load(),
+		Cumulative: k.reg.ClientSnapshot(), Providers: k.providerViews(),
+	}
+}
+
 func (b apiBackend) Version() string { return Version }
 func (b apiBackend) Stats() any      { return b.k.statsView() }
 func (b apiBackend) ResetStats() error {

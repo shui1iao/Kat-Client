@@ -46,7 +46,7 @@ impl AcceptedDocument {
 }
 /// Bound to the exact text and format whose successful Go validation produced this projection.
 #[derive(Debug)]
-pub struct ValidatedDocument { text: String, format: DocumentFormat, ports: Ports, counts: Counts }
+pub struct ValidatedDocument { advanced_dns:bool,text: String, format: DocumentFormat, ports: Ports, counts: Counts }
 impl ValidatedDocument {
     pub fn from_reply(text: &str, expected: DocumentFormat, value: &Value) -> Result<Self> {
         if value["valid"] != true { return Err(Error::new("DOCUMENT_INVALID", "Document validation failed")); }
@@ -55,10 +55,11 @@ impl ValidatedDocument {
         let counts = serde_json::from_value(value["counts"].clone()).map_err(|_|protocol())?;
         if format != expected || ports.http == 0 || ports.socks == 0 { return Err(protocol()); }
         if text.len() > crate::backups::LIMIT { return Err(Error::new("FILE_LIMIT", "Configuration exceeds 1 MiB")); }
-        Ok(Self { text: text.into(), format, ports, counts })
+        Ok(Self { advanced_dns:value["advanced_dns"].as_bool().unwrap_or(false),text: text.into(), format, ports, counts })
     }
     pub fn text(&self) -> &str { &self.text }
     pub fn format(&self) -> DocumentFormat { self.format }
+    pub fn ensure_enabled(&self)->Result<()>{if self.advanced_dns{Err(Error::new("advanced_dns_retired","此配置包含已停用的高级 DNS，请选择系统 DNS 或自定义 DNS 后保存"))}else{Ok(())}}
     pub fn ports(&self) -> Ports { self.ports }
     pub fn counts(&self) -> Counts { self.counts }
 }

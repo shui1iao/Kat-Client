@@ -4,19 +4,31 @@ import (
 	"context"
 	"errors"
 	"net"
+	"strings"
 	"syscall"
 	"testing"
 )
 
-func TestControlledSocketFamiliesLoopbackAndFailures(t *testing.T) {
+func fixtureOptions() Options {
 	v4, v6 := uint32(4), uint32(6)
-	calls := []string{}
-	p, e := newPolicy(Options{Enabled: true, IPv4: &v4, IPv6: &v6, DNS: []string{"192.0.2.53"}}, func(n string, _ syscall.RawConn) error { calls = append(calls, n); return nil }, nil)
+	l4, l6 := uint64(14), uint64(16)
+	return Options{Schema: Schema, Enabled: true, IPv4: &v4, IPv6: &v6, LUID4: &l4, LUID6: &l6, Identity: strings.Repeat("a", 64), Fingerprint: strings.Repeat("b", 64), DNS: []DNSEndpoint{{Address: "192.0.2.53", Owner: l4, IfIndex: v4}, {Address: "2001:db8::53", Owner: l6, IfIndex: v6}}}
+}
+func fixturePolicy(t *testing.T, bind func(string, syscall.RawConn) error) *Policy {
+	t.Helper()
+	p, e := newPolicy(fixtureOptions(), bind, nil)
 	if e != nil {
 		t.Fatal(e)
 	}
+	p.owner = func(DNSEndpoint) error { return nil }
+	t.Cleanup(p.Fail)
+	return p
+}
+func TestControlledSocketFamiliesLoopbackAndFailures(t *testing.T) {
+	var calls []string
+	p := fixturePolicy(t, func(n string, _ syscall.RawConn) error { calls = append(calls, n); return nil })
 	for _, a := range []string{"127.0.0.1:9", "[::1]:9"} {
-		if e = p.Control(context.Background(), "tcp", a, nil); e != nil {
+		if e := p.Control(context.Background(), "tcp", a, nil); e != nil {
 			t.Fatal(e)
 		}
 	}
@@ -24,71 +36,59 @@ func TestControlledSocketFamiliesLoopbackAndFailures(t *testing.T) {
 		t.Fatal("bound loopback")
 	}
 	for _, x := range []struct{ n, a string }{{"tcp", "192.0.2.1:80"}, {"tcp", "[2001:db8::1]:80"}, {"udp", "192.0.2.2:53"}, {"udp", "[2001:db8::2]:53"}} {
-		if e = p.Control(context.Background(), x.n, x.a, nil); e != nil {
+		if e := p.Control(context.Background(), x.n, x.a, nil); e != nil {
 			t.Fatal(e)
 		}
 	}
-	if len(calls) != 4 || calls[0] != "tcp4" || calls[1] != "tcp6" || calls[2] != "udp4" || calls[3] != "udp6" {
-		t.Fatal("family dispatch")
+	if strings.Join(calls, ",") != "tcp4,tcp6,udp4,udp6" {
+		t.Fatal(calls)
 	}
 	p.bind = func(string, syscall.RawConn) error { return errors.New("denied") }
 	if p.Control(context.Background(), "tcp", "192.0.2.1:80", nil) == nil || p.Ready() {
-		t.Fatal("binding failure ready")
+		t.Fatal("bind failure must fail closed")
 	}
 }
 func TestBootstrapNeverUsesSystemDestination(t *testing.T) {
-	i := uint32(1)
-	p, e := newPolicy(Options{Enabled: true, IPv4: &i, DNS: []string{"192.0.2.53"}}, func(string, syscall.RawConn) error { return nil }, nil)
+	p := fixturePolicy(t, func(string, syscall.RawConn) error { return nil })
+	c, e := p.resolverConn(context.Background(), "udp", "untrusted-system.example:53")
 	if e != nil {
 		t.Fatal(e)
 	}
-	asked := ""
-	p.dial = func(_ context.Context, network, address string) (net.Conn, error) {
-		asked = address
-		return nil, errors.New("no packets in test")
+	if _, ok := c.(resolverCancel); !ok {
+		t.Fatal("must be private in-memory resolver stream")
 	}
-	_, e = p.resolver.Dial(context.Background(), "udp", "untrusted-system.example:53")
-	if e == nil || asked != "192.0.2.53:53" {
-		t.Fatal("bootstrap used system resolver")
-	}
-	if p.Control(context.Background(), "tcp", "[2001:db8::1]:80", nil) == nil || p.Ready() {
-		t.Fatal("missing family must fail closed")
+	c.Close()
+	if p.Options.DNS[0].Address != "192.0.2.53" {
+		t.Fatal("physical endpoints mutated")
 	}
 }
 func TestUnsupportedPlatformDoesNotBind(t *testing.T) {
 	if Supported {
-		t.Skip("non-Windows invariant")
+		t.Skip("non-Windows")
 	}
 	if _, e := New(Options{Enabled: true}); e == nil {
-		t.Fatal("non-Windows accepted network action")
+		t.Fatal("unsupported accepted")
 	}
 }
-
-func TestK2DisabledFamilyDoesNotFailPhysicalEgress(t *testing.T) {
-	v4, v6 := uint32(4), uint32(6)
+func TestK2DisabledBusinessFamilyKeepsRegisteredIPv6DNSException(t *testing.T) {
 	bound := 0
-	p, e := newPolicy(Options{Enabled: true, IPv4: &v4, IPv6: &v6, DNS: []string{"2001:db8::53", "192.0.2.53"}}, func(string, syscall.RawConn) error { bound++; return nil }, nil)
-	if e != nil {
-		t.Fatal(e)
-	}
+	p := fixturePolicy(t, func(string, syscall.RawConn) error { bound++; return nil })
 	p.SetIPv6(false)
-	if e = p.Control(context.Background(), "tcp", "[2001:db8::1]:443", nil); e == nil || !p.Ready() || bound != 0 {
-		t.Fatal(e, p.Ready(), bound)
+	if e := p.Control(context.Background(), "tcp", "[2001:db8::1]:443", nil); e == nil || !p.Ready() || bound != 0 {
+		t.Fatal("business IPv6 guard weakened")
 	}
 	called := ""
-	p.dial = func(_ context.Context, network, address string) (net.Conn, error) {
-		called = address
-		return nil, errors.New("test no network")
+	p.dnsConnect = func(_ context.Context, n, a string, _ func(context.Context, string, string, syscall.RawConn) error) (net.Conn, error) {
+		called = n + " " + a
+		return nil, errors.New("no remote packets in test")
 	}
-	_, e = p.resolver.Dial(context.Background(), "udp", "ignored:53")
-	if e == nil || called != "192.0.2.53:53" {
-		t.Fatal(e, called)
+	state := p.dns.Load()
+	ep := p.Options.DNS[1]
+	if _, e := p.dnsDial(context.Background(), "udp", ep, state); e == nil || called != "udp6 [2001:db8::53]:53" {
+		t.Fatal("registered IPv6 DNS exception lost", called, e)
 	}
-	if p.Options.IPv6 == nil || *p.Options.IPv6 != 6 || len(p.Options.DNS) != 2 {
-		t.Fatal("physical snapshot mutated")
-	}
-	p.SetIPv6(true)
-	if e = p.Control(context.Background(), "tcp", "[2001:db8::1]:443", nil); e != nil || bound != 1 {
-		t.Fatal(e, bound)
+	ep.Owner++
+	if _, e := p.dnsDial(context.Background(), "udp", ep, state); e == nil || p.Ready() {
+		t.Fatal("unregistered endpoint trusted")
 	}
 }

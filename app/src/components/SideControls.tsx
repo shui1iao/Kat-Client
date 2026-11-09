@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {tip} from './Tooltip';
 import { Icon } from './Icon';
 import { Switch, useThumb } from './ui';
-import { MODE_LABEL, type Mode } from '../client/types';
+import { MODE_LABEL, stateLabel, type Mode } from '../client/types';
 import {errorText} from '../lib/errors';
 import type { Client } from '../client/useClient';
 
@@ -23,7 +23,8 @@ export function SideControls({ c }: { c: Client }) {
     void c.os(key==='tun'?'tun_set':'system_proxy_set',{enabled}).finally(()=>setNetPending(null));
   };
   const sysShown = netPending?.key==='sysproxy' ? netPending.enabled : !!sys?.enabled;
-  const tunShown = netPending?.key==='tun' ? netPending.enabled : !!tun?.enabled;
+  const tunShown = netPending?.key==='tun' ? netPending.enabled : !!(tun?.intent??tun?.enabled);
+  const tunState=netPending?.key==='tun'?(netPending.enabled?'starting':'stopping'):tun?.state;
 
   const shown = pending ?? mode;
   const [segRef, thumb] = useThumb<HTMLDivElement>(shown);
@@ -43,8 +44,8 @@ export function SideControls({ c }: { c: Client }) {
         <button className={'tgl net-row' + (sysShown ? ' on' : '')} disabled={!sys || busy || !!netPending || (!sys.error && !sys.enabled && !sysReady)} onClick={() => toggle('sysproxy', !sys?.enabled)} aria-pressed={sysShown} data-toggle="sysproxy" {...tip(sysError||'系统代理',!sysError)}>
           <Icon name="monitor" size={17} /><span className="tg-txt"><b>系统代理</b>{sysError&&<span className="net-warning"><Icon name="alert" size={14}/></span>}</span><Switch on={sysShown} />
         </button>
-        <button className={'tgl net-row' + (tunShown ? ' on' : '')} disabled={!tun || busy || !!netPending || (!tun.error && !tun.enabled && (!tunReady || !service?.installed))} onClick={() => toggle('tun', !tun?.enabled)} aria-pressed={tunShown} data-toggle="tun" {...tip(tunError||'TUN',!tunError)}>
-          <Icon name="shield" size={17} /><span className="tg-txt"><b>TUN</b>{tunError&&<span className="net-warning"><Icon name="alert" size={14}/></span>}</span><Switch on={tunShown} />
+        <button className={'tgl net-row' + (tunShown ? ' on' : '')} disabled={!tun || busy || !!netPending || (!tun.error && !tun.enabled && (!tunReady || !service?.installed))} onClick={() => toggle('tun', !(tun?.intent??tun?.enabled))} aria-pressed={tunShown} data-toggle="tun" {...tip(tunError||stateLabel(tunState),!tunError)}>
+          <Icon name="shield" size={17} /><span className="tg-txt"><b>TUN</b>{['cleanup_pending','waiting_network','recovering','starting','stopping'].includes(tunState??'')&&<span>{stateLabel(tunState)}</span>}{tunError&&<span className="net-warning"><Icon name="alert" size={14}/></span>}</span><Switch on={tunShown} />
         </button>
       </div>
     </div>

@@ -20,6 +20,13 @@ pub struct ProxyChange {pub connection:Option<String>,pub original:ProxyValue,pu
 #[serde(deny_unknown_fields)]
 pub struct ProxyJournal {pub schema:u32,pub owner_sid:String,pub session:u32,pub changes:Vec<ProxyChange>}
 impl ProxyJournal {
+ /// After the old monitor's exact exit, resume only the complete captured
+ /// original state. Foreign edits/new connections must never be overwritten.
+ pub fn handover_restored(&self,current:&[(Option<String>,ProxyValue)])->bool{
+  let expected:std::collections::BTreeSet<_>=self.changes.iter().map(|c|&c.connection).collect();
+  let observed:std::collections::BTreeSet<_>=current.iter().map(|(c,_)|c).collect();
+  expected.len()==self.changes.len()&&observed.len()==current.len()&&expected==observed&&self.changes.iter().all(|c|current.iter().any(|(name,v)|name==&c.connection&&v==&c.original))
+ }
  pub fn owned<'a>(&'a self,connection:&Option<String>,current:&ProxyValue)->Option<&'a ProxyChange> {
   self.changes.iter().find(|c|!c.restored && &c.connection==connection && &c.installed==current)
  }

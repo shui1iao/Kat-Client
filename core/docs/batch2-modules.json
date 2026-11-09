@@ -1,0 +1,67 @@
+{
+	"Path": "proxy-kernel",
+	"Main": true,
+	"Dir": "/opt/proxy-kernel",
+	"GoMod": "/opt/proxy-kernel/go.mod",
+	"GoVersion": "1.26.9"
+}
+{
+	"Path": "github.com/klauspost/cpuid/v2",
+	"Version": "v2.0.9",
+	"Time": "2021-07-30T06:58:55Z",
+	"Indirect": true,
+	"Dir": "/root/go/pkg/mod/github.com/klauspost/cpuid/v2@v2.0.9",
+	"GoMod": "/root/go/pkg/mod/cache/download/github.com/klauspost/cpuid/v2/@v/v2.0.9.mod",
+	"GoVersion": "1.13",
+	"Sum": "h1:lgaqFMSdTdQYdZ04uHyN2d/eKdOMyi2YLSvlQIBFYa4=",
+	"GoModSum": "h1:FInQzS24/EEf25PyTYn52gqo7WaD8xa0213Md/qVLRg="
+}
+{
+	"Path": "golang.org/x/crypto",
+	"Version": "v0.56.0",
+	"Time": "2026-09-02T18:02:47Z",
+	"Dir": "/root/go/pkg/mod/golang.org/x/crypto@v0.56.0",
+	"GoMod": "/root/go/pkg/mod/cache/download/golang.org/x/crypto/@v/v0.56.0.mod",
+	"GoVersion": "1.26.0",
+	"Sum": "h1:GUh5Ii4J5jtcseSMiRqr1jXCNHoxjeV9Fmekc2oLy6Y=",
+	"GoModSum": "h1:OMW5y6CY9l38uPLmxU6l6pwcXp1obtLo3e6gT7gQR2I="
+}
+{
+	"Path": "golang.org/x/net",
+	"Version": "v0.57.0",
+	"Time": "2026-07-08T21:02:14Z",
+	"Indirect": true
+}
+{
+	"Path": "golang.org/x/sys",
+	"Version": "v0.47.0",
+	"Time": "2026-06-30T17:07:31Z",
+	"Indirect": true,
+	"Dir": "/root/go/pkg/mod/golang.org/x/sys@v0.47.0",
+	"GoMod": "/root/go/pkg/mod/cache/download/golang.org/x/sys/@v/v0.47.0.mod",
+	"GoVersion": "1.25.0",
+	"Sum": "h1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs=",
+	"GoModSum": "h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw="
+}
+{
+	"Path": "golang.org/x/term",
+	"Version": "v0.45.0",
+	"Time": "2026-07-08T15:40:56Z",
+	"Indirect": true
+}
+{
+	"Path": "golang.org/x/text",
+	"Version": "v0.41.0",
+	"Time": "2026-08-11T15:22:47Z",
+	"Indirect": true
+}
+{
+	"Path": "lukechampine.com/blake3",
+	"Version": "v1.4.1",
+	"Time": "2025-05-08T12:37:30Z",
+	"Dir": "/root/go/pkg/mod/lukechampine.com/blake3@v1.4.1",
+	"GoMod": "/root/go/pkg/mod/cache/download/lukechampine.com/blake3/@v/v1.4.1.mod",
+	"GoVersion": "1.22",
+	"Sum": "h1:I3Smz7gso8w4/TunLKec6K2fn+kyKtDxr/xcQEN84Wg=",
+	"GoModSum": "h1:QFosUxmjB8mnrWFSNwKmvxHpfY72bmD2tQ0kBMM3kwo="
+}

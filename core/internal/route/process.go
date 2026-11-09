@@ -2,7 +2,9 @@ package route
 
 import (
 	"fmt"
+	"github.com/shui1iao/Kat/internal/procattr"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -22,12 +24,19 @@ func normProcessName(s string) (string, bool) {
 // ProcessUnavailableError means attribution could change the first matching
 // rule. It is never a direct fallback and never includes process paths or PIDs.
 type ProcessUnavailableError struct {
-	Rule   int
-	Status string
+	Rule      int
+	Status    string
+	Cause     string
+	Win32     uint32
+	ElapsedMS uint64
 }
 
 func (e *ProcessUnavailableError) Error() string {
-	return fmt.Sprintf("route: process attribution %s at rule %d", e.Status, e.Rule)
+	cause := procattr.SafeCause(e.Cause)
+	if e.Win32 != 0 {
+		return fmt.Sprintf("route: process attribution %s (%s; win32=%d) at rule %d", safeProcessStatus(e.Status), cause, e.Win32, e.Rule)
+	}
+	return fmt.Sprintf("route: process attribution %s (%s) at rule %d", safeProcessStatus(e.Status), cause, e.Rule)
 }
 func safeProcessStatus(s string) string {
 	switch s {
@@ -163,6 +172,30 @@ func (q *query) loadProcess() bool {
 		return false
 	}
 	q.processLoaded = true
+	started := time.Now()
 	q.processName, q.processStatus = q.processLookup()
+	q.processElapsed = uint64(time.Since(started).Milliseconds())
+	if q.processCause != nil {
+		q.cause, q.win32 = q.processCause()
+	}
+	q.cause = procattr.SafeCause(q.cause)
+	return true
+}
+
+// Only called for a top-level triUnknown after process lookup. preDNS calls
+// this only when no IP is needed, so unresolved DNS/data is never swallowed.
+func (q *query) skipProcess(rule int) bool {
+	if !q.skipUnavailableProcess {
+		return false
+	}
+	if q.skipped == nil {
+		q.skipped = map[int]bool{}
+	}
+	if !q.skipped[rule] {
+		q.skipped[rule] = true
+		if q.processSkipped != nil {
+			q.processSkipped(ProcessUnavailableError{Rule: rule, Status: safeProcessStatus(q.processStatus), Cause: q.cause, Win32: q.win32, ElapsedMS: q.processElapsed})
+		}
+	}
 	return true
 }

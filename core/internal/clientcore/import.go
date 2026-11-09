@@ -43,7 +43,19 @@ func (h *Host) importParse(ctx context.Context, raw json.RawMessage) (any, *Erro
 	}
 	h.mu.Lock()
 	probe := h.doc.client.ProbeURL
+	if len(p.URL) > 0 {
+		h.syncTUNEgressLocked()
+		if !h.hostEgressReadyLocked() {
+			h.mu.Unlock()
+			return nil, fail("import_fetch_failed", "params.url", "Physical egress is unavailable")
+		}
+	}
 	policy := h.egress
+	if len(p.URL) > 0 {
+		var stop func()
+		ctx, stop = h.bootstrapContextLocked(ctx)
+		defer stop()
+	}
 	taken := map[string]bool{}
 	for _, o := range h.doc.config.Outbounds {
 		taken[o.Name] = true
@@ -100,6 +112,9 @@ func (h *Host) importParse(ctx context.Context, raw json.RawMessage) (any, *Erro
 		return nil, fail("import_too_large", "params", "Import result exceeds response budget")
 	}
 	if ctx.Err() != nil {
+		return nil, fail("import_canceled", "params", "Import canceled")
+	}
+	if checkHostEgress(ctx) != nil {
 		return nil, fail("import_canceled", "params", "Import canceled")
 	}
 	return result, nil
@@ -165,7 +180,12 @@ func fetchImportBounded(ctx context.Context, raw string, policy *clientegress.Po
 	resolve := func(ctx context.Context, host string) ([]netip.Addr, error) {
 		var ips []netip.Addr
 		var e error
-		if policy != nil {
+		if e := checkHostEgress(ctx); e != nil {
+			return nil, e
+		}
+		if s := hostEgress(ctx); s != nil {
+			ips, e = s.Bootstrap(ctx, ipNetwork(ctx), host)
+		} else if policy != nil {
 			if !policy.Ready() {
 				return nil, dl("connect", "egress_unavailable")
 			}
@@ -179,11 +199,18 @@ func fetchImportBounded(ctx context.Context, raw string, policy *clientegress.Po
 		return checkedImportAddresses(ips, e)
 	}
 	options := direct.Options{DisableIPv6: ipDisabled(ctx), Resolve: resolve, Guard: func(_ context.Context, ip netip.Addr) bool { return !publicImportIP(ip) }, Timeout: 10 * time.Second}
-	if policy != nil {
+	if s := hostEgress(ctx); s != nil {
+		// Borrow the exact Switch: freeze and post-dial epoch/socket ownership
+		// checks apply even to a request that originally captured nil policy.
+		options.DialContext = func(ctx context.Context, n, a string) (net.Conn, error) { return dialHostEgress(ctx, s, n, a) }
+	} else if policy != nil {
 		options.Control = policy.Control
 	}
 	d := direct.New(options)
 	tr := &http.Transport{Proxy: nil, DisableKeepAlives: true, MaxResponseHeaderBytes: 64 << 10, DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+		if e := checkHostEgress(ctx); e != nil {
+			return nil, e
+		}
 		if policy != nil && !policy.Ready() {
 			return nil, dl("connect", "egress_unavailable")
 		}

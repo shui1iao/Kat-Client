@@ -4,6 +4,7 @@ package clientcore
 
 import (
 	"errors"
+	"github.com/shui1iao/Kat/internal/userio"
 	"os"
 
 	"golang.org/x/sys/windows"
@@ -17,7 +18,7 @@ func openSubscriptionResource(path string) (*os.File, error) {
 	// Do not request WRITE_DAC/WRITE_OWNER or call secureFile: a readable shared
 	// database is not ours to privatize. Inspect the opened leaf, not a separately
 	// queried path which could have changed since the check.
-	h, err := windows.CreateFile(p, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+	h, err := userio.CreateFile(p, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
 	if err != nil {
 		return nil, err
 	}

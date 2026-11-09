@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {editRule,simpleMatch} from '../src/client/rules.ts';
+import {editDocument,parseDocument} from '../src/client/document.ts';
+test('real rule fields and action/outbound, no mock TYPE',()=>{const old={domain_suffix:'old.invalid',outbound:'G',no_resolve:true};const next=editRule(old,'ip_cidr','127.0.0.0/8','direct',true);assert.deepEqual(next,{no_resolve:true,ip_cidr:'127.0.0.0/8',action:'direct'});assert.equal(simpleMatch({and:[{domain:'test.invalid'}],action:'direct'}),null);assert.throws(()=>editRule({},'PROCESS-NAME','app','direct',false));});
+test('MATCH changes only routing.final, complex rules kept in order',()=>{const text=JSON.stringify({schema_version:1,client:{mode:'rule'},kernel:{routing:{rules:[{and:[{domain:'test.invalid'}],outbound:'G'},{geoip:'private',action:'direct'}],final:'G'}}});const next=editDocument(text,d=>{d.kernel.routing!.final='direct';});assert.equal(next,text.replace('"final":"G"','"final":"direct"'));assert.equal(parseDocument(next).kernel.routing!.rules!.length,2);});

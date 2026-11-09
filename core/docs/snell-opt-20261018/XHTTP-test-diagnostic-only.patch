@@ -1,0 +1,17 @@
+--- baseline/xhttp_test.go
++++ validation/xhttp_test.go
+@@ -173,8 +173,12 @@
+ 	}
+ 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+ 	defer cancel()
+-	_ = s.Close(ctx)
+-	if st := s.cfg.Inbounds[0].xhttpServer.Stats(); st.Connections != 0 || st.Sessions != 0 || st.Handlers != 0 || st.BufferedBytes != 0 {
++ closeStarted:=time.Now()
++ closeResult:=s.Close(ctx)
++ closeElapsed:=time.Since(closeStarted)
++ closeSnapshot:=s.cfg.Inbounds[0].xhttpServer.Stats()
++ t.Logf("XHTTP_CLOSE_OBSERVATION returned=%v elapsed=%s snapshot=%+v",closeResult,closeElapsed,closeSnapshot)
++ if st:=closeSnapshot; st.Connections != 0 || st.Sessions != 0 || st.Handlers != 0 || st.BufferedBytes != 0 {
+ 		t.Fatal("XHTTP resources leaked", st)
+ 	}
+ 	if s.logical.Load() != 0 || s.Stats().Active != 0 || s.Stats().Handshakes != 0 {

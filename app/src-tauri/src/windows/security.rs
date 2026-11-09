@@ -50,7 +50,7 @@ pub fn pin_approved_clients(record:&crate::install_location::Record)->Result<Cli
  use std::{io::Read,os::windows::io::FromRawHandle};use sha2::{Sha256,Digest};
  if record.schema!=2{return Err(Error::new("INSTALL_REGISTRATION","Use Setup to migrate the protected runtime"));}
  let root=Path::new(&record.root);let dirs=super::install_location::pin_app_chain(root,true)?;verify_protected(root)?;let mut files=vec![];
- for n in ["kat-desktop.exe","kat-client-core.exe"]{
+ for n in ["kat-desktop.exe","kat-client-core.exe","kat-elevate-helper.exe"]{
   let p=root.join(n);verify_protected(&p)?;let w:Vec<u16>=p.as_os_str().encode_wide().chain(Some(0)).collect();
   let h=identity::Handle(unsafe{CreateFileW(w.as_ptr(),FILE_READ_DATA|FILE_READ_ATTRIBUTES|READ_CONTROL,FILE_SHARE_READ,std::ptr::null(),OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,std::ptr::null_mut())});
   if h.0==INVALID_HANDLE_VALUE{return Err(Error::new("INSTALL_PACKAGE","Cannot pin approved client image"));}
@@ -68,7 +68,7 @@ pub fn approved_client(h:HANDLE,name:&str)->Result<()>{
  let root=identity::install_root()?;if !same_path(&image(h)?,&root.join(name)){return Err(Error::new("CALLER_DENIED","Only the approved bound-user client may use this fixed role"));}Ok(())
 }
 pub fn journal_dir()->Result<PathBuf>{let p=identity::known_folder(windows_sys::core::GUID::from_u128(0x62ab5d82_fdc1_4dc3_a9dd_070d1d495d97))?.join("Kat Client");Ok(p)}
-pub fn verify_vendor(root:&Path)->Result<()>{verify_protected(root)?;verify_protected(&root.join("network"))?;use sha2::{Sha256,Digest};for(name,hash)in[("wintun.dll","e5da8447dc2c320edc0fc52fa01885c103de8c118481f683643cacc3220dafce"),("tun2socks.exe","f8feeed50a83a2c01e49287688eb36492e6563cc8d8db803afbd373803b3e1b6")]{let p=root.join("network").join(name);verify_protected(&p)?;let b=std::fs::read(p).map_err(|e|Error::io("VENDOR_READ",&e))?;if hex::encode(Sha256::digest(b))!=hash{return Err(Error::new("VENDOR_INTEGRITY","Installed network component hash mismatch"));}}Ok(())}
+pub fn verify_vendor(root:&Path)->Result<()>{verify_protected(root)?;verify_protected(&root.join("network"))?;use sha2::{Sha256,Digest};for(name,hash)in[("wintun.dll","e5da8447dc2c320edc0fc52fa01885c103de8c118481f683643cacc3220dafce")]{let p=root.join("network").join(name);verify_protected(&p)?;let b=std::fs::read(p).map_err(|e|Error::io("VENDOR_READ",&e))?;if hex::encode(Sha256::digest(b))!=hash{return Err(Error::new("VENDOR_INTEGRITY","Installed network component hash mismatch"));}}Ok(())}
 pub struct Wintun {module:HMODULE,open:unsafe extern "system" fn(*const u16)->HANDLE,close:unsafe extern "system" fn(HANDLE)}
 impl Wintun {pub fn load(root:&Path)->Result<Self>{verify_vendor(root)?;unsafe{let p=root.join("network/wintun.dll");let w:Vec<u16>=p.as_os_str().encode_wide().chain(Some(0)).collect();let module=LoadLibraryExW(w.as_ptr(),std::ptr::null_mut(),LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);if module.is_null(){return Err(Error::new("WINTUN_LOAD","Cannot load official Wintun DLL"));}
  let open=GetProcAddress(module,b"WintunOpenAdapter\0".as_ptr());let close=GetProcAddress(module,b"WintunCloseAdapter\0".as_ptr());match(open,close){(Some(o),Some(c))=>Ok(Self{module,open:std::mem::transmute(o),close:std::mem::transmute(c)}),_=>{FreeLibrary(module);Err(Error::new("WINTUN_API","Official Wintun API missing"))}}

@@ -1,0 +1,33 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { nodeRows } from '../src/client/nodeRows.ts';
+import { putEntity, validateGraph } from '../src/client/operations.ts';
+import type { DocumentSource, Outbound } from '../src/client/types.ts';
+
+test('manual count/actions use subscription snapshot ownership; configured subscription can copy to manual', () => {
+  const manual:Outbound={name:'subscription-looking-name',type:'socks5',server:'127.0.0.1',port:1080};
+  const subscribed:Outbound={name:'ordinary',type:'trojan',server:'example.invalid',port:443,password:'test-only',tls:{server_name:'example.invalid'}};
+  const source:DocumentSource={schema_version:1,client:{mode:'rule'},kernel:{outbounds:[manual,subscribed]},subscriptions:[{id:'owner',name:'手动',interval:3600,updated:0,snapshot:{outbounds:[structuredClone(subscribed)]}}]};
+  const before=structuredClone(source);
+  const rows=nodeRows(source,[{name:'runtime-only',type:'socks5',source:'legacy',probe_ms:null}]);
+  assert.equal(rows.filter(n=>n.manual).length,1);
+  assert.equal(rows[0].manual,manual);
+  assert.equal(rows[1].manual,undefined);
+  assert.equal(rows[1].copy,subscribed);
+  assert.equal(rows[2].manual,undefined);
+  assert.equal(rows[2].copy,undefined);
+  const copy={...structuredClone(rows[1].copy!),name:subscribed.name+'-copy'};
+  putEntity(source,'outbounds',null,copy);
+  assert.equal(nodeRows(source).filter(n=>n.manual).length,2);
+  assert.deepEqual(source.kernel.outbounds?.at(-1),copy);
+  assert.deepEqual(source.subscriptions,before.subscriptions);
+  assert.deepEqual(source.kernel.outbounds?.[1],subscribed);
+  assert.deepEqual(nodeRows(null),[]);
+  const page=readFileSync('src/pages/Nodes.tsx','utf8');
+  assert.match(page,/manualCount>0&&` · 手动 \${manualCount}`/);
+  assert.match(page,/manual&&<button className="ib" data-slot="2" \{\.\.\.tip\([\x27"]编辑节点[\x27"]\)\}/);
+  assert.match(page,/manual&&<button className="ib danger" data-slot="4" \{\.\.\.tip\([\x27"]删除节点[\x27"]\)\}/);
+  assert.match(page,/copy&&<button className="ib" data-slot="3" \{\.\.\.tip\([\x27"]复制节点[\x27"]\)\}/);
+  assert.match(page,/\{\.\.\.tip\([\x27"]节点测速[\x27"]\)\}/);
+});

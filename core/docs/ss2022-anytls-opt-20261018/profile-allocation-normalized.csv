@@ -1,0 +1,9 @@
+protocol,variant,direction,instrumented_binary,total_valid_stream_bytes_all_warm_and_measurement,TotalAlloc,HeapAlloc_at_shutdown,NumGC,Mallocs,allocated_bytes_per_valid_byte_approx
+ss2022,baseline-051,up,/opt/proxy-kernel-ss2022-anytls-opt-20261018/bin/baseline-051-profile,3407771609,6833768272,1797392,2740,629115,2.005348085520716
+ss2022,baseline-051,down,/opt/proxy-kernel-ss2022-anytls-opt-20261018/bin/baseline-051-profile,2794233856,6300766928,2049912,2564,857725,2.2549175382978395
+ss2022,ss-c1,up,/opt/proxy-kernel-ss2022-anytls-opt-20261018/bin/ss-c1-profile,3708840104,3723264344,3166616,1422,344429,1.0038891512158865
+ss2022,ss-c1,down,/opt/proxy-kernel-ss2022-anytls-opt-20261018/bin/ss-c1-profile,3806780046,4459200,1991512,1,3637,0.001171383674947423
+anytls,ss-c1,up,/opt/proxy-kernel-ss2022-anytls-opt-20261018/bin/ss-c1-profile,3690654932,3745303200,3231608,1773,682324,1.0148072006207272
+anytls,ss-c1,down,/opt/proxy-kernel-ss2022-anytls-opt-20261018/bin/ss-c1-profile,2312347648,5095899376,3389976,2155,1869282,2.2037773517349586
+anytls,ss-c1-any-c1,up,/opt/proxy-kernel-ss2022-anytls-opt-20261018/bin/ss-c1-any-c1-profile,3880161937,3937345808,2226568,1847,716989,1.0147374959933277
+anytls,ss-c1-any-c1,down,/opt/proxy-kernel-ss2022-anytls-opt-20261018/bin/ss-c1-any-c1-profile,2621120512,3110484280,3226504,1544,1947238,1.1867002168574843

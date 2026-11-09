@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/shui1iao/Kat/internal/userio"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -86,7 +87,7 @@ func refNames(refs map[string]bool) []string {
 }
 func sameNames(a, b []string) bool { return strings.Join(a, "\x00") == strings.Join(b, "\x00") }
 func safeCacheDir(path string) error {
-	st, e := os.Lstat(path)
+	st, e := userio.Lstat(path)
 	if e != nil {
 		return e
 	}
@@ -99,7 +100,7 @@ func sameResourceData(dir string, data map[string][]byte) bool {
 	if safeCacheDir(dir) != nil {
 		return false
 	}
-	entries, e := os.ReadDir(dir)
+	entries, e := userio.ReadDir(dir)
 	if e != nil {
 		return false
 	}
@@ -160,11 +161,11 @@ func (h *Host) stageResourceVersion(base document, data map[string][]byte) (dir,
 		h.resourceUsing[dir]++
 		return dir, "", nil
 	}
-	if _, e := os.Lstat(dir); e == nil {
+	if _, e := userio.Lstat(dir); e == nil {
 		unique := sha256.Sum256(append(hash.Sum(nil), []byte(subscriptionID())...))
 		dir = filepath.Join(h.workspace, "subscription-"+hex.EncodeToString(unique[:]))
 	}
-	if e := os.Mkdir(dir, 0700); e != nil {
+	if e := userio.Mkdir(dir, 0700); e != nil {
 		return "", "", e
 	}
 	h.resourceUsing[dir]++
@@ -187,7 +188,7 @@ func (h *Host) collectResourceVersionsLocked(previous document, acceptedDir stri
 	state := cacheState{}
 	p := filepath.Join(h.workspace, resourceCacheState)
 	if len(current) == 0 && len(before) == 0 {
-		if _, e := os.Lstat(p); os.IsNotExist(e) {
+		if _, e := userio.Lstat(p); os.IsNotExist(e) {
 			return
 		}
 	}
@@ -214,7 +215,7 @@ func (h *Host) collectResourceVersionsLocked(previous document, acceptedDir stri
 			return
 		}
 		m := filepath.Join(d, acceptedResourceMarker)
-		if _, e := os.Lstat(m); os.IsNotExist(e) {
+		if _, e := userio.Lstat(m); os.IsNotExist(e) {
 			if exclusiveDocumentWrite(m, []byte("Kat accepted resources\n")) != nil {
 				h.cacheFailure()
 				return
@@ -266,12 +267,12 @@ func (h *Host) collectResourceVersionsLocked(previous document, acceptedDir stri
 		}
 	}
 	backupDir := filepath.Join(h.workspace, "backups")
-	if _, e := os.Lstat(backupDir); e == nil {
+	if _, e := userio.Lstat(backupDir); e == nil {
 		if safeCacheDir(backupDir) != nil {
 			h.cacheFailure()
 			return
 		}
-		entries, e := os.ReadDir(backupDir)
+		entries, e := userio.ReadDir(backupDir)
 		if e != nil {
 			h.cacheFailure()
 			return
@@ -323,7 +324,7 @@ func (h *Host) collectResourceVersionsLocked(previous document, acceptedDir stri
 			current[n] = true
 		}
 	}
-	entries, e := os.ReadDir(h.workspace)
+	entries, e := userio.ReadDir(h.workspace)
 	if e != nil {
 		h.cacheFailure()
 		return
@@ -364,7 +365,7 @@ func removeResourceVersion(root, name string) error {
 	// Reject every reparse point before deleting anything. OpenRoot then confines
 	// deletion even if an entry is swapped after this check; RemoveAll never follows
 	// symbolic links. Unknown trees are retained rather than traversed.
-	if e := filepath.WalkDir(path, func(p string, d os.DirEntry, e error) error {
+	if e := userio.WalkDir(path, func(p string, d os.DirEntry, e error) error {
 		if e != nil {
 			return e
 		}
@@ -375,7 +376,7 @@ func removeResourceVersion(root, name string) error {
 	}); e != nil {
 		return e
 	}
-	r, e := os.OpenRoot(root)
+	r, e := userio.OpenRoot(root)
 	if e != nil {
 		return e
 	}

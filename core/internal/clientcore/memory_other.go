@@ -3,14 +3,15 @@
 package clientcore
 
 import (
-	"os"
+	"github.com/shui1iao/Kat/internal/userio"
+
 	"strconv"
 	"strings"
 )
 
 // processMemoryBytes reports resident set size from /proc when available.
 func processMemoryBytes() (uint64, bool) {
-	b, err := os.ReadFile("/proc/self/status")
+	b, err := userio.ReadFile("/proc/self/status")
 	if err != nil {
 		return 0, false
 	}

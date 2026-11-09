@@ -12,6 +12,9 @@ import (
 type mainRouteKey struct{}
 
 func subscriptionRedirect(req *http.Request, via []*http.Request) error {
+	if e := checkHostEgress(req.Context()); e != nil {
+		return e
+	}
 	if len(via) > 5 || !validImportURL(req.URL.String()) || req.URL.Scheme != via[0].URL.Scheme {
 		return dl("url_check", "redirect_refused")
 	}
@@ -22,10 +25,19 @@ func subscriptionRedirect(req *http.Request, via []*http.Request) error {
 			return dl("url_check", "redirect_refused")
 		}
 	} else {
-		ips, e := net.DefaultResolver.LookupNetIP(req.Context(), ipNetwork(req.Context()), req.URL.Hostname())
+		var ips []netip.Addr
+		var e error
+		if s := hostEgress(req.Context()); s != nil {
+			ips, e = s.Bootstrap(req.Context(), ipNetwork(req.Context()), req.URL.Hostname())
+		} else {
+			ips, e = net.DefaultResolver.LookupNetIP(req.Context(), ipNetwork(req.Context()), req.URL.Hostname())
+		}
 		if _, e = checkedImportAddresses(ips, e); e != nil {
 			return dl("url_check", "redirect_refused")
 		}
+	}
+	if e := checkHostEgress(req.Context()); e != nil {
+		return e
 	}
 	req.Header = make(http.Header)
 	req.Header.Set("User-Agent", "clash.meta")

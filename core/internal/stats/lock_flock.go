@@ -4,6 +4,7 @@ package stats
 
 import (
 	"errors"
+	"github.com/shui1iao/Kat/internal/userio"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -15,10 +16,10 @@ var ErrLocked = errors.New("stats: statistics file is used by another instance")
 // Lock takes an exclusive advisory lock on path+".lock" so that two
 // instances never persist into the same file. Release unlocks and closes.
 func Lock(path string) (release func(), err error) {
-	if e := os.MkdirAll(filepath.Dir(path), 0o700); e != nil {
+	if e := userio.MkdirAll(filepath.Dir(path), 0o700); e != nil {
 		return nil, e
 	}
-	f, e := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	f, e := userio.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
 	if e != nil {
 		return nil, e
 	}
@@ -33,7 +34,7 @@ func Lock(path string) (release func(), err error) {
 }
 
 func syncDir(dir string) {
-	if d, e := os.Open(dir); e == nil {
+	if d, e := userio.Open(dir); e == nil {
 		_ = d.Sync()
 		d.Close()
 	}

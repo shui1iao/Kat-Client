@@ -1,6 +1,6 @@
 [package]
 name = "kat-windows-host"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.85"
 default-run = "kat-desktop"
@@ -21,10 +21,13 @@ serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "sync", "time", "net"] }
 sha2 = "0.10"
 hex = "0.4"
+semver = "1"
+ed25519-dalek = "2"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 
 [target.'cfg(windows)'.dependencies]
 tauri = { version = "=2.12.5", optional = true, features = ["tray-icon", "custom-protocol"] }
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_IO", "Win32_System_Services", "Win32_System_Registry", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_RemoteDesktop", "Win32_System_Environment", "Win32_Storage_FileSystem", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinInet", "Win32_Networking_WinSock", "Win32_Graphics_Gdi", "Win32_UI_HiDpi", "Win32_UI_Controls_Dialogs", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Devices_DeviceAndDriverInstallation", "Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_IO", "Win32_System_Services", "Win32_System_Registry", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_RemoteDesktop", "Win32_System_Environment", "Win32_Storage_FileSystem", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinInet", "Win32_Networking_WinSock", "Win32_Graphics_Gdi", "Win32_UI_HiDpi", "Win32_UI_Controls_Dialogs", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [build-dependencies]
 tauri-build = { version = "=2.7.4", features = [] }
@@ -64,3 +67,15 @@ required-features=["real-core-integration"]
 [[bin]]
 name="kat-install-helper"
 path="src/bin/install-helper.rs"
+
+[[bin]]
+name="kat-elevate-helper"
+path="src/bin/elevate-helper.rs"
+
+[[test]]
+name="control-contract"
+path="tests/control_contract.rs"
+
+[[test]]
+name="elevation-launch"
+path="tests/elevation_launch.rs"

@@ -1,0 +1,29 @@
+bin/proxy-kernel: go1.26.9
+	path	proxy-kernel/cmd/proxy-kernel
+	mod	proxy-kernel	(devel)	
+	dep	github.com/andybalholm/brotli	v1.0.6	h1:Yf9fFpf49Zrxb9NlQaluyE92/+X7UVHlhMNJN2sxfOI=
+	dep	github.com/cloudflare/circl	v1.6.3	h1:9GPOhQGF9MCYUeXyMYlqTR6a5gTrgR/fBLXvUgtVcg8=
+	dep	github.com/coder/websocket	v1.8.14	h1:9L0p0iKiNOibykf283eHkKUHHrpG7f65OE3BhhO7v9g=
+	dep	github.com/juju/ratelimit	v1.0.2	h1:sRxmtRiajbvrcLQT7S+JbqU0ntsb9W2yhSdNN8tWfaI=
+	dep	github.com/klauspost/compress	v1.18.7	h1:aUyZsS4kH3QTKurYhAOwAHxllVPnOthb3vPfnF1Ehjw=
+	dep	github.com/klauspost/cpuid/v2	v2.0.9	h1:lgaqFMSdTdQYdZ04uHyN2d/eKdOMyi2YLSvlQIBFYa4=
+	dep	github.com/pires/go-proxyproto	v0.11.0	h1:gUQpS85X/VJMdUsYyEgyn59uLJvGqPhJV5YvG68wXH4=
+	dep	github.com/refraction-networking/utls	v1.8.2	h1:j4Q1gJj0xngdeH+Ox/qND11aEfhpgoEvV+S9iJ2IdQo=
+	dep	github.com/xtls/reality	v0.0.0-20260322125925-9234c772ba8f
+	=>	./third_party/reality	(devel)	
+	
+	dep	golang.org/x/crypto	v0.57.0	h1:3ZVCjf8Ggz7zneR/EHRVx68Ctf+2pmIMP2UFhh9cC6M=
+	dep	golang.org/x/net	v0.60.0	h1:79p50tfZlm0J9YfoDsSi639qSXNGVwEzOPLCxM2FsYU=
+	dep	golang.org/x/sys	v0.48.0	h1:bbX/i/6MgT9BVLM9RT1thmxL04yeTAhbEz4SyadbXoo=
+	dep	golang.org/x/text	v0.42.0	h1:JbOZXgfeCPU9gacVtYliJqOhD+zhrEqK4LfdpmlUZqI=
+	dep	lukechampine.com/blake3	v1.4.1	h1:I3Smz7gso8w4/TunLKec6K2fn+kyKtDxr/xcQEN84Wg=
+	build	-buildmode=exe
+	build	-compiler=gc
+	build	CGO_ENABLED=1
+	build	CGO_CFLAGS=
+	build	CGO_CPPFLAGS=
+	build	CGO_CXXFLAGS=
+	build	CGO_LDFLAGS=
+	build	GOARCH=amd64
+	build	GOOS=linux
+	build	GOAMD64=v1

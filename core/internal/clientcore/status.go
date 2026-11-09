@@ -81,7 +81,7 @@ func (h *Host) statusLocked() any {
 	var memory any
 	upRate, downRate := float64(0), float64(0)
 	if h.server != nil {
-		v := h.server.StatsView()
+		v := h.server.ClientStatusView()
 		trafficRules = v.Cumulative.Rules
 		byTarget := map[string]uint64{}
 		order := []string{}
@@ -111,9 +111,9 @@ func (h *Host) statusLocked() any {
 		if mem, ok := processMemoryBytes(); ok {
 			memory = mem
 		}
-		upRate, downRate = v.Rate.Up, v.Rate.Down
-		active = v.Connections.TCP + v.Connections.UDP
-		tcp, udp = v.Connections.TCP, v.Connections.UDP
+		upRate, downRate = v.UpRate, v.DownRate
+		active = v.TCP + v.UDP
+		tcp, udp = v.TCP, v.UDP
 		providers = v.Providers
 		for i := range providers {
 			if providers[i].LastErr != "" {

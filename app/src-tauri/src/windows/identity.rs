@@ -76,3 +76,15 @@ pub fn wake_existing(){unsafe{
  }
  windows_sys::Win32::UI::WindowsAndMessaging::EnumWindows(Some(visit),0);
 }}
+
+// Only the real main window registered by this GUI can own an elevation prompt.
+static UAC_OWNER:std::sync::atomic::AtomicIsize=std::sync::atomic::AtomicIsize::new(0);
+pub fn set_uac_owner(hwnd:isize){UAC_OWNER.store(hwnd,std::sync::atomic::Ordering::SeqCst);}
+pub fn uac_owner()->windows_sys::Win32::Foundation::HWND{unsafe{
+ use windows_sys::Win32::UI::WindowsAndMessaging::*;
+ let hwnd=UAC_OWNER.load(std::sync::atomic::Ordering::SeqCst) as windows_sys::Win32::Foundation::HWND;
+ let mut pid=0;GetWindowThreadProcessId(hwnd,&mut pid);
+ if hwnd.is_null()||IsWindow(hwnd)==0||pid!=std::process::id(){return std::ptr::null_mut();}
+ if IsIconic(hwnd)!=0{ShowWindow(hwnd,SW_RESTORE);}else{ShowWindow(hwnd,SW_SHOW);}
+ BringWindowToTop(hwnd);SetForegroundWindow(hwnd);hwnd
+}}

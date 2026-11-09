@@ -1,0 +1,306 @@
+module	version	file	license	copyright
+github.com/google/btree	v1.1.3	btree_generic.go	Apache-2.0	// Copyright 2014-2022 Google Inc.
+golang.org/x/exp	v0.0.0-20260611194520-c48552f49976	constraints/constraints.go	BSD-3-Clause + PATENTS	// Copyright 2021 The Go Authors. All rights reserved.
+golang.org/x/time	v0.15.0	rate/rate.go	BSD-3-Clause + PATENTS	// Copyright 2015 The Go Authors. All rights reserved.
+golang.org/x/time	v0.15.0	rate/sometimes.go	BSD-3-Clause + PATENTS	// Copyright 2022 The Go Authors. All rights reserved.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/atomicbitops/32b_64bit.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/atomicbitops/aligned_64bit.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/atomicbitops/atomicbitops.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/atomicbitops/atomicbitops_64bit_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/atomicbitops/atomicbitops_amd64.s	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/atomicbitops/atomicbitops_float64.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/bits/bits.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/bits/bits_template.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/bits/uint64_arch.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/bits/uint64_arch_amd64_asm.s	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/buffer.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/buffer_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/buffer_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/buffer_unsafe_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/chunk.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/chunk_refs.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/view.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/view_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/view_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/context/context.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/context/context_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/gohacks/linkname_go113_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/gohacks/noescape_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/gohacks/slice_go120_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/gohacks/string_go120_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/linewriter/linewriter.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/log/bug.go	Apache-2.0 (module; retain file notices)	// Copyright 2025 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/log/file.go	Apache-2.0 (module; retain file notices)	// Copyright 2026 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/log/glog.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/log/json.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/log/json_k8s.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/log/log.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/log/rate_limited.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/rand/rand.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/rand/rand_linux.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/rand/rand_linux_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/rand/rand_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/rand/rng.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/refs/refcounter.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/refs/refs_map.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/refs/refs_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sleep/sleep_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sleep/sleep_unsafe_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/addr_range.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/addr_set.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/decode.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/decode_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/deferred_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/encode.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/encode_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/ods_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/state.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/state_norace.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/stats.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/types.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/wire/wire.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/aliases.go	BSD-style (file notice)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/checklocks_off_unsafe.go	BSD-style (file notice)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/fence.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/fence_amd64.s	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/gate_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/goyield_unsafe.go	BSD-style (file notice)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/locking/atomicptrmap_ancestors_unsafe.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/locking/atomicptrmap_goroutine_unsafe.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/locking/lockdep_norace.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/locking/locking.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/mutex_unsafe.go	BSD-style (file notice)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/nocopy.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/norace_unsafe.go	BSD-style (file notice)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/runtime.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/runtime_amd64.go	BSD-style (file notice)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/runtime_constants_go_impl.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/runtime_exectracer2_go_impl.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/runtime_go126_unsafe.go	BSD-style (file notice)	// Copyright 2024 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/runtime_spinning_asm_impl_amd64.s	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/runtime_unsafe.go	BSD-style (file notice)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/rwmutex_unsafe.go	BSD-style (file notice)	// Copyright 2009 The Go Authors. All rights reserved. | // Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/seqcount.go	BSD-style (file notice)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/sync.go	BSD-style (file notice)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/adapters/gonet/gonet.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/adapters/gonet/gonet_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/checksum/checksum.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/checksum/checksum_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/checksum/checksum_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/checksum/checksum_unsafe_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/errors.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/errors_linux.go	Apache-2.0 (module; retain file notices)	// Copyright 2024 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/hash/jenkins/jenkins.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/hash/jenkins/jenkins_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/arp.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/checksum.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/datagram.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/eth.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/gue.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/header_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/icmpv4.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/icmpv6.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/igmp.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/igmpv3.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/interfaces.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ipv4.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ipv6.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ipv6_extension_headers.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ipv6_fragment.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/mld.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/mldv2.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/mldv2_igmpv3_common.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ndp_neighbor_advert.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ndp_neighbor_solicit.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ndp_options.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ndp_router_advert.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ndp_router_solicit.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ndpoptionidentifier_string.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/parse/parse.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/parse/parse_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/tcp.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/udp.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/virtionet.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/internal/tcp/tcp.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/internal/tcp/tcp_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/link/channel/channel.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/link/channel/channel_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/link/channel/endpoint_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/link/channel/queue_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/hash/hash.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/hash/hash_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/fragmentation/fragmentation.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/fragmentation/fragmentation_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/fragmentation/reassembler.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/fragmentation/reassembler_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/ip/duplicate_address_detection.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/ip/errors.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/ip/generic_multicast_protocol.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/ip/ip_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/ip/reject_with_reset.go	Apache-2.0 (module; retain file notices)	// Copyright 2026 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/ip/stats.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/multicast/multicast_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/multicast/route_table.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv4/icmp.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv4/igmp.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv4/ipv4.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv4/ipv4_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv4/stats.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv6/dhcpv6configurationfromndpra_string.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv6/icmp.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv6/ipv6.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv6/ipv6_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv6/mld.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv6/ndp.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv6/stats.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/ports/flags.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/ports/ports.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/ports/ports_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/route_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/seqnum/seqnum.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/seqnum/seqnum_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/sock_err_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/socketops.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/address_state_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/address_state_refs.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/addressable_endpoint_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/addressable_endpoint_state_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/bridge.go	Apache-2.0 (module; retain file notices)	// Copyright 2024 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/bridge_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/bucket_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/cleanup_endpoints_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/conn_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/conn_track_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/conntrack.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/endpoints_by_nic_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/headertype_string.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/hook_string.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/icmp_rate_limit.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/iptables.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/iptables_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/iptables_targets.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/iptables_types.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/multi_port_endpoint_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/nat.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/neighbor_cache.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/neighbor_cache_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/neighbor_entry.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/neighbor_entry_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/neighbor_entry_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/neighborstate_string.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/nftables_types.go	Apache-2.0 (module; retain file notices)	// Copyright 2025 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/nic.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/nic_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/nic_stats.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/nud.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/packet_buffer.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/packet_buffer_list.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/packet_buffer_refs.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/packet_buffer_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/packet_endpoint_list_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/packet_eps_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/packets_pending_link_resolution_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/pending_packets.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/rand.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/registration.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/route.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/route_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/route_stack_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/save_restore.go	Apache-2.0 (module; retain file notices)	// Copyright 2024 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/stack.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/stack_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/stack_options.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/stack_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/stack_unsafe_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/state_conn_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/transport_demuxer.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/transport_endpoints_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/tuple_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stdclock.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stdclock_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/tcpip.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/tcpip_linux_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/tcpip_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/tcpip_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/timer.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/datagram.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/icmp/endpoint.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/icmp/endpoint_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/icmp/icmp_packet_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/icmp/icmp_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/icmp/protocol.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/internal/network/endpoint.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/internal/network/endpoint_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/internal/network/network_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/internal/noop/endpoint.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/internal/noop/noop_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/packet/endpoint.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/packet/endpoint_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/packet/endpoint_rcv_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/packet/endpoint_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/packet/last_error_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/packet/packet_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/packet/packet_mmap_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/packet/packet_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/raw/endpoint.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/raw/endpoint_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/raw/protocol.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/raw/raw_packet_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/raw/raw_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/accept.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/accept_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/connect.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/connect_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/cubic.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/dispatcher.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/dispatcher_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/endpoint.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/endpoint_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/ep_queue_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/forwarder.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/forwarder_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/forwarder_request_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/hasher_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/keepalive_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/last_error_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/pending_processing_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/protocol.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/protocol_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/protocol_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2026 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/rack.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/rcv.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/rcv_queue_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/reno.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/reno_recovery.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/rtt_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/sack.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/sack_recovery.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/sack_scoreboard.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/segment.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/segment_heap.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/segment_queue.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/segment_queue_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/segment_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/segment_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/snd.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/snd_queue_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/state.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/tcp_endpoint_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/tcp_segment_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/tcp_segment_refs.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/tcp_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/tcp_unsafe_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/timer.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcpconntrack/tcp_conntrack.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcpconntrack/tcpconntrack_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/transport.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/transport_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/udp/endpoint.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/udp/endpoint_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/udp/forwarder.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/udp/protocol.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/udp/udp_packet_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/udp/udp_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/waiter/waiter.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/waiter/waiter_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/waiter/waiter_state_autogen.go	Apache-2.0 (module; retain file notices)	

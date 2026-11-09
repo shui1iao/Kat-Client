@@ -47,7 +47,7 @@ pub fn rollback_failed() -> Error { Error::new("INSTALL_ROLLBACK_FAILED", "æœåŠ
 
 // Only frozen stages and allowlisted codes are forwarded; never original messages/paths.
 fn valid_stage(s:&str)->bool{matches!(s,"prepare"|"stop"|"replace"|"configure"|"start"|"operation"|"recovery"|"recover_service_acl"|"recover_stop"|"recover_files"|"recover_binding"|"recover_apps"|"recover_registration"|"recover_remove_service"|"recover_restart"|"uninstall_stop"|"uninstall_binding"|"uninstall_delete"|"uninstall_files"|"uninstall_registration"|"uninstall_apps"|"uninstall_service")}
-pub fn at(stage:&str,error:Error)->Error{let stage=if valid_stage(stage){stage}else{"operation"};let code=crate::safe_log::safe_code(&error.code);Error::new(&code,&format!("stage={stage}; code={code}"))}
+pub fn at(stage:&str,error:Error)->Error{let stage=if valid_stage(stage){stage}else{"operation"};let code=crate::safe_log::safe_code(&error.code);let mut out=Error::new(&code,&format!("stage={stage}; code={code}"));out.os_error=error.os_error;out}
 fn stage(error:&Error,fallback:&str)->String{error.message.strip_prefix("stage=").and_then(|s|s.split(';').next()).filter(|s|valid_stage(s)).unwrap_or(fallback).to_string()}
 pub fn rollback_errors(operation:&Error,recovery:&Error)->Error{
  Error::new("INSTALL_ROLLBACK_FAILED",&format!("operation_stage={}; operation_code={}; recovery_stage={}; recovery_code={}",stage(operation,"operation"),crate::safe_log::safe_code(&operation.code),stage(recovery,"recovery"),crate::safe_log::safe_code(&recovery.code)))

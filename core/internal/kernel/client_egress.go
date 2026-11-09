@@ -10,12 +10,25 @@ import (
 // ClientEgress is a non-JSON, instance-local hook. Servers not opting into it
 // retain their existing dialing/resolver/reload behavior.
 type ClientEgress struct {
-	Failure       func()
-	Control       func(context.Context, string, string, syscall.RawConn) error
+	UDPAssociationBinding func() (uint64, string, error)
+	UDPBinding            func(ipv6 bool) (uint64, string, error)
+	Active                func() bool
+	Servers               func() []netip.Addr
+	DialContext           func(context.Context, string, string) (net.Conn, error)
+	PacketRelease         func(*net.UDPConn)
+	Failure               func()
+	Control               func(context.Context, string, string, syscall.RawConn) error
+	// PacketSource selects a real local source before the single net UDP bind.
+	PacketSource  func(network string, configured netip.Addr) (netip.Addr, error)
 	PacketControl func(string, *net.UDPConn) error
 	Bootstrap     func(context.Context, string, string) ([]netip.Addr, error)
-	// DNSServers are the host's original physical resolvers (literal bootstrap DNS).
+	// DNSServers is only the non-scoped compatibility target set for
+	// originalResolver. It is NOT used to dial system DNS when SystemQuery is set;
+	// that closure retains full immutable owner/scope endpoint identities.
 	DNSServers []netip.Addr
+	// SystemQuery is the owner/scope-preserving physical DNS-only transport.
+	SystemQuery func(context.Context, []byte) ([]byte, error)
+	DNSContext  func(context.Context) (context.Context, func(), uint64)
 }
 
 // SetClientIPv6 opts a desktop instance into the local address-family policy.
@@ -31,11 +44,15 @@ func (c *Config) SetClientEgress(e *ClientEgress) { c.clientEgress = e; c.client
 // physical interface instead of through a node, which usually cannot reach a
 // private LAN resolver.
 func (e *ClientEgress) originalResolver(ip netip.Addr, port uint16) bool {
-	if e == nil || port != 53 || !ip.IsValid() {
+	if !e.active() || port != 53 || !ip.IsValid() {
 		return false
 	}
 	ip = ip.Unmap()
-	for _, d := range e.DNSServers {
+	dns := e.DNSServers
+	if e.Servers != nil {
+		dns = e.Servers()
+	}
+	for _, d := range dns {
 		if d.Unmap() == ip {
 			return true
 		}
@@ -49,3 +66,5 @@ func (s *Server) trafficContext() context.Context {
 	}
 	return s.ctx
 }
+
+func (e *ClientEgress) active() bool { return e != nil && (e.Active == nil || e.Active()) }

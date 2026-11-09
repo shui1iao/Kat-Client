@@ -157,12 +157,15 @@ func (t *Outbound) request(cmd byte, dst outbound.Addr) ([]byte, error) {
 }
 
 func (t *Outbound) handshake(ctx context.Context) (net.Conn, error) {
+	diagnosticStarted := time.Now()
 	raw, e := t.under.DialTCP(ctx, t.server)
 	if e != nil {
+		outbound.ReportError(ctx, "trojan", "connect", e, diagnosticStarted)
 		return nil, e
 	}
 	c, e := tlsclient.Handshake(ctx, raw, t.tls, t.fp)
 	if e != nil {
+		outbound.ReportError(ctx, "trojan", "tls", e, diagnosticStarted)
 		raw.Close()
 		return nil, e
 	}

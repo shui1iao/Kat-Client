@@ -48,7 +48,7 @@ func TestEgressTransitionClosesOnlyOwnFlowsAndPreservesDocument(t *testing.T) {
 	peer := <-accepted
 	defer peer.Close()
 	// Test-injected loopback-only policy exercises lifecycle, not Windows APIs.
-	p := &clientegress.Policy{Options: clientegress.Options{Enabled: true, DNS: []string{}}}
+	p := &clientegress.Policy{Options: clientegress.Options{Enabled: true, DNS: []clientegress.DNSEndpoint{}}}
 	h.mu.Lock()
 	old := h.server
 	_, de := h.transitionEgressLocked(p, p.Options)

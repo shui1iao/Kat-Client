@@ -10,13 +10,14 @@ import (
 	A "github.com/shui1iao/Kat/internal/anytls"
 	"github.com/shui1iao/Kat/internal/route"
 	"github.com/shui1iao/Kat/internal/snell"
+	"github.com/shui1iao/Kat/internal/userio"
 	VX "github.com/shui1iao/Kat/internal/vlessx"
 	VT "github.com/shui1iao/Kat/internal/vtransport"
 	XH "github.com/shui1iao/Kat/internal/xhttp"
 	"io"
 	"net"
 	"net/netip"
-	"os"
+
 	"time"
 )
 
@@ -145,6 +146,8 @@ type Config struct {
 	clientIPv6        *bool
 	clientEgress      *ClientEgress
 	clientEgressSet   bool
+	clientDNS         *clientDNSPolicy
+	clientDNSSet      bool
 	clientProbe       *bool
 	DNS               *DNSOptions     `json:"dns,omitempty"`
 	Routing           *RoutingOptions `json:"routing,omitempty"`
@@ -180,7 +183,7 @@ type Config struct {
 
 func Load(path string) (Config, error) {
 	var c Config
-	f, e := os.Open(path)
+	f, e := userio.Open(path)
 	if e != nil {
 		return c, errors.New("cannot open configuration")
 	}
@@ -445,7 +448,7 @@ func (c *Config) Validate() error {
 			if in.TLS.extended() {
 				return errors.New("extended TLS options apply to Trojan and AnyTLS inbounds only")
 			}
-			cert, e := tls.LoadX509KeyPair(in.TLS.Cert, in.TLS.Key)
+			cert, e := userio.LoadX509KeyPair(in.TLS.Cert, in.TLS.Key)
 			if e != nil {
 				return errors.New("cannot load TLS certificate/key")
 			}

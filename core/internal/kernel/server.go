@@ -12,7 +12,6 @@ import (
 	"github.com/shui1iao/Kat/internal/ss"
 	"github.com/shui1iao/Kat/internal/stats"
 	"github.com/shui1iao/Kat/internal/tlscert"
-	"io"
 	"net"
 	"net/netip"
 	"sync"
@@ -130,14 +129,16 @@ type core struct {
 // generation; its exported methods always act on the running process.
 type Server struct {
 	*core
-	rt          *routingRuntime
-	dns         *internalDNS
-	cfg         Config
-	pool        *bufferPool
-	keys        *statKeys
-	listeners   []net.Listener
-	ssListeners []*ssUDPListener
-	byListen    map[string]int
+	rt           *routingRuntime
+	dns          *internalDNS
+	directDNS    *internalDNS
+	bootstrapDNS *internalDNS
+	cfg          Config
+	pool         *bufferPool
+	keys         *statKeys
+	listeners    []net.Listener
+	ssListeners  []*ssUDPListener
+	byListen     map[string]int
 
 	id           uint64
 	refs         atomic.Int64 // live connections/associations; -1 once released
@@ -511,6 +512,7 @@ func (s *Server) handle(raw net.Conn, in Inbound) {
 			cc := c
 			early = func() error { return req.respond(cc, nil, true) }
 		}
+		ctx = withOriginalTarget(ctx, req.Target)
 		sctx, sc, first, responded, e := s.sniffTCP(ctx, c, req.Target, early)
 		if e != nil {
 			return
@@ -525,10 +527,11 @@ func (s *Server) handle(raw net.Conn, in Inbound) {
 			}
 			return
 		}
+		failureStage := "response"
 		defer func() {
-			if e != nil && !errors.Is(e, io.EOF) {
+			if !quietFailure(e) && failureStage != "relay" {
 				f.setError(e)
-				f.connectionOutcome(e)
+				f.connectionOutcome(e, failureStage)
 			}
 			f.end("ok")
 		}()
@@ -541,9 +544,11 @@ func (s *Server) handle(raw net.Conn, in Inbound) {
 				return
 			}
 		}
+		failureStage = "initial_write"
 		if e = forwardSniffed(fctx, out, first); e != nil {
 			return
 		}
+		failureStage = "relay"
 		// fctx is s.ctx plus values (and, with details, a per-connection cancel).
 		if in.ssRuntime != nil && in.ssRuntime.v2022 {
 			e = s.relaySS2022(fctx, c, ss2022DownTarget(in, out))
@@ -565,11 +570,20 @@ func (s *Server) handle(raw net.Conn, in Inbound) {
 	}
 }
 func (s *Server) dial(ctx context.Context, a Address) (conn net.Conn, err error) {
+	observedStart := time.Now()
+	ctx = s.diagnosticContext(ctx)
+	defer func() { s.runtimeFailure(ctx, "connect", "unknown", err, observedStart) }()
 	defer func() {
 		if f := flowOf(ctx); f != nil {
 			f.connectionOutcome(err)
 		}
 	}()
+	if _, ok := ctx.Value(originalTargetKey{}).(Address); !ok {
+		ctx = withOriginalTarget(ctx, a)
+	}
+	if ip, e := netip.ParseAddr(a.Host); e == nil && s.cfg.clientDNS != nil && ClientFakeIP(ip) {
+		return nil, errFakeIP
+	}
 	if s.controlledDNS(a) {
 		return s.dnsTCP(ctx), nil
 	}
@@ -592,7 +606,7 @@ func (s *Server) dial(ctx context.Context, a Address) (conn net.Conn, err error)
 	defer func() { s.dialSlots.release(); s.counters.Dials.Add(-1) }()
 	f := flowOf(parent)
 	// override_destination: an IP target becomes the sniffed domain.
-	a = sniffOf(parent).target(a)
+	a = sniffTarget(parent, a)
 	if !s.networkPolicy() {
 		f.route(0, []string{"direct"})
 		c, e := s.directDialer().DialContext(ctx, "tcp", a.String())
@@ -704,6 +718,24 @@ func (s *Server) Close(ctx context.Context) error {
 	k.reloadMu.Unlock()
 	k.stopProviders()
 	k.nativeCancel()
+	if cur := k.gen.Load(); cur != nil {
+		if cur.bgCancel != nil {
+			cur.bgCancel()
+		}
+		if cur.clientCancel != nil {
+			cur.clientCancel()
+		}
+	}
+	k.gensMu.Lock()
+	for _, g := range k.gens {
+		if g.bgCancel != nil {
+			g.bgCancel()
+		}
+		if g.clientCancel != nil {
+			g.clientCancel()
+		}
+	}
+	k.gensMu.Unlock()
 	k.accepts.Wait()
 	done := make(chan struct{})
 	go func() { k.wg.Wait(); close(done) }()
@@ -713,6 +745,13 @@ func (s *Server) Close(ctx context.Context) error {
 	case <-ctx.Done():
 		result = ctx.Err()
 		k.cancel()
+		k.flowMu.Lock()
+		for _, f := range k.flows {
+			if f.cancel != nil {
+				f.cancel()
+			}
+		}
+		k.flowMu.Unlock()
 		k.mu.Lock()
 		var toClose []net.Conn
 		for c, state := range k.active {
@@ -738,6 +777,15 @@ func (s *Server) Close(ctx context.Context) error {
 	// Every connection has ended: the current generation is the last one.
 	if cur := k.gen.Load(); cur != nil {
 		cur.supersede()
+	}
+	k.gensMu.Lock()
+	var restGens []*Server
+	for _, g := range k.gens {
+		restGens = append(restGens, g)
+	}
+	k.gensMu.Unlock()
+	for _, g := range restGens {
+		g.supersede()
 	}
 	k.events.shutdown()
 	k.failures.shutdown()

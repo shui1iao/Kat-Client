@@ -1,0 +1,12 @@
+--- before/third_party/reality/tls.go
++++ after/third_party/reality/tls.go
+@@ -215,6 +215,9 @@
+ 
+ 	hs := serverHandshakeStateTLS13{
+ 		c: &Conn{
++			// Initialize the standard TLS control-record budget independently of
++			// an optional compatibility CCS having triggered retryReadRecord.
++			MaxUselessRecords: maxUselessRecords,
+ 			conn: &MirrorConn{
+ 				Mutex:  mutex,
+ 				Conn:   conn,

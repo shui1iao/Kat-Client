@@ -1,0 +1,27 @@
+{"id":"hello-1","method":"hello","params":{}}
+{"id":"document-1","method":"document.get","params":{}}
+{"id":"validate-1","method":"document.validate","params":{"text":"{\"schema_version\":1,\"client\":{\"mode\":\"rule\",\"global_group\":\"\",\"probe_url\":\"http://127.0.0.1:18080/\",\"http_port\":7890,\"socks_port\":7891},\"kernel\":{\"dns\":{\"server\":\"system\"}}}"}}
+{"id":"status-1","method":"status","params":{}}
+{"id":"probe-1","method":"probe.node","params":{"name":"direct","url":"http://127.0.0.1:18080/"}}
+{"id":"stop-1","method":"core.stop","params":{}}
+{"id":"host-egress-read","method":"network.egress.get","params":{}}
+{"id":"status-stopped-example","ok":true,"result":{"runtime":{"state":"stopped","core_version":"0.7.1","uptime_ms":0,"pid":null},"mode":"rule","groups":[],"nodes":[],"traffic":{"up_rate":0,"down_rate":0,"total_up":0,"total_down":0,"today_up":0,"today_down":0,"daily":[],"groups":[],"rules":[],"rules_since":null},"connections":{"active":0,"items":[],"total":null},"providers":[],"local":{"http":{"host":"127.0.0.1","port":7890,"ready":false},"socks":{"host":"127.0.0.1","port":7891,"ready":false}}}}
+{"id":"logs-empty","method":"logs.get","params":{"after":0,"limit":200}}
+{"id":"logs-empty","ok":true,"result":{"entries":[],"next_seq":0,"dropped":0}}
+{"id":"validate-probe-settings","method":"document.validate","params":{"text":"{\"schema_version\":1,\"client\":{\"mode\":\"rule\",\"global_group\":\"\",\"probe_url\":\"http://127.0.0.1:18080/probe\",\"http_port\":7890,\"socks_port\":7891,\"probe_timeout\":\"500ms\",\"probe_round_timeout\":\"2s\",\"probe_concurrency\":2},\"kernel\":{\"dns\":{\"server\":\"system\"}}}"}}
+{"id":"validate-yaml","method":"document.validate","params":{"text":"schema_version: 1\nclient:\n  mode: rule\n  global_group: \"\"\n  probe_url: http://127.0.0.1:18080/probe\n  http_port: 7890\n  socks_port: 7891\nkernel:\n  dns: {server: system}\n","format":"yaml"}}
+{"id":"connections","method":"connections.list","params":{"closed_limit":200}}
+{"id":"connection-log","method":"logs.connections","params":{"after":0,"limit":200}}
+{"id":"dns","method":"dns.query","params":{"name":"example.com","type":"both"}}
+{"id":"resources","method":"resources.list","params":{}}
+{"id":"refresh-rule","method":"resources.refresh","params":{"kind":"rule_set","name":"ads"}}
+{"id":"sniff","method":"document.validate","params":{"text":"{\"schema_version\":1,\"client\":{\"mode\":\"rule\",\"global_group\":\"\",\"probe_url\":\"https://www.gstatic.com/generate_204\",\"http_port\":7890,\"socks_port\":7891,\"sniff\":{\"enabled\":true,\"override_destination\":false}},\"kernel\":{}}","format":"json"}}
+{"id":"connections","ok":true,"result":{"active":[],"closed":[],"total":null}}
+{"id":"connection-log","ok":true,"result":{"entries":[],"next_seq":0,"dropped":0}}
+{"id":"dns","ok":true,"result":{"name":"example.com","addresses":[{"addr":"192.0.2.1","type":"A"}],"server":"UDP 8.8.8.8","duration_ms":8,"cached":false}}
+{"id":"resources","ok":true,"result":{"items":[{"kind":"rule_set","name":"ads","updated_at":null,"size_bytes":null,"entries":null,"state":"pending"}]}}
+{"id":"refresh-rule","ok":false,"error":{"code":"unsupported","message":"No configured safe remote update path for resource","path":"params"}}
+{"id":"all-probe","method":"probe.all","params":{}}
+{"id":"selected-close","method":"connections.close","params":{"ids":[17,18]}}
+{"id":"selected-close","ok":true,"result":{"closed":2}}
+{"id":"legacy-preview","method":"subscription.migrate","params":{"name":"old"}}

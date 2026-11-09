@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/shui1iao/Kat/internal/userio"
 	"io"
 	"os"
 	"path/filepath"
@@ -194,6 +195,29 @@ func (r *Registry) Snapshot() Snapshot {
 	return s
 }
 
+// ClientSnapshot is the cumulative projection consumed by client status.
+// It preserves Snapshot's visible key order and atomic counter reads without
+// constructing inbound, outbound or total traffic that client status discards.
+type ClientSnapshot struct {
+	Since  time.Time   `json:"since"`
+	Groups []Named     `json:"groups"`
+	Rules  []NamedRule `json:"rules"`
+}
+
+func (r *Registry) ClientSnapshot() ClientSnapshot {
+	s := ClientSnapshot{Since: time.Unix(0, r.since.Load()), Groups: []Named{}, Rules: []NamedRule{}}
+	ks := r.keys.Load()
+	for _, k := range ks.order.groups {
+		s.Groups = append(s.Groups, Named{k, ks.groups[k].Load()})
+	}
+	for _, k := range ks.order.rules {
+		c := ks.rules[k]
+		t := c.Load()
+		s.Rules = append(s.Rules, NamedRule{k, RuleTraffic{Hits: c.hits.Load(), Up: t.Up, Down: t.Down}})
+	}
+	return s
+}
+
 // Reset zeroes every cumulative counter (not the per-connection counters).
 func (r *Registry) Reset(now time.Time) {
 	r.Total.reset()
@@ -277,7 +301,7 @@ const maxFileBytes = 16 << 20
 // zero; the caller decides how to report it. Keys that no longer exist in
 // the configuration are dropped.
 func (r *Registry) Load(path string) error {
-	f, e := os.Open(path)
+	f, e := userio.Open(path)
 	if errors.Is(e, os.ErrNotExist) {
 		return nil
 	}
@@ -354,10 +378,10 @@ func (r *Registry) Save(path string, now time.Time) error {
 	}
 	b = append(b, '\n')
 	dir := filepath.Dir(path)
-	if e := os.MkdirAll(dir, 0o700); e != nil {
+	if e := userio.MkdirAll(dir, 0o700); e != nil {
 		return e
 	}
-	tmp, e := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
+	tmp, e := userio.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
 	if e != nil {
 		return e
 	}
@@ -366,7 +390,7 @@ func (r *Registry) Save(path string, now time.Time) error {
 	defer func() {
 		if !ok {
 			tmp.Close()
-			os.Remove(name)
+			userio.Remove(name)
 		}
 	}()
 	if e := tmp.Chmod(0o600); e != nil && !isUnsupported(e) {
@@ -381,7 +405,7 @@ func (r *Registry) Save(path string, now time.Time) error {
 	if e := tmp.Close(); e != nil {
 		return e
 	}
-	if e := os.Rename(name, path); e != nil {
+	if e := userio.Rename(name, path); e != nil {
 		return e
 	}
 	ok = true
@@ -393,7 +417,7 @@ func (r *Registry) Save(path string, now time.Time) error {
 // can be inspected; the next save then starts a fresh file.
 func QuarantineCorrupt(path string, now time.Time) (string, error) {
 	to := fmt.Sprintf("%s.corrupt-%s", path, now.UTC().Format("20060102T150405Z"))
-	return to, os.Rename(path, to)
+	return to, userio.Rename(path, to)
 }
 
 func bytesReader(b []byte) *bytes.Reader { return bytes.NewReader(b) }

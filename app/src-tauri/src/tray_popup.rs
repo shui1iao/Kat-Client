@@ -48,7 +48,7 @@ pub fn ensure(app:&tauri::AppHandle)->Result<WebviewWindow>{
 #[derive(Debug,Clone)]
 pub struct Popup {
  pub epoch:u64,pub layout:u64,pub phase:&'static str,pub focus_seen:bool,
- point:tauri::PhysicalPosition<f64>,work:tauri::PhysicalRect<i32,u32>,
+ point:tauri::PhysicalPosition<f64>,anchor:Option<(i64,i64,i64,i64)>,work:tauri::PhysicalRect<i32,u32>,
  scale:f64,client:tauri::PhysicalSize<u32>,limit:tauri::PhysicalSize<u32>,
  sample:Option<(f64,f64,f64,u32,u32)>,last:Option<(u32,u32,i32,i32)>,adjustments:u8,
 }
@@ -73,6 +73,18 @@ fn position(p:&Popup,size:tauri::PhysicalSize<u32>)->tauri::PhysicalPosition<i32
  let left=i64::from(p.work.position.x);let top=i64::from(p.work.position.y);
  let right=left+i64::from(p.work.size.width);let bottom=top+i64::from(p.work.size.height);
  let gap=(2.0*p.scale).ceil() as i64;
+ // Shell_NotifyIconGetRect -> tray-icon -> Tauri preserves physical pixels.
+ // The icon's whole rectangle, not the click point, is the exclusion anchor.
+ if let Some((x,y,r,b))=p.anchor{
+  let w=i64::from(size.width);let h=i64::from(size.height);
+  let cx=x+(r-x)/2;let cy=y+(b-y)/2;
+  // Nearest work-area edge identifies the taskbar even with auto-hide (where
+  // work area can equal monitor bounds). Prefer the inward side of that edge.
+  let distances=[(cy-top).abs(),(bottom-cy).abs(),(cx-left).abs(),(right-cx).abs()];
+  let edge=distances.iter().enumerate().min_by_key(|(_,d)|*d).map(|(i,_)|i).unwrap_or(1);
+  let (px,py)=match edge{0=>(cx-w/2,b+gap),1=>(cx-w/2,y-gap-h),2=>(r+gap,cy-h/2),_=>(x-gap-w,cy-h/2)};
+  return tauri::PhysicalPosition::new(px.clamp(left,right-w) as i32,py.clamp(top,bottom-h) as i32);
+ }
  let x=p.point.x.round() as i64;let y=p.point.y.round() as i64;
  fn axis(point:i64,low:i64,high:i64,length:i64,gap:i64)->i64{
   let after=point+gap;let before=point-gap-length;
@@ -84,19 +96,24 @@ fn position(p:&Popup,size:tauri::PhysicalSize<u32>)->tauri::PhysicalPosition<i32
   axis(y,top,bottom,i64::from(size.height),gap) as i32)
 }
 // Called only on the main thread, after ensure() has run on the blocking worker.
-pub fn prepare(app:&tauri::AppHandle,window:&WebviewWindow,point:tauri::PhysicalPosition<f64>,epoch:u64)->Result<()>{
+pub fn prepare(app:&tauri::AppHandle,window:&WebviewWindow,rect:tauri::Rect,point:tauri::PhysicalPosition<f64>,epoch:u64)->Result<()>{
  let state=app.state::<crate::desktop::Host>();
  if state.tray_state.lock().unwrap().popup_epoch!=epoch{return Ok(());}
  window.hide().map_err(|_|failed())?;
  let main=app.get_webview_window("main").ok_or_else(failed)?;
  if !point.x.is_finite()||!point.y.is_finite(){return Err(failed());}
- let monitor=main.monitor_from_point(point.x,point.y).map_err(|_|failed())?.ok_or_else(failed)?;
+ // Do not guess a scale for Logical coordinates: Windows native events are
+ // Physical. Unsupported/empty rectangles fall back to the physical cursor.
+ let anchor=match (rect.position,rect.size){
+  (tauri::Position::Physical(p),tauri::Size::Physical(s)) if s.width>0&&s.height>0&&s.width<=1024&&s.height<=1024=>Some((i64::from(p.x),i64::from(p.y),i64::from(p.x)+i64::from(s.width),i64::from(p.y)+i64::from(s.height))),_=>None};
+ let (mx,my)=anchor.map(|(x,y,r,b)|((x+(r-x)/2) as f64,(y+(b-y)/2) as f64)).unwrap_or((point.x,point.y));
+ let monitor=main.monitor_from_point(mx,my).map_err(|_|failed())?.ok_or_else(failed)?;
  let scale=monitor.scale_factor();let work=monitor.work_area().clone();
  if !scale.is_finite()||scale<=0.0||work.size.width==0||work.size.height==0{return Err(failed());}
  // These are preparation/available bounds, NOT the size of the visible menu.
  let limit=tauri::PhysicalSize::new(((360.0*scale).round() as u32).max(1).min(work.size.width),
   ((560.0*scale).round() as u32).max(1).min(work.size.height));
- let mut popup=Popup{epoch,layout:1,phase:"preparing",focus_seen:false,point,work,scale,client:limit,limit,
+ let mut popup=Popup{epoch,layout:1,phase:"preparing",focus_seen:false,point,anchor,work,scale,client:limit,limit,
   sample:None,last:None,adjustments:0};
  let pos=position(&popup,limit);
  window.set_position(pos).and_then(|_|window.set_size(limit)).and_then(|_|window.set_position(pos)).map_err(|_|failed())?;

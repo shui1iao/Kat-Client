@@ -9,8 +9,9 @@ enum IoFailure { Event, Start(u32), Complete(u32), Wait, Timeout, Stopped }
 impl IoFailure {
  fn error(self)->Error {match self {
   Self::Event=>Error::new("PIPE_IO","Cannot create pipe event"),
-  Self::Start(_)=>Error::new("PIPE_IO","Service pipe disconnected"),
-  Self::Complete(_)|Self::Wait=>Error::new("PIPE_IO","Service pipe operation failed"),
+  Self::Start(n)=>Error::new("PIPE_IO","Service pipe disconnected").native(n),
+  Self::Complete(n)=>Error::new("PIPE_IO","Service pipe operation failed").native(n),
+  Self::Wait=>Error::new("PIPE_IO","Service pipe operation failed"),
   Self::Timeout=>Error::new("PIPE_TIMEOUT","Service pipe operation timed out"),
   Self::Stopped=>Error::new("PIPE_IO","Service pipe operation cancelled"),
  }}
@@ -25,7 +26,7 @@ unsafe fn pending(h:HANDLE,ov:&OVERLAPPED,timeout:Option<u32>,stop:Option<&Atomi
   let left=deadline.map(|d|d.saturating_duration_since(std::time::Instant::now()).as_millis().min(u32::MAX as u128)as u32).unwrap_or(50);
   if left==0{cancel(h,ov);return Err(IoFailure::Timeout);}
   let wait=WaitForSingleObject(ov.hEvent,if stop.is_some(){left.min(50)}else{left});
-  if wait==WAIT_OBJECT_0 {let mut n=0;if GetOverlappedResult(h,ov,&mut n,0)==0{return Err(IoFailure::Complete(GetLastError()));}return Ok(n);}
+  if wait==WAIT_OBJECT_0 {let mut n=0;if GetOverlappedResult(h,ov,&mut n,0)==0{let e=GetLastError();if e==ERROR_IO_INCOMPLETE{std::thread::sleep(std::time::Duration::from_millis(1));continue;}return Err(IoFailure::Complete(e));}return Ok(n);}
   if wait!=WAIT_TIMEOUT{cancel(h,ov);return Err(IoFailure::Wait);}
  }
 }
@@ -40,11 +41,13 @@ fn transfer_raw(h:HANDLE,bytes:&mut[u8],write:bool,timeout:u32,stop:Option<&Atom
 fn exact_timeout(h:HANDLE,b:&mut[u8],write:bool,timeout:u32,stop:Option<&AtomicBool>)->Result<()>{
  let deadline=std::time::Instant::now()+std::time::Duration::from_millis(timeout as u64);let mut offset=0;
  while offset<b.len(){let left=deadline.saturating_duration_since(std::time::Instant::now()).as_millis().min(u32::MAX as u128)as u32;if left==0{return Err(Error::new("PIPE_TIMEOUT","Service pipe frame timed out"));}
-  let n=transfer_raw(h,&mut b[offset..],write,left,stop).map_err(IoFailure::error)?;if n==0{return Err(Error::new("PIPE_EOF","Service pipe closed"));}offset+=n;
+  let result=transfer_raw(h,&mut b[offset..],write,left,stop).map_err(IoFailure::error);
+  if result.is_err(){let mut d=crate::safe_log::RuntimeEvidence::new(if write{"ipc_write"}else{"ipc_read"},crate::safe_log::error_category(result.as_ref().err().unwrap().code.as_str()),"service_pipe");d.native=result.as_ref().err().and_then(|e|e.os_error);crate::safe_log::runtime_event(PIPE_ROLE.with(|r|r.get()),"diagnostics.collect",None,d);}
+  let n=result?;if n==0{return Err(Error::new("PIPE_EOF","Service pipe closed"));}offset+=n;
  }Ok(())
 }
 pub fn read(h:HANDLE,stop:&AtomicBool)->Result<Vec<u8>>{read_with_stop(h,3000,Some(stop))}
-fn read_timeout(h:HANDLE,timeout:u32)->Result<Vec<u8>>{read_with_stop(h,timeout,None)}
+pub(crate) fn read_timeout(h:HANDLE,timeout:u32)->Result<Vec<u8>>{read_with_stop(h,timeout,None)}
 fn read_with_stop(h:HANDLE,timeout:u32,stop:Option<&AtomicBool>)->Result<Vec<u8>>{let mut len=[0u8;4];exact_timeout(h,&mut len,false,timeout,stop)?;let n=u32::from_le_bytes(len)as usize;if n==0||n>PIPE_LIMIT{return Err(Error::new("PIPE_LIMIT","Invalid service frame length"));}let mut b=vec![0;n];exact_timeout(h,&mut b,false,timeout,stop)?;Ok(b)}
 pub fn write(h:HANDLE,b:Vec<u8>)->Result<()>{write_with_stop(h,b,None)}
 fn write_with_stop(h:HANDLE,mut b:Vec<u8>,stop:Option<&AtomicBool>)->Result<()>{if b.len()>PIPE_LIMIT{return Err(Error::new("PIPE_LIMIT","Service frame too large"));}exact_timeout(h,&mut(b.len()as u32).to_le_bytes(),true,3000,stop)?;exact_timeout(h,&mut b,true,3000,stop)}
@@ -78,29 +81,25 @@ pub fn caller(h:HANDLE,bound_sid:&str,request:&ServiceRequest)->Result<(Identity
  let mut pid=0;let mut session=0;if GetNamedPipeClientProcessId(h,&mut pid)==0||GetNamedPipeClientSessionId(h,&mut session)==0{return Err(Error::new("CALLER_DENIED","Cannot verify pipe client process"));}
  if ImpersonateNamedPipeClient(h)==0{return Err(Error::new("CALLER_DENIED","Cannot impersonate pipe client"));}
  let mut token=std::ptr::null_mut();let opened=OpenThreadToken(GetCurrentThread(),TOKEN_QUERY,1,&mut token);let result=if opened!=0{let token=Handle(token);identity::token_identity(token.0)}else{Err(Error::new("CALLER_DENIED","Cannot verify pipe token"))};let reverted=RevertToSelf();if reverted==0{std::process::abort();}let id=result?;
- let gui_pid=if let ServiceRequest::Prepare{lease}=request{Some(lease.gui_pid)}else{None};authorize(bound_sid,&id.sid,id.session,session,pid,gui_pid)?;
+ let gui_pid=if let ServiceRequest::Prepare{lease,..}=request{Some(lease.gui_pid)}else{None};authorize(bound_sid,&id.sid,id.session,session,pid,gui_pid)?;
  let p=Handle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION|0x00100000,0,pid));if p.0.is_null()||identity::process_identity(p.0)?!=id||!security::same_path(&security::image(p.0)?,&identity::install_root()?.join("kat-desktop.exe")){return Err(Error::new("CALLER_DENIED","Only the installed bound-user GUI may control the service"));}
  security::approved_client(p.0,"kat-desktop.exe")?;
  Ok((id,pid))
 }}
-// A separate read-only role: never called for Status/Prepare/Commit/Disable.
-// Keep the existing GUI caller verifier above byte-for-byte unchanged.
-pub fn core_caller(h:HANDLE,bound_sid:&str,lease:&crate::service_protocol::Lease,owner:&Identity,root:&std::path::Path)->Result<()>{unsafe{
- let mut pid=0;let mut session=0;if GetNamedPipeClientProcessId(h,&mut pid)==0||GetNamedPipeClientSessionId(h,&mut session)==0||pid!=lease.core_pid{return Err(Error::new("CALLER_DENIED","Original-flow query requires the active core"));}
- if ImpersonateNamedPipeClient(h)==0{return Err(Error::new("CALLER_DENIED","Cannot verify core pipe token"));}
- let mut token=std::ptr::null_mut();let opened=OpenThreadToken(GetCurrentThread(),TOKEN_QUERY,1,&mut token);let result=if opened!=0{let token=Handle(token);identity::token_identity(token.0)}else{Err(Error::new("CALLER_DENIED","Cannot verify core token"))};if RevertToSelf()==0{std::process::abort();}let id=result?;
- authorize(bound_sid,&id.sid,id.session,session,pid,Some(lease.core_pid))?;
- if id!=*owner{return Err(Error::new("CALLER_DENIED","Core user/session does not match its lease"));}
- let p=identity::open_verified(pid,lease.core_stamp,&id)?;security::approved_client(p.0,"kat-client-core.exe")?;
- crate::service_protocol::authorize_core_lookup(bound_sid,&id.sid,id.session,session,pid,identity::process_stamp(p.0)?,lease,security::same_path(&security::image(p.0)?,&root.join("kat-client-core.exe")),WaitForSingleObject(p.0,0)==WAIT_TIMEOUT)?;
- Ok(())
-}}
-pub fn client(request:&ServiceRequest,expected_server:u32)->Result<serde_json::Value>{unsafe{
+pub fn client(request:&ServiceRequest,expected_server:u32)->Result<serde_json::Value>{let _diagnostic_role=PipeRole::gui();unsafe{
  if expected_server==0{return Err(Error::new("SERVICE_NOT_READY","Network service is not running"));}
- let p=wide(PIPE);if WaitNamedPipeW(p.as_ptr(),3000)==0{return Err(Error::new("SERVICE_NOT_READY","Network service pipe is unavailable"));}
- let h=Handle(CreateFileW(p.as_ptr(),GENERIC_READ|GENERIC_WRITE,0,std::ptr::null(),OPEN_EXISTING,FILE_FLAG_OVERLAPPED|SECURITY_SQOS_PRESENT|SECURITY_IDENTIFICATION,std::ptr::null_mut()));if h.0==INVALID_HANDLE_VALUE{return Err(Error::new("PIPE_CONNECT","Cannot connect to network service"));}
+ let p=wide(PIPE);let deadline=std::time::Instant::now()+std::time::Duration::from_secs(3);
+ let h=loop{
+  let h=Handle(CreateFileW(p.as_ptr(),GENERIC_READ|GENERIC_WRITE,0,std::ptr::null(),OPEN_EXISTING,FILE_FLAG_OVERLAPPED|SECURITY_SQOS_PRESENT|SECURITY_IDENTIFICATION,std::ptr::null_mut()));
+  if h.0!=INVALID_HANDLE_VALUE{break h;}
+  let e=GetLastError();if e!=ERROR_PIPE_BUSY&&e!=ERROR_FILE_NOT_FOUND{return Err(Error::new("PIPE_CONNECT","Cannot connect to network service").native(e));}
+  if std::time::Instant::now()>=deadline{return Err(Error::new("SERVICE_NOT_READY","Network service pipe is unavailable"));}
+  std::thread::sleep(std::time::Duration::from_millis(10));
+ };
  let mut server=0;if GetNamedPipeServerProcessId(h.0,&mut server)==0||server!=expected_server{return Err(Error::new("SERVICE_IDENTITY","Network pipe server identity mismatch"));}
- let b=serde_json::to_vec(request).map_err(|_|Error::new("PIPE_PROTOCOL","Invalid service request"))?;write(h.0,b)?;let response:ServiceReply=serde_json::from_slice(&read_timeout(h.0,if matches!(request,ServiceRequest::Commit{..}){25000}else{10000})?).map_err(|_|Error::new("PIPE_PROTOCOL","Invalid service response"))?;
+ if matches!(request,ServiceRequest::Elevated{..}){let _service=super::elevated::verify_service(server)?;}
+ let started=std::time::Instant::now();let b=serde_json::to_vec(request).map_err(|_|Error::new("PIPE_PROTOCOL","Invalid service request"))?;let request_bytes=b.len()as u64;write(h.0,b)?;let frame=read_timeout(h.0,if matches!(request,ServiceRequest::Commit{..}){25000}else{10000})?;let response:ServiceReply=serde_json::from_slice(&frame).map_err(|_|Error::new("PIPE_PROTOCOL","Invalid service response"))?;
+ let mut d=crate::safe_log::RuntimeEvidence::new("ipc_response",if response.ok{"ok"}else{"unknown"},"service_pipe");d.request_bytes=Some(request_bytes);d.response_bytes=Some(frame.len()as u64);d.elapsed_ms=Some(started.elapsed().as_millis().min(9007199254740991)as u64);d.native=response.error.as_ref().and_then(|e|e.os_error);crate::safe_log::runtime_event(crate::log_context::Component::Gui,"diagnostics.collect",None,d);
  if response.ok{Ok(response.result)}else{Err(response.error.unwrap_or_else(||Error::new("SERVICE_FAILED","Network service request failed")))}
 }}
 
@@ -124,6 +123,20 @@ mod tests {
    std::thread::sleep(Duration::from_millis(40));assert_eq!(read_timeout(client.0,1000).unwrap(),expected);drop(client);assert!(worker.join().unwrap().is_ok());
   }
  }
+ #[test]fn original_request_receives_complete_limit_reply_before_disconnect(){
+  let(server,client)=pair();let request=serde_json::to_vec(&ServiceRequest::SafeHistory).unwrap();let original=request.clone();
+  let mut reply=ServiceReply{ok:true,result:serde_json::json!({"bytes":""}),error:None};
+  let overhead=serde_json::to_vec(&reply).unwrap().len();reply.result["bytes"]=serde_json::json!("x".repeat(PIPE_LIMIT-overhead));
+  let bytes=serde_json::to_vec(&reply).unwrap();assert_eq!(bytes.len(),PIPE_LIMIT);let expected=bytes.clone();
+  let worker=std::thread::spawn(move||{let server=server;let received=read(server.0,&AtomicBool::new(false)).unwrap();assert_eq!(received,original);assert!(matches!(crate::service_protocol::decode(&received).unwrap(),ServiceRequest::SafeHistory));let result=reply_and_drain(server.0,bytes,&AtomicBool::new(false));unsafe{DisconnectNamedPipe(server.0);}result});
+  write(client.0,request).unwrap();std::thread::sleep(Duration::from_millis(40));
+  let received=read_timeout(client.0,3000).unwrap();assert_eq!(received,expected);assert!(serde_json::from_slice::<ServiceReply>(&received).unwrap().ok);drop(client);assert!(worker.join().unwrap().is_ok());
+ }
+ #[test]fn invalid_length_and_partial_body_never_report_a_complete_frame(){
+  for length in [0,(PIPE_LIMIT+1)as u32]{let(server,client)=pair();exact_timeout(client.0,&mut length.to_le_bytes(),true,1000,None).unwrap();assert_eq!(read_timeout(server.0,100).unwrap_err().code,"PIPE_LIMIT");}
+  let(server,client)=pair();exact_timeout(client.0,&mut 8u32.to_le_bytes(),true,1000,None).unwrap();exact_timeout(client.0,&mut *b"abc",true,1000,None).unwrap();
+  let before=Instant::now();assert_eq!(read_timeout(server.0,100).unwrap_err().code,"PIPE_TIMEOUT");assert!(before.elapsed()<Duration::from_secs(2));
+ }
  #[test]fn nonclosing_peer_times_out_and_extra_request_is_rejected(){
   let(server,client)=pair();let stop=AtomicBool::new(false);write_with_stop(server.0,b"reply".to_vec(),Some(&stop)).unwrap();
   let before=Instant::now();assert_eq!(wait_peer_close(server.0,&stop,100).unwrap_err().code,"PIPE_TIMEOUT");assert!(before.elapsed()<Duration::from_secs(2));
@@ -142,3 +155,13 @@ mod tests {
   assert_eq!(write(server.0,vec![0;PIPE_LIMIT+1]).unwrap_err().code,"PIPE_LIMIT");
  }
 }
+
+thread_local!{static PIPE_ROLE:std::cell::Cell<crate::log_context::Component>=const{std::cell::Cell::new(crate::log_context::Component::Service)};}
+struct PipeRole(crate::log_context::Component);impl PipeRole{fn gui()->Self{Self(PIPE_ROLE.with(|r|r.replace(crate::log_context::Component::Gui)))}}impl Drop for PipeRole{fn drop(&mut self){PIPE_ROLE.with(|r|r.set(self.0));}}
+
+// Raw byte stream helpers for the fixed private stderr channel, not JSON frames.
+pub(crate) fn stream_accept(h:HANDLE,stop:&AtomicBool,timeout:u32)->Result<()>{unsafe{
+ let event=Handle(CreateEventW(std::ptr::null(),1,0,std::ptr::null()));if event.0.is_null(){return Err(Error::new("PIPE_IO","Cannot create stream event"));}let mut ov=OVERLAPPED::default();ov.hEvent=event.0;
+ if ConnectNamedPipe(h,&mut ov)==0{let e=GetLastError();if e!=ERROR_PIPE_CONNECTED{if e!=ERROR_IO_PENDING{return Err(Error::new("PIPE_CONNECT","Cannot accept stream peer").native(e));}pending(h,&ov,Some(timeout),Some(stop)).map_err(IoFailure::error)?;}}Ok(())
+}}
+pub(crate) fn stream_read(h:HANDLE,b:&mut[u8],timeout:u32,stop:&AtomicBool)->Result<usize>{match transfer_raw(h,b,false,timeout,Some(stop)){Ok(n)=>Ok(n),Err(IoFailure::Start(ERROR_BROKEN_PIPE|ERROR_PIPE_NOT_CONNECTED))|Err(IoFailure::Complete(ERROR_BROKEN_PIPE|ERROR_PIPE_NOT_CONNECTED))=>Ok(0),Err(e)=>Err(e.error())}}

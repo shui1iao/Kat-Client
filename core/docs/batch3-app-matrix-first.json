@@ -1,0 +1,386 @@
+[
+  {
+    "app": "sing-box",
+    "protocol": "socks5",
+    "method": null,
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "sing-box",
+    "protocol": "shadowsocks",
+    "method": "aes-128-gcm",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "sing-box",
+    "protocol": "shadowsocks",
+    "method": "aes-256-gcm",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "sing-box",
+    "protocol": "shadowsocks",
+    "method": "chacha20-ietf-poly1305",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "sing-box",
+    "protocol": "shadowsocks",
+    "method": "2022-blake3-aes-128-gcm",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "sing-box",
+    "protocol": "shadowsocks",
+    "method": "2022-blake3-aes-256-gcm",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "sing-box",
+    "protocol": "shadowsocks",
+    "method": "2022-blake3-chacha20-poly1305",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "sing-box",
+    "protocol": "trojan",
+    "method": null,
+    "tls": true,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "sing-box",
+    "protocol": "vless",
+    "method": null,
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "sing-box",
+    "protocol": "vless",
+    "method": null,
+    "tls": true,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "sing-box",
+    "protocol": "anytls",
+    "method": null,
+    "tls": true,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "sequential_streams": "PASS",
+    "concurrent_streams": "PASS (app may use multiple TLS sessions)",
+    "status": "PASS"
+  },
+  {
+    "app": "sing-box",
+    "protocol": "snell",
+    "method": null,
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "sequential_requests": "PASS (physical reuse separately proven by library peer)",
+    "status": "PASS"
+  },
+  {
+    "app": "sing-box",
+    "protocol": "snell",
+    "method": null,
+    "tls": false,
+    "obfs": "http",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "sequential_requests": "PASS (physical reuse separately proven by library peer)",
+    "status": "PASS"
+  },
+  {
+    "app": "mihomo",
+    "protocol": "socks5",
+    "method": null,
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "mihomo",
+    "protocol": "shadowsocks",
+    "method": "aes-128-gcm",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "mihomo",
+    "protocol": "shadowsocks",
+    "method": "aes-256-gcm",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "mihomo",
+    "protocol": "shadowsocks",
+    "method": "chacha20-ietf-poly1305",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "mihomo",
+    "protocol": "shadowsocks",
+    "method": "2022-blake3-aes-128-gcm",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "mihomo",
+    "protocol": "shadowsocks",
+    "method": "2022-blake3-aes-256-gcm",
+    "tls": false,
+    "obfs": "none",
+    "status": "FAIL",
+    "error": "[Errno 104] Connection reset by peer",
+    "app_log": "time=\"2026-10-18T01:14:00.823480095+08:00\" level=info msg=\"Start initial configuration in progress\"\ntime=\"2026-10-18T01:14:00.823690789+08:00\" level=info msg=\"Geodata Loader mode: memconservative\"\ntime=\"2026-10-18T01:14:00.823704242+08:00\" level=info msg=\"Geosite Matcher implementation: succinct\"\ntime=\"2026-10-18T01:14:00.823927252+08:00\" level=info msg=\"Initial configuration complete, total time: 0ms\"\n"
+  },
+  {
+    "app": "mihomo",
+    "protocol": "shadowsocks",
+    "method": "2022-blake3-chacha20-poly1305",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "mihomo",
+    "protocol": "trojan",
+    "method": null,
+    "tls": true,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "mihomo",
+    "protocol": "vless",
+    "method": null,
+    "tls": false,
+    "obfs": "none",
+    "status": "FAIL",
+    "error": "unexpected EOF",
+    "app_log": "time=\"2026-10-18T01:14:02.386799553+08:00\" level=info msg=\"Start initial configuration in progress\"\ntime=\"2026-10-18T01:14:02.387096844+08:00\" level=info msg=\"Geodata Loader mode: memconservative\"\ntime=\"2026-10-18T01:14:02.387116625+08:00\" level=info msg=\"Geosite Matcher implementation: succinct\"\ntime=\"2026-10-18T01:14:02.387361802+08:00\" level=info msg=\"Initial configuration complete, total time: 0ms\"\n"
+  },
+  {
+    "app": "mihomo",
+    "protocol": "vless",
+    "method": null,
+    "tls": true,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "NOT_CONFIGURABLE_AS_CMD2: fixed app forces XUDP/packetaddr",
+    "status": "PASS"
+  },
+  {
+    "app": "mihomo",
+    "protocol": "anytls",
+    "method": null,
+    "tls": true,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "sequential_streams": "PASS",
+    "concurrent_streams": "PASS (app may use multiple TLS sessions)",
+    "status": "PASS"
+  },
+  {
+    "app": "mihomo",
+    "protocol": "snell",
+    "method": null,
+    "tls": false,
+    "obfs": "none",
+    "status": "FAIL",
+    "error": "app exited early",
+    "app_log": "time=\"2026-10-18T01:14:03.963993199+08:00\" level=info msg=\"Start initial configuration in progress\"\ntime=\"2026-10-18T01:14:03.964295634+08:00\" level=fatal msg=\"Parse config error: proxy 0: snell 127.0.0.1:40303 obfs mode error: none\"\n"
+  },
+  {
+    "app": "mihomo",
+    "protocol": "snell",
+    "method": null,
+    "tls": false,
+    "obfs": "http",
+    "status": "FAIL",
+    "error": "unexpected EOF",
+    "app_log": "time=\"2026-10-18T01:14:04.465724236+08:00\" level=info msg=\"Start initial configuration in progress\"\ntime=\"2026-10-18T01:14:04.466059092+08:00\" level=info msg=\"Geodata Loader mode: memconservative\"\ntime=\"2026-10-18T01:14:04.466083148+08:00\" level=info msg=\"Geosite Matcher implementation: succinct\"\ntime=\"2026-10-18T01:14:04.466335349+08:00\" level=info msg=\"Initial configuration complete, total time: 0ms\"\n"
+  },
+  {
+    "app": "xray",
+    "protocol": "socks5",
+    "method": null,
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "xray",
+    "protocol": "shadowsocks",
+    "method": "aes-128-gcm",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "xray",
+    "protocol": "shadowsocks",
+    "method": "aes-256-gcm",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "xray",
+    "protocol": "shadowsocks",
+    "method": "chacha20-ietf-poly1305",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "xray",
+    "protocol": "shadowsocks",
+    "method": "2022-blake3-aes-128-gcm",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "xray",
+    "protocol": "shadowsocks",
+    "method": "2022-blake3-aes-256-gcm",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "xray",
+    "protocol": "shadowsocks",
+    "method": "2022-blake3-chacha20-poly1305",
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "xray",
+    "protocol": "trojan",
+    "method": null,
+    "tls": true,
+    "obfs": "none",
+    "status": "FAIL",
+    "error": "[Errno 104] Connection reset by peer",
+    "app_log": "Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.9 linux/amd64)\nA unified platform for anti-censorship.\n2026/10/18 01:14:08.698710 [Info] infra/conf/serial: Reading config: &{Name:/opt/proxy-kernel/.tmp/tmpgs1g8i_l/33/client.json Format:json}\n2026/10/18 01:14:08.700444 [Warning] common/errors: The feature Trojan (with no Flow, etc.) is deprecated, not recommended for using and might be removed. Please migrate to VLESS with Flow & Seed as soon as possible.\n"
+  },
+  {
+    "app": "xray",
+    "protocol": "vless",
+    "method": null,
+    "tls": false,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "xray",
+    "protocol": "vless",
+    "method": null,
+    "tls": true,
+    "obfs": "none",
+    "tcp": "PASS",
+    "udp": "PASS",
+    "status": "PASS"
+  },
+  {
+    "app": "xray",
+    "protocol": "anytls",
+    "obfs": "none",
+    "status": "NOT_SUPPORTED_BY_APP"
+  },
+  {
+    "app": "xray",
+    "protocol": "snell",
+    "obfs": "none",
+    "status": "NOT_SUPPORTED_BY_APP"
+  },
+  {
+    "app": "xray",
+    "protocol": "snell",
+    "obfs": "http",
+    "status": "NOT_SUPPORTED_BY_APP"
+  }
+]

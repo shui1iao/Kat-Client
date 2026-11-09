@@ -93,7 +93,8 @@ func (a *udpAssociation) sendProxy(name string, dst Address, payload []byte, tar
 func (a *udpAssociation) proxySessionFor(name string) *proxySession {
 	s := a.server
 	a.mu.Lock()
-	ses, closed, count := a.proxies[name], a.proxyClosed, len(a.proxies)
+	ses, closed := a.proxies[name], a.proxyClosed
+	count := len(a.proxies)
 	a.mu.Unlock()
 	if ses != nil {
 		return ses
@@ -106,7 +107,11 @@ func (a *udpAssociation) proxySessionFor(name string) *proxySession {
 	if s.rt != nil {
 		ob = s.rt.nodes[name]
 	}
-	if ob == nil || count >= s.rt.proxies {
+	full := false
+	if s.rt != nil {
+		full = count >= s.rt.proxies
+	}
+	if ob == nil || full {
 		s.counters.Dropped.Add(1)
 		s.failure(failUDPTargets, "udp", -1)
 		return nil
@@ -192,7 +197,8 @@ func (a *udpAssociation) proxyReturnLoop(ses *proxySession) {
 		a.mu.Lock()
 		client := a.client
 		a.mu.Unlock()
-		if e = a.output(client, Address{host, src.Port}, b[:n], idle); e != nil {
+		source := Address{host, src.Port}
+		if e = a.output(client, source, b[:n], idle); e != nil {
 			// Same as a direct reply write failure: the client side is gone.
 			a.cancel()
 			return

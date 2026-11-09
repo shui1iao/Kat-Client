@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"github.com/shui1iao/Kat/internal/outbound"
 	"golang.org/x/net/dns/dnsmessage"
 	"io"
 	"mime"
@@ -20,17 +21,24 @@ type dnsCacheEntry struct {
 	ips     []netip.Addr
 	expires time.Time
 	server  string
+	epoch   uint64
 }
 type dnsDial func(context.Context, string, string) (net.Conn, error)
 
 type internalDNS struct {
-	disableIPv6 bool
-	policyOnly  bool
-	rules       []dnsPolicyRuntime
-	hosts       map[string][]netip.Addr
-	physical    []netip.Addr
-	wireCache   map[string]dnsWireEntry
-	upstreams   []*dnsUpstream
+	diagnostic   func(context.Context, outbound.Diagnostic)
+	protected    bool
+	endpointDial dnsDial
+	local        *internalDNS
+	disableIPv6  bool
+	policyOnly   bool
+	rules        []dnsPolicyRuntime
+	hosts        map[string][]netip.Addr
+	physical     []netip.Addr
+	systemQuery  func(context.Context, []byte) ([]byte, error)
+	dnsContext   func(context.Context) (context.Context, func(), uint64)
+	wireCache    map[string]dnsWireEntry
+	upstreams    []*dnsUpstream
 	// Instance-local I/O seam; production always uses the ordinary direct dialer.
 	dial      func(context.Context, string, string) (net.Conn, error)
 	capacity  int
@@ -121,7 +129,7 @@ func (r *internalDNS) cachedAnswer(name string) ([]netip.Addr, string, bool) {
 	if !ok {
 		return nil, "", false
 	}
-	if !e.expires.After(r.now()) {
+	if e.epoch != r.dnsEpoch() || !e.expires.After(r.now()) {
 		delete(r.cache, name)
 		return nil, "", false
 	}
@@ -130,12 +138,19 @@ func (r *internalDNS) cachedAnswer(name string) ([]netip.Addr, string, bool) {
 func (r *internalDNS) cachePut(name string, ips []netip.Addr, ttl time.Duration) {
 	r.cachePutFrom(name, ips, ttl, "")
 }
-func (r *internalDNS) cachePutFrom(name string, ips []netip.Addr, ttl time.Duration, server string) {
+func (r *internalDNS) cachePutFrom(name string, ips []netip.Addr, ttl time.Duration, server string, epoch ...uint64) {
+	wanted := r.dnsEpoch()
+	if len(epoch) > 0 {
+		wanted = epoch[0]
+	}
 	if r.capacity == 0 || ttl <= 0 {
 		return
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if wanted != r.dnsEpoch() {
+		return
+	}
 	now := r.now()
 	var oldest string
 	var earliest time.Time
@@ -151,13 +166,25 @@ func (r *internalDNS) cachePutFrom(name string, ips []netip.Addr, ttl time.Durat
 	if _, ok := r.cache[name]; !ok && len(r.cache) >= r.capacity {
 		delete(r.cache, oldest)
 	}
-	r.cache[name] = dnsCacheEntry{ips: append([]netip.Addr(nil), ips...), expires: now.Add(ttl), server: server}
+	r.cache[name] = dnsCacheEntry{ips: append([]netip.Addr(nil), ips...), expires: now.Add(ttl), server: server, epoch: wanted}
 }
 func (r *internalDNS) lookup(ctx context.Context, name string) ([]netip.Addr, error) {
 	ips, _, _, err := r.lookupAnswer(ctx, name)
 	return ips, err
 }
-func (r *internalDNS) lookupAnswer(ctx context.Context, name string) ([]netip.Addr, string, bool, error) {
+func (r *internalDNS) lookupAnswer(ctx context.Context, name string) (answer []netip.Addr, server string, cached bool, result error) {
+	start := time.Now()
+	mode := "custom"
+	if len(r.upstreams) == 0 {
+		mode = "system"
+	}
+	defer func() {
+		category, native := outbound.Category(result)
+		hit := cached
+		r.observe(ctx, outbound.Diagnostic{Stage: "dns_lookup", Category: category, Protocol: mode, Native: native, ElapsedMS: outbound.Known(uint64(time.Since(start).Milliseconds())), CacheHit: &hit})
+	}()
+	ctx, cancel, epoch := r.dnsScope(ctx)
+	defer cancel()
 	name, e := dnsName(name)
 	if e != nil {
 		return nil, "", false, errDNS
@@ -171,12 +198,21 @@ func (r *internalDNS) lookupAnswer(ctx context.Context, name string) ([]netip.Ad
 	if p := r.policy(name); p != r {
 		return p.lookupAnswer(ctx, name)
 	}
+	if r.local != nil && localDNSName(name) {
+		return r.local.lookupAnswer(ctx, name)
+	}
 	if len(r.upstreams) == 0 {
 		ips, err := r.bootstrap(ctx, "ip", name)
+		if epoch != r.dnsEpoch() {
+			return nil, "", false, context.Canceled
+		}
 		return ips, "system", false, err
 	}
 	if r.capacity > 0 {
 		if ips, server, ok := r.cachedAnswer(name); ok {
+			if epoch != r.dnsEpoch() {
+				return nil, "", false, context.Canceled
+			}
 			return ips, server, true, nil
 		}
 	}
@@ -220,9 +256,12 @@ func (r *internalDNS) lookupAnswer(ctx context.Context, name string) ([]netip.Ad
 		if ctx.Err() != nil {
 			return nil, "", false, ctx.Err()
 		}
+		if epoch != r.dnsEpoch() {
+			return nil, "", false, context.Canceled
+		}
 		if len(ips) > 0 {
 			if complete {
-				r.cachePutFrom(name, ips, ttl, u.ep.label())
+				r.cachePutFrom(name, ips, ttl, u.ep.label(), epoch)
 			}
 			return ips, u.ep.label(), false, nil
 		}
@@ -249,6 +288,9 @@ func (r *internalDNS) lookupAnswer(ctx context.Context, name string) ([]netip.Ad
 	}
 	if len(ips) == 0 {
 		return nil, "", false, errDNS
+	}
+	if epoch != r.dnsEpoch() {
+		return nil, "", false, context.Canceled
 	}
 	return ips, "system", false, nil
 }
@@ -308,6 +350,12 @@ func (r *dnsUpstream) lookup(qctx context.Context, name string) (ips []netip.Add
 	return nil, 0, false, nxdomain || complete
 }
 func (r *dnsUpstream) connect(ctx context.Context, network string) (net.Conn, error) {
+	if r.resolver.protected {
+		if r.resolver.endpointDial == nil {
+			return nil, errDNS
+		}
+		return r.resolver.endpointDial(ctx, network, net.JoinHostPort(r.ep.host, r.ep.port))
+	}
 	var ips []netip.Addr
 	if ip, e := netip.ParseAddr(r.ep.host); e == nil {
 		ips = []netip.Addr{ip}
@@ -315,6 +363,7 @@ func (r *dnsUpstream) connect(ctx context.Context, network string) (net.Conn, er
 		var e error
 		ips, e = r.resolver.bootstrap(ctx, "ip", r.ep.host)
 		if e != nil {
+			r.resolver.observeError(ctx, "dns_connect", r.ep.scheme, e, time.Time{})
 			return nil, errDNS
 		}
 	}
@@ -329,6 +378,7 @@ func (r *dnsUpstream) connect(ctx context.Context, network string) (net.Conn, er
 			continue
 		}
 		c, e := r.resolver.dial(ctx, network, net.JoinHostPort(ip.Unmap().String(), r.ep.port))
+		r.resolver.observeError(ctx, "dns_connect", network, e, time.Time{})
 		if e == nil {
 			return c, nil
 		}
@@ -338,7 +388,9 @@ func (r *dnsUpstream) connect(ctx context.Context, network string) (net.Conn, er
 	}
 	return nil, errDNS
 }
-func (r *dnsUpstream) query(ctx context.Context, name string, typ dnsmessage.Type) (dnsAnswer, error) {
+func (r *dnsUpstream) query(ctx context.Context, name string, typ dnsmessage.Type) (answerResult dnsAnswer, result error) {
+	start := time.Now()
+	defer func() { r.resolver.observeError(ctx, "dns_exchange", r.ep.scheme, result, start) }()
 	wire, q, e := dnsQuestion(name, typ)
 	if e != nil {
 		return dnsAnswer{}, errDNS
@@ -351,12 +403,14 @@ func (r *dnsUpstream) query(ctx context.Context, name string, typ dnsmessage.Typ
 	case "https":
 		req, er := http.NewRequestWithContext(ctx, http.MethodPost, r.ep.url, bytes.NewReader(wire))
 		if er != nil {
+			r.resolver.observeError(ctx, "dns_exchange", r.ep.scheme, er, start)
 			return dnsAnswer{}, errDNS
 		}
 		req.Header.Set("Content-Type", "application/dns-message")
 		req.Header.Set("Accept", "application/dns-message")
 		resp, er := r.client.Do(req)
 		if er != nil {
+			r.resolver.observeError(ctx, "dns_exchange", r.ep.scheme, er, start)
 			return dnsAnswer{}, errDNS
 		}
 		defer resp.Body.Close()
@@ -376,6 +430,7 @@ func (r *dnsUpstream) query(ctx context.Context, name string, typ dnsmessage.Typ
 		return dnsAnswer{}, e
 	}
 	if a.truncated {
+		r.resolver.observe(ctx, outbound.Diagnostic{Stage: "dns_fallback", Category: "truncated_tcp", Protocol: r.ep.scheme})
 		if r.ep.scheme != "udp" {
 			return dnsAnswer{}, errDNS
 		}
@@ -388,11 +443,19 @@ func (r *dnsUpstream) query(ctx context.Context, name string, typ dnsmessage.Typ
 			return dnsAnswer{}, errDNS
 		}
 	}
+	category := "ok"
+	if a.nxdomain {
+		category = "nxdomain"
+	} else if len(a.ips) == 0 {
+		category = "nodata"
+	}
+	r.resolver.observe(ctx, outbound.Diagnostic{Stage: "dns_parse", Category: category, Protocol: r.ep.scheme, ElapsedMS: outbound.Known(uint64(time.Since(start).Milliseconds()))})
 	return a, nil
 }
 func (r *dnsUpstream) exchange(ctx context.Context, network string, wire []byte) ([]byte, error) {
 	c, e := r.connect(ctx, network)
 	if e != nil {
+		r.resolver.observeError(ctx, "dns_connect", network, e, time.Time{})
 		return nil, errDNS
 	}
 	defer c.Close()
@@ -405,10 +468,12 @@ func (r *dnsUpstream) exchange(ctx context.Context, network string, wire []byte)
 		b := binary.BigEndian.AppendUint16(nil, uint16(len(wire)))
 		b = append(b, wire...)
 		if e = writeAll(c, b); e != nil {
+			r.resolver.observeError(ctx, "dns_write", network, e, time.Time{})
 			return nil, errDNS
 		}
 		var size [2]byte
 		if _, e = io.ReadFull(c, size[:]); e != nil {
+			r.resolver.observeError(ctx, "dns_read", network, e, time.Time{})
 			return nil, errDNS
 		}
 		n := int(binary.BigEndian.Uint16(size[:]))
@@ -420,11 +485,13 @@ func (r *dnsUpstream) exchange(ctx context.Context, network string, wire []byte)
 		return b, e
 	}
 	if _, e = c.Write(wire); e != nil {
+		r.resolver.observeError(ctx, "dns_write", network, e, time.Time{})
 		return nil, errDNS
 	}
 	b := make([]byte, maxDNSMessage+1)
 	n, e := c.Read(b)
 	if e != nil || n > maxDNSMessage {
+		r.resolver.observeError(ctx, "dns_read", network, e, time.Time{})
 		return nil, errDNS
 	}
 	return b[:n], nil

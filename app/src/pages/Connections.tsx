@@ -69,7 +69,7 @@ export function Connections({ c, tab, onTab }: { c: Client; tab: ConnTab; onTab:
         </div>
       </section>
       {ruleFlow&&<RuleEditor c={c} draft={flowRuleDraft(ruleFlow,c.source)} close={()=>setRuleFlow(null)}/>}
-      {confirmation&&<Modal size="sm" title={confirmation.matched?`关闭匹配的 ${confirmation.ids.length} 个连接？`:`关闭全部 ${confirmation.ids.length} 个活跃连接？`} saveLabel="关闭" danger busy={closing} close={()=>setConfirmation(null)} save={()=>void closeIds(confirmation.ids)}><span>仅关闭所选活跃连接，不影响其它连接。</span></Modal>}
+      {confirmation&&<Modal readOnly size="sm" title={confirmation.matched?`关闭匹配的 ${confirmation.ids.length} 个连接？`:`关闭全部 ${confirmation.ids.length} 个活跃连接？`} saveLabel="关闭" danger busy={closing} close={()=>setConfirmation(null)} save={()=>void closeIds(confirmation.ids)}><span>仅关闭所选活跃连接，不影响其它连接。</span></Modal>}
     </div>
   );
 }

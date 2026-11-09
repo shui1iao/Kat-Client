@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,6 +21,7 @@ import (
 	"github.com/shui1iao/Kat/internal/outbound/socks5"
 	"github.com/shui1iao/Kat/internal/outbound/ss"
 	"github.com/shui1iao/Kat/internal/outbound/trojan"
+	"github.com/shui1iao/Kat/internal/procattr"
 	"github.com/shui1iao/Kat/internal/route"
 )
 
@@ -78,7 +80,8 @@ func (s *Server) lookup(ctx context.Context, host string) ([]netip.Addr, error) 
 	if s.dns == nil {
 		return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 	}
-	return s.dns.lookup(ctx, host)
+	ips, e := s.dns.lookup(ctx, host)
+	return s.realDNSAnswer(ips, e)
 }
 
 // buildRouting constructs direct, reject, every outbound and group in
@@ -97,7 +100,7 @@ func (s *Server) buildRouting() (*routingRuntime, error) {
 	if c.UDPBindIPv6 != "" {
 		b6, _ = netip.ParseAddr(c.UDPBindIPv6)
 	}
-	do := direct.Options{DisableIPv6: c.IPv6Disabled(), Resolve: s.lookup, BindIPv4: b4.Unmap(), BindIPv6: b6, Timeout: c.Limits.DialTimeout.value()}
+	do := direct.Options{DisableIPv6: c.IPv6Disabled(), Resolve: s.directLookup, BindIPv4: b4.Unmap(), BindIPv6: b6, Timeout: c.Limits.DialTimeout.value()}
 	if s.guardActive() {
 		do.Guard = s.directGuard
 	}
@@ -105,11 +108,20 @@ func (s *Server) buildRouting() (*routingRuntime, error) {
 		do.Control = tfoDialControl
 	}
 	if c.clientEgress != nil {
+		do.DialContext = c.clientEgress.DialContext
+		do.PacketRelease = c.clientEgress.PacketRelease
 		do.Control = c.clientEgress.Control
+		do.PacketSource = c.clientEgress.PacketSource
 		do.PacketControl = c.clientEgress.PacketControl
-		do.PacketFailure = c.clientEgress.Failure
+		// Policy.Control marks unsafe bind failures itself; a missing address
+		// family or ordinary UDP socket budget failure is not a global lease loss.
 	}
 	rt.nodes["direct"] = direct.New(do)
+	if c.clientDNS != nil && c.clientEgress != nil {
+		boot := do
+		boot.Resolve = s.bootstrapLookup
+		rt.nodes["direct"] = clientDirect{Outbound: rt.nodes["direct"], bootstrap: direct.New(boot)}
+	}
 	rt.nodes["reject"] = rejectOutbound{}
 	outs := map[string]outbound.Options{}
 	for _, o := range c.Outbounds {
@@ -305,13 +317,24 @@ func (s *Server) decide(ctx context.Context, network string, a Address, src neti
 	if ip, e := netip.ParseAddr(a.Host); e == nil && s.cfg.IPv6Disabled() && ip.Unmap().Is6() {
 		return d, "", direct.ErrIPv6Disabled
 	}
-	m := route.Metadata{Network: network, Port: a.Port, Source: src, ProcessLookup: processMetadata(ctx, network, a)}
+	lookup, cause := processAttribution(ctx, network, a)
+	m := route.Metadata{Network: network, Port: a.Port, Source: src, ProcessLookup: lookup, ProcessCause: cause}
+	if _, tun := tunFlowOf(ctx); tun || runtime.GOOS == "windows" && s.cfg.clientIPv6 != nil {
+		m.SkipUnavailableProcess = true
+		m.ProcessSkipped = func(a route.ProcessUnavailableError) {
+			fields := []string{"reason", a.Status, "rule", strconv.Itoa(a.Rule), "cause", procattr.SafeCause(a.Cause), "elapsed_ms", strconv.FormatUint(a.ElapsedMS, 10)}
+			if a.Win32 != 0 {
+				fields = append(fields, "win32", strconv.FormatUint(uint64(a.Win32), 10))
+			}
+			s.event("process_rule_skipped", fields...)
+		}
+	}
 	if im := inboundMetaOf(ctx); im != nil {
 		m.SrcPort, m.InPort, m.InName, m.InType = im.srcPort, im.port, im.name, im.typ
 	}
 	if sn := sniffOf(ctx); sn != nil {
 		m.Protocol = sn.proto
-		a = sn.target(a)
+		a = sniffTarget(ctx, a)
 		if sn.host != "" {
 			m.SniffHost = sn.host
 		}
@@ -348,10 +371,18 @@ func (s *Server) decide(ctx context.Context, network string, a Address, src neti
 	if e != nil {
 		return d, "", e
 	}
-	d, e = r.Decide(ctx, m, s.lookup)
+	if s.tunDNSActive() {
+		d, e = r.DecideClientDNS(ctx, m, s.lookup, s.directLookup, s.strictRuleDNS(host))
+	} else {
+		d, e = r.Decide(ctx, m, s.lookup)
+	}
 	var attribution *route.ProcessUnavailableError
 	if errors.As(e, &attribution) {
-		s.event("process_attribution_failed", "reason", attribution.Status, "rule", strconv.Itoa(attribution.Rule))
+		fields := []string{"reason", attribution.Status, "rule", strconv.Itoa(attribution.Rule), "cause", procattr.SafeCause(attribution.Cause)}
+		if attribution.Win32 != 0 {
+			fields = append(fields, "win32", strconv.FormatUint(uint64(attribution.Win32), 10))
+		}
+		s.event("process_attribution_failed", fields...)
 	}
 	if s.rt == nil {
 		r.Close()
@@ -415,7 +446,7 @@ func (s *Server) dialProxy(parent context.Context, start time.Time, name string,
 // values are additionally sanitized to one bounded token each.
 var knownEvents = map[string]int{"group_switch": 0, "rule_set_loaded": 1, "rule_set_update_failed": 2, "geoip_loaded": 3, "geoip_update_failed": 4,
 	// 0.7.0: geosite and ASN databases
-	"geosite_loaded": 5, "geosite_update_failed": 6, "geosite_category_missing": 7, "asn_loaded": 8, "asn_update_failed": 9, "process_attribution_failed": 10}
+	"geosite_loaded": 5, "geosite_update_failed": 6, "geosite_category_missing": 7, "asn_loaded": 8, "asn_update_failed": 9, "process_attribution_failed": 10, "process_rule_skipped": 11}
 
 const (
 	eventWindow = 10 * time.Second
@@ -427,7 +458,7 @@ type eventLog struct {
 	write   func([]byte) error
 	allow   func(event string) bool // nil = every event; else the log level gate
 	closed  bool
-	buckets [12]struct { // knownEvents + "other"
+	buckets [36]struct { // knownEvents + "other"
 		start      time.Time
 		count      int
 		suppressed uint64
@@ -459,6 +490,19 @@ func (l *eventLog) emit(now time.Time, event string, fields ...string) {
 	if !ok {
 		idx, event = len(knownEvents), "other"
 		fields = nil
+	}
+	if event == "process_rule_skipped" {
+		causes := []string{"local_denied", "not_bridged", "pin", "scm", "pipe_open", "pipe_identity", "session_hello", "session_timeout", "session_closed", "session_backoff", "service:FLOW_NOT_ACTIVE", "service:FLOW_QUERY", "service:FLOW_UNAVAILABLE", "service:LEASE_CHANGED", "service:CALLER_DENIED", "service:INSTALL_RELAUNCH_REQUIRED", "process:denied", "process:closed", "process:changed", "process:ambiguous", "process:unknown", "process:unsupported"}
+		for i := 0; i+1 < len(fields); i += 2 {
+			if fields[i] == "cause" {
+				for j, c := range causes {
+					if c == fields[i+1] {
+						idx = 13 + j
+						break
+					}
+				}
+			}
+		}
 	}
 	if l.allow != nil && !l.allow(event) {
 		return
@@ -516,6 +560,9 @@ func (l *eventLog) shutdown() {
 
 // eventLevelOf: update failures are warnings, every other event is info.
 func eventLevelOf(event string) logLevel {
+	if event == "process_rule_skipped" {
+		return levelInfo
+	}
 	if strings.HasSuffix(event, "_failed") {
 		return levelWarn
 	}

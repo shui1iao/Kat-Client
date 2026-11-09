@@ -4,18 +4,39 @@
 use crate::error::{Error, Result};
 use std::path::{Path, PathBuf};
 
-pub const FILES: &[&str] = &[
-    "Kat-Uninstall.exe", "kat-desktop.exe", "kat-client-core.exe", "kat-network-service.exe", "kat-proxy-watchdog.exe",
+/// c49 inventories remain readable only for migration/rollback. No old bridge is installed by c50.
+pub const LEGACY_FILES: &[&str] = &[
+    "kat-install-helper.exe","kat-package-auth.json","kat-package-auth.sig", "Kat-Uninstall.exe", "kat-desktop.exe", "kat-client-core.exe", "kat-network-service.exe", "kat-proxy-watchdog.exe",
     "network/tun2socks.exe", "network/wintun.dll", "network/WINTUN-LICENSE.txt",
     "network/TUN2SOCKS-LICENSE.txt", "network/THIRD-PARTY-NOTICES.txt", "network/manifest.json",
     "README-WINDOWS.txt", "Restore-User-Proxy.cmd", "RUST-THIRD-PARTY-NOTICES.txt",
     "THIRD-PARTY-SOURCE.zip", "GO-THIRD-PARTY-NOTICES.txt", "YAML-README.md",
     "kat-client.example.yaml", "FRONTEND-THIRD-PARTY-NOTICES.txt", "BUILD-IDENTITY.json",
 ];
-/// Only these files can ever be executed/loaded by SYSTEM; the package copy is
-/// installer input, not a normal-user update source. Everything else stays appRoot.
-pub const RUNTIME_FILES:&[&str]=&["kat-network-service.exe","network/tun2socks.exe","network/wintun.dll","network/WINTUN-LICENSE.txt","network/TUN2SOCKS-LICENSE.txt","network/THIRD-PARTY-NOTICES.txt","network/manifest.json"];
-pub const APP_FILES:&[&str]=&["Kat-Uninstall.exe","kat-desktop.exe","kat-client-core.exe","kat-proxy-watchdog.exe","README-WINDOWS.txt","Restore-User-Proxy.cmd","RUST-THIRD-PARTY-NOTICES.txt","THIRD-PARTY-SOURCE.zip","GO-THIRD-PARTY-NOTICES.txt","YAML-README.md","kat-client.example.yaml","FRONTEND-THIRD-PARTY-NOTICES.txt","BUILD-IDENTITY.json"];
+pub const FILES: &[&str] = &[
+    "kat-elevate-helper.exe","kat-install-helper.exe","kat-package-auth.json","kat-package-auth.sig", "Kat-Uninstall.exe", "kat-desktop.exe", "kat-client-core.exe", "kat-network-service.exe", "kat-proxy-watchdog.exe",
+    "network/wintun.dll", "network/WINTUN-LICENSE.txt",
+    "network/THIRD-PARTY-NOTICES.txt", "network/manifest.json",
+    "README-WINDOWS.txt", "Restore-User-Proxy.cmd", "RUST-THIRD-PARTY-NOTICES.txt",
+    "THIRD-PARTY-SOURCE.zip", "GO-THIRD-PARTY-NOTICES.txt", "YAML-README.md",
+    "kat-client.example.yaml", "FRONTEND-THIRD-PARTY-NOTICES.txt", "BUILD-IDENTITY.json",
+];
+
+pub const LEGACY_RUNTIME_FILES:&[&str]=&["kat-network-service.exe","network/tun2socks.exe","network/wintun.dll","network/TUN2SOCKS-LICENSE.txt","network/WINTUN-LICENSE.txt","network/THIRD-PARTY-NOTICES.txt","network/manifest.json"];
+pub const RETIRED_TUN:&[&str]=&["network/tun2socks.exe","network/TUN2SOCKS-LICENSE.txt"];
+pub const RUNTIME_FILES:&[&str]=&["kat-network-service.exe","network/wintun.dll","network/WINTUN-LICENSE.txt","network/THIRD-PARTY-NOTICES.txt","network/manifest.json"];
+pub const APP_FILES:&[&str]=&["kat-elevate-helper.exe","kat-install-helper.exe","kat-package-auth.json","kat-package-auth.sig","Kat-Uninstall.exe","kat-desktop.exe","kat-client-core.exe","kat-proxy-watchdog.exe","README-WINDOWS.txt","Restore-User-Proxy.cmd","RUST-THIRD-PARTY-NOTICES.txt","THIRD-PARTY-SOURCE.zip","GO-THIRD-PARTY-NOTICES.txt","YAML-README.md","kat-client.example.yaml","FRONTEND-THIRD-PARTY-NOTICES.txt","BUILD-IDENTITY.json"];
+pub const RETIRED_APP_PRIVILEGED:&[&str]=&["kat-network-service.exe","network/wintun.dll","network/WINTUN-LICENSE.txt","network/THIRD-PARTY-NOTICES.txt","network/manifest.json","network/tun2socks.exe","network/TUN2SOCKS-LICENSE.txt"];
+fn exact_inventory(h:&std::collections::BTreeMap<String,String>,names:&[&str])->bool{h.len()==names.len()&&names.iter().all(|n|h.get(*n).is_some_and(|s|s.len()==64&&s.bytes().all(|c|c.is_ascii_digit()||(b'a'..=b'f').contains(&c))))}
+pub fn valid_inventory(h:&std::collections::BTreeMap<String,String>)->bool{if exact_inventory(h,FILES)||exact_inventory(h,LEGACY_FILES){return true}let old:Vec<_>=LEGACY_FILES.iter().copied().filter(|n|!["kat-install-helper.exe","kat-package-auth.json","kat-package-auth.sig"].contains(n)).collect();exact_inventory(h,&old)}
+/// Renames are journaled by the Windows transaction caller; request disk completion.
+fn durable_rename(from:&Path,to:&Path)->Result<()> {
+    #[cfg(windows)] {use std::os::windows::ffi::OsStrExt;use windows_sys::Win32::Storage::FileSystem::*;
+        let f:Vec<u16>=from.as_os_str().encode_wide().chain(Some(0)).collect();let t:Vec<u16>=to.as_os_str().encode_wide().chain(Some(0)).collect();
+        if unsafe{MoveFileExW(f.as_ptr(),t.as_ptr(),MOVEFILE_WRITE_THROUGH)}==0{return Err(io(std::io::Error::last_os_error()));}Ok(())
+    }
+    #[cfg(not(windows))] {std::fs::rename(from,to).map_err(io)}
+}
 fn io(e: std::io::Error) -> Error { Error::io("INSTALL_COPY", &e) }
 fn regular_if_present(path: &Path) -> Result<bool> {
     match std::fs::symlink_metadata(path) {
@@ -105,10 +126,10 @@ impl FileUpdate {
             self.changed.push(Changed { name, old_moved: false, new_live: false });
             let change = self.changed.last_mut().unwrap();
             if present {
-                std::fs::rename(&target, self.work.join("old").join(name)).map_err(io)?;
+                durable_rename(&target, &self.work.join("old").join(name))?;
                 change.old_moved = true;
             }
-            std::fs::rename(self.work.join("new").join(name), &target).map_err(io)?;
+            durable_rename(&self.work.join("new").join(name), &target)?;
             change.new_live = true;
             protect(&target)?;
         }
@@ -119,7 +140,7 @@ impl FileUpdate {
     pub fn retire(&mut self,names:&'static[&'static str])->Result<()>{
         for &name in names{let p=self.root.join(name);if regular_if_present(&p)?{
             self.changed.push(Changed{name,old_moved:false,new_live:false});
-            std::fs::rename(p,self.work.join("old").join(name)).map_err(io)?;
+            durable_rename(&p,&self.work.join("old").join(name))?;
             self.changed.last_mut().unwrap().old_moved=true;
         }}Ok(())
     }
@@ -137,7 +158,7 @@ impl FileUpdate {
                 }
             }
             if change.old_moved {
-                match std::fs::rename(self.work.join("old").join(change.name), &target) {
+                match durable_rename(&self.work.join("old").join(change.name), &target) {
                     Ok(()) => change.old_moved = false,
                     Err(_) => failed = true,
                 }

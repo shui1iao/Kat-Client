@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"os"
+	"github.com/shui1iao/Kat/internal/userio"
+
 	"path/filepath"
 	"time"
 )
@@ -69,7 +70,7 @@ func subscriptionReason(code string, d *ResourceDetail) string {
 }
 func (h *Host) subscriptionStatusesLocked() map[string]subscriptionStatus {
 	statuses := map[string]subscriptionStatus{}
-	b, e := os.ReadFile(filepath.Join(h.workspace, "subscription-attempts.json"))
+	b, e := userio.ReadFile(filepath.Join(h.workspace, "subscription-attempts.json"))
 	if e != nil || len(b) > 65536 {
 		return statuses
 	}

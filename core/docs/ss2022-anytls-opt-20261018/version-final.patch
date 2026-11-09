@@ -1,0 +1,11 @@
+--- a/cmd/proxy-kernel/main.go
++++ b/cmd/proxy-kernel/main.go
+@@ -12,7 +12,7 @@
+ 	"time"
+ )
+ 
+-const version = "0.5.1-test-ssopt"
++const version = "0.5.2-test-ss2022-anytls"
+ 
+ func execute(args []string) error {
+ 	if len(args) == 1 && args[0] == "version" {

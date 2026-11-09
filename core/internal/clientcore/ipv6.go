@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/shui1iao/Kat/internal/userio"
 	"os"
 	"path/filepath"
 )
@@ -46,7 +47,7 @@ func (h *Host) ipContext(parent context.Context) (context.Context, func()) {
 // never marks itself complete. The exact old source is kept for rollback.
 func (h *Host) migrateIPv6() error {
 	marker := filepath.Join(h.workspace, "c16-network-migration.json")
-	if _, e := os.Lstat(marker); e == nil {
+	if _, e := userio.Lstat(marker); e == nil {
 		b, e := readPrivate(marker, 4096)
 		var report struct {
 			Version int      `json:"version"`
@@ -60,7 +61,7 @@ func (h *Host) migrateIPv6() error {
 		return e
 	}
 	backup := filepath.Join(h.workspace, "client-before-c16-network."+string(h.doc.format))
-	if _, e := os.Lstat(backup); os.IsNotExist(e) {
+	if _, e := userio.Lstat(backup); os.IsNotExist(e) {
 		if e = exclusiveDocumentWrite(backup, []byte(h.doc.text)); e != nil {
 			return e
 		}

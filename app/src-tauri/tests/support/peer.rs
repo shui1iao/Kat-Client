@@ -5,6 +5,7 @@ fn main() {
  if let Some(mode)=std::env::args().nth(1){
   if mode=="stdin-blocked"{let ready=std::env::args().nth(2).unwrap();std::fs::write(ready,b"ready").unwrap();std::thread::sleep(std::time::Duration::from_secs(30));return;}
   if mode=="mutation-fixture"{mutation_fixture();return;}
+  if mode=="stage5-update-fixture"{stage5_update_fixture(&std::env::args().nth(2).unwrap_or_default());return;}
   if mode=="restart-fixture"{
    let behavior=std::env::args().nth(2).unwrap();let marker=std::env::args().nth(3).unwrap();
    let first=match std::fs::OpenOptions::new().write(true).create_new(true).open(marker){Ok(_)=>true,Err(e)if e.kind()==std::io::ErrorKind::AlreadyExists=>false,Err(e)=>panic!("{e}")};
@@ -62,4 +63,43 @@ fn mutation_fixture(){
    _=>r["params"].clone(),
   };println!("{}",json!({"id":id,"ok":true,"result":result}));io::stdout().flush().unwrap();
  }
+}
+
+fn stage5_update_fixture(submode:&str){
+ for line in io::stdin().lock().lines(){
+  let r:Value=serde_json::from_str(&line.unwrap()).unwrap();
+  let id=r["id"].clone();
+  match r["method"].as_str().unwrap_or(""){
+   "hello"=>{
+    println!("{}",json!({"id":id,"ok":true,"result":{"protocol":1,"capabilities":["host.prepare-update.v1","host.handover.v1"]}}));
+    io::stdout().flush().unwrap();
+   },
+   "host.prepare-update"=>{
+    if submode=="eof-before-ack"{std::process::exit(0);}
+    if submode=="save-failed"{
+     println!("{}",json!({"id":id,"ok":false,"error":{"code":"update_history_failed","message":"disk full"}}));
+     io::stdout().flush().unwrap();
+     continue;
+    }
+    let cp=json!({"schema":1,"source_sha256":"a".repeat(64),"history_sha256":"b".repeat(64)});
+    println!("{}",json!({"id":id,"ok":true,"result":{"prepared":true,"source_saved":true,"history_saved":true,"checkpoint":cp}}));
+    io::stdout().flush().unwrap();
+   },
+   "host.resume-update"=>{
+    println!("{}",json!({"id":id,"ok":true,"result":{"resumed":true}}));
+    io::stdout().flush().unwrap();
+   },
+   "status"=>{
+    println!("{}",json!({"id":id,"ok":true,"result":{"runtime":{"state":"stopped"}}}));
+    io::stdout().flush().unwrap();
+   },
+   _=>{
+    println!("{}",json!({"id":id,"ok":true,"result":r["params"]}));
+    io::stdout().flush().unwrap();
+   }
+  }
+ }
+ if submode=="nonzero-exit"{std::process::exit(2);}
+ if submode=="hang-exit"{std::thread::sleep(std::time::Duration::from_secs(30));}
+ std::process::exit(0);
 }

@@ -3,17 +3,17 @@ use serde::Serialize;use serde_json::Value;use crate::safe_log::{self,LogEntry};
 #[derive(Debug,Serialize)]pub struct LocalEntry{pub host:String,pub port:u16,pub ready:bool}
 #[derive(Debug,Serialize)]pub struct Local{pub http:LocalEntry,pub socks:LocalEntry}
 pub use crate::document::Counts;
-#[derive(Debug,Serialize)]pub struct Switch{pub enabled:bool,pub state:String,#[serde(skip_serializing_if="Option::is_none")]pub error:Option<String>}
+#[derive(Debug,Serialize)]pub struct Switch{#[serde(default)]pub cleanup_pending:bool,pub enabled:bool,pub state:String,#[serde(skip_serializing_if="Option::is_none")]pub error:Option<String>}
 #[derive(Debug,Serialize)]pub struct Service{pub installed:bool,pub running:bool,pub state:String}
 #[derive(Debug,Serialize)]pub struct Network{pub system_proxy:Switch,pub tun:Switch,pub service:Service}
-#[derive(Debug,Serialize)]pub struct DiagnosticReply{pub app_version:String,pub platform:String,pub core:Option<Core>,pub local:Option<Local>,pub network:Option<Network>,pub counts:Option<Counts>,pub host_events:Vec<LogEntry>,pub core_events:Vec<LogEntry>,pub errors:Vec<String>}
+#[derive(Debug,Serialize)]pub struct DiagnosticReply{pub private_crash:Option<crate::crash_private::Summary>,pub history:Option<crate::safe_archive::Snapshot>,pub service_history:Option<crate::safe_archive::Snapshot>,pub app_version:String,pub platform:String,pub core:Option<Core>,pub local:Option<Local>,pub network:Option<Network>,pub counts:Option<Counts>,pub host_events:Vec<LogEntry>,pub core_events:Vec<LogEntry>,pub errors:Vec<String>}
 fn version(v:&Value)->Option<String>{let s=v.as_str()?;if s.len()>64||s.is_empty()||!s.bytes().all(|b|b.is_ascii_alphanumeric()||b".-+_".contains(&b)){return None;}Some(s.into())}
 fn commit(v:&Value)->Option<String>{let s=v.as_str()?;if s.len()!=40||!s.bytes().all(|b|b.is_ascii_hexdigit()){return None;}Some(s.into())}
 fn local(v:&Value)->Option<Local>{fn entry(v:&Value)->Option<LocalEntry>{if v["host"]!="127.0.0.1"{return None;}Some(LocalEntry{host:"127.0.0.1".into(),port:u16::try_from(v["port"].as_u64()?).ok().filter(|p|*p>0)?,ready:v["ready"].as_bool()?})}Some(Local{http:entry(&v["http"])?,socks:entry(&v["socks"]) ?})}
-fn switch(v:&Value)->Option<Switch>{let s=v["state"].as_str()?;if !["off","starting","on","stopping","error"].contains(&s){return None;}Some(Switch{enabled:v["enabled"].as_bool()?,state:s.into(),error:v["error"].as_str().map(safe_log::safe_code)})}
+fn switch(v:&Value)->Option<Switch>{let s=v["state"].as_str()?;if !["off","starting","on","waiting_network","recovering","stopping","error","cleanup_pending"].contains(&s){return None;}Some(Switch{cleanup_pending:v["cleanup_pending"]==true,enabled:v["enabled"].as_bool()?,state:s.into(),error:v["error"].as_str().map(safe_log::safe_code)})}
 fn network(v:&Value)->Option<Network>{let s=&v["service"];let state=s["state"].as_str()?;if !["absent","stopped","running","installing","uninstalling","error"].contains(&state){return None;}Some(Network{system_proxy:switch(&v["system_proxy"])?,tun:switch(&v["tun"])?,service:Service{installed:s["installed"].as_bool()?,running:s["running"].as_bool()?,state:state.into()}})}
 impl DiagnosticReply{
- pub fn new(events:Vec<LogEntry>)->Self{Self{app_version:env!("CARGO_PKG_VERSION").into(),platform:"windows-x86_64".into(),core:None,local:None,network:None,counts:None,host_events:events,core_events:Vec::new(),errors:Vec::new()}}
+ pub fn new(events:Vec<LogEntry>)->Self{Self{private_crash:crate::crash_private::snapshot(),history:None,service_history:None,app_version:env!("CARGO_PKG_VERSION").into(),platform:"windows-x86_64".into(),core:None,local:None,network:None,counts:None,host_events:events,core_events:Vec::new(),errors:Vec::new()}}
  pub fn error(&mut self,code:&str){let code=safe_log::safe_code(code);if !self.errors.contains(&code)&&self.errors.len()<16{self.errors.push(code);}}
  pub fn status(&mut self,hello:&Value,status:&Value){let state=status["runtime"]["state"].as_str().filter(|s|["stopped","starting","running","error"].contains(s));if let(Some(core_version),Some(build_commit),Some(state))=(version(&hello["core_version"]),commit(&hello["build_commit"]),state){self.core=Some(Core{core_version,build_commit,state:state.into(),uptime_ms:status["runtime"]["uptime_ms"].as_u64()});}else{self.error("DIAGNOSTIC_FIELD_REJECTED");}self.local=local(&status["local"]);}
  pub fn counts(&mut self,document:&crate::document::ValidatedDocument){self.counts=Some(document.counts());}
@@ -83,3 +83,5 @@ impl DiagnosticReply{pub async fn from_core(&mut self,c:&crate::supervisor::Supe
  })).unwrap();let mut d=DiagnosticReply::new(vec![]);d.core_events=rows;let bytes=serde_json::to_string(&d).unwrap();assert!(bytes.contains("icon_connect_failed")&&bytes.contains("timeout")&&bytes.contains("HK"));assert!(!bytes.contains("https://"));assert_eq!(d.core_events.len(),201);
  }
 }
+
+impl DiagnosticReply{pub fn bound_export(&mut self){while serde_json::to_vec(self).map(|b|b.len()>900*1024).unwrap_or(true){self.error("LOG_HISTORY_TRUNCATED");if let Some(s)=self.history.as_mut(){if !s.entries.is_empty(){s.entries.remove(0);continue;}}if !self.host_events.is_empty(){self.host_events.remove(0);continue;}if !self.core_events.is_empty(){self.core_events.remove(0);continue;}break;}}}

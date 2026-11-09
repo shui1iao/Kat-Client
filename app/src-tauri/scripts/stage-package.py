@@ -9,9 +9,13 @@ spec=importlib.util.spec_from_file_location("pe",root/"scripts/inspect-pe.py");p
 assert pe.inspect(core)["machine"]=="AMD64"
 target=Path("/opt/kat-windows-toolchain-20261027/cache/target/x86_64-pc-windows-msvc/release")
 stage=root/"distribution/Kat-Client-Windows-x64";stage.mkdir(exist_ok=True)
-for n in ["kat-desktop.exe","kat-network-service.exe","kat-proxy-watchdog.exe"]:
+for n in ["kat-desktop.exe","kat-network-service.exe","kat-proxy-watchdog.exe","kat-install-helper.exe"]:
  src=target/n;assert pe.inspect(src)["subsystem"]=="WINDOWS_GUI";shutil.copy2(src,stage/n)
 shutil.copy2(core,stage/"kat-client-core.exe")
+for n in ["kat-package-auth.json","kat-package-auth.sig"]:
+ src=root/"distribution"/n
+ assert src.is_file(), "Signed package identity must be generated from final component bytes first"
+ shutil.copy2(src,stage/n)
 network=stage/"network";network.mkdir(exist_ok=True)
 for n in ["tun2socks.exe","wintun.dll","WINTUN-LICENSE.txt","TUN2SOCKS-LICENSE.txt","THIRD-PARTY-NOTICES.txt","manifest.json","tun2socks-buildinfo.txt"]:shutil.copy2(root/"vendor/network"/n,network/n)
 for n in ["README-WINDOWS.txt","Restore-User-Proxy.cmd","RUST-THIRD-PARTY-NOTICES.txt","THIRD-PARTY-SOURCE.zip","GO-THIRD-PARTY-NOTICES.txt"]:shutil.copy2(root/"distribution"/n,stage/n)

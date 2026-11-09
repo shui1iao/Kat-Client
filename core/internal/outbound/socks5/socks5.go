@@ -269,11 +269,23 @@ func (s *Outbound) handshake(c net.Conn, cmd byte, dst outbound.Addr) (outbound.
 }
 
 // DialTCP opens a CONNECT tunnel to dst through the proxy.
-func (s *Outbound) DialTCP(ctx context.Context, dst outbound.Addr) (net.Conn, error) {
+func (s *Outbound) DialTCP(ctx context.Context, dst outbound.Addr) (result net.Conn, resultError error) {
+	start := time.Now()
+	stage := "connect"
+	defer func() {
+		if resultError != nil {
+			category, native := outbound.Category(resultError)
+			if c := SafeFailure(resultError); c != "" {
+				category = c
+			}
+			outbound.Report(ctx, outbound.Diagnostic{Stage: stage, Category: category, Protocol: "socks5", Native: native, ElapsedMS: outbound.Known(uint64(time.Since(start).Milliseconds()))})
+		}
+	}()
 	c, e := s.under.DialTCP(ctx, s.server)
 	if e != nil {
 		return nil, e
 	}
+	stage = "handshake"
 	e = bounded(ctx, c, func() error {
 		_, e := s.handshake(c, 1, dst)
 		return e
@@ -414,4 +426,17 @@ func (p *packetConn) SetWriteDeadline(t time.Time) error { return p.pc.SetWriteD
 // Destination rejection and ambiguous EOF/timeouts deliberately do not match.
 func IsProxyFailure(err error) bool {
 	return errors.Is(err, errAuthRejected) || errors.Is(err, errNoMethod) || errors.Is(err, errProtocol)
+}
+
+func SafeFailure(e error) string {
+	var reply ReplyError
+	switch {
+	case errors.Is(e, errAuthRejected):
+		return "authentication_rejected"
+	case errors.Is(e, errNoMethod), errors.Is(e, errProtocol), errors.Is(e, errAddress):
+		return "protocol"
+	case errors.As(e, &reply):
+		return "rejected"
+	}
+	return ""
 }

@@ -1,10 +1,3 @@
-Kat client core JSON/YAML development test candidate: base commit 68a64dd1276d7b53b70fabee3aa822251b8514d0 plus the current uncommitted working-source snapshot. BUILD-IDENTITY.json identifies the delivered source archive and binaries; base commit alone is not the exact source identity.
-The historical v0.7.1 URLs in the unchanged upstream notices below are NOT used to claim correspondence for this new binary.
-Exact current corresponding MPL REALITY source, patches, root notices, Go locks and retained dependency licenses are in THIRD-PARTY-SOURCE.zip under go-core/. No release or public source upload is performed.
-
-
-===== THIRD_PARTY_NOTICES.md (unchanged) =====
-
 # 第三方组件与二进制分发说明
 
 Kat 自研代码保留所有权利；下述第三方组件及其修改继续适用各自原许可。此说明不替代原始法律文本，也不限制第三方许可授予的权利。
@@ -59,9 +52,20 @@ PERFORMANCE OF THIS SOFTWARE.
 
 provider 的 Clash YAML 解析链接 `gopkg.in/yaml.v3 v3.0.1`，源码未作修改。该组件部分文件为 MIT，其余为 Apache-2.0，不应将整个组件简单标成单一 MIT 许可。保留上游完整通知：[yaml.v3 LICENSE](third_party/licenses/gopkg.in_yaml.v3@v3.0.1-LICENSE)。对应源码：<https://gopkg.in/yaml.v3>。
 
+## C50 内置 TUN netstack（增量；不覆盖既有组件）
 
-===== MPL-NOTICE.md (unchanged) =====
+`internal/tunstack` 直接使用 `gvisor.dev/gvisor v0.0.0-20260701204157-69c2d17aea96` 的 netstack 公共 API，不导入其容器/CLI，也不导入 tun2socks engine/tunnel/proxy。gVisor 主体 Apache-2.0，但实际编译的 `pkg/sync` 有 BSD-style 文件，部分派生自 Go 标准库，须保留 **The Go Authors 和 The gVisor Authors 各原年份版权**，不能以根 Apache 许可替代这些通知。
 
+- 原文：[gVisor Apache LICENSE](third_party/licenses/gvisor.dev_gvisor@v0.0.0-20260701204157-69c2d17aea96-LICENSE)、[文件所指 Google BSD 原网页](third_party/licenses/gvisor-sync-Google-BSD.html)、[Go BSD 原文](third_party/licenses/gvisor-sync-Go-BSD-LICENSE)。本精确模块不带独立 NOTICE。
+- 实际 Linux/amd64 定向运行路径和 Windows/amd64 生产路径的源文件并集及逐文件原版权/许可归属：[C50-TUNSTACK-FILE-NOTICES.tsv](third_party/licenses/C50-TUNSTACK-FILE-NOTICES.tsv)。这不是整个 gVisor 模块可选源码的许可保证。上游精确来源：<https://github.com/google/gvisor/tree/69c2d17aea96>；模块 zip/版本由 go.sum 锁定，未修改 gVisor 源码。
+- 实际传递依赖：`github.com/google/btree v1.1.3`（Apache-2.0）、`golang.org/x/exp v0.0.0-20260611194520-c48552f49976`（BSD-3 + PATENTS，constraints）、`golang.org/x/time v0.15.0`（BSD-3 + PATENTS，rate）。完整 LICENSE/PATENTS 均在 third_party/licenses 相应版本文件，来源为各精确 Go module；不是全部 gVisor go.mod 的云/容器依赖进二进制。
+- `internal/tunstack/{stack.go,link.go}` 的初始化/报文桥基于 tun2socks v2.7.0 commit `8dda19e8e4613e014f0b12f3e624fdff5e5f23b3` 的 MIT core/device/iobased；原版权 **Copyright (c) 2019 Jason Lyu**，完整 MIT 在 [LICENSE.tun2socks](internal/tunstack/LICENSE.tun2socks) 和总许可目录。文件已标明 Kat 对生命周期、packet API、UDP/admission/epoch 和错误传播的修改。不引入 tun2socks Go 模块或旧 Kat 桥补丁实现。
+- 新栈的 OS Device 由 tunplatform 的官方 Wintun DLL API wrapper 提供；本 DATA 没有新增 wireguard 或 Wintun Go binding 模块。官方 DLL 的独立 Prebuilt Binaries License 与 MIT Go 源码许可不同，沿已有 network/WINTUN-LICENSE.txt 原样保留，由 OS/打包 owner pin 官方 0.14.1 amd64 字节，不编译驱动源码。
+
+新增运行依赖和复用片段是以上 MIT/Apache/BSD 范围；既有 REALITY/MPL、ratelimit/LGPL+例外等原通知和义务保持，不据此宣称整个既有 Kat 或完整 Source 所有历史材料都只有 MIT/Apache/BSD。此增量不引入 GPL 实现，不以历史独立测试 peer 代替生产依赖证据。
+
+
+===== MPL-NOTICE.md =====
 # REALITY 源码与修改说明
 
 `third_party/reality/` 保留 XTLS/REALITY 的源码快照，来源提交为
@@ -85,8 +89,316 @@ provider 的 Clash YAML 解析链接 `gopkg.in/yaml.v3 v3.0.1`，源码未作修
 分发二进制时，应向接收者提供可获取的对应受许可源码及本地修改，并保留许可、版权和修改说明。本版本对应源码位于公开仓库 `https://github.com/shui1iao/Kat` 的 `v0.7.1` 标签中，受许可部分为 `third_party/reality/`，差异为 `patches/reality/`；源码归档由相同标签生成。应将二进制与该版本源码和第三方许可附件一起提供，不能用此说明代替实际提供源码或其他适用义务。
 
 
-===== third_party/licenses/GPL-3.0.txt =====
+===== third_party/licenses/C50-TUNSTACK-FILE-NOTICES.tsv =====
+module	version	file	license	copyright
+github.com/google/btree	v1.1.3	btree_generic.go	Apache-2.0	// Copyright 2014-2022 Google Inc.
+golang.org/x/exp	v0.0.0-20260611194520-c48552f49976	constraints/constraints.go	BSD-3-Clause + PATENTS	// Copyright 2021 The Go Authors. All rights reserved.
+golang.org/x/time	v0.15.0	rate/rate.go	BSD-3-Clause + PATENTS	// Copyright 2015 The Go Authors. All rights reserved.
+golang.org/x/time	v0.15.0	rate/sometimes.go	BSD-3-Clause + PATENTS	// Copyright 2022 The Go Authors. All rights reserved.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/atomicbitops/32b_64bit.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/atomicbitops/aligned_64bit.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/atomicbitops/atomicbitops.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/atomicbitops/atomicbitops_64bit_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/atomicbitops/atomicbitops_amd64.s	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/atomicbitops/atomicbitops_float64.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/bits/bits.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/bits/bits_template.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/bits/uint64_arch.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/bits/uint64_arch_amd64_asm.s	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/buffer.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/buffer_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/buffer_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/buffer_unsafe_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/chunk.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/chunk_refs.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/view.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/view_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/buffer/view_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/context/context.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/context/context_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/gohacks/linkname_go113_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/gohacks/noescape_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/gohacks/slice_go120_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/gohacks/string_go120_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/linewriter/linewriter.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/log/bug.go	Apache-2.0 (module; retain file notices)	// Copyright 2025 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/log/file.go	Apache-2.0 (module; retain file notices)	// Copyright 2026 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/log/glog.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/log/json.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/log/json_k8s.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/log/log.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/log/rate_limited.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/rand/rand.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/rand/rand_linux.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/rand/rand_linux_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/rand/rand_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/rand/rng.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/refs/refcounter.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/refs/refs_map.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/refs/refs_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sleep/sleep_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sleep/sleep_unsafe_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/addr_range.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/addr_set.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/decode.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/decode_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/deferred_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/encode.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/encode_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/ods_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/state.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/state_norace.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/stats.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/types.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/state/wire/wire.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/aliases.go	BSD-style (file notice)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/checklocks_off_unsafe.go	BSD-style (file notice)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/fence.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/fence_amd64.s	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/gate_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/goyield_unsafe.go	BSD-style (file notice)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/locking/atomicptrmap_ancestors_unsafe.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/locking/atomicptrmap_goroutine_unsafe.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/locking/lockdep_norace.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/locking/locking.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/mutex_unsafe.go	BSD-style (file notice)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/nocopy.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/norace_unsafe.go	BSD-style (file notice)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/runtime.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/runtime_amd64.go	BSD-style (file notice)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/runtime_constants_go_impl.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/runtime_exectracer2_go_impl.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/runtime_go126_unsafe.go	BSD-style (file notice)	// Copyright 2024 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/runtime_spinning_asm_impl_amd64.s	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/runtime_unsafe.go	BSD-style (file notice)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/rwmutex_unsafe.go	BSD-style (file notice)	// Copyright 2009 The Go Authors. All rights reserved. | // Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/seqcount.go	BSD-style (file notice)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/sync/sync.go	BSD-style (file notice)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/adapters/gonet/gonet.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/adapters/gonet/gonet_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/checksum/checksum.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/checksum/checksum_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/checksum/checksum_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2023 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/checksum/checksum_unsafe_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/errors.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/errors_linux.go	Apache-2.0 (module; retain file notices)	// Copyright 2024 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/hash/jenkins/jenkins.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/hash/jenkins/jenkins_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/arp.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/checksum.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/datagram.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/eth.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/gue.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/header_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/icmpv4.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/icmpv6.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/igmp.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/igmpv3.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/interfaces.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ipv4.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ipv6.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ipv6_extension_headers.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ipv6_fragment.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/mld.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/mldv2.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/mldv2_igmpv3_common.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ndp_neighbor_advert.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ndp_neighbor_solicit.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ndp_options.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ndp_router_advert.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ndp_router_solicit.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/ndpoptionidentifier_string.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/parse/parse.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/parse/parse_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/tcp.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/udp.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/header/virtionet.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/internal/tcp/tcp.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/internal/tcp/tcp_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/link/channel/channel.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/link/channel/channel_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/link/channel/endpoint_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/link/channel/queue_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/hash/hash.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/hash/hash_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/fragmentation/fragmentation.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/fragmentation/fragmentation_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/fragmentation/reassembler.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/fragmentation/reassembler_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/ip/duplicate_address_detection.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/ip/errors.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/ip/generic_multicast_protocol.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/ip/ip_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/ip/reject_with_reset.go	Apache-2.0 (module; retain file notices)	// Copyright 2026 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/ip/stats.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/multicast/multicast_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/internal/multicast/route_table.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv4/icmp.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv4/igmp.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv4/ipv4.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv4/ipv4_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv4/stats.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv6/dhcpv6configurationfromndpra_string.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv6/icmp.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv6/ipv6.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv6/ipv6_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv6/mld.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv6/ndp.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/network/ipv6/stats.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/ports/flags.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/ports/ports.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/ports/ports_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/route_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/seqnum/seqnum.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/seqnum/seqnum_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/sock_err_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/socketops.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/address_state_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/address_state_refs.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/addressable_endpoint_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/addressable_endpoint_state_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/bridge.go	Apache-2.0 (module; retain file notices)	// Copyright 2024 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/bridge_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/bucket_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/cleanup_endpoints_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/conn_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/conn_track_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/conntrack.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/endpoints_by_nic_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/headertype_string.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/hook_string.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/icmp_rate_limit.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/iptables.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/iptables_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/iptables_targets.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/iptables_types.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/multi_port_endpoint_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/nat.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/neighbor_cache.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/neighbor_cache_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/neighbor_entry.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/neighbor_entry_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/neighbor_entry_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/neighborstate_string.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/nftables_types.go	Apache-2.0 (module; retain file notices)	// Copyright 2025 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/nic.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/nic_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/nic_stats.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/nud.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/packet_buffer.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/packet_buffer_list.go	Apache-2.0 (module; retain file notices)	// Copyright 2022 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/packet_buffer_refs.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/packet_buffer_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/packet_endpoint_list_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/packet_eps_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/packets_pending_link_resolution_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/pending_packets.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/rand.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/registration.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/route.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/route_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/route_stack_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/save_restore.go	Apache-2.0 (module; retain file notices)	// Copyright 2024 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/stack.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/stack_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/stack_options.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/stack_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/stack_unsafe_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/state_conn_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/transport_demuxer.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/transport_endpoints_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stack/tuple_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stdclock.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/stdclock_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/tcpip.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/tcpip_linux_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/tcpip_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/tcpip_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/timer.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/datagram.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/icmp/endpoint.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/icmp/endpoint_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/icmp/icmp_packet_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/icmp/icmp_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/icmp/protocol.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/internal/network/endpoint.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/internal/network/endpoint_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/internal/network/network_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/internal/noop/endpoint.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/internal/noop/noop_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/packet/endpoint.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/packet/endpoint_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/packet/endpoint_rcv_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/packet/endpoint_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/packet/last_error_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/packet/packet_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/packet/packet_mmap_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/packet/packet_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/raw/endpoint.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/raw/endpoint_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/raw/protocol.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/raw/raw_packet_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/raw/raw_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/accept.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/accept_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/connect.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/connect_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/cubic.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/dispatcher.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/dispatcher_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/endpoint.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/endpoint_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/ep_queue_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/forwarder.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/forwarder_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/forwarder_request_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/hasher_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/keepalive_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/last_error_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/pending_processing_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/protocol.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/protocol_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/protocol_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2026 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/rack.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/rcv.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/rcv_queue_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/reno.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/reno_recovery.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/rtt_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/sack.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/sack_recovery.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/sack_scoreboard.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/segment.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/segment_heap.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/segment_queue.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/segment_queue_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/segment_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/segment_unsafe.go	Apache-2.0 (module; retain file notices)	// Copyright 2020 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/snd.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/snd_queue_mutex.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/state.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/tcp_endpoint_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/tcp_segment_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/tcp_segment_refs.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/tcp_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/tcp_unsafe_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcp/timer.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcpconntrack/tcp_conntrack.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/tcpconntrack/tcpconntrack_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/transport.go	Apache-2.0 (module; retain file notices)	// Copyright 2021 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/transport_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/udp/endpoint.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/udp/endpoint_state.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/udp/forwarder.go	Apache-2.0 (module; retain file notices)	// Copyright 2019 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/udp/protocol.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/udp/udp_packet_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/tcpip/transport/udp/udp_state_autogen.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/waiter/waiter.go	Apache-2.0 (module; retain file notices)	// Copyright 2018 The gVisor Authors.
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/waiter/waiter_list.go	Apache-2.0 (module; retain file notices)	
+gvisor.dev/gvisor	v0.0.0-20260701204157-69c2d17aea96	pkg/waiter/waiter_state_autogen.go	Apache-2.0 (module; retain file notices)	
 
+
+===== third_party/licenses/GPL-3.0.txt =====
                     GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
 
@@ -764,7 +1076,6 @@ Public License instead of this License.  But first, please read
 
 
 ===== third_party/licenses/XHTTP-input-Go-BSD.txt =====
-
 Copyright 2009 The Go Authors.
 
 Redistribution and use in source and binary forms, with or without
@@ -795,7 +1106,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===== third_party/licenses/XHTTP-input-golang-x-net-BSD.txt =====
-
 Copyright 2009 The Go Authors.
 
 Redistribution and use in source and binary forms, with or without
@@ -826,7 +1136,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===== third_party/licenses/XHTTP-input-golang-x-text-BSD.txt =====
-
 Copyright 2009 The Go Authors.
 
 Redistribution and use in source and binary forms, with or without
@@ -857,7 +1166,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===== third_party/licenses/blake3-MIT.txt =====
-
 The MIT License (MIT)
 
 Copyright (c) 2020 Luke Champine
@@ -882,7 +1190,6 @@ THE SOFTWARE.
 
 
 ===== third_party/licenses/cpuid-MIT.txt =====
-
 The MIT License (MIT)
 
 Copyright (c) 2015 Klaus Post
@@ -908,7 +1215,6 @@ SOFTWARE.
 
 
 ===== third_party/licenses/github.com_andybalholm_brotli@v1.0.6-LICENSE =====
-
 Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -931,7 +1237,6 @@ THE SOFTWARE.
 
 
 ===== third_party/licenses/github.com_cloudflare_circl@v1.6.3-LICENSE =====
-
 Copyright (c) 2019 Cloudflare. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -992,7 +1297,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===== third_party/licenses/github.com_coder_websocket@v1.8.14-LICENSE.txt =====
-
 Copyright (c) 2025 Coder
 
 Permission to use, copy, modify, and distribute this software for any
@@ -1008,8 +1312,212 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 
-===== third_party/licenses/github.com_juju_ratelimit@v1.0.2-LICENSE =====
+===== third_party/licenses/github.com_google_btree@v1.1.3-LICENSE =====
 
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+   APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+   Copyright [yyyy] [name of copyright owner]
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+
+===== third_party/licenses/github.com_juju_ratelimit@v1.0.2-LICENSE =====
 All files in this repository are licensed as follows. If you contribute
 to this repository, it is assumed that you license your contribution
 under the same license unless you state otherwise.
@@ -1204,7 +1712,6 @@ Library.
 
 
 ===== third_party/licenses/github.com_klauspost_compress@v1.18.7-LICENSE =====
-
 Copyright (c) 2012 The Go Authors. All rights reserved.
 Copyright (c) 2019 Klaus Post. All rights reserved.
 
@@ -1512,7 +2019,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 
 ===== third_party/licenses/github.com_klauspost_cpuid_v2@v2.0.9-LICENSE =====
-
 The MIT License (MIT)
 
 Copyright (c) 2015 Klaus Post
@@ -1538,7 +2044,6 @@ SOFTWARE.
 
 
 ===== third_party/licenses/github.com_oschwald_maxminddb-golang@v1.13.1-LICENSE =====
-
 ISC License
 
 Copyright (c) 2015, Gregory J. Oschwald <oschwald@gmail.com>
@@ -1557,7 +2062,6 @@ PERFORMANCE OF THIS SOFTWARE.
 
 
 ===== third_party/licenses/github.com_pires_go-proxyproto@v0.11.0-LICENSE =====
-
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -1762,7 +2266,6 @@ PERFORMANCE OF THIS SOFTWARE.
 
 
 ===== third_party/licenses/github.com_refraction-networking_utls@v1.8.2-LICENSE =====
-
 Copyright (c) 2009 The Go Authors. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -1793,7 +2296,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===== third_party/licenses/github.com_rogpeppe_go-internal@v1.9.0-LICENSE =====
-
 Copyright (c) 2018 The Go Authors. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -1824,7 +2326,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===== third_party/licenses/go-BSD.txt =====
-
 Copyright 2009 The Go Authors.
 
 Redistribution and use in source and binary forms, with or without
@@ -1855,7 +2356,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===== third_party/licenses/golang-x-crypto-BSD.txt =====
-
 Copyright 2009 The Go Authors.
 
 Redistribution and use in source and binary forms, with or without
@@ -1886,7 +2386,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===== third_party/licenses/golang-x-sys-BSD.txt =====
-
 Copyright 2009 The Go Authors.
 
 Redistribution and use in source and binary forms, with or without
@@ -1917,7 +2416,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===== third_party/licenses/golang.org_x_crypto@v0.56.0-LICENSE =====
-
 Copyright 2009 The Go Authors.
 
 Redistribution and use in source and binary forms, with or without
@@ -1948,7 +2446,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===== third_party/licenses/golang.org_x_crypto@v0.56.0-PATENTS =====
-
 Additional IP Rights Grant (Patents)
 
 "This implementation" means the copyrightable works distributed by
@@ -1974,7 +2471,6 @@ shall terminate as of the date such litigation is filed.
 
 
 ===== third_party/licenses/golang.org_x_crypto@v0.57.0-LICENSE =====
-
 Copyright 2009 The Go Authors.
 
 Redistribution and use in source and binary forms, with or without
@@ -2005,7 +2501,61 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===== third_party/licenses/golang.org_x_crypto@v0.57.0-PATENTS =====
+Additional IP Rights Grant (Patents)
 
+"This implementation" means the copyrightable works distributed by
+Google as part of the Go project.
+
+Google hereby grants to You a perpetual, worldwide, non-exclusive,
+no-charge, royalty-free, irrevocable (except as stated in this section)
+patent license to make, have made, use, offer to sell, sell, import,
+transfer and otherwise run, modify and propagate the contents of this
+implementation of Go, where such license applies only to those patent
+claims, both currently owned or controlled by Google and acquired in
+the future, licensable by Google that are necessarily infringed by this
+implementation of Go.  This grant does not include claims that would be
+infringed only as a consequence of further modification of this
+implementation.  If you or your agent or exclusive licensee institute or
+order or agree to the institution of patent litigation against any
+entity (including a cross-claim or counterclaim in a lawsuit) alleging
+that this implementation of Go or any code incorporated within this
+implementation of Go constitutes direct or contributory patent
+infringement, or inducement of patent infringement, then any patent
+rights granted to you under this License for this implementation of Go
+shall terminate as of the date such litigation is filed.
+
+
+===== third_party/licenses/golang.org_x_exp@v0.0.0-20260611194520-c48552f49976-LICENSE =====
+Copyright 2009 The Go Authors.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google LLC nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+===== third_party/licenses/golang.org_x_exp@v0.0.0-20260611194520-c48552f49976-PATENTS =====
 Additional IP Rights Grant (Patents)
 
 "This implementation" means the copyrightable works distributed by
@@ -2031,7 +2581,6 @@ shall terminate as of the date such litigation is filed.
 
 
 ===== third_party/licenses/golang.org_x_net@v0.60.0-LICENSE =====
-
 Copyright 2009 The Go Authors.
 
 Redistribution and use in source and binary forms, with or without
@@ -2062,7 +2611,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===== third_party/licenses/golang.org_x_net@v0.60.0-PATENTS =====
-
 Additional IP Rights Grant (Patents)
 
 "This implementation" means the copyrightable works distributed by
@@ -2088,7 +2636,6 @@ shall terminate as of the date such litigation is filed.
 
 
 ===== third_party/licenses/golang.org_x_sys@v0.47.0-LICENSE =====
-
 Copyright 2009 The Go Authors.
 
 Redistribution and use in source and binary forms, with or without
@@ -2119,7 +2666,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===== third_party/licenses/golang.org_x_sys@v0.47.0-PATENTS =====
-
 Additional IP Rights Grant (Patents)
 
 "This implementation" means the copyrightable works distributed by
@@ -2145,7 +2691,6 @@ shall terminate as of the date such litigation is filed.
 
 
 ===== third_party/licenses/golang.org_x_sys@v0.48.0-LICENSE =====
-
 Copyright 2009 The Go Authors.
 
 Redistribution and use in source and binary forms, with or without
@@ -2176,7 +2721,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===== third_party/licenses/golang.org_x_sys@v0.48.0-PATENTS =====
-
 Additional IP Rights Grant (Patents)
 
 "This implementation" means the copyrightable works distributed by
@@ -2202,7 +2746,6 @@ shall terminate as of the date such litigation is filed.
 
 
 ===== third_party/licenses/golang.org_x_text@v0.42.0-LICENSE =====
-
 Copyright 2009 The Go Authors.
 
 Redistribution and use in source and binary forms, with or without
@@ -2233,7 +2776,61 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===== third_party/licenses/golang.org_x_text@v0.42.0-PATENTS =====
+Additional IP Rights Grant (Patents)
 
+"This implementation" means the copyrightable works distributed by
+Google as part of the Go project.
+
+Google hereby grants to You a perpetual, worldwide, non-exclusive,
+no-charge, royalty-free, irrevocable (except as stated in this section)
+patent license to make, have made, use, offer to sell, sell, import,
+transfer and otherwise run, modify and propagate the contents of this
+implementation of Go, where such license applies only to those patent
+claims, both currently owned or controlled by Google and acquired in
+the future, licensable by Google that are necessarily infringed by this
+implementation of Go.  This grant does not include claims that would be
+infringed only as a consequence of further modification of this
+implementation.  If you or your agent or exclusive licensee institute or
+order or agree to the institution of patent litigation against any
+entity (including a cross-claim or counterclaim in a lawsuit) alleging
+that this implementation of Go or any code incorporated within this
+implementation of Go constitutes direct or contributory patent
+infringement, or inducement of patent infringement, then any patent
+rights granted to you under this License for this implementation of Go
+shall terminate as of the date such litigation is filed.
+
+
+===== third_party/licenses/golang.org_x_time@v0.15.0-LICENSE =====
+Copyright 2009 The Go Authors.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google LLC nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+===== third_party/licenses/golang.org_x_time@v0.15.0-PATENTS =====
 Additional IP Rights Grant (Patents)
 
 "This implementation" means the copyrightable works distributed by
@@ -2259,7 +2856,6 @@ shall terminate as of the date such litigation is filed.
 
 
 ===== third_party/licenses/gopkg.in_check.v1@v1.0.0-20201130134442-10cb98267c6c-LICENSE =====
-
 Gocheck - A rich testing framework for Go
  
 Copyright (c) 2010-2013 Gustavo Niemeyer <gustavo@niemeyer.net>
@@ -2288,7 +2884,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 ===== third_party/licenses/gopkg.in_yaml.v3@v3.0.1-LICENSE =====
-
 
 This project is covered by two different licenses: MIT and Apache.
 
@@ -2341,8 +2936,1890 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 
-===== third_party/licenses/lukechampine.com_blake3@v1.4.1-LICENSE =====
+===== third_party/licenses/gvisor-sync-Go-BSD-LICENSE =====
+Copyright 2009 The Go Authors.
 
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of Google LLC nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+===== third_party/licenses/gvisor-sync-Google-BSD.html =====
+
+
+
+
+
+
+
+
+
+<!doctype html>
+<html 
+      lang="en"
+      dir="ltr">
+  <head>
+    <meta name="google-signin-client-id" content="721724668570-nbkv1cfusk7kk4eni4pjvepaus73b13t.apps.googleusercontent.com"><meta name="google-signin-scope"
+          content="profile email https://www.googleapis.com/auth/developerprofiles https://www.googleapis.com/auth/developerprofiles.award https://www.googleapis.com/auth/devprofiles.full_control.firstparty"><meta property="og:site_name" content="Google for Developers">
+    <meta property="og:type" content="website"><meta name="theme-color" content="#1a73e8"><meta charset="utf-8">
+    <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+
+    <link rel="manifest" href="/_pwa/developers/manifest.json"
+          crossorigin="use-credentials">
+    <link rel="preconnect" href="//www.gstatic.com" crossorigin>
+    <link rel="preconnect" href="//fonts.googleapis.com" crossorigin>
+    <link rel="preconnect" href="//www.google-analytics.com" crossorigin><link rel="stylesheet" href="//fonts.googleapis.com/css?family=Google+Sans:400,500|Roboto:400,400italic,500,500italic,700,700italic|Roboto+Mono:400,500,700&display=swap">
+      <link rel="stylesheet"
+            href="//fonts.googleapis.com/css2?family=Material+Icons&family=Material+Symbols+Outlined&display=block"><link rel="stylesheet" href="https://www.gstatic.com/devrel-devsite/prod/vab328caf183ea693bb389a1701d6be5b2db91193de097b9f38bbe8a87dd02cd9/developers/css/app.css">
+      <link rel="shortcut icon" href="https://www.gstatic.com/devrel-devsite/prod/vab328caf183ea693bb389a1701d6be5b2db91193de097b9f38bbe8a87dd02cd9/developers/images/favicon-new.png">
+    <link rel="apple-touch-icon" href="https://www.gstatic.com/devrel-devsite/prod/vab328caf183ea693bb389a1701d6be5b2db91193de097b9f38bbe8a87dd02cd9/developers/images/touchicon-180-new.png"><link rel="canonical" href="https://developers.google.com/open-source/licenses/bsd"><link rel="search" type="application/opensearchdescription+xml"
+            title="Google for Developers" href="https://developers.google.com/s/opensearch.xml">
+      <link rel="alternate" hreflang="en"
+          href="https://developers.google.com/open-source/licenses/bsd" /><link rel="alternate" hreflang="x-default" href="https://developers.google.com/open-source/licenses/bsd" /><link rel="alternate" hreflang="ar"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=ar" /><link rel="alternate" hreflang="bn"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=bn" /><link rel="alternate" hreflang="zh-Hans"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=zh-cn" /><link rel="alternate" hreflang="zh-Hant"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=zh-tw" /><link rel="alternate" hreflang="fa"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=fa" /><link rel="alternate" hreflang="fr"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=fr" /><link rel="alternate" hreflang="de"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=de" /><link rel="alternate" hreflang="he"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=he" /><link rel="alternate" hreflang="hi"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=hi" /><link rel="alternate" hreflang="id"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=id" /><link rel="alternate" hreflang="it"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=it" /><link rel="alternate" hreflang="ja"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=ja" /><link rel="alternate" hreflang="ko"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=ko" /><link rel="alternate" hreflang="pl"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=pl" /><link rel="alternate" hreflang="pt-BR"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=pt-br" /><link rel="alternate" hreflang="ru"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=ru" /><link rel="alternate" hreflang="es-419"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=es-419" /><link rel="alternate" hreflang="th"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=th" /><link rel="alternate" hreflang="tr"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=tr" /><link rel="alternate" hreflang="vi"
+          href="https://developers.google.com/open-source/licenses/bsd?hl=vi" /><title>Open Source Programs Office &nbsp;|&nbsp; Google for Developers</title>
+
+<meta property="og:title" content="Open Source Programs Office &nbsp;|&nbsp; Google for Developers"><meta property="og:url" content="https://developers.google.com/open-source/licenses/bsd"><meta property="og:image" content="https://www.gstatic.com/devrel-devsite/prod/vab328caf183ea693bb389a1701d6be5b2db91193de097b9f38bbe8a87dd02cd9/developers/images/opengraph/google-blue.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="675"><meta property="og:locale" content="en"><meta name="twitter:card" content="summary_large_image">
+  
+    
+    
+    
+    
+    
+  
+
+    </head>
+  <body class="color-scheme--light"
+        template="page"
+        theme="google-blue"
+        type="lcat"
+        
+        
+        
+        layout="docs"
+        
+        
+        
+        
+        
+        display-toc
+        pending>
+  
+    <devsite-progress type="indeterminate" id="app-progress"></devsite-progress>
+  
+  
+    <a href="#main-content" class="skip-link button">
+      
+      Skip to main content
+    </a>
+    <section class="devsite-wrapper">
+      <devsite-cookie-notification-bar></devsite-cookie-notification-bar>
+        <devsite-header role="banner">
+  
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="devsite-header--inner" data-nosnippet>
+  <div class="devsite-top-logo-row-wrapper-wrapper">
+    <div class="devsite-top-logo-row-wrapper">
+      <div class="devsite-top-logo-row">
+        <button type="button" id="devsite-hamburger-menu"
+          class="devsite-header-icon-button button-flat material-icons gc-analytics-event"
+          data-category="Site-Wide Custom Events"
+          data-label="Navigation menu button"
+          visually-hidden
+          aria-label="Open menu">
+        </button>
+        
+<div class="devsite-product-name-wrapper">
+
+  
+    
+  
+
+
+
+  
+  
+  <span class="devsite-product-name">
+    <ul class="devsite-breadcrumb-list"
+  >
+  
+  <li class="devsite-breadcrumb-item
+             devsite-has-google-wordmark">
+    
+    
+    
+      
+      
+        
+  <a href="https://developers.google.com/open-source"
+      
+        class="devsite-breadcrumb-link gc-analytics-event"
+      
+        data-category="Site-Wide Custom Events"
+      
+        data-label="Upper Header"
+      
+        data-value="1"
+      
+        track-type="globalNav"
+      
+        track-name="breadcrumb"
+      
+        track-metadata-position="1"
+      
+        track-metadata-eventdetail="Google Open Source Programs Office"
+      
+    >
+    
+          <svg class="devsite-google-wordmark"
+       xmlns="http://www.w3.org/2000/svg"
+       viewBox="0 0 148 48">
+    <title>Google</title>
+    <path class="devsite-google-wordmark-svg-path" d="M19.58,37.65c-9.87,0-18.17-8.04-18.17-17.91c0-9.87,8.3-17.91,18.17-17.91c5.46,0,9.35,2.14,12.27,4.94l-3.45,3.45c-2.1-1.97-4.93-3.49-8.82-3.49c-7.21,0-12.84,5.81-12.84,13.02c0,7.21,5.64,13.02,12.84,13.02c4.67,0,7.34-1.88,9.04-3.58c1.4-1.4,2.32-3.41,2.66-6.16H19.58v-4.89h16.47c0.18,0.87,0.26,1.92,0.26,3.06c0,3.67-1.01,8.21-4.24,11.44C28.93,35.9,24.91,37.65,19.58,37.65z M61.78,26.12c0,6.64-5.1,11.53-11.36,11.53s-11.36-4.89-11.36-11.53c0-6.68,5.1-11.53,11.36-11.53S61.78,19.43,61.78,26.12z M56.8,26.12c0-4.15-2.96-6.99-6.39-6.99c-3.43,0-6.39,2.84-6.39,6.99c0,4.11,2.96,6.99,6.39,6.99C53.84,33.11,56.8,30.22,56.8,26.12z M87.25,26.12c0,6.64-5.1,11.53-11.36,11.53c-6.26,0-11.36-4.89-11.36-11.53c0-6.68,5.1-11.53,11.36-11.53C82.15,14.59,87.25,19.43,87.25,26.12zM82.28,26.12c0-4.15-2.96-6.99-6.39-6.99c-3.43,0-6.39,2.84-6.39,6.99c0,4.11,2.96,6.99,6.39,6.99C79.32,33.11,82.28,30.22,82.28,26.12z M112.09,15.29v20.7c0,8.52-5.02,12.01-10.96,12.01c-5.59,0-8.95-3.76-10.22-6.81l4.41-1.83c0.79,1.88,2.71,4.1,5.81,4.1c3.8,0,6.16-2.36,6.16-6.77v-1.66h-0.18c-1.14,1.4-3.32,2.62-6.07,2.62c-5.76,0-11.05-5.02-11.05-11.49c0-6.51,5.28-11.57,11.05-11.57c2.75,0,4.93,1.22,6.07,2.58h0.18v-1.88H112.09z M107.64,26.16c0-4.06-2.71-7.03-6.16-7.03c-3.49,0-6.42,2.97-6.42,7.03c0,4.02,2.93,6.94,6.42,6.94C104.93,33.11,107.64,30.18,107.64,26.16z M120.97,3.06v33.89h-5.07V3.06H120.97z M140.89,29.92l3.93,2.62c-1.27,1.88-4.32,5.11-9.61,5.11c-6.55,0-11.28-5.07-11.28-11.53c0-6.86,4.77-11.53,10.71-11.53c5.98,0,8.91,4.76,9.87,7.34l0.52,1.31l-15.42,6.38c1.18,2.31,3.01,3.49,5.59,3.49C137.79,33.11,139.58,31.84,140.89,29.92zM128.79,25.77l10.31-4.28c-0.57-1.44-2.27-2.45-4.28-2.45C132.24,19.04,128.66,21.31,128.79,25.77z"/>
+  </svg>Open Source Programs Office
+        
+  </a>
+  
+      
+    
+  </li>
+  
+</ul>
+  </span>
+
+</div>
+        <div class="devsite-top-logo-row-middle">
+          <div class="devsite-header-upper-tabs">
+            
+           </div>
+          
+<devsite-search
+    enable-signin
+    enable-search
+    enable-suggestions
+      enable-query-completion
+    
+    enable-search-summaries
+    project-name="Open Source Programs Office"
+    tenant-name="Google for Developers"
+    project-scope="/open-source"
+    url-scoped="https://developers.google.com/s/results/open-source"
+    
+    
+    
+    >
+  <form class="devsite-search-form" action="https://developers.google.com/s/results" method="GET">
+    <div class="devsite-search-container">
+      <button type="button"
+              search-open
+              class="devsite-search-button devsite-header-icon-button button-flat material-icons"
+              
+              aria-label="Open search"></button>
+      <div class="devsite-searchbox">
+        <input
+          aria-activedescendant=""
+          aria-autocomplete="list"
+          
+          aria-label="Search"
+          aria-expanded="false"
+          aria-haspopup="listbox"
+          autocomplete="off"
+          class="devsite-search-field devsite-search-query"
+          name="q"
+          
+          placeholder="Search"
+          role="combobox"
+          type="text"
+          value=""
+          >
+          <div class="devsite-search-image material-icons" aria-hidden="true">
+            
+              <svg class="devsite-search-ai-image" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <g clip-path="url(#clip0_6641_386)">
+                    <path d="M19.6 21L13.3 14.7C12.8 15.1 12.225 15.4167 11.575 15.65C10.925 15.8833 10.2333 16 9.5 16C7.68333 16 6.14167 15.375 4.875 14.125C3.625 12.8583 3 11.3167 3 9.5C3 7.68333 3.625 6.15 4.875 4.9C6.14167 3.63333 7.68333 3 9.5 3C10.0167 3 10.5167 3.05833 11 3.175C11.4833 3.275 11.9417 3.43333 12.375 3.65L10.825 5.2C10.6083 5.13333 10.3917 5.08333 10.175 5.05C9.95833 5.01667 9.73333 5 9.5 5C8.25 5 7.18333 5.44167 6.3 6.325C5.43333 7.19167 5 8.25 5 9.5C5 10.75 5.43333 11.8167 6.3 12.7C7.18333 13.5667 8.25 14 9.5 14C10.6667 14 11.6667 13.625 12.5 12.875C13.35 12.1083 13.8417 11.15 13.975 10H15.975C15.925 10.6333 15.7833 11.2333 15.55 11.8C15.3333 12.3667 15.05 12.8667 14.7 13.3L21 19.6L19.6 21ZM17.5 12C17.5 10.4667 16.9667 9.16667 15.9 8.1C14.8333 7.03333 13.5333 6.5 12 6.5C13.5333 6.5 14.8333 5.96667 15.9 4.9C16.9667 3.83333 17.5 2.53333 17.5 0.999999C17.5 2.53333 18.0333 3.83333 19.1 4.9C20.1667 5.96667 21.4667 6.5 23 6.5C21.4667 6.5 20.1667 7.03333 19.1 8.1C18.0333 9.16667 17.5 10.4667 17.5 12Z" fill="#5F6368"/>
+                  </g>
+                <defs>
+                <clipPath id="clip0_6641_386">
+                <rect width="24" height="24" fill="white"/>
+                </clipPath>
+                </defs>
+              </svg>
+            
+          </div>
+          <div class="devsite-search-shortcut-icon-container" aria-hidden="true">
+            <kbd class="devsite-search-shortcut-icon">/</kbd>
+          </div>
+      </div>
+    </div>
+  </form>
+  <button type="button"
+          search-close
+          class="devsite-search-button devsite-header-icon-button button-flat material-icons"
+          
+          aria-label="Close search"></button>
+</devsite-search>
+
+        </div>
+
+        
+
+          
+
+          
+
+          
+
+          
+
+          
+<devsite-language-selector>
+  <ul role="presentation">
+    
+    
+    <li role="presentation">
+      <a role="menuitem" lang="en"
+        >English</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="de"
+        >Deutsch</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="es"
+        >Español</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="es_419"
+        >Español – América Latina</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="fr"
+        >Français</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="id"
+        >Indonesia</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="it"
+        >Italiano</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="pl"
+        >Polski</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="pt_br"
+        >Português – Brasil</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="vi"
+        >Tiếng Việt</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="tr"
+        >Türkçe</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="ru"
+        >Русский</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="he"
+        >עברית</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="ar"
+        >العربيّة</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="fa"
+        >فارسی</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="hi"
+        >हिंदी</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="bn"
+        >বাংলা</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="th"
+        >ภาษาไทย</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="zh_cn"
+        >中文 – 简体</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="zh_tw"
+        >中文 – 繁體</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="ja"
+        >日本語</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="ko"
+        >한국어</a>
+    </li>
+    
+  </ul>
+</devsite-language-selector>
+
+
+          
+
+        
+
+        
+          <devsite-user 
+                        
+                        
+                          enable-profiles
+                        
+                        
+                          fp-auth
+                        
+                        id="devsite-user">
+            
+              
+              <span class="button devsite-top-button" aria-hidden="true" visually-hidden>Sign in</span>
+            
+          </devsite-user>
+        
+        
+        
+      </div>
+    </div>
+  </div>
+
+
+
+  <div class="devsite-collapsible-section
+    
+      devsite-header-no-lower-tabs
+    ">
+    <div class="devsite-header-background">
+      
+        
+      
+      
+    </div>
+  </div>
+
+</div>
+
+
+
+  
+</devsite-header>
+        <devsite-book-nav scrollbars hidden>
+          
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="devsite-book-nav-filter"
+     hidden>
+  <span class="filter-list-icon material-icons" aria-hidden="true"></span>
+  <input type="text"
+         placeholder="Filter"
+         
+         aria-label="Type to filter"
+         role="searchbox">
+  
+  <span class="filter-clear-button hidden"
+        data-title="Clear filter"
+        aria-label="Clear filter"
+        role="button"
+        tabindex="0"></span>
+</div>
+
+<nav class="devsite-book-nav devsite-nav nocontent" data-nosnippet
+     aria-label="Side menu">
+  <div class="devsite-mobile-header">
+    <button type="button"
+            id="devsite-close-nav"
+            class="devsite-header-icon-button button-flat material-icons gc-analytics-event"
+            data-category="Site-Wide Custom Events"
+            data-label="Close navigation"
+            aria-label="Close navigation">
+    </button>
+    <div class="devsite-product-name-wrapper">
+
+  
+    
+  
+
+
+  
+      <span class="devsite-product-name">
+        
+        
+        <ul class="devsite-breadcrumb-list"
+  >
+  
+  <li class="devsite-breadcrumb-item
+             devsite-has-google-wordmark">
+    
+    
+    
+      
+      
+        
+  <a href="https://developers.google.com/open-source"
+      
+        class="devsite-breadcrumb-link gc-analytics-event"
+      
+        data-category="Site-Wide Custom Events"
+      
+        data-label="Upper Header"
+      
+        data-value="1"
+      
+        track-type="globalNav"
+      
+        track-name="breadcrumb"
+      
+        track-metadata-position="1"
+      
+        track-metadata-eventdetail="Google Open Source Programs Office"
+      
+    >
+    
+          <svg class="devsite-google-wordmark"
+       xmlns="http://www.w3.org/2000/svg"
+       viewBox="0 0 148 48">
+    <title>Google</title>
+    <path class="devsite-google-wordmark-svg-path" d="M19.58,37.65c-9.87,0-18.17-8.04-18.17-17.91c0-9.87,8.3-17.91,18.17-17.91c5.46,0,9.35,2.14,12.27,4.94l-3.45,3.45c-2.1-1.97-4.93-3.49-8.82-3.49c-7.21,0-12.84,5.81-12.84,13.02c0,7.21,5.64,13.02,12.84,13.02c4.67,0,7.34-1.88,9.04-3.58c1.4-1.4,2.32-3.41,2.66-6.16H19.58v-4.89h16.47c0.18,0.87,0.26,1.92,0.26,3.06c0,3.67-1.01,8.21-4.24,11.44C28.93,35.9,24.91,37.65,19.58,37.65z M61.78,26.12c0,6.64-5.1,11.53-11.36,11.53s-11.36-4.89-11.36-11.53c0-6.68,5.1-11.53,11.36-11.53S61.78,19.43,61.78,26.12z M56.8,26.12c0-4.15-2.96-6.99-6.39-6.99c-3.43,0-6.39,2.84-6.39,6.99c0,4.11,2.96,6.99,6.39,6.99C53.84,33.11,56.8,30.22,56.8,26.12z M87.25,26.12c0,6.64-5.1,11.53-11.36,11.53c-6.26,0-11.36-4.89-11.36-11.53c0-6.68,5.1-11.53,11.36-11.53C82.15,14.59,87.25,19.43,87.25,26.12zM82.28,26.12c0-4.15-2.96-6.99-6.39-6.99c-3.43,0-6.39,2.84-6.39,6.99c0,4.11,2.96,6.99,6.39,6.99C79.32,33.11,82.28,30.22,82.28,26.12z M112.09,15.29v20.7c0,8.52-5.02,12.01-10.96,12.01c-5.59,0-8.95-3.76-10.22-6.81l4.41-1.83c0.79,1.88,2.71,4.1,5.81,4.1c3.8,0,6.16-2.36,6.16-6.77v-1.66h-0.18c-1.14,1.4-3.32,2.62-6.07,2.62c-5.76,0-11.05-5.02-11.05-11.49c0-6.51,5.28-11.57,11.05-11.57c2.75,0,4.93,1.22,6.07,2.58h0.18v-1.88H112.09z M107.64,26.16c0-4.06-2.71-7.03-6.16-7.03c-3.49,0-6.42,2.97-6.42,7.03c0,4.02,2.93,6.94,6.42,6.94C104.93,33.11,107.64,30.18,107.64,26.16z M120.97,3.06v33.89h-5.07V3.06H120.97z M140.89,29.92l3.93,2.62c-1.27,1.88-4.32,5.11-9.61,5.11c-6.55,0-11.28-5.07-11.28-11.53c0-6.86,4.77-11.53,10.71-11.53c5.98,0,8.91,4.76,9.87,7.34l0.52,1.31l-15.42,6.38c1.18,2.31,3.01,3.49,5.59,3.49C137.79,33.11,139.58,31.84,140.89,29.92zM128.79,25.77l10.31-4.28c-0.57-1.44-2.27-2.45-4.28-2.45C132.24,19.04,128.66,21.31,128.79,25.77z"/>
+  </svg>Open Source Programs Office
+        
+  </a>
+  
+      
+    
+  </li>
+  
+</ul>
+      </span>
+    
+
+</div>
+  </div>
+
+  <div class="devsite-book-nav-wrapper">
+    <div class="devsite-mobile-nav-top">
+      
+        <ul class="devsite-nav-list">
+          
+          
+          
+        </ul>
+      
+    </div>
+    
+  </div>
+</nav>
+          
+        </devsite-book-nav>
+      
+      <section id="gc-wrapper">
+        <main role="main" id="main-content" class="devsite-main-content"
+            
+              
+              has-sidebar
+            >
+          <div class="devsite-sidebar">
+            <div class="devsite-sidebar-content">
+                
+                <devsite-toc class="devsite-nav"
+                            role="navigation"
+                            aria-label="On this page"
+                            depth="2"
+                            scrollbars
+                            data-nosnippet
+                  ></devsite-toc>
+                <devsite-recommendations-sidebar class="nocontent devsite-nav" data-nosnippet>
+                </devsite-recommendations-sidebar>
+            </div>
+          </div>
+          <devsite-content>
+            
+              
+
+
+
+
+
+
+
+
+
+
+<article class="devsite-article"><style>
+      #gc-appbar {
+        display: none;
+      }
+      #gc-content h1 {
+        padding-top: 0.5em;
+      }
+      </style>
+  
+  
+  
+  
+  
+
+  <div class="devsite-article-meta nocontent" role="navigation" data-nosnippet>
+    
+    
+    <ul class="devsite-breadcrumb-list"
+  
+    aria-label="Breadcrumb">
+  
+  <li class="devsite-breadcrumb-item
+             ">
+    
+    
+    
+      
+        
+  <a href="https://developers.google.com/"
+      
+        class="devsite-breadcrumb-link gc-analytics-event"
+      
+        data-category="Site-Wide Custom Events"
+      
+        data-label="Breadcrumbs"
+      
+        data-value="1"
+      
+        track-type="globalNav"
+      
+        track-name="breadcrumb"
+      
+        track-metadata-position="1"
+      
+        track-metadata-eventdetail=""
+      
+    >
+    
+          Home
+        
+  </a>
+  
+      
+    
+  </li>
+  
+  <li class="devsite-breadcrumb-item
+             ">
+    
+      
+      <div class="devsite-breadcrumb-guillemet material-icons" aria-hidden="true"></div>
+    
+    
+    
+      
+        
+  <a href="https://developers.google.com/products"
+      
+        class="devsite-breadcrumb-link gc-analytics-event"
+      
+        data-category="Site-Wide Custom Events"
+      
+        data-label="Breadcrumbs"
+      
+        data-value="2"
+      
+        track-type="globalNav"
+      
+        track-name="breadcrumb"
+      
+        track-metadata-position="2"
+      
+        track-metadata-eventdetail=""
+      
+    >
+    
+          Products
+        
+  </a>
+  
+      
+    
+  </li>
+  
+  <li class="devsite-breadcrumb-item
+             ">
+    
+      
+      <div class="devsite-breadcrumb-guillemet material-icons" aria-hidden="true"></div>
+    
+    
+    
+      
+        
+  <a href="https://developers.google.com/open-source"
+      
+        class="devsite-breadcrumb-link gc-analytics-event"
+      
+        data-category="Site-Wide Custom Events"
+      
+        data-label="Breadcrumbs"
+      
+        data-value="3"
+      
+        track-type="globalNav"
+      
+        track-name="breadcrumb"
+      
+        track-metadata-position="3"
+      
+        track-metadata-eventdetail="Google Open Source Programs Office"
+      
+    >
+    
+          Open Source Programs Office
+        
+  </a>
+  
+      
+    
+  </li>
+  
+</ul>
+    
+      
+    <devsite-thumb-rating position="header">
+    </devsite-thumb-rating>
+  
+    
+  </div>
+  <devsite-actions hidden data-nosnippet><devsite-feature-tooltip
+      ack-key="AckCollectionsBookmarkTooltipDismiss"
+      analytics-category="Site-Wide Custom Events"
+      analytics-action-show="Callout Profile displayed"
+      analytics-action-close="Callout Profile dismissed"
+      analytics-label="Create Collection Callout"
+      class="devsite-page-bookmark-tooltip nocontent"
+      data-nosnippet
+      dismiss-button="true"
+      id="devsite-collections-dropdown"
+      
+      dismiss-button-text="Dismiss"
+
+      
+      close-button-text="Got it">
+
+    
+    
+      <devsite-bookmark></devsite-bookmark>
+    
+
+    <span slot="popout-heading">
+      
+      Stay organized with collections
+    </span>
+    <span slot="popout-contents">
+      
+      Save and categorize content based on your preferences.
+    </span>
+  </devsite-feature-tooltip>
+    <devsite-llm-tools></devsite-llm-tools></devsite-actions>
+  
+    
+  
+
+  <devsite-toc class="devsite-nav"
+    depth="2"
+    devsite-toc-embedded
+    >
+  </devsite-toc>
+  
+    
+  <div class="devsite-article-body clearfix
+  devsite-no-page-title">
+
+  
+    
+    
+    <h1 itemprop="name" class="page-title" id="bsd-license" data-text="BSD License" tabindex="-1">BSD License</h1>
+
+    <p>Copyright (c) 2025, Google LLC</p>
+
+    <p>Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are
+    met:</p>
+
+    <ul>
+      <li>Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.</li>
+      <li>Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the
+      distribution.</li>
+      <li>Neither the name of Google LLC nor the names of its contributors
+      may be used to endorse or promote products derived from this software
+      without specific prior written permission.</li>
+    </ul>
+
+    <p>THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+    IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+    THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+    PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+    CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+    EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+    PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+    OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+    WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+    OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+    ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. </p>
+
+  
+  
+
+  
+</div>
+
+  
+    
+    
+      
+    <devsite-thumb-rating position="footer">
+    </devsite-thumb-rating>
+  
+       
+    
+    
+  
+
+  <div class="devsite-floating-action-buttons"></div></article>
+
+
+<devsite-content-footer class="nocontent" data-nosnippet>
+  <p>Except as otherwise noted, the content of this page is licensed under the <a href="https://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 License</a>. For details, see the <a href="https://developers.google.com/site-policies">Google Developers Site Policies</a>. Java is a registered trademark of Oracle and/or its affiliates.</p>
+  <p>Last updated 2025-10-07 UTC.</p>
+</devsite-content-footer>
+
+
+<devsite-notification
+>
+</devsite-notification>
+
+
+  
+<div class="devsite-content-data">
+  
+  
+    <template class="devsite-content-data-template">
+      [[["Easy to understand","easyToUnderstand","thumb-up"],["Solved my problem","solvedMyProblem","thumb-up"],["Other","otherUp","thumb-up"]],[["Missing the information I need","missingTheInformationINeed","thumb-down"],["Too complicated / too many steps","tooComplicatedTooManySteps","thumb-down"],["Out of date","outOfDate","thumb-down"],["Samples / code issue","samplesCodeIssue","thumb-down"],["Other","otherDown","thumb-down"]],["Last updated 2025-10-07 UTC."],[],["This document outlines the BSD license terms for software copyrighted by Google Inc. It permits redistribution and modification in source and binary forms, provided that the copyright notice, conditions, and disclaimer are retained in both forms.  It prohibits using Google's name for product endorsement without written permission. The software is provided \"as is,\" disclaiming all warranties, and limits liability for any damages arising from its use.\n"]]
+    </template>
+  
+</div>
+            
+          </devsite-content>
+        </main>
+        <devsite-footer-promos class="devsite-footer">
+          
+            
+
+<nav class="devsite-footer-promos nocontent"
+     aria-label="Promotions"
+     data-nosnippet>
+  <ul class="devsite-footer-promos-list">
+    
+    <li class="devsite-footer-promo">
+      <a href="https://opensource.googleblog.com/"
+         class="devsite-footer-promo-title gc-analytics-event"
+         data-category="Site-Wide Custom Events"
+       
+         
+         data-label="Footer Promo Link (index 1)"
+       
+       >
+        
+        
+        <picture>
+          
+          <img class="devsite-footer-promo-icon"
+                src="/static/site-assets/blogger_64dp.png"
+                loading="lazy"
+                alt="Blog">
+        </picture>
+        
+        <span class="devsite-footer-promo-label">
+          Blog
+        </span>
+      </a>
+      <div class="devsite-footer-promo-description"> </div>
+    </li>
+    
+  </ul>
+</nav>
+
+          
+        </devsite-footer-promos>
+        <devsite-footer-linkboxes class="devsite-footer">
+          
+            
+<nav class="devsite-footer-linkboxes nocontent"
+     aria-label="Footer links"
+     data-nosnippet>
+  
+  <ul class="devsite-footer-linkboxes-list">
+    
+    <li class="devsite-footer-linkbox ">
+    <h3 class="devsite-footer-linkbox-heading no-link">Engage</h3>
+      <ul class="devsite-footer-linkbox-list">
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="https://discuss.ai.google.dev/"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 1)"
+            >
+            
+          
+            Google AI Forum
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="/program"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 2)"
+            >
+            
+          
+            Google Developer Program
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="/community"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 3)"
+            >
+            
+          
+            Google Developer Groups
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="/community/experts"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 4)"
+            >
+            
+          
+            Google Developer Experts
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="/community/accelerators"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 5)"
+            >
+            
+          
+            Accelerators
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="/community/nvidia"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 6)"
+            >
+            
+              
+              
+            
+          
+            Google Cloud & NVIDIA
+          
+          </a>
+          
+          
+        </li>
+        
+      </ul>
+    </li>
+    
+    <li class="devsite-footer-linkbox ">
+    <h3 class="devsite-footer-linkbox-heading no-link">Connect</h3>
+      <ul class="devsite-footer-linkbox-list">
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="//googledevelopers.blogspot.com"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 1)"
+            >
+            
+          
+            Blog
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="https://bsky.app/profile/developers.google.com"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 2)"
+            >
+            
+          
+            Bluesky
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="https://www.instagram.com/googlefordevs/"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 3)"
+            >
+            
+          
+            Instagram
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="https://www.linkedin.com/showcase/googledevelopers/"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 4)"
+            >
+            
+          
+            LinkedIn
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="//twitter.com/googledevs"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 5)"
+            >
+            
+          
+            X (Twitter)
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="//www.youtube.com/user/GoogleDevelopers"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 6)"
+            >
+            
+              
+              
+            
+          
+            YouTube
+          
+          </a>
+          
+          
+        </li>
+        
+      </ul>
+    </li>
+    
+    <li class="devsite-footer-linkbox ">
+    <h3 class="devsite-footer-linkbox-heading no-link">Build</h3>
+      <ul class="devsite-footer-linkbox-list">
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="https://developer.android.com/"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 1)"
+            >
+            
+          
+            Android
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="https://developer.chrome.com/"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 2)"
+            >
+            
+          
+            Chrome
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="https://firebase.google.com/"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 3)"
+            >
+            
+          
+            Firebase
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="https://aistudio.google.com/"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 4)"
+            >
+            
+          
+            Google AI Studio
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="https://antigravity.google/"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 5)"
+            >
+            
+          
+            Google Antigravity
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="https://cloud.google.com/"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 6)"
+            >
+            
+          
+            Google Cloud
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="https://play.google.com/console/about/"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 7)"
+            >
+            
+          
+            Google Play
+          
+          </a>
+          
+          
+        </li>
+        
+        <li class="devsite-footer-linkbox-item">
+          
+          <a href="/products"
+             class="devsite-footer-linkbox-link gc-analytics-event"
+             data-category="Site-Wide Custom Events"
+            
+             data-label="Footer Link (index 8)"
+            >
+            
+              
+              
+            
+          
+            View all
+          
+          </a>
+          
+          
+        </li>
+        
+      </ul>
+    </li>
+    
+  </ul>
+  
+</nav>
+          
+        </devsite-footer-linkboxes>
+        <devsite-footer-utility class="devsite-footer">
+          
+            
+
+<div class="devsite-footer-utility nocontent" data-nosnippet>
+  
+  
+  <nav class="devsite-footer-sites" aria-label="Other Google Developers websites">
+    <a href="https://developers.google.com/"
+       class="devsite-footer-sites-logo-link gc-analytics-event"
+       data-category="Site-Wide Custom Events"
+       data-label="Footer Google Developers Link">
+      <picture>
+        
+        <img class="devsite-footer-sites-logo"
+             src="https://www.gstatic.com/devrel-devsite/prod/vab328caf183ea693bb389a1701d6be5b2db91193de097b9f38bbe8a87dd02cd9/developers/images/lockup-google-for-developers.svg"
+             loading="lazy"
+             alt="Google Developers">
+      </picture>
+    </a>
+    <ul class="devsite-footer-sites-list">
+      
+      <li class="devsite-footer-sites-item">
+        <a href="//developer.android.com"
+           class="devsite-footer-sites-link
+                  gc-analytics-event"
+           data-category="Site-Wide Custom Events"
+         
+           data-label="Footer Android Link"
+         
+         >
+          Android
+        </a>
+      </li>
+      
+      <li class="devsite-footer-sites-item">
+        <a href="//developer.chrome.com/home"
+           class="devsite-footer-sites-link
+                  gc-analytics-event"
+           data-category="Site-Wide Custom Events"
+         
+           data-label="Footer Chrome Link"
+         
+         >
+          Chrome
+        </a>
+      </li>
+      
+      <li class="devsite-footer-sites-item">
+        <a href="//firebase.google.com"
+           class="devsite-footer-sites-link
+                  gc-analytics-event"
+           data-category="Site-Wide Custom Events"
+         
+           data-label="Footer Firebase Link"
+         
+         >
+          Firebase
+        </a>
+      </li>
+      
+      <li class="devsite-footer-sites-item">
+        <a href="//cloud.google.com"
+           class="devsite-footer-sites-link
+                  gc-analytics-event"
+           data-category="Site-Wide Custom Events"
+         
+           data-label="Footer Google Cloud Platform Link"
+         
+         >
+          Google Cloud Platform
+        </a>
+      </li>
+      
+      <li class="devsite-footer-sites-item">
+        <a href="//ai.google.dev/"
+           class="devsite-footer-sites-link
+                  gc-analytics-event"
+           data-category="Site-Wide Custom Events"
+         
+           data-label="Footer Google AI Link"
+         
+         >
+          Google AI
+        </a>
+      </li>
+      
+      <li class="devsite-footer-sites-item">
+        <a href="/products"
+           class="devsite-footer-sites-link
+                  gc-analytics-event"
+           data-category="Site-Wide Custom Events"
+         
+           data-label="Footer All products Link"
+         
+         >
+          All products
+        </a>
+      </li>
+      
+    </ul>
+  </nav>
+  
+
+  
+  <nav class="devsite-footer-utility-links" aria-label="Utility links">
+    
+    <ul class="devsite-footer-utility-list">
+      
+      <li class="devsite-footer-utility-item
+                 ">
+        
+        
+        <a class="devsite-footer-utility-link gc-analytics-event"
+           href="/terms/site-terms"
+           data-category="Site-Wide Custom Events"
+           data-label="Footer Terms link"
+         >
+          Terms
+        </a>
+        
+      </li>
+      
+      <li class="devsite-footer-utility-item
+                 ">
+        
+        
+        <a class="devsite-footer-utility-link gc-analytics-event"
+           href="//policies.google.com/privacy"
+           data-category="Site-Wide Custom Events"
+           data-label="Footer Privacy link"
+         >
+          Privacy
+        </a>
+        
+      </li>
+      
+      <li class="devsite-footer-utility-item
+                 glue-cookie-notification-bar-control">
+        
+        
+        <a class="devsite-footer-utility-link gc-analytics-event"
+           href="#"
+           data-category="Site-Wide Custom Events"
+           data-label="Footer Manage cookies link"
+         
+           aria-hidden="true"
+         >
+          Manage cookies
+        </a>
+        
+      </li>
+      
+    </ul>
+    
+    
+<devsite-language-selector>
+  <ul role="presentation">
+    
+    
+    <li role="presentation">
+      <a role="menuitem" lang="en"
+        >English</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="de"
+        >Deutsch</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="es"
+        >Español</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="es_419"
+        >Español – América Latina</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="fr"
+        >Français</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="id"
+        >Indonesia</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="it"
+        >Italiano</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="pl"
+        >Polski</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="pt_br"
+        >Português – Brasil</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="vi"
+        >Tiếng Việt</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="tr"
+        >Türkçe</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="ru"
+        >Русский</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="he"
+        >עברית</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="ar"
+        >العربيّة</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="fa"
+        >فارسی</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="hi"
+        >हिंदी</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="bn"
+        >বাংলা</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="th"
+        >ภาษาไทย</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="zh_cn"
+        >中文 – 简体</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="zh_tw"
+        >中文 – 繁體</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="ja"
+        >日本語</a>
+    </li>
+    
+    <li role="presentation">
+      <a role="menuitem" lang="ko"
+        >한국어</a>
+    </li>
+    
+  </ul>
+</devsite-language-selector>
+
+  </nav>
+</div>
+          
+        </devsite-footer-utility>
+        <devsite-panel>
+          
+        </devsite-panel>
+        
+      </section>
+      </section>
+    <devsite-sitemask></devsite-sitemask>
+    <devsite-snackbar></devsite-snackbar>
+    <devsite-tooltip ></devsite-tooltip>
+    <devsite-heading-link></devsite-heading-link>
+    <devsite-analytics>
+      
+        <script type="application/json" analytics>[{&#34;dimensions&#34;: {&#34;dimension6&#34;: &#34;en&#34;, &#34;dimension11&#34;: false, &#34;dimension5&#34;: &#34;en&#34;, &#34;dimension3&#34;: false, &#34;dimension4&#34;: &#34;Open Source Programs Office&#34;, &#34;dimension1&#34;: &#34;Signed out&#34;}, &#34;gaid&#34;: &#34;UA-24532603-1&#34;, &#34;metrics&#34;: {&#34;ratings_count&#34;: &#34;metric2&#34;, &#34;ratings_value&#34;: &#34;metric1&#34;}, &#34;purpose&#34;: 1}, {&#34;dimensions&#34;: {&#34;dimension6&#34;: &#34;en&#34;, &#34;dimension11&#34;: false, &#34;dimension5&#34;: &#34;en&#34;, &#34;dimension3&#34;: false, &#34;dimension4&#34;: &#34;Open Source Programs Office&#34;, &#34;dimension1&#34;: &#34;Signed out&#34;}, &#34;gaid&#34;: &#34;UA-53341410-3&#34;, &#34;metrics&#34;: {&#34;ratings_count&#34;: &#34;metric2&#34;, &#34;ratings_value&#34;: &#34;metric1&#34;}, &#34;purpose&#34;: 0}]</script>
+<script type="application/json" tag-management>{&#34;at&#34;: &#34;True&#34;, &#34;ga4&#34;: [{&#34;id&#34;: &#34;G-272J68FCRF&#34;, &#34;purpose&#34;: 1}], &#34;ga4p&#34;: [{&#34;id&#34;: &#34;G-272J68FCRF&#34;, &#34;purpose&#34;: 1}], &#34;gtm&#34;: [{&#34;id&#34;: &#34;GTM-T98GCPGN&#34;, &#34;purpose&#34;: 1}], &#34;parameters&#34;: {&#34;internalUser&#34;: &#34;False&#34;, &#34;language&#34;: {&#34;machineTranslated&#34;: &#34;False&#34;, &#34;requested&#34;: &#34;en&#34;, &#34;served&#34;: &#34;en&#34;}, &#34;pageType&#34;: &#34;lcat&#34;, &#34;projectName&#34;: &#34;Open Source Programs Office&#34;, &#34;signedIn&#34;: &#34;False&#34;, &#34;tenant&#34;: &#34;developers&#34;, &#34;recommendations&#34;: {&#34;sourcePage&#34;: &#34;&#34;, &#34;sourceType&#34;: 0, &#34;sourceRank&#34;: 0, &#34;sourceIdenticalDescriptions&#34;: 0, &#34;sourceTitleWords&#34;: 0, &#34;sourceDescriptionWords&#34;: 0, &#34;experiment&#34;: &#34;&#34;}, &#34;experiment&#34;: {&#34;ids&#34;: &#34;&#34;}}}</script>
+      
+    </devsite-analytics>
+    
+      <devsite-badger></devsite-badger>
+    
+    
+    
+    
+    
+<script nonce="WUxDF4v/xbnyzk+zwdKSkYAjv0Ca2G">
+  
+  (function(d,e,v,s,i,t,E){d['GoogleDevelopersObject']=i;
+    t=e.createElement(v);t.async=1;t.src=s;E=e.getElementsByTagName(v)[0];
+    E.parentNode.insertBefore(t,E);})(window, document, 'script',
+    'https://www.gstatic.com/devrel-devsite/prod/vab328caf183ea693bb389a1701d6be5b2db91193de097b9f38bbe8a87dd02cd9/developers/js/app_loader.js', '[1,"en",null,"/js/devsite_app_module.js","https://www.gstatic.com/devrel-devsite/prod/vab328caf183ea693bb389a1701d6be5b2db91193de097b9f38bbe8a87dd02cd9","https://www.gstatic.com/devrel-devsite/prod/vab328caf183ea693bb389a1701d6be5b2db91193de097b9f38bbe8a87dd02cd9/developers","https://developers-dot-devsite-v2-prod.appspot.com",null,null,["/_pwa/developers/manifest.json","https://www.gstatic.com/devrel-devsite/prod/vab328caf183ea693bb389a1701d6be5b2db91193de097b9f38bbe8a87dd02cd9/images/video-placeholder.svg","https://www.gstatic.com/devrel-devsite/prod/vab328caf183ea693bb389a1701d6be5b2db91193de097b9f38bbe8a87dd02cd9/developers/images/favicon-new.png","https://fonts.googleapis.com/css?family=Google+Sans:400,500|Roboto:400,400italic,500,500italic,700,700italic|Roboto+Mono:400,500,700&display=swap"],1,null,[1,6,8,12,14,17,21,25,50,52,63,70,75,76,80,87,91,92,93,97,98,100,101,102,103,104,105,107,108,109,110,112,113,116,117,118,120,122,124,125,126,127,129,130,131,132,133,134,135,136,138,140,141,147,148,149,151,152,156,157,158,159,161,163,164,168,169,170,179,180,182,183,186,191,193,196],"AIzaSyAP-jjEJBzmIyKR4F-3XITp8yM9T1gEEI8","AIzaSyB6xiKGDR5O3Ak2okS4rLkauxGUG7XP0hg","developers.google.com","AIzaSyAQk0fBONSGUqCNznf6Krs82Ap1-NV6J4o","AIzaSyCCxcqdrZ_7QMeLCRY20bh_SXdAYqy70KY",null,null,null,["Profiles__enable_completequiz_endpoint","DevPro__enable_g1_integration","DevPro__enable_embed_profile_creation","Concierge__enable_key_takeaways","TpcFeatures__proxy_prod_host","Search__enable_ai_eligibility_checks","Profiles__enable_recognition_badges","AIStudioInteractionsToggle__interactions_are_default","Profiles__enable_dashboard_curated_recommendations","MiscFeatureFlags__gdp_dashboard_reskin_enabled","Profiles__enable_auto_apply_credits","DevPro__enable_devsite_captcha","DevPro__enable_enterprise","Cloud__enable_free_trial_server_call","Analytics__enable_devpro_interaction_logging","Profiles__enable_playlist_community_acl","Analytics__enable_clearcut_logging","DevPro__enable_g1_ineligible_redirect","DevPro__enable_vertex_credit_card","MiscFeatureFlags__enable_variable_operator","DevPro__enable_free_benefits","DevPro__remove_eu_tax_intake_form","Profiles__enable_completecodelab_endpoint","DevPro__enable_nvidia_credits_card","DevPro__enable_google_one_card","Concierge__enable_pushui","CloudShell__cloud_shell_button","EngEduTelemetry__enable_engedu_telemetry","MiscFeatureFlags__enable_framebox_badge_methods","DevPro__enable_google_payments_buyflow","Profiles__enable_release_notes_notifications","Search__enable_page_map","Search__enable_ai_search_summaries_for_all","Profiles__enable_targeted_hero","Concierge__enable_remove_info_panel_tags","MiscFeatureFlags__enable_project_variables","Concierge__enable_actions_menu","Search__enable_dynamic_content_confidential_banner","DevPro__enable_devpro_offers","MiscFeatureFlags__developers_footer_dark_image","Concierge__enable_devsite_llm_tools","Profiles__enable_awarding_url","Profiles__require_profile_eligibility_for_signin","Profiles__enable_join_program_group_endpoint","Profiles__enable_developer_profile_pages_as_content","Cloud__cache_serialized_dynamic_content","Profiles__enable_public_developer_profiles","ProgramGroups__enable_auto_enroll","Cloud__enable_cloudx_experiment_ids","Profiles__enable_stripe_subscription_management","Profiles__enable_complete_playlist_endpoint","MiscFeatureFlags__enable_explicit_template_dependencies","Concierge__enable_key_takeaways_new_ui","DevPro__enable_code_assist","Cloud__enable_cloud_shell_fte_user_flow","BookNav__enable_tenant_cache_key","Profiles__enable_profile_collections","Profiles__enable_page_saving","MiscFeatureFlags__remove_cross_domain_tracking_params","Significatio__enable_by_tenant","MiscFeatureFlags__developers_footer_image","Profiles__enable_callout_notifications","Cloud__enable_legacy_calculator_redirect","MiscFeatureFlags__enable_view_transitions","DevPro__enable_firebase_workspaces_card","MiscFeatureFlags__enable_appearance_cookies","Home__enable_chatbot","Search__enable_suggestions_from_borg","MiscFeatureFlags__enable_markdown_accept_header","CloudShell__cloud_code_overflow_menu","Profiles__enable_purchase_prompts","MiscFeatureFlags__fix_lower_breadcrumbs","DevPro__enable_credits_banner","DevPro__enable_developer_subscriptions","Experiments__reqs_query_experiments","Profiles__enable_developer_profiles_callout","MiscFeatureFlags__enable_variable_operator_index_yaml","Cloud__enable_cloud_shell","Profiles__enable_developer_profile_benefits_ui_redesign","DevPro__enable_cloud_innovators_plus","TpcFeatures__enable_unmirrored_page_left_nav","SignIn__enable_l1_signup_flow","MiscFeatureFlags__enable_firebase_utm","Cloud__enable_cloud_dlp_service","Cloud__fast_free_trial","Profiles__enable_user_type"],null,null,"AIzaSyBLEMok-5suZ67qRPzx0qUtbnLmyT_kCVE","https://developerscontentserving-pa.clients6.google.com","AIzaSyCM4QpTRSqP5qI4Dvjt4OAScIN8sOUlO-k","https://developerscontentsearch-pa.clients6.google.com",1,4,null,"https://developerprofiles-pa.clients6.google.com",[1,"developers","Google for Developers","developers.google.com",null,"developers-dot-devsite-v2-prod.appspot.com",null,null,[1,1,[1],null,null,null,null,null,null,null,null,[1],null,null,null,null,null,null,[1],[1,null,null,[1,20],"/recommendations/information"],null,null,null,[1,1,1],[1,1,null,1,1,null,null,["/meridian"]],[1,null,null,null,null,null,null,["/admob","/ad-manager/mobile-ads-sdk","/ml-kit"]],null,[null,["/meridian","/youtube/devices/"]],1,null,[1]],null,[null,null,null,null,null,null,"/images/lockup-new.svg","/images/touchicon-180-new.png",null,null,null,null,1,null,null,null,null,null,null,null,null,1,null,null,null,"/images/lockup-dark-theme-new.svg",[]],[],null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,[6,1,14,15,20,22,23,29,32,36],null,[[null,null,null,[3,7,10,2,39,17,4,32,24,11,12,13,34,15,25],null,null,[1,[["docType","Choose a content type",[["Tutorial",null,null,null,null,null,null,null,null,"Tutorial"],["Guide",null,null,null,null,null,null,null,null,"Guide"],["Sample",null,null,null,null,null,null,null,null,"Sample"]]],["product","Choose a product",[["Android",null,null,null,null,null,null,null,null,"Android"],["ARCore",null,null,null,null,null,null,null,null,"ARCore"],["ChromeOS",null,null,null,null,null,null,null,null,"ChromeOS"],["Firebase",null,null,null,null,null,null,null,null,"Firebase"],["Flutter",null,null,null,null,null,null,null,null,"Flutter"],["Assistant",null,null,null,null,null,null,null,null,"Google Assistant"],["GoogleCloud",null,null,null,null,null,null,null,null,"Google Cloud"],["GoogleMapsPlatform",null,null,null,null,null,null,null,null,"Google Maps Platform"],["GooglePay",null,null,null,null,null,null,null,null,"Google Pay & Google Wallet"],["GooglePlay",null,null,null,null,null,null,null,null,"Google Play"],["Tensorflow",null,null,null,null,null,null,null,null,"TensorFlow"]]],["category","Choose a topic",[["AiAndMachineLearning",null,null,null,null,null,null,null,null,"AI and Machine Learning"],["Data",null,null,null,null,null,null,null,null,"Data"],["Enterprise",null,null,null,null,null,null,null,null,"Enterprise"],["Gaming",null,null,null,null,null,null,null,null,"Gaming"],["Mobile",null,null,null,null,null,null,null,null,"Mobile"],["Web",null,null,null,null,null,null,null,null,"Web"]]]]]],[1,1],null,1],[[["UA-24532603-1"],["UA-22084204-5"],null,null,["UA-24532603-5"],["GTM-T98GCPGN"],null,[["G-272J68FCRF"],null,null,[["G-272J68FCRF",2]]],[["UA-24532603-1",2]],null,[["UA-24532603-5",2]],[["GTM-T98GCPGN",2]],1],[[3,2],[14,11],[6,5],[4,3],[13,10],[15,12],[16,13],[1,1],[12,9],[5,4],[11,8]],[[2,2],[1,1]]],null,4,null,null,null,null,null,null,null,null,null,null,null,null,null,"developers.devsite.google",null,null,null,null,null,[]],null,"pk_live_5170syrHvgGVmSx9sBrnWtA5luvk9BwnVcvIi7HizpwauFG96WedXsuXh790rtij9AmGllqPtMLfhe2RSwD6Pn38V00uBCydV4m",1,null,"https://developerscontentinsights-pa.clients6.google.com","AIzaSyCg-ZUslalsEbXMfIo9ZP8qufZgo3LSBDU","AIzaSyDxT0vkxnY_KeINtA4LSePJO-4MAZPMRsE","https://developers.clients6.google.com",["https://codeassist.google.com","https://code-assist-free-tier.corp.google.com","https://pay.google.com","https://pay-merchant-console-autopush-qual.corp.google.com","https://pay-merchant-console-dev.corp.google.com","https://pay-merchant-console-preprod-qual.corp.google.com"],null,"AIzaSyBQom12tzI-rybN7Sf-KfeL4nwm-Rf7PmI\n",null,null,"https://developers.googleapis.com"]')
+  
+</script>
+
+    <devsite-a11y-announce></devsite-a11y-announce>
+  </body>
+</html>
+
+===== third_party/licenses/gvisor.dev_gvisor@v0.0.0-20260701204157-69c2d17aea96-LICENSE =====
+
+                                 Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable
+      by such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s)
+      with the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or
+          Derivative Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+   APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+   Copyright [yyyy] [name of copyright owner]
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
+------------------
+
+Some files carry the following license, noted at the top of each file:
+
+   Permission is hereby granted, free of charge, to any person obtaining a copy
+   of this software and associated documentation files (the "Software"), to deal
+   in the Software without restriction, including without limitation the rights
+   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   copies of the Software, and to permit persons to whom the Software is
+   furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+   THE SOFTWARE.
+
+------------------
+
+Some files carry the "BSD" license, noted at the top of each file:
+
+   Redistribution and use in source and binary forms, with or without
+   modification, are permitted provided that the following conditions are met:
+
+      * Redistributions of source code must retain the above copyright notice,
+      this list of conditions and the following disclaimer.
+
+      * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+
+      * Neither the name of Google Inc. nor the names of its contributors may be
+      used to endorse or promote products derived from this software without
+      specific prior written permission.
+
+   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+   POSSIBILITY OF SUCH DAMAGE.
+
+===== third_party/licenses/lukechampine.com_blake3@v1.4.1-LICENSE =====
 The MIT License (MIT)
 
 Copyright (c) 2020 Luke Champine
@@ -2364,3 +4841,51 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+
+===== third_party/licenses/tun2socks-v2.7.0-MIT-LICENSE =====
+MIT License
+
+Copyright (c) 2019 Jason Lyu
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+===== internal/tunstack/LICENSE.tun2socks (embedded MIT code; not retired external binary) =====
+MIT License
+
+Copyright (c) 2019 Jason Lyu
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

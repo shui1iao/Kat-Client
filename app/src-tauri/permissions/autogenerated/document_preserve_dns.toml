@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-document-preserve-dns"
+description = "Enables the document_preserve_dns command without any pre-configured scope."
+commands.allow = ["document_preserve_dns"]
+
+[[permission]]
+identifier = "deny-document-preserve-dns"
+description = "Denies the document_preserve_dns command without any pre-configured scope."
+commands.deny = ["document_preserve_dns"]

@@ -1,0 +1,19 @@
+{
+  "core_source_merged": true,
+  "core_binary_build_pending": false,
+  "version": "0.5.2-test-ss2022-anytls",
+  "rollback_binary": "670f38eb7778287a7433c057a86949014614b01225545131529278fb83e5eb4a",
+  "full_rollback_source": "/opt/proxy-kernel-ss2022-anytls-opt-20261018/baseline-source",
+  "measured_SS_binary": "22a12b4c57dbe647298ff0c5d99b813d5efbbe9e1b8df5cbc751540f46ae6009",
+  "measured_combined_binary": "4c7e002d46997db85ff80abcdb7ef90ab817eec537b59f9863731ee70e54542c",
+  "functionally_verified_final_label_binary": "9104e3fea4834f99d88eb2cbe2afe1a367b7c80d08cd4be2c37599e459b4358d",
+  "production_files_exact_measured_candidates": {
+    "internal/ss/tcp.go": "f96e530286e62f0c6a2c84b9dfe061af4857a4cd6bd16570837254abd531f4ae",
+    "internal/ss/record2022.go": "19bd3c865cffd0fa212c41d60e2eb7d63de3f17bcedfa350bc195931ba831f29",
+    "internal/anytls/session.go": "4d6bd750e07ede3e55ae5a2ea589f5634adb7fb5e2c84539705f1e11c327d0a1"
+  },
+  "version_and_test_only_differences": "final main version label and added tests; protocol production bytes unchanged from respective AB candidate",
+  "core_binary_final": "a8579fda6ec83ab9a63ba7145d9d3a1c827514f784f05c321734bf14f4f80abd",
+  "functionally_verified_final_core": true,
+  "final_version": "0.5.2-test-ss2022-anytls"
+}

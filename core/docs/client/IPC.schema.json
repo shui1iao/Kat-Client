@@ -1,0 +1,4774 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:kat:client-core:ipc:1.5",
+  "title": "Kat client core JSONL v1 + host-only egress + safe logs + manual probe settings + Kat JSON/YAML source",
+  "description": "UTF-8 JSONL; max 2097152 bytes per frame excluding newline; <=16 inflight; responses out of order with exact id. x-methods maps method results. Kernel document and imported outbounds retain actual Kat fields, not a second config schema. network.egress.* MUST NOT pass Rust public core_request. Linux does not expose network.egress.v2 capability. logs.get is public and additive; protocol remains 1. Cursor/dropped semantics are in x-methods.logs.get. Desktop source format is json/yaml/yml; wire protocol remains JSONL and protocol 1. Optional format defaults to the active extension. See contracts/YAML.md. Physical egress private payload schema 2 requires registered system_dns endpoints with owner LUID, family ifIndex, effective scope, and snapshot fingerprint. Old bare bootstrap_dns payloads are rejected; core JSONL protocol remains 1. Windows also requires network.dns-revision.v1. identity binds physical route/adapter identity independently of mutable DNS fingerprint; dns_revision changes without business generation changes. Windows TUN also requires network.flow-session.v1. Attribution typed events carry only finite reason/cause, rule and optional immediate Win32 code; raw kernel log messages remain a separate private channel.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/response"
+    }
+  ],
+  "$defs": {
+    "request": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "hello"
+            },
+            "params": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "document.get"
+            },
+            "params": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "document.validate"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "json",
+                    "yaml",
+                    "yml"
+                  ]
+                }
+              },
+              "required": [
+                "text"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "document.apply"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "json",
+                    "yaml",
+                    "yml"
+                  ]
+                }
+              },
+              "required": [
+                "text"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "core.start"
+            },
+            "params": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "core.stop"
+            },
+            "params": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "core.reload"
+            },
+            "params": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "status"
+            },
+            "params": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "probe.node"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "probe.group"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "import.parse"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string",
+                  "maxLength": 8192,
+                  "description": "Explicit HTTPS public subscription fetch; no redirect/userinfo/fragment. Never inferred from text."
+                }
+              },
+              "oneOf": [
+                {
+                  "required": [
+                    "text"
+                  ],
+                  "not": {
+                    "required": [
+                      "url"
+                    ]
+                  }
+                },
+                {
+                  "required": [
+                    "url"
+                  ],
+                  "not": {
+                    "required": [
+                      "text"
+                    ]
+                  }
+                }
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "network.egress.get"
+            },
+            "params": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "network.egress.set"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "ipv4_if_index": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 4294967295
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "ipv6_if_index": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 4294967295
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "schema": {
+                  "const": 2
+                },
+                "ipv4_luid": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 18446744073709551615
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "ipv6_luid": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 18446744073709551615
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "system_dns": {
+                  "type": "array",
+                  "maxItems": 16,
+                  "items": {
+                    "$ref": "#/$defs/systemDnsEndpoint"
+                  }
+                },
+                "fingerprint": {
+                  "type": "string",
+                  "pattern": "^([0-9a-fA-F]{64})?$"
+                },
+                "identity": {
+                  "type": "string",
+                  "pattern": "^([0-9a-fA-F]{64})?$"
+                }
+              },
+              "required": [
+                "enabled",
+                "ipv4_if_index",
+                "ipv6_if_index",
+                "schema",
+                "ipv4_luid",
+                "ipv6_luid",
+                "system_dns",
+                "fingerprint",
+                "identity"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "logs.get"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "after": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991,
+                  "default": 0
+                },
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 500,
+                  "default": 200
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "connections.list"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "closed_limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 500,
+                  "default": 200
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "logs.connections"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "after": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 500,
+                  "default": 200
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "dns.query"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "A",
+                    "AAAA",
+                    "both"
+                  ],
+                  "default": "both"
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "resources.list"
+            },
+            "params": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "resources.refresh"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "rule_set",
+                    "geoip",
+                    "asn"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "subscription.migrate"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "probe.all"
+            },
+            "params": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "connections.close"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  }
+                }
+              },
+              "required": [
+                "ids"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "icon.get"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "url": {
+                  "type": "string",
+                  "maxLength": 65536
+                },
+                "group": {
+                  "type": "string",
+                  "maxLength": 64
+                }
+              },
+              "required": [
+                "url"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "group.filter_preview"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "filter": {
+                  "type": "string",
+                  "maxLength": 4096
+                },
+                "exclude_filter": {
+                  "type": "string",
+                  "maxLength": 4096
+                },
+                "include_group": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "description": "One existing source group; omitted/empty retains legacy all-node preview. Empty filter with a source includes all source leaves."
+                },
+                "group_name": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "description": "Optional existing consumer group; requires include_group. Validates the proposed source edge (including mixed cycles). Omit for an unsaved new group."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "logs.kernel"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "after": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 500,
+                  "default": 200
+                },
+                "level": {
+                  "enum": [
+                    "debug",
+                    "info",
+                    "warn",
+                    "error"
+                  ]
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "dns.cache.clear"
+            },
+            "params": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "diagnostics.network"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "unlock",
+                    "connectivity",
+                    "exit"
+                  ]
+                },
+                "run": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "urls": {
+                  "type": "array",
+                  "maxItems": 16,
+                  "items": {
+                    "type": "string",
+                    "format": "uri",
+                    "pattern": "^https://",
+                    "maxLength": 2048
+                  }
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "subscription.select"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "restore_group": {
+                  "type": "string"
+                },
+                "remove_invalid": {
+                  "type": "string"
+                },
+                "delete_id": {
+                  "type": "string"
+                },
+                "restore_rules": {
+                  "type": "boolean"
+                },
+                "edit_only": {
+                  "type": "boolean"
+                },
+                "disable_edited": {
+                  "type": "boolean"
+                },
+                "restore_rule": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "toggle_rule": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "disable_remote_rule": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "edit_rule": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "edit_local_rule": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "rule_value": {
+                  "type": "object"
+                },
+                "add_rule": {
+                  "type": "object",
+                  "description": "Explicit connection-generated active subscription local overlay rule; edit_only=true required."
+                },
+                "rule_position": {
+                  "enum": [
+                    "top",
+                    "end"
+                  ],
+                  "description": "Global first / before MATCH, only with add_rule."
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "method": {
+              "const": "network.egress.dns.refresh"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "revision": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "fingerprint": {
+                  "type": "string",
+                  "pattern": "^[0-9a-fA-F]{64}$"
+                }
+              },
+              "required": [
+                "revision",
+                "fingerprint"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "method"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "response": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "ok": {
+              "const": true
+            },
+            "result": {}
+          },
+          "required": [
+            "id",
+            "ok",
+            "result"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "ok": {
+              "const": false
+            },
+            "error": {
+              "$ref": "#/$defs/error"
+            }
+          },
+          "required": [
+            "id",
+            "ok",
+            "error"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "detail": {
+          "$ref": "#/$defs/resource_detail"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "probe": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "probe_ms": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "error": {
+          "type": "string"
+        },
+        "cold_ms": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "type": "string"
+        },
+        "error_stage": {
+          "enum": [
+            "queue",
+            "dependency",
+            "target",
+            "process"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "probe_ms",
+        "at"
+      ],
+      "additionalProperties": false
+    },
+    "member": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "protocol": {
+          "type": "string"
+        },
+        "probe_ms": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "probe_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "weight": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100
+        },
+        "available": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selected": {
+          "type": "boolean"
+        },
+        "decision_score_ms": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "score_parts": {
+          "$ref": "#/$defs/smartScoreParts"
+        },
+        "effective_samples": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sample_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "success_rate": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "health_state": {
+          "enum": [
+            "healthy",
+            "suspect",
+            "open",
+            "recovering"
+          ]
+        },
+        "cooldown_until": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "dial_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "confirm_progress": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "confirm_required": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "probe_error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "probe_ms",
+        "weight",
+        "available",
+        "selected"
+      ],
+      "additionalProperties": false
+    },
+    "provider": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        },
+        "nodes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "updated": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "last_attempt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updates": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failures": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type",
+        "source",
+        "nodes",
+        "skipped",
+        "updates",
+        "failures"
+      ],
+      "additionalProperties": false
+    },
+    "status": {
+      "type": "object",
+      "properties": {
+        "runtime": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "enum": [
+                "stopped",
+                "starting",
+                "running",
+                "error"
+              ]
+            },
+            "core_version": {
+              "type": "string"
+            },
+            "uptime_ms": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "pid": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "memory_bytes": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "state",
+            "core_version",
+            "uptime_ms",
+            "pid"
+          ],
+          "additionalProperties": false
+        },
+        "mode": {
+          "enum": [
+            "rule",
+            "global",
+            "direct"
+          ]
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "current": {
+                "type": "string"
+              },
+              "fixed": {
+                "type": "string"
+              },
+              "members": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/member"
+                }
+              },
+              "selection_mode": {
+                "enum": [
+                  "site",
+                  "group"
+                ]
+              },
+              "algorithm_version": {
+                "const": 2
+              },
+              "default_member": {
+                "type": "string"
+              },
+              "most_used_member": {
+                "type": "string"
+              },
+              "learned_sites": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "selection_reason": {
+                "type": "string"
+              },
+              "candidate": {
+                "type": "string"
+              },
+              "confirm_progress": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "confirm_required": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "remaining_dwell_ms": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "current",
+              "members"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "probe_ms": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "probe_at": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Actual most recent manual probe completion from this client process; unknown null/omitted, never display clock time. No persisted probe history."
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "probe_ms"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "traffic": {
+          "type": "object",
+          "properties": {
+            "up_rate": {
+              "type": "number",
+              "minimum": 0
+            },
+            "down_rate": {
+              "type": "number",
+              "minimum": 0
+            },
+            "total_up": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total_down": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "today_up": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "today_down": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "daily": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "date": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "up": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "down": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "date",
+                  "up",
+                  "down"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 31
+            },
+            "groups": {
+              "type": "array",
+              "description": "Actual cumulative per-policy-group bytes from current Kat registry, not today or daily history; empty when unavailable. Nested groups may count the same flow at each group hop.",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "up": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "down": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "name",
+                  "up",
+                  "down"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "rules": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "hits": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "up": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "down": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "name",
+                  "hits",
+                  "up",
+                  "down"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "rules_since": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "up_rate",
+            "down_rate",
+            "total_up",
+            "total_down",
+            "today_up",
+            "today_down",
+            "daily"
+          ],
+          "additionalProperties": false
+        },
+        "connections": {
+          "type": "object",
+          "properties": {
+            "active": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "total": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "tcp": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "udp": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            }
+          },
+          "required": [
+            "active",
+            "items"
+          ],
+          "additionalProperties": false
+        },
+        "providers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/provider"
+          }
+        },
+        "local": {
+          "type": "object",
+          "properties": {
+            "http": {
+              "type": "object",
+              "properties": {
+                "host": {
+                  "const": "127.0.0.1"
+                },
+                "port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                },
+                "ready": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "host",
+                "port",
+                "ready"
+              ],
+              "additionalProperties": false
+            },
+            "socks": {
+              "type": "object",
+              "properties": {
+                "host": {
+                  "const": "127.0.0.1"
+                },
+                "port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                },
+                "ready": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "host",
+                "port",
+                "ready"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "http",
+            "socks"
+          ],
+          "additionalProperties": false
+        },
+        "probe_round": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "done": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "total": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "names": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "done",
+                "total",
+                "names"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        }
+      },
+      "required": [
+        "runtime",
+        "mode",
+        "groups",
+        "nodes",
+        "traffic",
+        "connections",
+        "providers",
+        "local"
+      ],
+      "additionalProperties": false
+    },
+    "egress": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "ipv4_if_index": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4294967295
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ipv6_if_index": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4294967295
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "coverage": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "schema": {
+          "const": 2
+        },
+        "ipv4_luid": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 18446744073709551615
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ipv6_luid": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 18446744073709551615
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "system_dns": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/systemDnsEndpoint"
+          }
+        },
+        "fingerprint": {
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{64})?$"
+        },
+        "identity": {
+          "type": "string",
+          "pattern": "^([0-9a-fA-F]{64})?$"
+        },
+        "dns_revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "enabled",
+        "ipv4_if_index",
+        "ipv6_if_index",
+        "ready",
+        "generation",
+        "coverage",
+        "schema",
+        "ipv4_luid",
+        "ipv6_luid",
+        "system_dns",
+        "fingerprint",
+        "identity",
+        "dns_revision"
+      ],
+      "additionalProperties": false
+    },
+    "logEntry": {
+      "type": "object",
+      "properties": {
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "stage": {
+              "enum": [
+                "unknown",
+                "dns_lookup",
+                "dns_exchange",
+                "dns_cache",
+                "dns_fallback",
+                "dns_connect",
+                "dns_write",
+                "dns_read",
+                "dns_parse",
+                "connect",
+                "tls",
+                "handshake",
+                "auth",
+                "relay",
+                "close",
+                "route",
+                "ipc_request",
+                "ipc_response",
+                "ipc_read",
+                "ipc_write",
+                "ipc_parse",
+                "ipc_admission",
+                "proxy_write",
+                "proxy_readback",
+                "proxy_restore",
+                "tun_prepare",
+                "tun_commit",
+                "tun_bind",
+                "tun_revision",
+                "tun_cleanup",
+                "ready",
+                "stderr",
+                "http_bridge"
+              ]
+            },
+            "category": {
+              "enum": [
+                "unknown",
+                "ok",
+                "timeout",
+                "canceled",
+                "eof",
+                "closed",
+                "dns",
+                "nxdomain",
+                "nodata",
+                "truncated_tcp",
+                "tls_certificate",
+                "tls_handshake",
+                "authentication_rejected",
+                "authentication_integrity",
+                "protocol",
+                "rejected",
+                "unsupported",
+                "os_error",
+                "busy",
+                "frame_limit",
+                "invalid_json",
+                "read_failed",
+                "write_failed",
+                "owner_changed",
+                "binding_failed",
+                "runtime_panic",
+                "runtime_fatal",
+                "runtime_oom",
+                "discarded"
+              ]
+            },
+            "protocol": {
+              "enum": [
+                "unknown",
+                "stdio",
+                "service_pipe",
+                "flow_pipe",
+                "bridge_pipe",
+                "system",
+                "custom",
+                "udp",
+                "tcp",
+                "https",
+                "direct",
+                "socks5",
+                "shadowsocks",
+                "anytls",
+                "trojan",
+                "http",
+                "tls",
+                "relay"
+              ]
+            },
+            "bridge_id": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "observation_seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "related_seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "observed_close_seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "flow_id": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "request_id": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "request_bytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "response_bytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "inflight": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "queued": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "elapsed_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "sampled_unix_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "age_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "active": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "tcp": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "udp": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "logical": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "memory_bytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "native": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4294967295
+            },
+            "direction": {
+              "enum": [
+                "client_to_socks",
+                "socks_to_client",
+                "client",
+                "socks",
+                "none"
+              ]
+            },
+            "action": {
+              "enum": [
+                "copy_end",
+                "close_begin",
+                "close_end",
+                "half_close_begin",
+                "half_close_end",
+                "bind",
+                "dial_end",
+                "response_header",
+                "request_end",
+                "flow_observation"
+              ]
+            },
+            "trigger": {
+              "enum": [
+                "context_done",
+                "handler_return",
+                "upload_return",
+                "download_return"
+              ]
+            },
+            "io_operation": {
+              "enum": [
+                "read",
+                "write",
+                "close",
+                "unknown"
+              ]
+            },
+            "cache_hit": {
+              "type": "boolean"
+            },
+            "snapshot_unavailable": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "stage",
+            "category",
+            "protocol"
+          ]
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "time": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 35
+        },
+        "level": {
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ]
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "group": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Accepted icon group display label only, bounded and no URL or query"
+        },
+        "reason": {
+          "enum": [
+            "unknown",
+            "ambiguous",
+            "unsupported",
+            "denied",
+            "changed",
+            "closed"
+          ]
+        },
+        "rule": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        },
+        "cause": {
+          "enum": [
+            "local_denied",
+            "not_bridged",
+            "pin",
+            "scm",
+            "pipe_open",
+            "pipe_identity",
+            "session_hello",
+            "session_timeout",
+            "session_closed",
+            "session_backoff",
+            "service:FLOW_NOT_ACTIVE",
+            "service:FLOW_QUERY",
+            "service:FLOW_UNAVAILABLE",
+            "service:LEASE_CHANGED",
+            "service:CALLER_DENIED",
+            "service:INSTALL_RELAUNCH_REQUIRED",
+            "process:denied",
+            "process:closed",
+            "process:changed",
+            "process:ambiguous",
+            "process:unknown",
+            "process:unsupported"
+          ]
+        },
+        "win32": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "seq",
+        "time",
+        "level",
+        "event"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "event": {
+                "const": "process_attribution_failed"
+              }
+            },
+            "required": [
+              "event"
+            ]
+          },
+          "then": {
+            "required": [
+              "reason",
+              "rule",
+              "cause"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "group"
+                  ]
+                },
+                {
+                  "required": [
+                    "code"
+                  ]
+                }
+              ]
+            }
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "reason"
+                  ]
+                },
+                {
+                  "required": [
+                    "rule"
+                  ]
+                },
+                {
+                  "required": [
+                    "cause"
+                  ]
+                },
+                {
+                  "required": [
+                    "win32"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "logs": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "$ref": "#/$defs/logEntry"
+          }
+        },
+        "next_seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "dropped": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "entries",
+        "next_seq",
+        "dropped"
+      ],
+      "additionalProperties": false
+    },
+    "clientProbeSettings": {
+      "type": "object",
+      "description": "Optional fields in kat-client.json client object (not IPC method params). Runtime defaults only; no source normalization. Other existing client fields remain accepted. Duration numeric bounds and round>=point are validated by Go, not only this JSON shape. Background group.probe stays independent.",
+      "properties": {
+        "probe_timeout": {
+          "type": "string",
+          "default": "5s",
+          "description": "Go Duration string, 100ms..60s; per HTTP probe after obtaining permit."
+        },
+        "probe_round_timeout": {
+          "type": "string",
+          "default": "10s",
+          "description": "Independent per-dequeued-member round budget including dependency preparation, never a shared whole-group or whole-batch deadline. Caller/Stop/Apply cancellation still wins."
+        },
+        "probe_concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "default": 50,
+          "description": "Per-client permits shared by all manual node/group requests, not a global server limit."
+        },
+        "sniff": {
+          "$ref": "#/$defs/clientSniff"
+        },
+        "close_on_switch": {
+          "type": "boolean",
+          "default": true,
+          "description": "After a committed manual selected/fixed change, close only captured existing flows whose strategy chain contains the changed group. Automatic switches never close flows."
+        }
+      },
+      "additionalProperties": true
+    },
+    "resource_detail": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string",
+          "enum": [
+            "subscription",
+            "rule_set",
+            "geoip",
+            "asn",
+            "resource_stage"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "download",
+            "local",
+            "cache"
+          ]
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "url_check",
+            "resolve",
+            "connect",
+            "proxy_read",
+            "proxy_connect",
+            "tls",
+            "http_status",
+            "body_read",
+            "dependency_scan",
+            "format_check",
+            "local_read",
+            "stage_create",
+            "stage_protect",
+            "stage_write",
+            "cache_verify",
+            "validate",
+            "apply"
+          ]
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "address_refused",
+            "fake_ip",
+            "egress_unavailable",
+            "dns_failed",
+            "connect_failed",
+            "timeout",
+            "canceled",
+            "tls_certificate",
+            "tls_handshake",
+            "redirect_refused",
+            "http_status",
+            "read_failed",
+            "size_limit",
+            "total_size_limit",
+            "invalid_format",
+            "db_incompatible",
+            "permission_denied",
+            "disk_full",
+            "file_io",
+            "unsafe_file",
+            "unknown",
+            "proxy_unsupported",
+            "proxy_auth_required",
+            "proxy_protocol",
+            "proxy_http",
+            "self_loop",
+            "proxy_identity_unknown",
+            "candidate_changed",
+            "header_limit",
+            "proxy_read_failed"
+          ]
+        },
+        "route": {
+          "type": "string",
+          "enum": [
+            "direct",
+            "windows_static_http"
+          ]
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "subscription_ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "http_status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "first_attempt": {
+          "$ref": "#/$defs/resource_attempt"
+        }
+      },
+      "required": [
+        "resource",
+        "source",
+        "stage",
+        "category",
+        "route"
+      ],
+      "additionalProperties": false
+    },
+    "clientSniff": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "override_destination": {
+          "type": "boolean"
+        },
+        "tcp_ports": {
+          "type": "string",
+          "description": "Kernel port list/ranges, empty defaults to 80,443,8080,8443; none disables TCP sniffing."
+        },
+        "udp_ports": {
+          "type": "string",
+          "description": "Kernel port list/ranges, empty defaults to 443; none disables UDP sniffing."
+        },
+        "timeout": {
+          "type": "string",
+          "description": "Kernel Go duration: 1ms–2s, zero uses 300ms default; omitted uses default."
+        }
+      },
+      "required": [
+        "enabled",
+        "override_destination"
+      ],
+      "additionalProperties": false
+    },
+    "connInfo": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "network": {
+          "enum": [
+            "tcp",
+            "udp"
+          ]
+        },
+        "inbound": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "chain": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "up": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "down": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "flow_id": {
+          "type": "string"
+        },
+        "inbound_kind": {
+          "enum": [
+            "tun",
+            "system_proxy",
+            "socks",
+            "http"
+          ]
+        },
+        "source_addr": {
+          "type": "string"
+        },
+        "dest_host": {
+          "type": "string"
+        },
+        "sniffed": {
+          "type": "boolean"
+        },
+        "dest_ip": {
+          "type": "string"
+        },
+        "dest_ips": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "remote_dns": {
+          "type": "boolean"
+        },
+        "error_text": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "error_stage": {
+          "enum": [
+            "dns",
+            "connect",
+            "tls",
+            "proxy_handshake",
+            "rule_reject",
+            "canceled",
+            "process"
+          ]
+        },
+        "process_name": {
+          "type": "string",
+          "description": "Verified procattr name; unavailable empty/omitted."
+        },
+        "process_path": {
+          "type": "string",
+          "description": "Verified native image path; unavailable empty/omitted. Private connection view only."
+        },
+        "domain_suffix": {
+          "type": "string",
+          "description": "PSL eTLD+1 of dest_host, for explicit rule editor prefill."
+        }
+      },
+      "required": [
+        "id",
+        "network",
+        "inbound",
+        "source",
+        "target",
+        "rule",
+        "chain",
+        "start",
+        "duration_ms",
+        "up",
+        "down"
+      ],
+      "additionalProperties": false
+    },
+    "closedConn": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "network": {
+          "enum": [
+            "tcp",
+            "udp"
+          ]
+        },
+        "inbound": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "chain": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "up": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "down": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "network",
+        "inbound",
+        "source",
+        "target",
+        "rule",
+        "chain",
+        "start",
+        "duration_ms",
+        "up",
+        "down",
+        "end"
+      ],
+      "additionalProperties": false
+    },
+    "connectionsReply": {
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/connInfo"
+          }
+        },
+        "closed": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/closedConn"
+          },
+          "maxItems": 500
+        },
+        "total": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      },
+      "required": [
+        "active",
+        "closed",
+        "total"
+      ],
+      "additionalProperties": false
+    },
+    "connectionLogEntry": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "network": {
+          "enum": [
+            "tcp",
+            "udp"
+          ]
+        },
+        "source": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "chain": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "outcome": {
+          "enum": [
+            "ok",
+            "error",
+            "rejected"
+          ]
+        },
+        "code": {
+          "type": "string"
+        },
+        "flow_id": {
+          "type": "string"
+        },
+        "inbound_kind": {
+          "enum": [
+            "tun",
+            "system_proxy",
+            "socks",
+            "http"
+          ]
+        },
+        "source_addr": {
+          "type": "string"
+        },
+        "dest_host": {
+          "type": "string"
+        },
+        "sniffed": {
+          "type": "boolean"
+        },
+        "dest_ip": {
+          "type": "string"
+        },
+        "dest_ips": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "remote_dns": {
+          "type": "boolean"
+        },
+        "error_text": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "error_stage": {
+          "enum": [
+            "dns",
+            "connect",
+            "tls",
+            "proxy_handshake",
+            "rule_reject",
+            "canceled",
+            "process"
+          ]
+        },
+        "start": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "up": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "down": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ended": {
+          "type": "boolean"
+        },
+        "process_name": {
+          "type": "string",
+          "description": "Verified procattr name; unavailable empty/omitted."
+        },
+        "process_path": {
+          "type": "string",
+          "description": "Verified native image path; unavailable empty/omitted. Private connection view only."
+        },
+        "domain_suffix": {
+          "type": "string",
+          "description": "PSL eTLD+1 of dest_host, for explicit rule editor prefill."
+        }
+      },
+      "required": [
+        "seq",
+        "time",
+        "network",
+        "source",
+        "target",
+        "rule",
+        "chain",
+        "outcome"
+      ],
+      "additionalProperties": false
+    },
+    "connectionLogsReply": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/connectionLogEntry"
+          },
+          "maxItems": 500
+        },
+        "next_seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "dropped": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "entries",
+        "next_seq",
+        "dropped"
+      ],
+      "additionalProperties": false
+    },
+    "dnsReply": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "addr": {
+                "type": "string"
+              },
+              "type": {
+                "enum": [
+                  "A",
+                  "AAAA"
+                ]
+              }
+            },
+            "required": [
+              "addr",
+              "type"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "server": {
+          "type": "string"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cached": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "addresses",
+        "server",
+        "duration_ms",
+        "cached"
+      ],
+      "additionalProperties": false
+    },
+    "resourceItem": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "rule_set",
+            "geoip",
+            "asn"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "updated_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "size_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "entries": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "state": {
+          "enum": [
+            "ok",
+            "error",
+            "pending",
+            "missing"
+          ]
+        },
+        "code": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "updated_at",
+        "size_bytes",
+        "entries",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "resourcesReply": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/resourceItem"
+          }
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "resource_attempt": {
+      "type": "object",
+      "properties": {
+        "route": {
+          "type": "string",
+          "enum": [
+            "direct",
+            "windows_static_http"
+          ]
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "url_check",
+            "resolve",
+            "connect",
+            "proxy_read",
+            "proxy_connect",
+            "tls",
+            "http_status",
+            "body_read",
+            "dependency_scan",
+            "format_check",
+            "local_read",
+            "stage_create",
+            "stage_protect",
+            "stage_write",
+            "cache_verify",
+            "validate",
+            "apply"
+          ]
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "address_refused",
+            "fake_ip",
+            "egress_unavailable",
+            "dns_failed",
+            "connect_failed",
+            "timeout",
+            "canceled",
+            "tls_certificate",
+            "tls_handshake",
+            "redirect_refused",
+            "http_status",
+            "read_failed",
+            "size_limit",
+            "total_size_limit",
+            "invalid_format",
+            "db_incompatible",
+            "permission_denied",
+            "disk_full",
+            "file_io",
+            "unsafe_file",
+            "unknown",
+            "proxy_unsupported",
+            "proxy_auth_required",
+            "proxy_protocol",
+            "proxy_http",
+            "self_loop",
+            "proxy_identity_unknown",
+            "candidate_changed",
+            "header_limit",
+            "proxy_read_failed"
+          ]
+        },
+        "http_status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        }
+      },
+      "required": [
+        "route",
+        "stage",
+        "category"
+      ],
+      "additionalProperties": false
+    },
+    "kernelLogEntry": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "level": {
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "seq",
+        "time",
+        "level",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "kernelLogsReply": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/kernelLogEntry"
+          },
+          "maxItems": 500
+        },
+        "next_seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "dropped": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "entries",
+        "next_seq",
+        "dropped"
+      ],
+      "additionalProperties": false
+    },
+    "clientNetworkSettings": {
+      "type": "object",
+      "properties": {
+        "ipv6": {
+          "type": "boolean",
+          "default": false,
+          "description": "Desktop-only local address-family policy. c16 one-time upgrade writes false and records a private migration report; subsequent explicit choice persists. TUN IPv6 capture routes remain installed in both states. Does not change physical NIC settings."
+        }
+      },
+      "additionalProperties": true
+    },
+    "dnsPolicyRule": {
+      "type": "object",
+      "properties": {
+        "match": {
+          "enum": [
+            "domain_suffix",
+            "domain",
+            "keyword"
+          ]
+        },
+        "domain": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253
+        },
+        "servers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "match",
+        "domain",
+        "servers"
+      ],
+      "additionalProperties": false
+    },
+    "clientDNSSettings": {
+      "type": "object",
+      "properties": {
+        "server": {
+          "type": "string"
+        },
+        "servers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 16
+        },
+        "cache_entries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4096
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dnsPolicyRule"
+          },
+          "maxItems": 256
+        },
+        "nameserver-policy": {
+          "type": "object",
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "maxItems": 16
+              }
+            ]
+          },
+          "description": "Ordered mihomo import subset: exact domain / +.suffix. JSON/YAML export retains the original field representation. Native rules containing keywords remain the rules array without conversion or error. Exclusive with nonempty rules; unsupported imported selectors reject. Source spelling/order retained until explicitly edited."
+        },
+        "hosts": {
+          "type": "object",
+          "maxProperties": 1024,
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "maxItems": 16
+              }
+            ]
+          },
+          "description": "Exact or *.suffix keys, literal IPv4/IPv6 addresses. Exact wins, then longest wildcard suffix; wildcard excludes apex. IPv6 answers are inactive while client.ipv6 is false."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Old server/servers/cache_entries semantics remain valid. First domain-policy match wins; each matched chain is isolated and does not leak to system on failure. Native source is retained, not reserialized from runtime."
+    },
+    "smartScoreParts": {
+      "type": "object",
+      "properties": {
+        "response_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "failure_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "jitter_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "real_share": {
+          "type": "number",
+          "minimum": 0
+        },
+        "weight": {
+          "type": "number",
+          "minimum": 0
+        },
+        "probe_ms": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "real_ms": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "response_ms",
+        "failure_ms",
+        "jitter_ms",
+        "real_share",
+        "weight",
+        "probe_ms",
+        "real_ms"
+      ],
+      "additionalProperties": false
+    },
+    "automaticGroupSettings": {
+      "type": "object",
+      "properties": {
+        "tolerance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 5000
+            }
+          ],
+          "description": "url-test default 50ms; smart default 30ms; numeric mihomo milliseconds; explicit zero retained. Strictly greater absolute difference plus all other stable gates."
+        },
+        "damping": {
+          "type": "object",
+          "properties": {
+            "relative_improvement": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.9,
+              "default": 0.2
+            },
+            "confirm_rounds": {
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 5,
+              "default": 2
+            },
+            "min_dwell": {
+              "type": "string",
+              "default": "60s",
+              "description": "0..30m"
+            }
+          },
+          "additionalProperties": false
+        },
+        "smart": {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "enum": [
+                "site",
+                "group"
+              ],
+              "default": "site"
+            },
+            "exploration_rate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 0.05,
+              "default": 0
+            },
+            "adaptive_dial": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true,
+      "description": "Native Kat group extension. All auto groups always stable; all smart groups v2, no legacy mode. Performance fields only url-test/smart. Fallback/load-balance share fixed 2-success/5s interval/10s hold recovery, not latency selection."
+    },
+    "networkDiagnosticRow": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string"
+        },
+        "node": {
+          "type": "string"
+        },
+        "ip": {
+          "type": "string"
+        },
+        "result": {
+          "enum": [
+            "unlocked",
+            "blocked",
+            "originals",
+            "failed",
+            "ok"
+          ]
+        },
+        "chain": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "http_status": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        }
+      },
+      "required": [
+        "name",
+        "result",
+        "chain",
+        "duration_ms"
+      ],
+      "additionalProperties": false
+    },
+    "networkDiagnosticReply": {
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/networkDiagnosticRow"
+          }
+        }
+      },
+      "required": [
+        "at",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "traySnapshot": {
+      "type": "object",
+      "properties": {
+        "ready": {
+          "type": "boolean"
+        },
+        "busy": {
+          "type": "boolean"
+        },
+        "system_proxy": {
+          "type": "boolean"
+        },
+        "tun": {
+          "type": "boolean"
+        },
+        "proxy_ready": {
+          "type": "boolean"
+        },
+        "tun_ready": {
+          "type": "boolean"
+        },
+        "mode": {
+          "enum": [
+            "",
+            "rule",
+            "global",
+            "direct"
+          ]
+        },
+        "groups": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "fixed": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "current": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "members": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "label"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "name",
+              "label",
+              "kind",
+              "fixed",
+              "current",
+              "members"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "ready",
+        "busy",
+        "system_proxy",
+        "tun",
+        "proxy_ready",
+        "tun_ready",
+        "mode",
+        "groups"
+      ],
+      "additionalProperties": false
+    },
+    "systemDnsEndpoint": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string",
+          "description": "Canonical unzoned literal IP; effective IPv6 zone is scope_id, not a user string."
+        },
+        "owner_luid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18446744073709551615
+        },
+        "if_index": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        },
+        "scope_id": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "address",
+        "owner_luid",
+        "if_index",
+        "scope_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "x-methods": {
+    "hello": {
+      "params": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "protocol": {
+            "const": 1
+          },
+          "core_version": {
+            "type": "string"
+          },
+          "build_commit": {
+            "type": "string"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "protocol",
+          "core_version",
+          "build_commit",
+          "capabilities"
+        ],
+        "additionalProperties": false
+      },
+      "hostOnly": false
+    },
+    "document.get": {
+      "params": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "running": {
+            "type": "boolean"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "json",
+              "yaml",
+              "yml"
+            ]
+          }
+        },
+        "required": [
+          "text",
+          "path",
+          "running",
+          "format"
+        ],
+        "additionalProperties": false
+      },
+      "hostOnly": false
+    },
+    "document.validate": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "json",
+              "yaml",
+              "yml"
+            ]
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "const": true
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "json",
+              "yaml",
+              "yml"
+            ]
+          },
+          "ports": {
+            "type": "object",
+            "properties": {
+              "http": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "socks": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            },
+            "required": [
+              "http",
+              "socks"
+            ],
+            "additionalProperties": false
+          },
+          "counts": {
+            "type": "object",
+            "properties": {
+              "nodes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "groups": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "rules": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "providers": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "nodes",
+              "groups",
+              "rules",
+              "providers"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "valid",
+          "format",
+          "ports",
+          "counts"
+        ],
+        "additionalProperties": false
+      },
+      "hostOnly": false
+    },
+    "document.apply": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "json",
+              "yaml",
+              "yml"
+            ]
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "selection_only": {
+            "type": "boolean",
+            "description": "Optional true when only selected/fixed preferences changed on the existing running generation; all other edits retain full apply."
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "json",
+              "yaml",
+              "yml"
+            ]
+          }
+        },
+        "required": [
+          "text",
+          "path",
+          "applied",
+          "format"
+        ],
+        "additionalProperties": false
+      },
+      "hostOnly": false
+    },
+    "core.start": {
+      "params": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "result": {
+        "$ref": "#/$defs/status"
+      },
+      "hostOnly": false
+    },
+    "core.stop": {
+      "params": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "result": {
+        "$ref": "#/$defs/status"
+      },
+      "hostOnly": false
+    },
+    "core.reload": {
+      "params": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "result": {
+        "$ref": "#/$defs/status"
+      },
+      "hostOnly": false
+    },
+    "status": {
+      "params": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "result": {
+        "$ref": "#/$defs/status"
+      },
+      "hostOnly": false
+    },
+    "probe.node": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "$ref": "#/$defs/probe"
+      },
+      "hostOnly": false,
+      "description": "One node or current route of a group, independent configured 5s target/10s own-round defaults, HEAD (405/501 GET in same deadline). Default permits50, explicit settings preserved. Errors appear inline via status.nodes and groups; no completion toast."
+    },
+    "probe.group": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "started": {
+            "const": true
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "started",
+          "total"
+        ],
+        "additionalProperties": false
+      },
+      "hostOnly": false,
+      "description": "Admit core-owned background member round; each member has own budgets, HEAD then GET only on 405/501; selected route for nested groups. Group URL takes precedence over client URL, explicit url takes precedence over both. Poll status.probe_round; no whole-batch deadline; actual results in status.groups."
+    },
+    "import.parse": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "maxLength": 8192,
+            "description": "Explicit HTTPS public subscription fetch; no redirect/userinfo/fragment. Never inferred from text."
+          }
+        },
+        "oneOf": [
+          {
+            "required": [
+              "text"
+            ],
+            "not": {
+              "required": [
+                "url"
+              ]
+            }
+          },
+          {
+            "required": [
+              "url"
+            ],
+            "not": {
+              "required": [
+                "text"
+              ]
+            }
+          }
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "outbounds": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "type",
+                "server",
+                "port"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "enum": [
+                    "socks5",
+                    "shadowsocks",
+                    "trojan",
+                    "anytls"
+                  ]
+                },
+                "server": {
+                  "type": "string"
+                },
+                "port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "type",
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "dependency_groups": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Only complete necessary Kat dependency group closure, not original whole proxy-groups/rules."
+          }
+        },
+        "required": [
+          "outbounds",
+          "skipped",
+          "dependency_groups"
+        ],
+        "additionalProperties": false
+      },
+      "hostOnly": false,
+      "description": "Exactly one text (always pure parse) or explicit HTTPS url (bounded30s/no redirect/public checked literal dial/TLS/no env proxy). Import is draft-only. SS obfs-http and necessary via/url-test closure preserved; no unrelated rules imported. Native transport budget45s; wire protocol1 unchanged."
+    },
+    "network.egress.get": {
+      "params": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "result": {
+        "$ref": "#/$defs/egress"
+      },
+      "hostOnly": true
+    },
+    "network.egress.set": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "ipv4_if_index": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4294967295
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ipv6_if_index": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4294967295
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schema": {
+            "const": 2
+          },
+          "ipv4_luid": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 18446744073709551615
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ipv6_luid": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 18446744073709551615
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "system_dns": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "$ref": "#/$defs/systemDnsEndpoint"
+            }
+          },
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^([0-9a-fA-F]{64})?$"
+          },
+          "identity": {
+            "type": "string",
+            "pattern": "^([0-9a-fA-F]{64})?$"
+          }
+        },
+        "required": [
+          "enabled",
+          "ipv4_if_index",
+          "ipv6_if_index",
+          "schema",
+          "ipv4_luid",
+          "ipv6_luid",
+          "system_dns",
+          "fingerprint",
+          "identity"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "$ref": "#/$defs/egress"
+      },
+      "hostOnly": true
+    },
+    "logs.get": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "after": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991,
+            "default": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 200
+          }
+        },
+        "additionalProperties": false
+      },
+      "result": {
+        "$ref": "#/$defs/logs"
+      },
+      "hostOnly": false,
+      "description": "after is an exclusive sequence cursor (default 0); entries are ascending. next_seq is the last returned sequence, or after if empty. dropped is cumulative ring evictions during this sidecar process (not filtering or since-cursor count). Ring max 2000; no disk history, no reset on core stop/start/reload. New process empty. Client logs.v1 capability. All entries come from allowlisted actual kernel calls at the configured kernel.log.level (default info). No raw fields/messages. Unsupported/filtered events create no entries."
+    },
+    "connections.list": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "closed_limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 200
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "result": {
+        "$ref": "#/$defs/connectionsReply"
+      },
+      "description": "Logical TCP/UDP flows since this start. Closed ring 500 newest first, cleared on Stop; source prefix-truncated as ConnInfo.",
+      "hostOnly": false
+    },
+    "logs.connections": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "after": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 200
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "result": {
+        "$ref": "#/$defs/connectionLogsReply"
+      },
+      "description": "Memory-only 2000 entries, exclusive after, ascending entries, next_seq last returned or after; dropped cumulative evictions; kept across Stop/Start. Never included in diagnostics.",
+      "hostOnly": false
+    },
+    "dns.query": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "A",
+              "AAAA",
+              "both"
+            ],
+            "default": "both"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "$ref": "#/$defs/dnsReply"
+      },
+      "description": "Running kernel resolver, ordered domain-policy rules, exact/wildcard Hosts and cache provenance. client.ipv6=false suppresses all upstream AAAA queries; type AAAA returns an empty list with server IPv6 已关闭 without network I/O. Enabled preserves the dual-family chain and view-only type filtering.",
+      "hostOnly": false
+    },
+    "resources.list": {
+      "params": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "result": {
+        "$ref": "#/$defs/resourcesReply"
+      },
+      "description": "No URLs, paths or free-form errors. Stopped configured resources pending. Nullable unknown metadata.",
+      "hostOnly": false
+    },
+    "resources.refresh": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "rule_set",
+              "geoip",
+              "asn"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/provider"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "provider",
+                  "rule_set",
+                  "geoip",
+                  "asn"
+                ]
+              },
+              "name": {
+                "type": "string"
+              },
+              "state": {
+                "const": "ok"
+              }
+            },
+            "required": [
+              "kind",
+              "name",
+              "state"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "description": "Only rule_set/geoip/asn use configured safe HTTPS downloader. Stopped core returns core_not_running. Subscription-owned local resources with no remote URL return unsupported; update the complete subscription instead.",
+      "hostOnly": false
+    },
+    "subscription.migrate": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "format": {
+            "enum": [
+              "json",
+              "yaml",
+              "yml"
+            ]
+          },
+          "id": {
+            "type": "string"
+          },
+          "counts": {
+            "type": "object"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "needs_confirmation": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "object"
+          },
+          "kind": {
+            "enum": [
+              "full",
+              "nodes",
+              "native"
+            ]
+          },
+          "node_import": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind",
+          "counts",
+          "changes",
+          "issues",
+          "needs_confirmation"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Preview one existing legacy provider as a complete subscription; no mutation until native backup + document.apply. Per-provider source identity and rollback are retained. Never accepts a URL/path supplied as a new provider.",
+      "hostOnly": false
+    },
+    "probe.all": {
+      "params": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "started": {
+            "const": true
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "started",
+          "total"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Immediate admission of a core-owned batch, with independent ordinary per-node HEAD budgets after dequeue, no shared batch deadline. Poll status.probe_round for actual completions and status.nodes for results. Stop/Apply/Close cancel; overlapping manual probes return probe_busy.",
+      "hostOnly": false
+    },
+    "connections.close": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "closed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "closed"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Cancel only selected active TCP/UDP/TUN logical flows; duplicate/missing/already-closed ignored; return actual newly closed count. No kernel reload.",
+      "hostOnly": false
+    },
+    "icon.get": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 65536
+          },
+          "group": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "data_uri": {
+            "type": "string",
+            "maxLength": 700000
+          }
+        },
+        "required": [
+          "data_uri"
+        ],
+        "additionalProperties": false
+      },
+      "hostOnly": false,
+      "description": "Display-only bounded local image lookup. http/https via current kernel SOCKS routing when running; stopped direct retains checked-public SSRF policy. Redirects refused. Content image-only <=512KiB, inline SVG<=64KiB. URL-hash private cache7days stale-while-refresh; failure retains previous or returns empty, no raw errors."
+    },
+    "group.filter_preview": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "exclude_filter": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "include_group": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "One existing source group; omitted/empty retains legacy all-node preview. Empty filter with a source includes all source leaves."
+          },
+          "group_name": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "Optional existing consumer group; requires include_group. Validates the proposed source edge (including mixed cycles). Omit for an unsaved new group."
+          }
+        },
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "names"
+        ],
+        "additionalProperties": false
+      },
+      "hostOnly": false,
+      "description": "Read-only exact kernel MemberFilter RE2 preview. With include_group, recursively flatten all effective source leaves in source order (not Current), deduplicate and filter; empty filter includes all. Optional group_name validates the proposed edge. Running uses current expanded generation; stopped uses accepted document plus local provider files/caches, never fetches. Without include_group legacy all-node/empty-filter-disabled behavior is unchanged. names are source matches before consumer manual-member dedup/1024 cap. Invalid regex/source returns names:[] and a safe error; no persistence or JS regex substitute."
+    },
+    "logs.kernel": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "after": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "default": 200
+          },
+          "level": {
+            "enum": [
+              "debug",
+              "info",
+              "warn",
+              "error"
+            ]
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "result": {
+        "$ref": "#/$defs/kernelLogsReply"
+      },
+      "description": "Private memory raw kernel log ring (2000), collected at configured log level. Original message is sanitized (URL query/userinfo/secrets), max 1024 bytes. after exclusive; next_seq last scanned including filtered entries; dropped cumulative; retained across stop/start. Not included in diagnostics. UI filter does not alter collection.",
+      "hostOnly": false
+    },
+    "dns.cache.clear": {
+      "params": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object",
+        "properties": {
+          "cleared": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "cleared"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Clear all live resolver generations IP and wire-answer caches, including domain-policy chains; returns removed entry count. Does not clear Windows or browser caches. Stopped core: core_not_running.",
+      "hostOnly": false
+    },
+    "diagnostics.network": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "enum": [
+              "unlock",
+              "connectivity",
+              "exit"
+            ]
+          },
+          "run": {
+            "type": "boolean",
+            "default": false
+          },
+          "urls": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "type": "string",
+              "format": "uri",
+              "pattern": "^https://",
+              "maxLength": 2048
+            }
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "oneOf": [
+          {
+            "type": "null"
+          },
+          {
+            "$ref": "#/$defs/networkDiagnosticReply"
+          }
+        ]
+      },
+      "description": "run=false (default) reads the last cached result without network. Explicit run=true only; one host batch, <=4 workers, each item all endpoints <=8s. HTTPS same-host redirects only; no cookies/login. Local SOCKS and actual final chain node. Exit groups are first five distinct routing targets + final group in rule order; cannot override groups from public params. urls only with connectivity, max16 HTTPS no userinfo/fragment. Results privately persisted (<=1 MiB/kind) until next successful batch, including application restart. No probe history writes."
+    },
+    "subscription.select": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "restore_group": {
+            "type": "string"
+          },
+          "remove_invalid": {
+            "type": "string"
+          },
+          "delete_id": {
+            "type": "string"
+          },
+          "restore_rules": {
+            "type": "boolean"
+          },
+          "edit_only": {
+            "type": "boolean"
+          },
+          "disable_edited": {
+            "type": "boolean"
+          },
+          "restore_rule": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "toggle_rule": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "disable_remote_rule": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "edit_rule": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "edit_local_rule": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "rule_value": {
+            "type": "object"
+          },
+          "add_rule": {
+            "type": "object",
+            "description": "Explicit connection-generated active subscription local overlay rule; edit_only=true required."
+          },
+          "rule_position": {
+            "enum": [
+              "top",
+              "end"
+            ],
+            "description": "Global first / before MATCH, only with add_rule."
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "type": "object"
+      },
+      "description": "Existing local subscription edit/select preview, then same document.apply acceptance. add_rule explicitly owns a generated connection rule in the active local overlay; ordinary new-rule behavior remains manual."
+    },
+    "network.egress.dns.refresh": {
+      "params": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{64}$"
+          }
+        },
+        "required": [
+          "revision",
+          "fingerprint"
+        ],
+        "additionalProperties": false
+      },
+      "result": {
+        "$ref": "#/$defs/egress"
+      },
+      "hostOnly": true,
+      "description": "IDs only; core pulls pending route-prepared endpoints from pinned SYSTEM service under the existing core lease. Updates DNS revision/cancellation/cache only, not business generation."
+    }
+  },
+  "x-limits": {
+    "maxFrameBytes": 2097152,
+    "maxInflight": 16,
+    "maxManualProbes": 4,
+    "documentBytes": 1048576
+  },
+  "x-client-probe-settings": {
+    "$ref": "#/$defs/clientProbeSettings"
+  },
+  "x-client-sniff": {
+    "$ref": "#/$defs/clientSniff",
+    "description": "Optional client.sniff. Omitted is disabled; exact source bytes retained. Applies to generated kat-client inbound, including system proxy and TUN."
+  },
+  "x-client-network": {
+    "$ref": "#/$defs/clientNetworkSettings"
+  },
+  "x-client-dns": {
+    "$ref": "#/$defs/clientDNSSettings"
+  },
+  "x-client-policy-groups": {
+    "$ref": "#/$defs/automaticGroupSettings"
+  },
+  "x-desktop-preferences": {
+    "diagnostic_urls": {
+      "type": "array",
+      "default": [],
+      "maxItems": 16,
+      "items": {
+        "type": "string",
+        "maxLength": 2048,
+        "pattern": "^https://"
+      },
+      "description": "Desktop only; explicit connectivity URL additions. No login, userinfo or fragment; Go parses again before requesting."
+    }
+  },
+  "x-host-commands": {
+    "tray_sync": {
+      "description": "Projection of confirmed accepted main-window state only; cannot write config or network. Snapshot menu events are dispatched as tray-action to the existing DocumentSession document.apply / network paths. Busy/draft/install/uncertain states disable writes. Only local WebView has host-controls permission.",
+      "params": {
+        "type": "object",
+        "properties": {
+          "snapshot": {
+            "$ref": "#/$defs/traySnapshot"
+          }
+        },
+        "required": [
+          "snapshot"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "tray-action": {
+      "event": "mode:{mode}, system_proxy:{enabled}, tun:{enabled}, member:{group,member,unpin}",
+      "description": "Native event; same selected/fixed document.apply as main window, compatible with K1 close_on_switch. Show window for any failure; no success toast."
+    }
+  },
+  "x-flow-session": {
+    "private": true,
+    "pipe": "\\\\.\\pipe\\KatClientNetwork-flow-v1",
+    "protocol": 1,
+    "requestLimit": 4096,
+    "replyLimit": 32768,
+    "inflightLimit": 64,
+    "requiredCapability": "network.flow-session.v1",
+    "description": "Current-core-only, complete bidirectional authentication; held installation proof and lease/epoch revocation; no public method or mixed-component fallback."
+  }
+}

@@ -3,11 +3,13 @@ package procattr
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"golang.org/x/sys/windows"
 	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"unsafe"
 )
 
@@ -15,9 +17,14 @@ var iphlp = windows.NewLazySystemDLL("iphlpapi.dll")
 var tcpTable = iphlp.NewProc("GetExtendedTcpTable")
 var udpTable = iphlp.NewProc("GetExtendedUdpTable")
 
-func ownerRows(q Query) ([]Row, string) {
-	if !q.Source.IsValid() || q.Source.Port() == 0 || q.Source.Addr().Zone() != "" {
-		return nil, "unsupported"
+// OWNER_PID ABI: TCP4 row=24, TCP6 row=56; UDP4 row=12, UDP6
+// row=28; each table starts with a DWORD count. Ports are network order.
+func ownerRows(ctx context.Context, q Query) ([]Row, string, uint32) {
+	if ctx.Err() != nil {
+		return nil, "unknown", 0
+	}
+	if !q.Source.IsValid() || q.Source.Port() == 0 || q.Source.Addr().IsUnspecified() || q.Source.Addr().Zone() != "" {
+		return nil, "unsupported", 0
 	}
 	fam := uintptr(2)
 	if q.Source.Addr().Is6() {
@@ -37,35 +44,55 @@ func ownerRows(q Query) ([]Row, string) {
 			size = 28
 		}
 	} else if q.Network != "tcp" {
-		return nil, "unsupported"
+		return nil, "unsupported", 0
+	}
+	if q.Network == "tcp" && (!q.Destination.IsValid() || q.Destination.Port() == 0 || q.Destination.Addr().IsUnspecified() || q.Destination.Addr().Zone() != "" || q.Source.Addr().Is4() != q.Destination.Addr().Is4()) {
+		return nil, "unsupported", 0
 	}
 	var n uint32
 	r, _, _ := proc.Call(0, uintptr(unsafe.Pointer(&n)), 0, fam, class, 0)
-	if r != 122 || n < 4 || n > 16<<20 {
-		return nil, "denied"
+	if r != 122 {
+		return nil, "denied", uint32(r)
 	}
 	for tries := 0; tries < 3; tries++ {
+		if ctx.Err() != nil {
+			return nil, "unknown", 0
+		}
+		if n < 4 {
+			return nil, "changed", 0
+		}
+		if n > 16<<20 {
+			return nil, "unsupported", 0
+		}
+		alloc := n + uint32(16*size)
+		if alloc < n || alloc > 16<<20 {
+			alloc = 16 << 20
+		}
+		n = alloc
 		b := make([]byte, n)
 		r, _, _ = proc.Call(uintptr(unsafe.Pointer(&b[0])), uintptr(unsafe.Pointer(&n)), 0, fam, class, 0)
+		if ctx.Err() != nil {
+			return nil, "unknown", 0
+		}
 		if r == 122 {
-			if n > 16<<20 {
-				return nil, "unsupported"
-			}
 			continue
 		}
 		if r != 0 {
-			return nil, "denied"
+			return nil, "denied", uint32(r)
 		}
 		if n < 4 || int(n) > len(b) {
-			return nil, "changed"
+			return nil, "changed", 0
 		}
 		b = b[:n]
 		count := int(binary.LittleEndian.Uint32(b))
 		if count > (len(b)-4)/size {
-			return nil, "changed"
+			return nil, "changed", 0
 		}
 		rows := make([]Row, 0, count)
 		for i := 0; i < count; i++ {
+			if i&255 == 0 && ctx.Err() != nil {
+				return nil, "unknown", 0
+			}
 			v := b[4+i*size : 4+(i+1)*size]
 			var src, dst netip.Addr
 			var sp, dp uint16
@@ -110,50 +137,101 @@ func ownerRows(q Query) ([]Row, string) {
 			}
 			rows = append(rows, row)
 		}
-		return rows, "known"
+		return rows, "known", 0
 	}
-	return nil, "changed"
+	return nil, "changed", 0
 }
 func stamp(h windows.Handle) (uint64, error) {
 	var c, e, k, u windows.Filetime
 	err := windows.GetProcessTimes(h, &c, &e, &k, &u)
 	return uint64(c.HighDateTime)<<32 | uint64(c.LowDateTime), err
 }
+func processRunning(h windows.Handle) bool {
+	var c, e, k, u windows.Filetime
+	if windows.GetProcessTimes(h, &c, &e, &k, &u) != nil || e.LowDateTime != 0 || e.HighDateTime != 0 {
+		return false
+	}
+	var code uint32
+	return windows.GetExitCodeProcess(h, &code) == nil && code == 259
+}
+func nativeUnavailable(status string, code uint32) Identity {
+	id := unavailableIdentity(status)
+	if status == "denied" {
+		id.Cause = "local_denied"
+	}
+	id.Win32 = code
+	return id
+}
+
+func nativeDenied(err error) Identity {
+	var code syscall.Errno
+	_ = errors.As(err, &code)
+	return nativeUnavailable("denied", uint32(code))
+}
+
 func lookupLocal(ctx context.Context, q Query) Identity {
 	if ctx.Err() != nil {
-		return Identity{Status: "closed"}
+		return unavailableIdentity("unknown")
 	}
-	return resolveCurrent(q, ownerRows, func(pid uint32) (Identity, func() bool, func()) {
-		h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.SYNCHRONIZE, false, pid)
+	// Reject a process created between the first snapshot and OpenProcess:
+	// a recycled PID must not make a different process look like that owner.
+	var started windows.Filetime
+	windows.GetSystemTimeAsFileTime(&started)
+	before := uint64(started.HighDateTime)<<32 | uint64(started.LowDateTime)
+	var tableCode uint32
+	id := resolveCurrent(q, func(q Query) ([]Row, string) {
+		rows, status, code := ownerRows(ctx, q)
+		tableCode = code
+		return rows, status
+	}, func(pid uint32) (Identity, func() bool, func()) {
+		if ctx.Err() != nil {
+			return unavailableIdentity("unknown"), nil, nil
+		}
+		h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
 		if err != nil {
-			return Identity{PID: pid, Status: "denied"}, nil, nil
+			return nativeDenied(err), nil, nil
 		}
 		close := func() { windows.CloseHandle(h) }
 		created, err := stamp(h)
 		if err != nil {
-			return Identity{PID: pid, Status: "denied"}, nil, close
+			return nativeDenied(err), nil, close
+		}
+		if !processCreatedBefore(created, before) {
+			return unavailableIdentity("changed"), nil, close
+		}
+		if !processRunning(h) {
+			return unavailableIdentity("changed"), nil, close
 		}
 		b := make([]uint16, 32768)
 		n := uint32(len(b))
-		if windows.QueryFullProcessImageName(h, 0, &b[0], &n) != nil {
-			return Identity{PID: pid, Status: "denied"}, nil, close
+		if err := windows.QueryFullProcessImageName(h, 0, &b[0], &n); err != nil {
+			return nativeDenied(err), nil, close
+		}
+		if n == 0 || n > uint32(len(b)) {
+			return unavailableIdentity("unknown"), nil, close
 		}
 		path := windows.UTF16ToString(b[:n])
 		name := filepath.Base(path)
-		if name == "" || strings.ContainsAny(name, "/\\") {
-			return Identity{PID: pid, Status: "unknown"}, nil, close
+		if !filepath.IsAbs(path) || name == "" || name == "." || strings.ContainsAny(name, "/\\") {
+			return unavailableIdentity("unknown"), nil, close
 		}
 		var session uint32
-		if windows.ProcessIdToSessionId(pid, &session) != nil {
-			return Identity{PID: pid, Status: "denied"}, nil, close
+		if err := windows.ProcessIdToSessionId(pid, &session); err != nil {
+			return nativeDenied(err), nil, close
 		}
 		valid := func() bool {
 			now, err := stamp(h)
-			wait, _ := windows.WaitForSingleObject(h, 0)
-			return err == nil && now == created && wait == uint32(windows.WAIT_TIMEOUT) && ctx.Err() == nil
+			return err == nil && processProofCurrent(created, now, processRunning(h)) && ctx.Err() == nil
 		}
 		return Identity{Name: name, Path: path, Status: "known", PID: pid, Stamp: created}, valid, close
 	})
+	if ctx.Err() != nil {
+		return unavailableIdentity("unknown")
+	}
+	if id.Status != "known" && tableCode != 0 {
+		return nativeUnavailable(id.Status, tableCode)
+	}
+	return id
 }
 
 func Lookup(ctx context.Context, q Query) Identity {
@@ -161,36 +239,21 @@ func Lookup(ctx context.Context, q Query) Identity {
 	if !control.Source.IsValid() {
 		control.Source, control.Destination = q.Source, q.Destination
 	}
-	rows, status := ownerRows(control)
+	rows, status, code := ownerRows(ctx, control)
 	if status != "known" {
-		return Identity{Status: status}
+		return nativeUnavailable(status, code)
 	}
 	pid, status := unique(rows, control)
 	if status != "known" {
-		return Identity{Status: status}
+		return unavailableIdentity(status)
 	}
 	if pid == uint32(os.Getpid()) {
 		if id, ok := httpIdentity(ctx, q); ok && q.Network == "tcp" {
 			return id
 		}
-		return Identity{Status: "unknown"}
+		return unavailableIdentity("unknown")
 	}
 	ctl := lookupLocal(ctx, control)
-	if ctl.Status == "denied" || strings.EqualFold(ctl.Name, "tun2socks.exe") {
-		id, bridge, err := lookupService(ctx, q)
-		if err != nil {
-			return Identity{Status: "denied"}
-		}
-		if bridge {
-			return id
-		}
-		if ctl.Status != "known" {
-			return ctl
-		}
-		if strings.EqualFold(ctl.Name, "tun2socks.exe") {
-			return Identity{Status: "unknown"}
-		}
-	}
 	if q.Network == "tcp" && control.Source == q.Source && control.Destination == q.Destination {
 		return ctl
 	}

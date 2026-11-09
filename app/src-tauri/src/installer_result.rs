@@ -31,12 +31,18 @@ pub struct InstallerOutcome {
     pub ok: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<Error>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub firewall_error: Option<crate::firewall_rule::FirewallRuleError>,
     #[serde(default,skip_serializing_if = "Option::is_none")]
     pub service_acl_diagnostic:Option<ServiceAclDiagnostic>,
 }
+std::thread_local!{static FIREWALL_ERROR:std::cell::RefCell<Option<crate::firewall_rule::FirewallRuleError>>=const{std::cell::RefCell::new(None)};}
+pub fn fw_error_clear(){FIREWALL_ERROR.with(|e|*e.borrow_mut()=None);}
+pub fn fw_error_record(err:crate::firewall_rule::FirewallRuleError){FIREWALL_ERROR.with(|e|{let mut e=e.borrow_mut();if e.is_none(){*e=Some(err);}});}
+pub fn fw_error_snapshot()->Option<crate::firewall_rule::FirewallRuleError>{FIREWALL_ERROR.with(|e|e.borrow().clone())}
 impl InstallerOutcome {
     pub fn from_result(result: &Result<()>) -> Self {
-        Self { ok: result.is_ok(), error: result.as_ref().err().cloned(), service_acl_diagnostic:acl_diag_snapshot() }
+        Self { ok: result.is_ok(), error: result.as_ref().err().cloned(), firewall_error:fw_error_snapshot(), service_acl_diagnostic:acl_diag_snapshot() }
     }
 }
 pub fn report_exit(result: &Result<()>, written: Result<()>) -> u32 {

@@ -4,6 +4,7 @@ package clientcore
 
 import (
 	"errors"
+	"github.com/shui1iao/Kat/internal/userio"
 	"golang.org/x/sys/windows"
 )
 
@@ -21,7 +22,7 @@ func secureWorkspace(path string) error {
 	if e != nil {
 		return e
 	}
-	return windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil)
+	return userio.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, acl, nil)
 }
 func secureFile(path string) error { return secureWorkspace(path) }
 
@@ -32,7 +33,7 @@ func rejectReparse(path string) error {
 	if e != nil {
 		return e
 	}
-	a, e := windows.GetFileAttributes(p)
+	a, e := userio.GetFileAttributes(p)
 	if e != nil {
 		return e
 	}

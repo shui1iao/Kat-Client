@@ -1,0 +1,146 @@
+[
+  {
+    "app": "sing-box",
+    "server_config_version": 4,
+    "client_wire_version": 4,
+    "obfs": "none",
+    "reuse": true,
+    "client_class": "complete pinned application, not library peer",
+    "two_distinct_target_reuse_physical_TCP": [
+      1,
+      1
+    ],
+    "TCP_two_targets": "PASS exact 2056 bytes each",
+    "UDP": "PASS 3x131 exact payload plus source address",
+    "server_first_large_response": "PASS initial 19 byte banner, then exact 196608-byte echo",
+    "real_half_close_large_response": "PASS target waited for EOF then exact 262191 response bytes",
+    "post_halfclose_new_target": "PASS exact bytes, no stale tail",
+    "status": "PASS"
+  },
+  {
+    "app": "sing-box",
+    "server_config_version": 4,
+    "client_wire_version": 4,
+    "obfs": "http",
+    "reuse": true,
+    "client_class": "complete pinned application, not library peer",
+    "two_distinct_target_reuse_physical_TCP": [
+      1,
+      1
+    ],
+    "TCP_two_targets": "PASS exact 2056 bytes each",
+    "UDP": "PASS 3x131 exact payload plus source address",
+    "server_first_large_response": "PASS initial 19 byte banner, then exact 196608-byte echo",
+    "real_half_close_large_response": "PASS target waited for EOF then exact 262191 response bytes",
+    "post_halfclose_new_target": "PASS exact bytes, no stale tail",
+    "status": "PASS"
+  },
+  {
+    "app": "sing-box",
+    "server_config_version": 5,
+    "client_wire_version": 4,
+    "obfs": "none",
+    "reuse": true,
+    "client_class": "complete pinned application, not library peer",
+    "two_distinct_target_reuse_physical_TCP": [
+      1,
+      1
+    ],
+    "TCP_two_targets": "PASS exact 2056 bytes each",
+    "UDP": "PASS 3x131 exact payload plus source address",
+    "server_first_large_response": "PASS initial 19 byte banner, then exact 196608-byte echo",
+    "real_half_close_large_response": "PASS target waited for EOF then exact 262191 response bytes",
+    "post_halfclose_new_target": "PASS exact bytes, no stale tail",
+    "status": "PASS"
+  },
+  {
+    "app": "sing-box",
+    "server_config_version": 5,
+    "client_wire_version": 4,
+    "obfs": "http",
+    "reuse": true,
+    "client_class": "complete pinned application, not library peer",
+    "two_distinct_target_reuse_physical_TCP": [
+      1,
+      1
+    ],
+    "TCP_two_targets": "PASS exact 2056 bytes each",
+    "UDP": "PASS 3x131 exact payload plus source address",
+    "server_first_large_response": "PASS initial 19 byte banner, then exact 196608-byte echo",
+    "real_half_close_large_response": "PASS target waited for EOF then exact 262191 response bytes",
+    "post_halfclose_new_target": "PASS exact bytes, no stale tail",
+    "status": "PASS"
+  },
+  {
+    "app": "mihomo",
+    "server_config_version": 4,
+    "client_wire_version": 4,
+    "obfs": "none",
+    "reuse": true,
+    "client_class": "complete pinned application, not library peer",
+    "two_distinct_target_reuse_physical_TCP": [
+      1,
+      1
+    ],
+    "TCP_two_targets": "PASS exact 2056 bytes each",
+    "UDP": "PASS 3x131 exact payload plus source address",
+    "server_first_large_response": "PASS initial 19 byte banner, then exact 196608-byte echo",
+    "real_half_close_large_response": "PASS target waited for EOF then exact 262191 response bytes",
+    "post_halfclose_new_target": "PASS exact bytes, no stale tail",
+    "status": "PASS"
+  },
+  {
+    "app": "mihomo",
+    "server_config_version": 4,
+    "client_wire_version": 4,
+    "obfs": "http",
+    "reuse": true,
+    "client_class": "complete pinned application, not library peer",
+    "two_distinct_target_reuse_physical_TCP": [
+      1,
+      1
+    ],
+    "TCP_two_targets": "PASS exact 2056 bytes each",
+    "UDP": "PASS 3x131 exact payload plus source address",
+    "server_first_large_response": "PASS initial 19 byte banner, then exact 196608-byte echo",
+    "real_half_close_large_response": "PASS target waited for EOF then exact 262191 response bytes",
+    "post_halfclose_new_target": "PASS exact bytes, no stale tail",
+    "status": "PASS"
+  },
+  {
+    "app": "mihomo",
+    "server_config_version": 5,
+    "client_wire_version": 4,
+    "obfs": "none",
+    "reuse": true,
+    "client_class": "complete pinned application, not library peer",
+    "two_distinct_target_reuse_physical_TCP": [
+      1,
+      1
+    ],
+    "TCP_two_targets": "PASS exact 2056 bytes each",
+    "UDP": "PASS 3x131 exact payload plus source address",
+    "server_first_large_response": "PASS initial 19 byte banner, then exact 196608-byte echo",
+    "real_half_close_large_response": "PASS target waited for EOF then exact 262191 response bytes",
+    "post_halfclose_new_target": "PASS exact bytes, no stale tail",
+    "status": "PASS"
+  },
+  {
+    "app": "mihomo",
+    "server_config_version": 5,
+    "client_wire_version": 4,
+    "obfs": "http",
+    "reuse": true,
+    "client_class": "complete pinned application, not library peer",
+    "two_distinct_target_reuse_physical_TCP": [
+      1,
+      1
+    ],
+    "TCP_two_targets": "PASS exact 2056 bytes each",
+    "UDP": "PASS 3x131 exact payload plus source address",
+    "server_first_large_response": "PASS initial 19 byte banner, then exact 196608-byte echo",
+    "real_half_close_large_response": "PASS target waited for EOF then exact 262191 response bytes",
+    "post_halfclose_new_target": "PASS exact bytes, no stale tail",
+    "status": "PASS"
+  }
+]

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/shui1iao/Kat/internal/userio"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -36,7 +37,7 @@ type stateFile struct {
 func prepareStateFile(path string, write func(string) error) (*stateFile, error) {
 	f := &stateFile{path: path}
 	fail := func(e error) (*stateFile, error) { f.cleanup(); return nil, e }
-	fi, e := os.Lstat(path)
+	fi, e := userio.Lstat(path)
 	if e == nil {
 		if !fi.Mode().IsRegular() {
 			return nil, fmt.Errorf("state target is not a regular file: %s", path)
@@ -49,15 +50,15 @@ func prepareStateFile(path string, write func(string) error) (*stateFile, error)
 		return nil, e
 	}
 	dir := filepath.Dir(path)
-	if e = os.MkdirAll(dir, 0700); e != nil {
+	if e = userio.MkdirAll(dir, 0700); e != nil {
 		return nil, e
 	}
-	if d, e := os.Stat(dir); e != nil {
+	if d, e := userio.Stat(dir); e != nil {
 		return nil, e
 	} else if d.Mode().Perm()&0222 == 0 || d.Mode().Perm()&0111 == 0 {
 		return nil, fmt.Errorf("state directory is not writable: %s", dir)
 	}
-	tmp, e := os.CreateTemp(dir, ".kat-reload-*")
+	tmp, e := userio.CreateTemp(dir, ".kat-reload-*")
 	if e != nil {
 		return nil, e
 	}
@@ -71,13 +72,13 @@ func prepareStateFile(path string, write func(string) error) (*stateFile, error)
 	// Exercise write/fsync/chmod/rename in this directory without touching the
 	// target. Target-specific rename errors are still handled before publication.
 	ready := f.temp + ".ready"
-	if e = os.Rename(f.temp, ready); e != nil {
+	if e = userio.Rename(f.temp, ready); e != nil {
 		return fail(e)
 	}
 	f.temp = ready
 	if f.before != nil {
 		backup := f.temp + ".previous"
-		if e = os.Link(path, backup); e != nil {
+		if e = userio.Link(path, backup); e != nil {
 			return fail(e)
 		}
 		f.backup = backup
@@ -86,14 +87,14 @@ func prepareStateFile(path string, write func(string) error) (*stateFile, error)
 }
 func (f *stateFile) cleanup() {
 	if f.temp != "" {
-		_ = os.Remove(f.temp)
+		_ = userio.Remove(f.temp)
 	}
 	if f.backup != "" {
-		_ = os.Remove(f.backup)
+		_ = userio.Remove(f.backup)
 	}
 }
 func (f *stateFile) install() error {
-	fi, e := os.Lstat(f.path)
+	fi, e := userio.Lstat(f.path)
 	if f.before == nil {
 		if e == nil {
 			return fmt.Errorf("state target appeared during reload: %s", f.path)
@@ -106,7 +107,7 @@ func (f *stateFile) install() error {
 	} else if !os.SameFile(fi, f.before) {
 		return fmt.Errorf("state target changed during reload: %s", f.path)
 	}
-	if e = os.Rename(f.temp, f.path); e != nil {
+	if e = userio.Rename(f.temp, f.path); e != nil {
 		return e
 	}
 	f.temp = ""
@@ -119,9 +120,9 @@ func (f *stateFile) undo() error {
 	}
 	var e error
 	if f.before != nil {
-		e = os.Rename(f.backup, f.path)
+		e = userio.Rename(f.backup, f.path)
 	} else {
-		e = os.Remove(f.path)
+		e = userio.Remove(f.path)
 	}
 	if e == nil {
 		f.installed = false
@@ -148,7 +149,7 @@ func (k *core) prepareState(c *Config, selections map[string]selRecord) (*stateP
 	}
 	p.changed = !same
 	if p.changed && p.want != "" {
-		if fi, e := os.Lstat(p.want + ".lock"); e == nil && !fi.Mode().IsRegular() {
+		if fi, e := userio.Lstat(p.want + ".lock"); e == nil && !fi.Mode().IsRegular() {
 			return fail(errors.New("state lock is not a regular file"))
 		} else if e != nil && !errors.Is(e, os.ErrNotExist) {
 			return fail(e)

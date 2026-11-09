@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net"
 	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/net/dns/dnsmessage"
 )
 
 const maxDatagram = 65507
@@ -18,6 +21,9 @@ type packet struct {
 	payload []byte
 }
 type udpAssociation struct {
+	// TUN uses the existing bounded queue/sniffer, never its proxy codec/socket lifecycle.
+	tunSend func(context.Context, packet, time.Duration)
+
 	server                       *Server
 	writeBack                    func(Address, []byte) error
 	ssNative                     bool // only native SS uses bidirectional target idle refresh
@@ -26,6 +32,7 @@ type udpAssociation struct {
 	stream                       net.Conn
 	outbound4, outbound6, native *net.UDPConn
 	activity                     atomic.Int64
+	receivedDatagram             atomic.Bool
 	queuedBytes                  atomic.Int64
 	outputMu                     sync.Mutex
 	req                          request
@@ -71,7 +78,7 @@ func (s *Server) resolve(ctx context.Context, a Address) (netip.AddrPort, error)
 	}
 	return netip.AddrPortFrom(ips[0].Unmap(), a.Port), nil
 }
-func (s *Server) serveUDP(c net.Conn, r request) error {
+func (s *Server) serveUDP(c net.Conn, r request) (retErr error) {
 	if !s.udpSlots.try() {
 		s.failure(failUDPBudget, "udp", -1)
 		_ = r.respond(c, nil, false)
@@ -91,7 +98,25 @@ func (s *Server) serveUDP(c net.Conn, r request) error {
 		a.source = addrIP(c.RemoteAddr())
 	}
 	f.setSource(a.source)
-	defer f.end("ok")
+	established := false
+	defer func() {
+		result := "ok"
+		if retErr != nil && (!established || !(errors.Is(retErr, io.EOF) || errors.Is(retErr, net.ErrClosed) || errors.Is(retErr, context.Canceled) || errors.Is(retErr, io.ErrClosedPipe))) {
+			result = "udp_association_failed"
+			if f != nil {
+				f.mu.Lock()
+				failureRecorded := f.lastOutcome == "error" || f.lastOutcome == "rejected"
+				f.mu.Unlock()
+				if !failureRecorded {
+					f.setError(retErr)
+				}
+			}
+		} else if established && !a.receivedDatagram.Load() {
+			// An accepted control association is not a transmitted UDP datagram.
+			result = "idle"
+		}
+		f.end(result)
+	}()
 	defer cancel()
 	var e error
 	a.outbound4, e = net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP(s.cfg.UDPBindIPv4)})
@@ -141,6 +166,7 @@ func (s *Server) serveUDP(c net.Conn, r request) error {
 	if e = r.respond(c, bound, true); e != nil {
 		return e
 	}
+	established = true
 	a.activity.Store(time.Now().UnixNano())
 	// One cancellation watcher, sender and return reader per association; never per packet.
 	a.wg.Add(2)
@@ -184,6 +210,7 @@ func (s *Server) serveUDP(c net.Conn, r request) error {
 	}
 }
 func (a *udpAssociation) enqueue(p packet) {
+	a.receivedDatagram.Store(true)
 	n := int64(len(p.payload))
 	limit := int64(a.server.cfg.Limits.UDPQueueBytes)
 	// A zero limit only exists in isolated unit fixtures; validated servers always set it.
@@ -315,27 +342,27 @@ func (a *udpAssociation) sendLoop() {
 
 // send routes and forwards one datagram (ctx may carry a sniff result).
 func (a *udpAssociation) send(ctx context.Context, p packet, idle time.Duration) {
+	if a.tunSend != nil {
+		a.tunSend(ctx, p, idle)
+		return
+	}
 	if a.native != nil {
 		a.mu.Lock()
 		source := a.client
 		a.mu.Unlock()
 		ctx = context.WithValue(ctx, udpProcessKey{}, udpProcessTuple{source: source, destination: addrPort(a.native.LocalAddr())})
 	}
-	if a.server.controlledDNS(p.target) {
-		qctx, cancel := context.WithTimeout(ctx, a.server.cfg.Limits.DialTimeout.value())
-		reply, e := a.server.answerDNS(qctx, p.payload, false)
-		cancel()
-		if e == nil {
-			a.mu.Lock()
-			client := a.client
-			a.mu.Unlock()
-			_ = a.output(client, p.target, reply, idle)
-		} else {
-			a.server.counters.Dropped.Add(1)
-		}
+	ctx = withOriginalTarget(ctx, p.target)
+	if ip, e := netip.ParseAddr(p.target.Host); e == nil && a.server.cfg.clientDNS != nil && ClientFakeIP(ip) {
+		a.server.counters.Dropped.Add(1)
+		a.flow.setError(errFakeIP)
 		return
 	}
-	a.flow.originDetails(ctx, p.target)
+	if a.server.controlledDNS(p.target) {
+		a.sendDNS(ctx, p, idle)
+		return
+	}
+	a.flow.scheduleDetails(ctx, p.target)
 	a.flow.sniffHost(ctx)
 	candidates, proxy, host, rule, e := a.server.routeUDP(ctx, p.target, a.source)
 	if e != nil {
@@ -439,6 +466,57 @@ func (a *udpAssociation) send(ctx context.Context, p packet, idle time.Duration)
 		a.activity.Store(time.Now().UnixNano())
 	}
 }
+
+// sendDNS accounts only the client DNS payload, not upstream attempts/cache
+// traffic. The target is the requested DNS endpoint, never the question name.
+func (a *udpAssociation) sendDNS(ctx context.Context, p packet, idle time.Duration) {
+	a.touchDNSActivity(idle)
+	a.flow.udpUp(nil, len(p.payload))
+	a.flow.udpDNS(p.target, "", nil)
+	qctx, cancel := context.WithTimeout(ctx, a.server.cfg.Limits.DialTimeout.value())
+	reply, e := a.server.answerDNS(qctx, p.payload, false)
+	cancel()
+	if e != nil {
+		a.flow.udpDNS(p.target, "dns_query_failed", e)
+		a.server.counters.Dropped.Add(1)
+		return
+	}
+	// The gateway deliberately returns a wire SERVFAIL when all upstreams fail.
+	// Deliver that response unchanged, but do not describe the query as ok.
+	var parser dnsmessage.Parser
+	header, e := parser.Start(reply)
+	if e != nil || !header.Response || (header.RCode != dnsmessage.RCodeSuccess && header.RCode != dnsmessage.RCodeNameError) {
+		a.flow.udpDNS(p.target, "dns_query_failed", errors.New("DNS upstream returned a failure response"))
+	}
+	a.mu.Lock()
+	client := a.client
+	a.mu.Unlock()
+	if e = a.output(client, p.target, reply, idle); e != nil {
+		a.flow.udpDNS(p.target, "dns_response_failed", e)
+		a.server.counters.Dropped.Add(1)
+		return
+	}
+	a.flow.udpDown(nil, len(reply))
+	a.touchDNSActivity(idle)
+}
+
+// DNS-only associations have unused outbound readers too. Renew both their
+// blocking read deadlines and the timestamp checked after a raced timeout.
+func (a *udpAssociation) touchDNSActivity(idle time.Duration) {
+	n := time.Now().UnixNano()
+	for old := a.activity.Load(); n > old; old = a.activity.Load() {
+		if a.activity.CompareAndSwap(old, n) {
+			break
+		}
+	}
+	deadline := time.Unix(0, a.activity.Load()).Add(idle)
+	for _, socket := range []*net.UDPConn{a.outbound4, a.outbound6} {
+		if socket != nil {
+			_ = socket.SetReadDeadline(deadline)
+		}
+	}
+}
+
 func (a *udpAssociation) returnLoop(socket *net.UDPConn) {
 	b := make([]byte, 65535)
 	idle := a.server.cfg.Limits.UDPIdle.value()

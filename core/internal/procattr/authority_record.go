@@ -10,13 +10,16 @@ import (
 	"unicode/utf16"
 )
 
-// The installer's fixed schema2 inventory, NOT a user manifest or update source.
-// Rust installer_files::FILES is the authority; parity is checked in focused tests.
+// The installer's legacy schema2 inventory, NOT a user manifest or update source.
+// Together with installationExtraFiles this mirrors Rust installer_files::valid_inventory.
 var installationFiles = [...]string{
 	"Kat-Uninstall.exe", "kat-desktop.exe", "kat-client-core.exe", "kat-network-service.exe", "kat-proxy-watchdog.exe",
 	"network/tun2socks.exe", "network/wintun.dll", "network/WINTUN-LICENSE.txt", "network/TUN2SOCKS-LICENSE.txt", "network/THIRD-PARTY-NOTICES.txt", "network/manifest.json",
 	"README-WINDOWS.txt", "Restore-User-Proxy.cmd", "RUST-THIRD-PARTY-NOTICES.txt", "THIRD-PARTY-SOURCE.zip", "GO-THIRD-PARTY-NOTICES.txt", "YAML-README.md", "kat-client.example.yaml", "FRONTEND-THIRD-PARTY-NOTICES.txt", "BUILD-IDENTITY.json",
 }
+
+// Modern approval includes all three extra roles; old records include none.
+var installationExtraFiles = [...]string{"kat-install-helper.exe", "kat-package-auth.json", "kat-package-auth.sig"}
 
 type installationRecord struct {
 	Schema  uint32            `json:"schema"`
@@ -64,7 +67,33 @@ func inventoryKey(s string) bool {
 			return true
 		}
 	}
+	for _, n := range installationExtraFiles {
+		if s == n {
+			return true
+		}
+	}
 	return false
+}
+
+// Both decoding and pin preparation accept exactly the same closed inventory.
+// Required base keys plus exact size exclude unknown keys even for typed callers.
+func validInstallationInventory(hashes map[string]string) bool {
+	modern := len(hashes) == len(installationFiles)+len(installationExtraFiles)
+	if !modern && len(hashes) != len(installationFiles) {
+		return false
+	}
+	for _, n := range installationFiles {
+		if !exactHash(hashes[n]) {
+			return false
+		}
+	}
+	for _, n := range installationExtraFiles {
+		value, present := hashes[n]
+		if present != modern || (present && !exactHash(value)) {
+			return false
+		}
+	}
+	return true
 }
 func exactHash(s string) bool {
 	if len(s) != 64 {
@@ -121,7 +150,7 @@ func decodeInstallationRecord(kind uint32, b []byte, currentSID, knownRuntime st
 			return fail()
 		}
 		hashes, err := recordObject(fields["hashes"], inventoryKey)
-		if err != nil || len(hashes) != len(installationFiles) {
+		if err != nil {
 			return fail()
 		}
 		r.Hashes = make(map[string]string, len(hashes))
@@ -131,6 +160,9 @@ func decodeInstallationRecord(kind uint32, b []byte, currentSID, knownRuntime st
 				return fail()
 			}
 			r.Hashes[n] = value
+		}
+		if !validInstallationInventory(r.Hashes) {
+			return fail()
 		}
 	default:
 		return fail()
@@ -172,13 +204,8 @@ func installationPins(r installationRecord, exe, knownRuntime string) (string, [
 		service := r.Root + `\kat-network-service.exe`
 		return service, append(pins, installationPin{path: exe, aclKind: "protected"}, installationPin{path: service, aclKind: "protected"}), nil
 	}
-	if r.Schema != 2 || r.Runtime == nil || !validRoot(knownRuntime) || !strings.EqualFold(*r.Runtime, knownRuntime) || strings.EqualFold(r.Root, knownRuntime) || len(r.Hashes) != len(installationFiles) {
+	if r.Schema != 2 || r.Runtime == nil || !validRoot(knownRuntime) || !strings.EqualFold(*r.Runtime, knownRuntime) || strings.EqualFold(r.Root, knownRuntime) || !validInstallationInventory(r.Hashes) {
 		return "", nil, invalidAuthority()
-	}
-	for _, n := range installationFiles {
-		if !exactHash(r.Hashes[n]) {
-			return "", nil, invalidAuthority()
-		}
 	}
 	pins := chainPins(r.Root, "")
 	pins = append(pins, installationPin{path: exe, hash: r.Hashes["kat-client-core.exe"]})

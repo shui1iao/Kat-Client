@@ -1,0 +1,34 @@
+{
+  "source_merged": true,
+  "binary_build_pending": false,
+  "version": "0.5.3-test-anytls-recv",
+  "source_input": "independent Any fixed; NOT review-combined",
+  "AnyTLS_sources": {
+    "internal/anytls/session.go": "9a0cbdaa24a1066e42fd7a1709f10c17eae4a105dd5b964468e0b39848e7ba05",
+    "internal/anytls/stream.go": "f23fed5210b8e8735c8cdf5f00b766022bbcf4c2767b837777d42c73428c9b62",
+    "internal/anytls/inbound_buffer.go": "f05d84b1193b94185218a0b0555ba1eb7aa96b90ed142423a82d53f926f3a5f3",
+    "internal/anytls/inbound_buffer_test.go": "d4b97c0137b3ef3e887272a96a927d6c1043bd7e04ff96a589c03316d0adef03"
+  },
+  "SS_all_Go_hashes_unchanged": {
+    "internal/ss/address.go": "7028e691d9116a3e6dac81e02056bd9e23b545e863bb2de0d019482d09cf3256",
+    "internal/ss/edge_test.go": "49e32a033f551c985f7f0b6bcee7e06c39691c657081a98b30ec912732754930",
+    "internal/ss/method.go": "1af24df5a91ee24c59165bfa67a0e649cbd16a6f077fc71ae78ac7b30090eb5b",
+    "internal/ss/record2017.go": "cf592152d182607bea4ccd82e86e90ead2522888889f7ee89adcd48c974fbcd9",
+    "internal/ss/record2017_test.go": "e0afc4950b903034933661219f87c2f45518d2232d0d87753c97c6bb55510515",
+    "internal/ss/record2022.go": "19bd3c865cffd0fa212c41d60e2eb7d63de3f17bcedfa350bc195931ba831f29",
+    "internal/ss/record2022_test.go": "2adf6f7ac89b02c55de65423d7af0790335b38f7eec9620281e7ad7080466288",
+    "internal/ss/replay.go": "e49d6ff5f20a69843e7c3714bd10c0213f34abe2c1c736dd39375b864e28dd98",
+    "internal/ss/ss_test.go": "bea2e1d95dc5de869a772b15e182f51876ac83c9bb8f12686b21654aee6d86f3",
+    "internal/ss/tcp.go": "f96e530286e62f0c6a2c84b9dfe061af4857a4cd6bd16570837254abd531f4ae",
+    "internal/ss/udp.go": "b86c9211be196f426ffd581f113d5da5eb9d826aa3a3b85b4dc321316fcd88f3"
+  },
+  "kernel_server_unchanged": "f66e005bee44923de9673710e721c2adee0b1eb9a2c6d7be4f6ff1decd5474cc",
+  "SS_receive_candidate_consumed": false,
+  "XHTTP_diagnostic_test_consumed": false,
+  "baseline_binary": "a8579fda6ec83ab9a63ba7145d9d3a1c827514f784f05c321734bf14f4f80abd",
+  "independent_validated_binary": "4629cd4497e65f33791e1e5c148d87d6d15be6be2765304d72dc93bd70cc71e8",
+  "rollback": "/opt/proxy-kernel-receive-opt-20261018/anytls-integration/rollback/pre-merge",
+  "final_core_binary": "044849cc7eba77469ffb52e952e61c72914adde041e18471c208231d5b0d57dc",
+  "final_canonical_targets_pass": true,
+  "SS_lost_handoff_candidate_fixed": false
+}

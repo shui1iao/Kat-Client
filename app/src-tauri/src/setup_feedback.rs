@@ -11,7 +11,7 @@ pub fn error_text(e:&Error,uninstall:bool)->String{if e.code=="INSTALL_ROLLBACK_
  "INSTALL_ROLLBACK_FAILED"=>"安装/卸载失败且恢复未完成。已保留回滚副本，请停止重复操作并查看诊断。",
  "INSTALL_HANDOFF_FAILED"=>"程序和服务已安装，但已安装版窗口未能自动打开。请从开始菜单或桌面 Kat 入口以普通身份打开；健康服务不会回退。",
  "INSTALL_REGISTRATION"|"INSTALL_DISCOVERY"|"SCM_BINDING"=>"现有安装登记或网络服务路径未通过安全核验。已停止，不会回退到默认目录或覆盖其它位置。",
- _=>"操作未完成。原错误码已保留；请检查安装目录、服务状态和诊断，勿反复授权。"};let phase=e.message.strip_prefix("stage=").and_then(|s|s.split(';').next()).filter(|s|["prepare","stop","replace","configure","start"].contains(s)).unwrap_or("preflight");let label=if uninstall{"卸载阶段"}else{"安装阶段"};format!("{text}\n{label}：{phase}\n诊断码：{}",crate::safe_log::safe_code(&e.code))}
+ _=>"操作未完成。原错误码已保留；请检查安装目录、服务状态和诊断，勿反复授权。"};let phase=e.message.strip_prefix("stage=").and_then(|s|s.split(';').next()).filter(|s|["prepare","stop","replace","configure","start"].contains(s)).unwrap_or("preflight");let label=if uninstall{"卸载阶段"}else{"安装阶段"};let native=e.os_error.map(|n|format!("\nWin32：{n}")).unwrap_or_default();format!("{text}\n{label}：{phase}\n诊断码：{}{native}",crate::safe_log::safe_code(&e.code))}
 
 /// NSIS Unicode strings have a 1024-unit limit. This local display record is
 /// deliberately bounded below it, contains no NUL and preserves multiline text.

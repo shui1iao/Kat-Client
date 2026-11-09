@@ -1,5 +1,8 @@
 package kernel
 
-import "os"
+import (
+	"github.com/shui1iao/Kat/internal/userio"
+	"os"
+)
 
-func openProviderFile(path string) (*os.File, error) { return os.Open(path) }
+func openProviderFile(path string) (*os.File, error) { return userio.Open(path) }

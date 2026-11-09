@@ -7,12 +7,13 @@ import (
 	"github.com/shui1iao/Kat/internal/clientdiag"
 	"github.com/shui1iao/Kat/internal/kernel"
 	"github.com/shui1iao/Kat/internal/procattr"
+	"github.com/shui1iao/Kat/internal/userio"
 	"golang.org/x/net/proxy"
 	"io"
 	"net"
 	"net/http"
 	"net/netip"
-	"os"
+
 	"path/filepath"
 	"strings"
 	"sync"
@@ -354,7 +355,7 @@ func (h *Host) saveDiagnosticCache(kind string, r *diagnosticReply) error {
 	return atomicWrite(filepath.Join(h.workspace, "network-diagnostic-"+kind+".json"), b)
 }
 func (h *Host) readDiagnosticCache(kind string) *diagnosticReply {
-	f, e := os.Open(filepath.Join(h.workspace, "network-diagnostic-"+kind+".json"))
+	f, e := userio.Open(filepath.Join(h.workspace, "network-diagnostic-"+kind+".json"))
 	if e != nil {
 		return nil
 	}

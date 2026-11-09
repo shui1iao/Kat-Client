@@ -13,6 +13,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"github.com/shui1iao/Kat/internal/userio"
 	"net"
 	"net/http"
 	"net/url"
@@ -290,10 +291,10 @@ func token(s string, n int) string {
 // ---- storage ----
 
 func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
-	if e := os.MkdirAll(filepath.Dir(path), 0o700); e != nil {
+	if e := userio.MkdirAll(filepath.Dir(path), 0o700); e != nil {
 		return e
 	}
-	f, e := os.CreateTemp(filepath.Dir(path), ".tmp-*")
+	f, e := userio.CreateTemp(filepath.Dir(path), ".tmp-*")
 	if e != nil {
 		return e
 	}
@@ -309,10 +310,10 @@ func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
 		e = ce
 	}
 	if e == nil {
-		e = os.Rename(tmp, path)
+		e = userio.Rename(tmp, path)
 	}
 	if e != nil {
-		os.Remove(tmp)
+		userio.Remove(tmp)
 	}
 	return e
 }
@@ -533,13 +534,13 @@ func (m *Manager) present(ctx context.Context, c *acme.Client, domain string, ch
 		}
 		if m.o.Webroot != "" {
 			file := filepath.Join(m.o.Webroot, filepath.FromSlash(strings.TrimPrefix(path, "/")))
-			if e := os.MkdirAll(filepath.Dir(file), 0o755); e != nil {
+			if e := userio.MkdirAll(filepath.Dir(file), 0o755); e != nil {
 				return nil, e
 			}
-			if e := os.WriteFile(file, []byte(body), 0o644); e != nil {
+			if e := userio.WriteFile(file, []byte(body), 0o644); e != nil {
 				return nil, e
 			}
-			return func() { os.Remove(file) }, nil
+			return func() { userio.Remove(file) }, nil
 		}
 		r, e := acquireHTTP(m.o.HTTPListen)
 		if e != nil {

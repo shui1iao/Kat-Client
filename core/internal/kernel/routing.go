@@ -66,7 +66,11 @@ func (s *Server) routeUDP(ctx context.Context, a Address, src netip.Addr) (candi
 		return nil, d.Outbound, host, d.Rule, nil
 	}
 	if s.cfg.clientEgress != nil {
-		return nil, "direct", host, d.Rule, nil
+		var candidates []netip.AddrPort
+		for _, ip := range d.Candidates {
+			candidates = append(candidates, netip.AddrPortFrom(ip, a.Port))
+		}
+		return candidates, "direct", host, d.Rule, nil
 	}
 	out := make([]netip.AddrPort, 0, len(d.Candidates))
 	for _, ip := range d.Candidates {

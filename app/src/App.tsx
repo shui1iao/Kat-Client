@@ -1,3 +1,4 @@
+import {useSoftwareUpdates,SoftwareUpdateLayer} from './components/SoftwareUpdates';
 import {OperationError} from './components/OperationError';
 import { useEffect, useState } from 'react';
 import { TitleBar, useWindowDrag } from './components/TitleBar';
@@ -31,7 +32,7 @@ export default function App() {
   const [page,setPage]=useState<PageId>(readHash),[theme,setTheme]=useTheme(),c=useClient(),sidebar=useSidebar();
   useEffect(()=>{const f=()=>setPage(readHash());window.addEventListener('hashchange',f);return()=>window.removeEventListener('hashchange',f);},[]);
   useEffect(()=>{const warn=(e:BeforeUnloadEvent)=>{if(c.doc.dirty){e.preventDefault();e.returnValue='';}};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);},[c.doc.dirty]);
-  const drag=useWindowDrag(c);
+  const drag=useWindowDrag(c),updates=useSoftwareUpdates(c);
   const [connTab,setConnTab]=useState<ConnTab>('active');
   const go=(p:PageId)=>{if(location.hash!=='#'+p)location.hash=p;setPage(p);};
   const groups=c.source?.kernel.groups??[],nodes=c.status?.nodes?.length??c.source?.kernel.outbounds?.length??0;
@@ -40,7 +41,7 @@ export default function App() {
   // Only the ordinary save banner duplicates Config's persistent file/panel state.
 
 
-  return <EditorSessionContext.Provider value={c.doc}><div className="app" inert={c.doc.installing||c.appRestarting||c.errorQueue.length>0}><div className={"body "+(sidebar.collapsed?"sidebar-collapsed":"sidebar-expanded")}><Sidebar collapsed={sidebar.collapsed} onToggle={sidebar.toggle} page={page} onGo={go} meta={meta} onDrag={drag} footer={<SideStatus c={c} current={page==='kernel'} onOpen={()=>go('kernel')}/>} /><div className="workspace"><TitleBar c={c} title={PAGE_LABEL[page]}/><main className="main">
-    <div className={'content page-'+page}>{page==='overview'&&<Dashboard c={c} onConnections={tab=>{setConnTab(tab);go('connections');}}/>} {page==='policies'&&<Policies c={c}/>} {page==='nodes'&&<Nodes c={c}/>} {page==='rules'&&<Rules c={c}/>} {page==='resources'&&<Resources c={c}/>} {page==='connections'&&<Connections c={c} tab={connTab} onTab={setConnTab}/>} {page==='logs'&&<Logs c={c}/>} {page==='config'&&<Config c={c}/>} {page==='kernel'&&<Kernel c={c}/>} {page==='settings'&&<Settings c={c} theme={theme} onTheme={setTheme}/>}</div>
-  </main></div></div><SelectPopover/><TooltipHost/></div>{c.errorQueue[0]&&<OperationError key={c.errorQueue[0]} error={c.errorQueue[0]} close={c.dismissError}/>}{c.doc.installing&&<div className="modal-mask" role="status" aria-live="polite"><section className="modal"><header><h3>安装 / 更新网络服务</h3></header><div className="form"><p>等待 Windows 授权</p><p>成功：恢复网络 · 安全退出 · 普通身份打开 Program Files 已安装版</p><p>取消 / 失败：保留当前窗口</p></div></section></div>}</EditorSessionContext.Provider>;
+  return <EditorSessionContext.Provider value={c.doc}><div className="app" inert={c.doc.installing||c.appRestarting||c.quitCleanupPending||c.errorQueue.length>0}><div inert={!!updates.data?.preparing} className={"body "+(sidebar.collapsed?"sidebar-collapsed":"sidebar-expanded")}><Sidebar collapsed={sidebar.collapsed} onToggle={sidebar.toggle} page={page} onGo={go} meta={meta} onDrag={drag} footer={<SideStatus c={c} current={page==='kernel'} onOpen={()=>go('kernel')}/>} /><div className="workspace"><TitleBar c={c} title={PAGE_LABEL[page]}/><main className="main">
+    <div className={'content page-'+page}>{page==='overview'&&<Dashboard c={c} onConnections={tab=>{setConnTab(tab);go('connections');}}/>} {page==='policies'&&<Policies c={c}/>} {page==='nodes'&&<Nodes c={c}/>} {page==='rules'&&<Rules c={c}/>} {page==='resources'&&<Resources c={c}/>} {page==='connections'&&<Connections c={c} tab={connTab} onTab={setConnTab}/>} {page==='logs'&&<Logs c={c}/>} {page==='config'&&<Config c={c}/>} {page==='kernel'&&<Kernel c={c}/>} {page==='settings'&&<Settings c={c} updates={updates} theme={theme} onTheme={setTheme}/>}</div>
+  </main></div></div><SelectPopover/><TooltipHost/><SoftwareUpdateLayer u={updates} onOpen={()=>{go('settings');requestAnimationFrame(()=>document.querySelector('.software-update-card')?.scrollIntoView({block:'nearest'}));}}/></div>{c.errorQueue[0]&&<OperationError key={c.errorQueue[0]} error={c.errorQueue[0]} close={c.dismissError}/>}{c.quitCleanupPending&&<div className="modal-mask" role="status" aria-live="polite"><section className="modal modal-sm"><header><h3>退出 Kat</h3></header><div className="form"><p>正在完成网络清理…</p></div></section></div>}{c.doc.installing&&<div className="modal-mask" role="status" aria-live="polite"><section className="modal"><header><h3>安装 / 更新网络服务</h3></header><div className="form"><p>等待 Windows 授权</p><p>成功：恢复网络 · 安全退出 · 普通身份打开 Program Files 已安装版</p><p>取消 / 失败：保留当前窗口</p></div></section></div>}</EditorSessionContext.Provider>;
 }

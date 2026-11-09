@@ -1,0 +1,16 @@
+.interop/anytls-peer: go1.26.9
+	path	example.invalid/anytls-independent-peer
+	mod	example.invalid/anytls-independent-peer	(devel)	
+	dep	github.com/anytls/sing-anytls	v0.0.11	h1:w8e9Uj1oP3m4zxkyZDewPk0EcQbvVxb7Nn+rapEx4fc=
+	dep	github.com/sagernet/sing	v0.6.1	h1:mJ6e7Ir2wtCoGLbdnnXWBsNJu5YHtbXmv66inoE0zFA=
+	dep	golang.org/x/sys	v0.30.0	h1:QjkSwP/36a20jFYWkSue1YwXzLmsV5Gfq7Eiy72C1uc=
+	build	-buildmode=exe
+	build	-compiler=gc
+	build	CGO_ENABLED=1
+	build	CGO_CFLAGS=
+	build	CGO_CPPFLAGS=
+	build	CGO_CXXFLAGS=
+	build	CGO_LDFLAGS=
+	build	GOARCH=amd64
+	build	GOOS=linux
+	build	GOAMD64=v1

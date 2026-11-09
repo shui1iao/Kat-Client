@@ -115,7 +115,7 @@ func (s *Server) release() {
 		s.clientCancel()
 	}
 	s.rt.close()
-	s.dns.close()
+	s.closeDNS()
 	s.gensMu.Lock()
 	delete(s.gens, s.id)
 	s.gensMu.Unlock()
@@ -213,7 +213,7 @@ func (k *core) prepareContext(ctx context.Context, c Config, prev *Server) (*Ser
 			g.clientCancel()
 		}
 		g.rt.close()
-		g.dns.close()
+		g.closeDNS()
 		return nil, nil, &prepareError{stage, e}
 	}
 	if e := ctx.Err(); e != nil {
@@ -235,18 +235,48 @@ func (k *core) prepareContext(ctx context.Context, c Config, prev *Server) (*Ser
 	bootstrap := net.DefaultResolver.LookupNetIP
 	dial := (&net.Dialer{}).DialContext
 	var physical []netip.Addr
+	var system func(context.Context, []byte) ([]byte, error)
 	if c.clientEgress != nil {
 		bootstrap = c.clientEgress.Bootstrap
 		dial = (&net.Dialer{ControlContext: c.clientEgress.Control}).DialContext
+		if c.clientEgress.DialContext != nil {
+			dial = c.clientEgress.DialContext
+		}
 		physical = c.clientEgress.DNSServers
+		system = c.clientEgress.SystemQuery
 	}
-	dns.configureIO(c.IPv6Disabled(), bootstrap, dial, physical)
+	if c.clientDNS != nil {
+		rawDial := dial
+		dial = func(ctx context.Context, network, address string) (net.Conn, error) {
+			host, _, e := net.SplitHostPort(address)
+			if e == nil {
+				if ip, e := netip.ParseAddr(host); e == nil && ClientFakeIP(ip) {
+					return nil, errFakeIP
+				}
+			}
+			return rawDial(ctx, network, address)
+		}
+	}
+	dns.setDiagnostic(g.runtimeDiagnostic)
+	dns.configureIO(c.IPv6Disabled(), bootstrap, dial, physical, system)
 	g.dns = dns
+	if e := g.configureClientDNS(bootstrap, dial, physical, system); e != nil {
+		return fail("client_dns", e)
+	}
+	if c.clientEgress != nil {
+		scope := c.clientEgress.DNSContext
+		g.dns.bindDNSRevision(scope)
+		g.directDNS.bindDNSRevision(scope)
+		g.bootstrapDNS.bindDNSRevision(scope)
+	}
 	rt, e := g.buildRouting()
 	if e != nil {
 		return fail("routing", e)
 	}
 	g.rt = rt
+	if e := g.bindClientDNS(); e != nil {
+		return fail("client_dns_detour", e)
+	}
 	if c.resourceChange != nil {
 		if err := g.checkResourceChange(prev, c.resourceChange); err != nil {
 			return fail("resource", err)
@@ -318,7 +348,7 @@ func (k *core) prepareContext(ctx context.Context, c Config, prev *Server) (*Ser
 					if errors.As(err, &rb) {
 						p.abort()
 						g.rt.close()
-						g.dns.close()
+						g.closeDNS()
 						return nil, nil, err
 					}
 					return fail("bind_udp", fmt.Errorf("inbound %d: cannot listen on udp %s: %w", i, in.Listen, err))
@@ -701,6 +731,10 @@ func (s *Server) reloadCandidateLockedContext(ctx context.Context, trigger strin
 	if c.clientIPv6 == nil {
 		c.clientIPv6 = prev.cfg.clientIPv6
 	}
+	if !c.clientDNSSet {
+		c.clientDNS = prev.cfg.clientDNS
+		c.clientDNSSet = prev.cfg.clientDNSSet
+	}
 	if !c.clientEgressSet {
 		c.clientEgress = prev.cfg.clientEgress
 		c.clientEgressSet = prev.cfg.clientEgressSet
@@ -726,7 +760,7 @@ func (s *Server) reloadCandidateLockedContext(ctx context.Context, trigger strin
 		if e != nil {
 			p.abort()
 			g.rt.close()
-			g.dns.close()
+			g.closeDNS()
 		}
 	}
 	if e != nil {

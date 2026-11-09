@@ -1,16 +1,5 @@
 {
   "wintun_zip_sha256": "07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51",
   "wintun_dll_sha256": "e5da8447dc2c320edc0fc52fa01885c103de8c118481f683643cacc3220dafce",
-  "wintun_version": "0.14.1",
-  "tun2socks_version": "2.7.0",
-  "tun2socks_commit": "8dda19e8e4613e014f0b12f3e624fdff5e5f23b3",
-  "tun2socks_asset": "tun2socks-windows-amd64.zip",
-  "tun2socks_asset_url": "https://github.com/xjasonlyu/tun2socks/releases/download/v2.7.0/tun2socks-windows-amd64.zip",
-  "tun2socks_zip_sha256": "c5d46e9452f6c9cc7c15ab9158d6d6a0169ceecd6bca019ce476b49337d2be43",
-  "tun2socks_exe_sha256": "f8feeed50a83a2c01e49287688eb36492e6563cc8d8db803afbd373803b3e1b6",
-  "tun2socks_upstream_exe_sha256": "076b3c3d6a372bae3f49f2b415a4105f70c30a3ed3caaed7979390e649892559",
-  "kat_patch": "source/kat-originalflow-v1.patch",
-  "kat_patch_sha256": "589585ad684c7a750b9518605deb3c9c25c99e827b2ec04d4e25842e79bcf7ac",
-  "upstream_source_sha256": "a26310f661eef4b6d58cef0d52b7e479c2adc8c834cd8e99a629068dc7f58924",
-  "rollback": "rollback-original-2.7.0"
+  "wintun_version": "0.14.1"
 }

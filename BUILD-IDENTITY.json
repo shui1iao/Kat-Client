@@ -1,17 +1,43 @@
 {
-  "client_version": "0.1.0",
-  "functional_baseline": "candidate24",
-  "core_version": "0.7.1",
-  "core_source_fingerprint": "c5e28b7eea7f0cf77ec9c9efb1d5437d85ab6223a2ec9d350b5471bd4c3816be",
-  "core_build_commit_kind": "exact core source fingerprint first40; NOT git HEAD",
-  "executables": {
-    "kat-desktop.exe": "3769435585e930f056a9abb41c86ced49e088fdded8e740a527bb4cd1c1d474f",
-    "kat-network-service.exe": "4149805e34928807b0c3bebe1995e2ce9304d591a9da643d54ebc5f896849fb2",
-    "kat-install-helper.exe": "2d58649a3f21c14514c80608f12836c12292b267a7b8e7209ecd4b12ac41586b",
-    "kat-client-core.exe": "f8e7c6f7ac5964404f7a4baa32f73a7526b6b470d98db9395b42c51a79dc52f8",
-    "kat-proxy-watchdog.exe": "84182671ff1d065a9290fffc25b08407767d17152114a9dc29005991459dbcf4"
+  "candidate": "candidate50-m2-udp-044",
+  "source_archive": {
+    "sha256": "ea2d4a4b931610eb5331c6cc37b6a1dd4c393857c826929709ef51ad120439ab",
+    "bytes": 54858164
   },
-  "unsigned": true,
-  "windows_runtime_validation": "NOTRUN; no deployment",
-  "public_source_note": "Non-compiled historical reports omitted; compiler sources byte-matched; core fingerprint retains accepted c24 provenance, not public Git HEAD."
+  "source_manifest_sha256": "f40d1696fef199d75c2141196fdd4b0ea51273ff4d44615d1aa7caff0fd39792",
+  "core_source_fingerprint": "c40a0ccbf0f83239ec8ab75dc306f71056090ebf666dc5c160e4256dcf9efe63",
+  "executables": {
+    "kat-client-core.exe": {
+      "bytes": 19717632,
+      "sha256": "1271016b470f604da2ab3c99fbcbb8fcf13fbb72c40d4470210c525bee235a20"
+    },
+    "kat-desktop.exe": {
+      "bytes": 11712512,
+      "sha256": "70c6212d73bc47bac3c812e86b07bdad36be603923b1b4ef0d56a599f8233102"
+    },
+    "kat-elevate-helper.exe": {
+      "bytes": 585728,
+      "sha256": "668f57ade9aabc4f8c2aa1fc3f1e35d33a1e0e281d03260b5f15ba89698cb35b"
+    },
+    "kat-install-helper.exe": {
+      "bytes": 1284608,
+      "sha256": "4d5eb3005aaa61a3fa4c2c1e029ab67b280f128f2e9fc2862f7bc491ea51df2f"
+    },
+    "kat-network-service.exe": {
+      "bytes": 1821696,
+      "sha256": "55ed63a968db5a7829d92eac1c34055fb418daa29e1183f79ae0a80d4be79836"
+    },
+    "kat-proxy-watchdog.exe": {
+      "bytes": 481280,
+      "sha256": "eae48ae14dd8a323ff28a78f352512c1fcc9606f5d927572a52d2e7331346c26"
+    }
+  },
+  "app_version": "0.2.0",
+  "windows_clientcore_version": "0.8.0",
+  "sequence": 1794300000,
+  "diagnostic_build": false,
+  "diagnostic_build_field_scope": "legacy memory-profile build, not tun-reason diagnostics",
+  "tun_reason_diagnostic_only": false,
+  "signature_key_id": "0afa646ee76f17d8",
+  "not_published": false
 }

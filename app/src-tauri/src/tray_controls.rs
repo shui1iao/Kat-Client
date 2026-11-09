@@ -11,7 +11,8 @@ pub enum Action{Mode{mode:String},SystemProxy{enabled:bool},Tun{enabled:bool},Me
 impl Node{fn item(id:&str,title:&str,enabled:bool)->Self{Self{id:id.into(),title:title.into(),enabled,checked:None,children:vec![],action:None}}fn check(id:&str,title:&str,enabled:bool,checked:bool,action:Action)->Self{Self{checked:Some(checked),action:Some(action),..Self::item(id,title,enabled)}}fn sep()->Self{Self::item("","",false)}}
 impl Snapshot{
  pub fn valid(&self)->bool{self.groups.len()<=128&&["","rule","global","direct"].contains(&self.mode.as_str())&&self.groups.iter().all(|g|g.name.len()<=1024&&g.label.len()<=1024&&g.members.len()<=10000&&g.members.iter().all(|m|m.name.len()<=1024&&m.label.len()<=1024))}
- pub fn menu(&self)->Vec<Node>{let enabled=self.ready&&!self.busy;
+ pub fn menu(&self)->Vec<Node>{self.menu_with_busy(self.busy)}
+ fn menu_with_busy(&self,busy:bool)->Vec<Node>{let enabled=self.ready&&!busy;
   let current_mode=match self.mode.as_str(){"rule"=>"规则","global"=>"全局","direct"=>"直连",_=>"未就绪"};
   let mut mode=Node::item("mode",&format!("模式：{current_mode}"),enabled);for(m,label)in[("rule","规则"),("global","全局"),("direct","直连")]{mode.children.push(Node::check(&format!("k3-mode-{m}"),label,enabled,self.mode==m,Action::Mode{mode:m.into()}));}
   let mut groups=Node::item("groups","策略组",enabled);let mut selects=0;
@@ -23,7 +24,7 @@ impl Snapshot{
    for(j,m)in g.members.iter().enumerate(){group.children.push(Node::check(&format!("k3-member-{i}-{j}"),&m.label,enabled,g.fixed.as_ref().or(g.current.as_ref())==Some(&m.name),Action::Member{group:g.name.clone(),member:m.name.clone(),unpin:false}));}groups.children.push(group);
   }
   if groups.children.is_empty(){groups.enabled=false;}
-  vec![Node::item("show","显示主窗口",true),Node::sep(),mode,Node::check("k3-proxy","系统代理",enabled&&self.proxy_ready,self.system_proxy,Action::SystemProxy{enabled:!self.system_proxy}),Node::check("k3-tun","TUN",enabled&&self.tun_ready,self.tun,Action::Tun{enabled:!self.tun}),Node::sep(),groups,Node::sep(),Node{action:Some(Action::RestartCore),..Node::item("restart","重启内核",!self.busy)},Node{action:Some(Action::RestartApp),..Node::item("restart-app","重启应用",!self.busy)},Node::sep(),Node{action:Some(Action::Quit),..Node::item("quit","恢复网络并退出",!self.busy)}]
+  vec![Node::item("show","显示主窗口",true),Node::sep(),mode,Node::check("k3-proxy","系统代理",enabled&&self.proxy_ready,self.system_proxy,Action::SystemProxy{enabled:!self.system_proxy}),Node::check("k3-tun","TUN",enabled&&self.tun_ready,self.tun,Action::Tun{enabled:!self.tun}),Node::sep(),groups,Node::sep(),Node{action:Some(Action::RestartCore),..Node::item("restart","重启内核",!busy)},Node{action:Some(Action::RestartApp),..Node::item("restart-app","重启应用",!busy)},Node::sep(),Node{action:Some(Action::Quit),..Node::item("quit","恢复网络并退出",true)}]
  }
  pub fn action(&self,id:&str)->Option<Action>{fn find(nodes:Vec<Node>,id:&str)->Option<Action>{for n in nodes{if n.id==id{return if n.enabled{n.action}else{None}};if let Some(a)=find(n.children,id){return Some(a)}}None}find(self.menu(),id)}
 }
@@ -42,11 +43,12 @@ impl Default for MenuState{fn default()->Self{Self{snapshot:Snapshot::default(),
 impl MenuState{
  fn changed(&mut self){self.revision=self.revision.checked_add(1).expect("tray revision exhausted");}
  pub fn sync(&mut self,snapshot:Snapshot){
+  if self.snapshot==snapshot{return;} // Exact equality only; invisible changes keep the original menu comparison below.
   if self.snapshot.ready!=snapshot.ready||self.snapshot.busy!=snapshot.busy||self.snapshot.menu()!=snapshot.menu(){self.changed();}
   self.snapshot=snapshot;
  }
  pub fn native_busy(&mut self,busy:bool){if self.native_busy!=busy{self.native_busy=busy;self.changed();}}
- pub fn nodes(&self)->Vec<Node>{let mut view=self.snapshot.clone();view.busy|=self.native_busy;view.menu()}
+ pub fn nodes(&self)->Vec<Node>{self.snapshot.menu_with_busy(self.snapshot.busy||self.native_busy)}
  pub fn theme(&mut self,theme:&'static str){if self.theme!=theme{self.theme=theme;self.changed();}}
  pub fn reply(&mut self)->MenuReply{self.popup_read=self.popup_epoch;MenuReply{revision:self.revision.to_string(),nodes:self.nodes(),theme:self.theme,#[cfg(all(windows,feature="desktop"))]popup:self.popup.as_ref().map(|p|p.reply())}}
  pub fn select(&mut self,revision:&str,id:&str)->crate::error::Result<Option<Delivery>>{

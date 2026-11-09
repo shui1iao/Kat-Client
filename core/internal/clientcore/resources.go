@@ -50,6 +50,7 @@ func (h *Host) refreshResource(ctx context.Context, raw json.RawMessage) (any, *
 		h.mu.Unlock()
 		return nil, fail("core_not_running", "runtime", "Core is stopped")
 	}
+	h.syncTUNEgressLocked()
 	base, generation, policy := h.doc, s.GenerationID(), h.egress
 	target, failure := h.manualResourceLocked(base, p.Kind, p.Name)
 	if failure != nil {
@@ -67,11 +68,29 @@ func (h *Host) refreshResource(ctx context.Context, raw json.RawMessage) (any, *
 	// that must acquire that mutex. Cancellation plus source/generation checks
 	// discard its result before any source or cache publication.
 	local := target.url == ""
+	var stopBootstrap func()
+	if !local {
+		if !h.hostEgressReadyLocked() {
+			stopEpoch()
+			stop()
+			cancel()
+			h.mu.Unlock()
+			return nil, fail("resource_refresh_failed", "params", "Physical egress is unavailable")
+		}
+		ctx, stopBootstrap = h.bootstrapContextLocked(ctx)
+	}
 	if local {
 		h.probeWG.Add(1)
 	}
 	h.mu.Unlock()
-	defer func() { stopEpoch(); stop(); cancel() }()
+	defer func() {
+		if stopBootstrap != nil {
+			stopBootstrap()
+		}
+		stopEpoch()
+		stop()
+		cancel()
+	}()
 	if !local {
 		return h.refreshDownloadedResource(ctx, base, s, generation, policy, target)
 	}

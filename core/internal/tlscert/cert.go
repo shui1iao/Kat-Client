@@ -14,8 +14,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"github.com/shui1iao/Kat/internal/userio"
 	"io"
-	"os"
+
 	"strings"
 	"sync/atomic"
 	"time"
@@ -29,7 +30,7 @@ var ErrLoad = errors.New("cannot load TLS certificate/key")
 
 // ReadFileLimited reads a small file, refusing files above 1 MiB.
 func ReadFileLimited(path string) ([]byte, error) {
-	f, e := os.Open(path)
+	f, e := userio.Open(path)
 	if e != nil {
 		return nil, e
 	}

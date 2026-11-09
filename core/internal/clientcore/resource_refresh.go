@@ -223,7 +223,8 @@ func (h *Host) refreshDownloadedResource(ctx context.Context, base document, s *
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if ctx.Err() != nil {
+	h.syncTUNEgressLocked()
+	if ctx.Err() != nil || checkHostEgress(ctx) != nil {
 		return nil, requestCanceled()
 	}
 	if h.server != s || h.doc.text != base.text || h.doc.format != base.format || s.GenerationID() != generation {

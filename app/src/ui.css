@@ -99,7 +99,7 @@
 .conn-table-active .conn-row { grid-template-columns:44px minmax(160px,1.2fr) minmax(150px,1.1fr) minmax(170px,1.4fr) 72px 72px 64px 72px 28px; min-width:860px; }
 .conn-table-closed .conn-row { grid-template-columns:44px minmax(160px,1.2fr) minmax(150px,1.1fr) minmax(170px,1.4fr) 72px 72px 64px 72px; min-width:860px; }
 .conn-row.log-row { grid-template-columns:64px 44px minmax(160px,1.2fr) minmax(150px,1.1fr) minmax(170px,1.4fr) 80px; min-width:820px; }
-.logs-page .events-card :is(.safe-log-head,.safe-log) { grid-template-columns:136px 56px 72px minmax(200px,1fr) minmax(120px,.6fr); }
+.logs-page .events-card :is(.safe-log-head,.safe-log) { grid-template-columns:260px 56px 72px minmax(140px,.6fr) minmax(120px,.6fr); }
 .res-row { grid-template-columns:72px minmax(160px,1fr) 80px 72px 104px 88px 28px; }
 .nodes-page .live-node-row,.rules-page .live-rule-row,.conn-row:not(.conn-th),.res-row:not(.res-th) { height:44px; min-height:44px; border-bottom:0; }
 .conn-row.log-row:not(.conn-th) { height:40px; min-height:40px; }

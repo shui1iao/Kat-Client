@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/shui1iao/Kat/internal/clientegress"
+	"github.com/shui1iao/Kat/internal/elevated"
 	"github.com/shui1iao/Kat/internal/kernel"
 	"github.com/shui1iao/Kat/internal/stats"
+	"github.com/shui1iao/Kat/internal/tunplatform"
+	"github.com/shui1iao/Kat/internal/userio"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -16,6 +19,8 @@ import (
 )
 
 type Host struct {
+	tunSession *elevated.Session
+	tun        *tunplatform.Manager
 	ipMu       sync.Mutex
 	ipDisabled bool
 	ipLife     context.Context
@@ -36,67 +41,76 @@ type Host struct {
 	iconFetch     func(context.Context, string) ([]byte, error)
 	iconTransport func(*http.Transport) http.RoundTripper
 
-	allRound           *probeRound
-	groupRounds        map[string]*probeRound
-	allProbeOutcome    *probeOutcome
-	groupProbeOutcomes map[string]probeOutcome
-	manualNodes        map[string]context.Context
-	activeManualProbes int
-	bootstrapLife      context.Context
-	bootstrapCancel    context.CancelFunc
-	stageWrite         func(string, []byte) error // Same I/O-only test seam as fullFetch; never exposed through configuration.
-	fullPending        *subscriptionPending
-	fullCandidates     map[string]*subscriptionPending
-	expiredFullTexts   map[[32]byte]bool
-	resourceUsing      map[string]int
-	fullFetch          func(context.Context, string, *clientegress.Policy, int64) ([]byte, error)
-	logs               logRing
-	connectionLogs     connectionRing
-	kernelLogs         kernelLogRing
-	manualCtx          context.Context
-	manualCancel       context.CancelFunc
-	manualWG           sync.WaitGroup
-	manualPolicy       *kernel.ManualProbePolicy
-	retiredBridges     []*httpBridge
-	egress             *clientegress.Policy
-	egressOptions      clientegress.Options
-	egressGeneration   uint64
-	mu                 sync.Mutex
-	workspace, path    string
-	sourceInfo         os.FileInfo
-	release            func()
-	doc                document
-	server             *kernel.Server
-	bridge             *httpBridge
-	probeCtx           context.Context
-	probeCancel        context.CancelFunc
-	probeWG            sync.WaitGroup
-	state              string
-	probes             map[string]kernel.ProbeResult
-	history            history
-	cancel             context.CancelFunc
-	done               chan struct{}
-	localReady         bool
+	allRound                 *probeRound
+	groupRounds              map[string]*probeRound
+	allProbeOutcome          *probeOutcome
+	groupProbeOutcomes       map[string]probeOutcome
+	manualNodes              map[string]context.Context
+	activeManualProbes       int
+	bootstrapLife            context.Context
+	bootstrapCancel          context.CancelFunc
+	bootstrapRequests        map[context.Context]context.CancelFunc
+	stageWrite               func(string, []byte) error // Same I/O-only test seam as fullFetch; never exposed through configuration.
+	fullPending              *subscriptionPending
+	fullCandidates           map[string]*subscriptionPending
+	expiredFullTexts         map[[32]byte]bool
+	resourceUsing            map[string]int
+	fullFetch                func(context.Context, string, *clientegress.Policy, int64) ([]byte, error)
+	logs                     logRing
+	connectionLogs           connectionRing
+	kernelLogs               kernelLogRing
+	manualCtx                context.Context
+	manualCancel             context.CancelFunc
+	manualWG                 sync.WaitGroup
+	manualPolicy             *kernel.ManualProbePolicy
+	retiredBridges           []*httpBridge
+	egressSwitch             clientegress.Switch
+	egress                   *clientegress.Policy
+	egressOptions            clientegress.Options
+	egressGeneration         uint64
+	egressPhysicalGeneration uint64
+	egressFrozen             bool
+	mu                       sync.Mutex
+	workspace, path          string
+	sourceInfo               os.FileInfo
+	release                  func()
+	doc                      document
+	server                   *kernel.Server
+	bridge                   *httpBridge
+	probeCtx                 context.Context
+	probeCancel              context.CancelFunc
+	probeWG                  sync.WaitGroup
+	state                    string
+	probes                   map[string]kernel.ProbeResult
+	history                  history
+	cancel                   context.CancelFunc
+	done                     chan struct{}
+	localReady               bool
+	updatePrepared           bool // Final Close must recheck the accepted source after a strict prepare.
 }
 
-func Open(workspace string) (*Host, error) {
+func Open(workspace string) (*Host, error) { return openWorkspace(workspace, nil) }
+func openWorkspace(workspace string, expected *elevated.Checkpoint) (*Host, error) {
+	if e := userio.Check(); e != nil {
+		return nil, e
+	}
 	if !filepath.IsAbs(workspace) {
 		return nil, errors.New("workspace must be absolute")
 	}
-	if st, e := os.Lstat(workspace); e == nil && (!st.IsDir() || st.Mode()&os.ModeSymlink != 0) {
+	if st, e := userio.Lstat(workspace); e == nil && (!st.IsDir() || st.Mode()&os.ModeSymlink != 0) {
 		return nil, errors.New("workspace must be a private directory")
 	}
-	if e := os.MkdirAll(workspace, 0700); e != nil {
+	if e := userio.MkdirAll(workspace, 0700); e != nil {
 		return nil, errors.New("cannot create workspace")
 	}
 	if e := secureWorkspace(workspace); e != nil {
 		return nil, errors.New("cannot secure workspace")
 	}
 	pd := filepath.Join(workspace, "providers")
-	if st, e := os.Lstat(pd); e == nil && (!st.IsDir() || st.Mode()&os.ModeSymlink != 0) {
+	if st, e := userio.Lstat(pd); e == nil && (!st.IsDir() || st.Mode()&os.ModeSymlink != 0) {
 		return nil, errors.New("invalid provider directory")
 	}
-	if e := os.MkdirAll(pd, 0700); e != nil {
+	if e := userio.MkdirAll(pd, 0700); e != nil {
 		return nil, e
 	}
 	if e := secureWorkspace(pd); e != nil {
@@ -105,6 +119,12 @@ func Open(workspace string) (*Host, error) {
 	release, e := stats.Lock(filepath.Join(workspace, "client-workspace"))
 	if e != nil {
 		return nil, errors.New("workspace in use or unavailable")
+	}
+	if expected != nil {
+		if e := checkHandover(workspace, *expected); e != nil {
+			release()
+			return nil, e
+		}
 	}
 	found, e := documentCandidates(workspace)
 	if e != nil {
@@ -149,7 +169,7 @@ func Open(workspace string) (*Host, error) {
 		return nil, de
 	}
 	h.setIPPolicy(!h.doc.client.IPv6)
-	h.sourceInfo, e = os.Lstat(h.path)
+	h.sourceInfo, e = userio.Lstat(h.path)
 	if e != nil || !matchesSource(h.path, string(b), h.sourceInfo) {
 		release()
 		return nil, fail("document_changed", "text", "Saved document changed externally; reopen before applying")
@@ -168,7 +188,7 @@ func Open(workspace string) (*Host, error) {
 		// Frozen v1 backup is not part of the rotating transaction backups. Candidate
 		// 13 rejects v2 fields; rollback must restore this exact private source.
 		backup := filepath.Join(workspace, "subscription-v1-before-upgrade."+string(format))
-		if _, err := os.Lstat(backup); os.IsNotExist(err) {
+		if _, err := userio.Lstat(backup); os.IsNotExist(err) {
 			if err := exclusiveDocumentWrite(backup, []byte(h.doc.text)); err != nil {
 				release()
 				return nil, errors.New("cannot back up subscription migration")
@@ -272,6 +292,9 @@ func (h *Host) applyContext(ctx context.Context, text string, formats ...Documen
 	if e != nil {
 		return nil, e
 	}
+	if e := d.dnsEnableError(); e != nil {
+		return nil, e
+	}
 	if e := legacyDelta(h.doc, d); e != nil {
 		return nil, e
 	}
@@ -288,12 +311,7 @@ func (h *Host) applyContext(ctx context.Context, text string, formats ...Documen
 			}
 		}
 	}
-	root, _ := sourceJSON(d)
-	if root["subscriptions"] != nil {
-		if e := validateSubscriptionResources(d.config, func() []fullSubscription { v, _ := subscriptionsOf(root); return v }()...); e != nil {
-			return nil, e
-		}
-	}
+
 	refresh := h.fullPending != nil && h.fullPending.Text == text
 	priorProbes := map[string]kernel.ProbeResult{}
 	if refresh {
@@ -342,7 +360,7 @@ func (h *Host) applyContext(ctx context.Context, text string, formats ...Documen
 	var next *httpBridge
 	if h.server != nil && d.client.HTTPPort != h.doc.client.HTTPPort {
 		var err error
-		next, err = newHTTPBridge(d.client.HTTPPort, d.client.SOCKSPort)
+		next, err = newHTTPBridge(d.client.HTTPPort, d.client.SOCKSPort, h.logs.record)
 		if err != nil {
 			if tx.rollback() != nil {
 				return nil, fail("rollback_failed", "text", "Runtime retained; cannot restore accepted source")
@@ -444,7 +462,8 @@ func (h *Host) applyContext(ctx context.Context, text string, formats ...Documen
 	if previous.client.IPv6 != d.client.IPv6 {
 		h.setIPPolicy(!d.client.IPv6)
 		h.cancelBootstrapLocked()
-		if h.egress != nil {
+		h.egressSwitch.SetIPv6(d.client.IPv6)
+		if h.tunSession == nil && h.egress != nil {
 			h.egress.SetIPv6(d.client.IPv6)
 		}
 	}
@@ -498,11 +517,15 @@ func (h *Host) applyContext(ctx context.Context, text string, formats ...Documen
 	return map[string]any{"text": d.text, "path": h.path, "applied": applied, "format": d.format}, nil
 }
 func (h *Host) startLocked() *Error {
+	if e := h.doc.dnsEnableError(); e != nil {
+		h.state = "error"
+		return e
+	}
 	if h.server != nil {
 		return nil
 	}
 	h.state = "starting"
-	b, e := newHTTPBridge(h.doc.client.HTTPPort, h.doc.client.SOCKSPort)
+	b, e := newHTTPBridge(h.doc.client.HTTPPort, h.doc.client.SOCKSPort, h.logs.record)
 	if e != nil {
 		h.state = "error"
 		return fail("start_failed", "client.http_port", "HTTP port unavailable")
@@ -534,7 +557,16 @@ func (h *Host) Start() (any, *Error) {
 	return h.statusLocked(), e
 }
 func (h *Host) stopLocked() *Error {
+	return h.stopWithDrainLocked(2*time.Second, false)
+}
+func (h *Host) stopWithDrainLocked(drain time.Duration, allowTimeout bool) *Error {
 	h.cancelBootstrapLocked()
+	if h.tun != nil {
+		if e := h.tun.Close(); e != nil {
+			return h.tunFailure(e)
+		}
+		h.tun = nil
+	}
 	h.localReady = false
 	if h.server == nil {
 		h.state = "stopped"
@@ -548,14 +580,14 @@ func (h *Host) stopLocked() *Error {
 		b.close()
 	}
 	h.retiredBridges = nil
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), drain)
 	defer cancel()
 	e := h.server.Close(ctx)
 	h.sampleLocked(time.Now())
 	h.server = nil
 	h.bridge = nil
 	h.state = "stopped"
-	if e != nil {
+	if e != nil && !allowTimeout {
 		return fail("drain_timeout", "runtime", "Core stopped after drain timeout")
 	}
 	return nil
@@ -603,6 +635,11 @@ func (h *Host) Close() error {
 	defer h.mu.Unlock()
 	h.clearFullPendingLocked()
 	e := h.stopLocked()
+	if h.updatePrepared {
+		if se := h.checkSourceLocked(); se != nil && e == nil {
+			e = fail("update_source_failed", "text", "Accepted source changed after update prepare")
+		}
+	}
 	if he := h.saveHistory(); he != nil && e == nil {
 		e = fail("history_save_failed", "traffic", "Cannot save history")
 	}

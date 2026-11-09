@@ -20,8 +20,7 @@ import { delayLabel, latencyTone, probeLabel, probeFailureTitle } from '../lib/f
 const PROTOCOLS = ['socks5','shadowsocks','trojan','anytls'];
 const METHODS = ['aes-128-gcm','aes-256-gcm','chacha20-ietf-poly1305','2022-blake3-aes-128-gcm','2022-blake3-aes-256-gcm','2022-blake3-chacha20-poly1305'];
 export function Nodes({ c }: { c: Client }) {
-  const quickDraft=useFormDraft({url:''}),quickURL=quickDraft.value.url;
-  const setQuickURL=(url:string)=>{if(url)quickDraft.set('url',url);else quickDraft.reset();};
+  const [quickURL,setQuickURL]=useState('');
   const quickImport=async()=>{const url=quickURL.trim();if(!url)return;const r=await c.startSubscription({url,interval:3600,auto_update:true,full_only:true,download_mode:'auto'},'new',false,message=>{c.setError(message+(/网络|超时|连接|下载/.test(message)?'；可在“更多选项”里改用系统代理':''));return true;});if(r?.done)setQuickURL('');if(r?.confirmation)setFull({initialText:url});};
   const [sort,setSort]=useDisplaySort('nodes');
   const [node,setNode]=useState<{value:Outbound;previous:string|null}|null>(null);
