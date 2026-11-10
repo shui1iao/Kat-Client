@@ -274,7 +274,7 @@ fn show_main(app:&tauri::AppHandle){if let Some(w)=app.get_webview_window("main"
  if w.is_minimized().unwrap_or(false){let _=w.unminimize();}if app.state::<Host>().pending_maximize.swap(false,Ordering::SeqCst){let _=w.maximize();}let _=w.show();let _=w.set_focus();
 }}
 
-fn tray_image()->tauri::image::Image<'static>{tauri::image::Image::new_owned(include_bytes!("../icons/icon-32.rgba").to_vec(),32,32)}
+fn tray_image()->tauri::image::Image<'static>{tauri::image::Image::new(include_bytes!("../icons/icon-32.rgba"),32,32)}
 // Called from Ready and window actions. Tauri owns a resource-table clone, and
 // Host also retains the verified handle explicitly. A successful build alone can
 // hide a failed NIM_ADD in tray-icon 0.25.1; set_icon propagates NIM_MODIFY failure.
@@ -285,7 +285,7 @@ fn ensure_tray(app:&tauri::AppHandle)->bool{
  }
  held.take();app.remove_tray_by_id("kat-main");
  let built=(||->tauri::Result<tauri::tray::TrayIcon>{
-        TrayIconBuilder::with_id("kat-main").tooltip("Kat").icon(tauri::image::Image::new_owned(include_bytes!("../icons/icon-32.rgba").to_vec(),32,32)).show_menu_on_left_click(false)
+        TrayIconBuilder::with_id("kat-main").tooltip("Kat").icon(tray_image()).show_menu_on_left_click(false)
           .on_tray_icon_event(|tray,event|{
             if let tauri::tray::TrayIconEvent::Click{button:tauri::tray::MouseButton::Right,button_state:tauri::tray::MouseButtonState::Up,rect,position,..}=&event{
              show_tray_popup(tray.app_handle(),*rect,*position);return;
@@ -480,7 +480,7 @@ pub fn run() {
           .on_page_load(|w,payload|{if matches!(payload.event(),tauri::webview::PageLoadEvent::Started){w.state::<Host>().tray_state.lock().unwrap().listener_ready=false;}})
           .transparent(true)
           .on_navigation(|url| url.scheme()=="tauri" || (url.scheme()=="http" && url.host_str()==Some("tauri.localhost")))
-          .icon(tauri::image::Image::new_owned(include_bytes!("../icons/icon-32.rgba").to_vec(),32,32))?
+          .icon(tray_image())?
           .visible((installed_handoff||crate::preferences::initially_visible(&settings,settings_error.is_some()||intent_error.is_some()||app.state::<Host>().core.is_none())||last.tun) && !settings.remember_window).build()?;
         crate::windows::identity::set_uac_owner(window.hwnd().map(|h|h.0 as isize).unwrap_or(0));
         crate::acrylic::install(&window);

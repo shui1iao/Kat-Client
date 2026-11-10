@@ -3,6 +3,7 @@ package kernel
 import (
 	"context"
 	"errors"
+	"github.com/shui1iao/Kat/internal/procattr"
 	"net"
 	"net/netip"
 	"strings"
@@ -11,10 +12,19 @@ import (
 )
 
 func TestRound2FlowDetailsAndEnd(t *testing.T) {
+	oldLookup := lookupApplication
+	defer func() { lookupApplication = oldLookup }()
+	lookupApplication = func(context.Context, procattr.Query) procattr.Identity {
+		return procattr.Identity{Name: "client.exe", Path: `C:\App\client.exe`, Status: "known"}
+	}
 	events := []ConnectionEvent{}
 	s := startTest(t, Inbound{Protocol: "socks5"}, func(c *Config) { c.SetConnectionSink(func(e ConnectionEvent) { events = append(events, e) }) })
 	ctx := withInboundMeta(context.Background(), &Inbound{Protocol: "socks5"}, &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 1080}, &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 12345})
 	f, _ := s.newFlow(ctx, "tcp", Address{Host: "example.test", Port: 443})
+	waitFor(t, func() bool {
+		a, _ := s.ClientConnections(500)
+		return len(a) == 1 && a[0].InboundKind == "socks" && a[0].SourceAddr == "127.0.0.1:12345"
+	})
 	f.route(0, []string{"direct"})
 	f.dialIPs([]netip.Addr{netip.MustParseAddr("1.2.3.4"), netip.MustParseAddr("1.2.3.5")}, netip.MustParseAddr("1.2.3.5"))
 	f.connectionOutcome(errors.New("Get https://u:pw@bad.test/path?token=SECRET: connection refused"))

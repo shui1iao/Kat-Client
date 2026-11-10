@@ -15,8 +15,8 @@ const (
 	// Received-but-unread bytes buffered per stream. Beyond it the session
 	// reader stops reading the TLS connection until the application reads:
 	// plain TCP backpressure on the stream's own (exclusive) session.
-	maxStreamBuffer = 512 << 10
-	writeChunk      = 32 << 10
+	maxStreamBuffer = 1024 << 10
+	writeChunk      = maxFrame
 )
 
 var errClosedByPeer = errors.New("anytls: stream closed by server")
@@ -30,9 +30,11 @@ type stream struct {
 	sentAt int64
 
 	rmu, wmu sync.Mutex // serialize Read / Write callers
+	wbuf     []byte
 
 	mu       sync.Mutex
 	in       [][]byte
+	inHead   int
 	off      int
 	inBytes  int
 	rerr     error // terminal read state (io.EOF after FIN, or failure)
@@ -66,6 +68,31 @@ func signal(c chan struct{}) {
 // await waits for the server's verdict on a new stream. TCP needs the v2
 // SYNACK; UoT only needs proof the session is authenticated (server settings),
 // because servers may delay SYNACK until the UoT request arrives.
+func (st *stream) awaitWrite(ctx context.Context, req *writeReq) error {
+	s := st.s
+	select {
+	case e := <-req.done:
+		if e != nil {
+			return e
+		}
+	case <-s.done:
+		return s.cause()
+	case <-ctx.Done():
+		if !s.cancel(req) {
+			select {
+			case e := <-req.done:
+				if e != nil {
+					return e
+				}
+			case <-s.done:
+				return s.cause()
+			}
+		}
+		return fmt.Errorf("anytls: waiting for server: %w", ctx.Err())
+	}
+	return st.await(ctx, false)
+}
+
 func (st *stream) await(ctx context.Context, needAck bool) error {
 	s := st.s
 	ver := s.ver
@@ -141,6 +168,15 @@ func (st *stream) push(b []byte) {
 			return
 		}
 		if st.inBytes == 0 || st.inBytes+len(b) <= maxStreamBuffer {
+			if st.inHead > 0 && st.inHead == len(st.in) {
+				st.in = st.in[:0]
+				st.inHead = 0
+			} else if st.inHead >= 64 && st.inHead*2 >= len(st.in) {
+				n := copy(st.in, st.in[st.inHead:])
+				clear(st.in[n:])
+				st.in = st.in[:n]
+				st.inHead = 0
+			}
 			st.in = append(st.in, b)
 			st.inBytes += len(b)
 			st.mu.Unlock()
@@ -165,6 +201,10 @@ func (st *stream) remoteClose(err error) {
 	if st.werr == nil {
 		st.werr = errClosedByPeer
 	}
+	if st.inHead == len(st.in) {
+		st.in = nil
+		st.inHead = 0
+	}
 	st.mu.Unlock()
 	signal(st.rch)
 	st.detach(false)
@@ -178,6 +218,10 @@ func (st *stream) abort(err error) {
 	}
 	if st.werr == nil || st.werr == errClosedByPeer {
 		st.werr = err
+	}
+	if st.inHead == len(st.in) {
+		st.in = nil
+		st.inHead = 0
 	}
 	st.mu.Unlock()
 	signal(st.rch)
@@ -215,25 +259,35 @@ func (st *stream) Read(p []byte) (int, error) {
 			st.mu.Unlock()
 			return 0, os.ErrDeadlineExceeded
 		}
-		if len(st.in) > 0 {
+		if st.inHead < len(st.in) {
 			if len(p) == 0 {
 				st.mu.Unlock()
 				return 0, nil
 			}
-			b := st.in[0]
+			b := st.in[st.inHead]
 			n := copy(p, b[st.off:])
 			st.off += n
 			if st.off == len(b) {
-				st.in[0] = nil
-				st.in = st.in[1:]
+				st.in[st.inHead] = nil
+				st.inHead++
 				st.off = 0
 				st.inBytes -= len(b)
+				if st.inHead == len(st.in) {
+					if st.rerr != nil {
+						st.in = nil
+					} else {
+						st.in = st.in[:0]
+					}
+					st.inHead = 0
+				}
 				signal(st.space)
 			}
 			st.mu.Unlock()
 			return n, nil
 		}
 		if st.rerr != nil {
+			st.in = nil
+			st.inHead = 0
 			e := st.rerr
 			st.mu.Unlock()
 			return 0, e
@@ -292,7 +346,12 @@ func (st *stream) writeData(data []byte) error {
 		return e
 	}
 	s := st.s
-	wire := make([]byte, 0, len(data)+headerSize*(len(data)/maxFrame+1))
+	frames := (len(data) + maxFrame - 1) / maxFrame
+	need := len(data) + headerSize*max(frames, 1)
+	if cap(st.wbuf) < need {
+		st.wbuf = make([]byte, 0, need)
+	}
+	wire := st.wbuf[:0]
 	for len(data) > 0 {
 		n := min(len(data), maxFrame)
 		wire = appendFrame(wire, cmdPSH, st.id, data[:n])
@@ -334,6 +393,8 @@ func (st *stream) Close() error {
 	}
 	st.closed = true
 	st.in = nil
+	st.inHead = 0
+	st.off = 0
 	st.inBytes = 0
 	close(st.closing)
 	st.mu.Unlock()

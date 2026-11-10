@@ -2,7 +2,7 @@
 //! ABI: learn.microsoft.com/windows/win32/api/netioapi/ and official Windows SDK.
 use super::journal::*;
 use crate::error::{Error,Result};
-use windows_sys::{core::GUID,Win32::{Devices::DeviceAndDriverInstallation::{CM_Locate_DevNodeW,CM_LOCATE_DEVNODE_PHANTOM,CR_NO_SUCH_DEVNODE},Foundation::*,Networking::WinSock::*,NetworkManagement::{IpHelper::*,Ndis::*}}};
+use windows_sys::{core::GUID,Win32::{Devices::DeviceAndDriverInstallation::{CM_Locate_DevNodeW,CM_LOCATE_DEVNODE_PHANTOM,CR_NO_SUCH_DEVNODE,CR_SUCCESS},Foundation::*,Networking::WinSock::*,NetworkManagement::{IpHelper::*,Ndis::*}}};
 pub(super) unsafe fn is_uninstalled_tombstone(oper:i32,guid:&str,luid_val:u64)->bool{
  if oper!=2||luid_val==0||!guid_ok(guid){return false}
  let instance=super::super::identity::wide(&format!(r"SWD\Wintun\{{{guid}}}"));
@@ -42,6 +42,39 @@ pub fn adapter_present(a:&Adapter)->Result<bool>{check_compartment(a)?;unsafe{
  if rows.iter().any(|r|{let g=text(r.InterfaceGuid);g==a.guid&&!is_uninstalled_tombstone(r.OperStatus,&g,r.InterfaceLuid.Value)}){return Err(bad("RECOVERY_CONFLICT"))}Ok(false)
  })();FreeMibTable(t.cast());result
 }}
+/// Read-only retirement proof for an already completed/restored journal.
+/// Never query routes/DNS by the old LUID: another adapter may now own it.
+pub fn completed_adapter_absent(a: &Adapter) -> Result<bool> {
+ check_compartment(a)?;
+ unsafe {
+  let mut t = std::ptr::null_mut(); rc(GetIfTable2(&mut t))?;
+  if t.is_null() { return Err(bad("INTERFACE_QUERY")) }
+  let n = (*t).NumEntries as usize;
+  if n > 65536 { FreeMibTable(t.cast()); return Err(bad("INTERFACE_QUERY")) }
+  let result = (|| {
+   let mut own_tombstone = false;
+   for r in std::slice::from_raw_parts((*t).Table.as_ptr(), n) {
+    let end = r.Alias.iter().position(|&v| v == 0).ok_or_else(|| bad("INTERFACE_QUERY"))?;
+    let name = String::from_utf16(&r.Alias[..end]).map_err(|_| bad("INTERFACE_QUERY"))?;
+    let g = text(r.InterfaceGuid);
+    if retired_row_owned(a, &g, &name).map_err(bad)? {
+     if !is_uninstalled_tombstone(r.OperStatus, &g, r.InterfaceLuid.Value) { return Ok(false) }
+     own_tombstone = true;
+    }
+   }
+   if own_tombstone { return Ok(true) }
+   let instance = super::super::identity::wide(&format!(r"SWD\Wintun\{{{}}}", a.guid));
+   let mut dev = 0u32;
+   match CM_Locate_DevNodeW(&mut dev, instance.as_ptr(), CM_LOCATE_DEVNODE_PHANTOM) {
+    CR_NO_SUCH_DEVNODE => Ok(true),
+    CR_SUCCESS => Ok(false),
+    _ => Err(bad("INTERFACE_QUERY")),
+   }
+  })();
+  FreeMibTable(t.cast()); result
+ }
+}
+
 pub fn bind_adapter(a:&Adapter)->Result<()> {if a.luid==0||!adapter_present(a)?{return Err(bad("JOURNAL_ADAPTER"))}Ok(())}
 fn route_row(a:&Adapter,v:&RouteValue)->Result<MIB_IPFORWARD_ROW2>{let mut r=MIB_IPFORWARD_ROW2::default();unsafe{InitializeIpForwardEntry(&mut r)};r.InterfaceLuid=luid(a.luid);r.DestinationPrefix.Prefix=addr(&v.destination)?;r.DestinationPrefix.PrefixLength=v.prefix;r.NextHop=addr(&v.next_hop)?;r.Metric=v.metric;r.Protocol=v.protocol as i32;r.SitePrefixLength=v.site_prefix;r.ValidLifetime=v.valid_lifetime;r.PreferredLifetime=v.preferred_lifetime;r.Loopback=v.loopback;r.AutoconfigureAddress=v.autoconfigure;r.Publish=v.publish;r.Immortal=v.immortal;Ok(r)}
 unsafe fn route_value(r:&MIB_IPFORWARD_ROW2)->Result<Value>{Ok(Value{route:Some(RouteValue{destination:ip(&r.DestinationPrefix.Prefix)?,prefix:r.DestinationPrefix.PrefixLength,next_hop:ip(&r.NextHop)?,scope:if r.NextHop.si_family==AF_INET6{r.NextHop.Ipv6.Anonymous.sin6_scope_id}else{0},metric:r.Metric,protocol:r.Protocol as u32,site_prefix:r.SitePrefixLength,valid_lifetime:r.ValidLifetime,preferred_lifetime:r.PreferredLifetime,loopback:r.Loopback,autoconfigure:r.AutoconfigureAddress,publish:r.Publish,immortal:r.Immortal,origin:r.Origin as u32}),address:None,interface:None,dns:None})}

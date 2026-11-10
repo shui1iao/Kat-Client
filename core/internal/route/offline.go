@@ -347,35 +347,9 @@ func (e *Engine) OfflineWithContext(options Options, in OfflineInput) (out Offli
 		return out, err
 	}
 	out.Known = known
-	// Validate normalizes nested conditions in place; never mutate accepted cfg.
-	options.Rules = append([]Rule(nil), options.Rules...)
-	for i := range options.Rules {
-		options.Rules[i] = cloneRule(options.Rules[i])
-	}
-	options.RuleSets = append([]RuleSetOptions(nil), options.RuleSets...)
-	for _, p := range []**GeoIPOptions{&options.GeoIP, &options.ASN, &options.Geosite} {
-		if *p != nil {
-			copy := **p
-			*p = &copy
-		}
-	}
-	if err = options.Validate(); err != nil {
-		return out, errors.New("当前规则无法安全模拟")
-	}
-	if e == nil {
-		return out, errors.New("当前路由引擎不可用")
-	}
-	v, byName := e.freezeOffline()
-	for _, set := range options.RuleSets {
-		if byName[set.Name] == nil {
-			return out, errors.New("当前引擎未加载所需规则集")
-		}
-	}
-	// Compile the normalized accepted rule projection once against the same
-	// frozen resources. The counterfactual must not reload or recompile live data.
-	conditions := make([]*cond, len(options.Rules))
-	for i := range options.Rules {
-		conditions[i] = compileRule(&options.Rules[i], byName)
+	options, v, conditions, err := e.offlineRules(options, false)
+	if err != nil {
+		return out, err
 	}
 	seed := out
 	out = v.evaluateFrom(options, conditions, m, 0, seed)
@@ -668,4 +642,47 @@ func (v *offlineEvaluation) data(d *setData, q *query, x *ipInfo, noDNS bool) (i
 		return triUnknown, missing
 	}
 	return triFalse, nil
+}
+
+// offlineRules normalizes a detached accepted projection and borrows one
+// immutable resource snapshot. Target tests use the runtime's empty-set
+// behavior for an unloaded resource, while the strict legacy view can still
+// describe that missing resource as unknown.
+func (e *Engine) offlineRules(options Options, emptyUnloaded bool) (Options, *offlineEvaluation, []*cond, error) {
+	options.Rules = append([]Rule(nil), options.Rules...)
+	for i := range options.Rules {
+		options.Rules[i] = cloneRule(options.Rules[i])
+	}
+	options.RuleSets = append([]RuleSetOptions(nil), options.RuleSets...)
+	for _, p := range []**GeoIPOptions{&options.GeoIP, &options.ASN, &options.Geosite} {
+		if *p != nil {
+			copy := **p
+			*p = &copy
+		}
+	}
+	if err := options.Validate(); err != nil {
+		return options, nil, nil, errors.New("当前规则无法安全模拟")
+	}
+	if e == nil {
+		return options, nil, nil, errors.New("当前路由引擎不可用")
+	}
+	v, byName := e.freezeOffline()
+	for _, set := range options.RuleSets {
+		if byName[set.Name] == nil {
+			return options, nil, nil, errors.New("当前引擎未加载所需规则集")
+		}
+	}
+	if emptyUnloaded {
+		// The ruleSet is a detached snapshot from freezeOffline, not a live set.
+		for _, set := range byName {
+			if set.data.Load() == nil {
+				set.data.Store(&setData{})
+			}
+		}
+	}
+	conditions := make([]*cond, len(options.Rules))
+	for i := range options.Rules {
+		conditions[i] = compileRule(&options.Rules[i], byName)
+	}
+	return options, v, conditions, nil
 }

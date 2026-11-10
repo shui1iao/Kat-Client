@@ -1,3 +1,4 @@
+#![cfg_attr(not(windows), allow(dead_code))]
 //! Stable owner for successive instances of the one core child we launch.
 //! No PID lookup, process-name matching or external kill command is used.
 use crate::{error::{Error,Result},supervisor::{Supervisor,Life}};
@@ -12,7 +13,7 @@ impl Drop for EntryMutation { fn drop(&mut self) {
  let _publication=self.0.publication.lock().unwrap_or_else(|p|p.into_inner());
  self.0.entry_revision.fetch_add(1,Ordering::SeqCst);self.0.entry_active.fetch_sub(1,Ordering::SeqCst);
 } }
-fn entry_mutation(m:&str)->bool { matches!(m,"document.apply"|"core.reload"|"core.start"|"core.stop"|"network.tun.disable"|"network.tun.prepare"|"network.tun.commit"|"network.egress.set"|"network.egress.pause"|"network.egress.dns.refresh"|"host.prepare-update"|"host.resume-update") }
+fn entry_mutation(m:&str)->bool { matches!(m,"document.apply"|"core.reload"|"core.start"|"core.stop"|"network.tun.disable"|"network.tun.prepare"|"network.tun.commit"|"network.egress.set"|"network.egress.pause"|"host.prepare-update"|"host.resume-update") }
 fn transport_error()->Error { Error::new("UPDATE_TRANSPORT_NOT_READY","Kat 更新出口暂不可确认，请等待内核操作完成后重试；未发送 GitHub 请求") }
 /// Only an owned stdio status may supply this port. Config/draft/PID is not readiness.
 fn update_port(s:&Value)->Result<Option<u16>> {

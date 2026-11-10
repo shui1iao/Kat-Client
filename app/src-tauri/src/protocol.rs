@@ -111,7 +111,7 @@ pub fn request_timeout(method:&str)->std::time::Duration{std::time::Duration::fr
  #[test]fn response_shapes_and_ids_fail_closed_without_forwarding_frame(){
   for v in [serde_json::json!({"id":"","ok":true,"result":{}}),serde_json::json!({"id":"a".repeat(129),"ok":true,"result":{}}),serde_json::json!({"id":"a","ok":true}),serde_json::json!({"id":"a","ok":true,"result":{},"error":{"code":"X","message":"private"}}),serde_json::json!({"id":"a","ok":false}),serde_json::json!({"id":"a","ok":false,"result":{},"error":{"code":"X","message":"private"}}),serde_json::json!({"id":"a","ok":true,"result":{},"private":"secret"})]{let e=Response::parse(&serde_json::to_vec(&v).unwrap()).unwrap_err();assert_eq!(e.code,"CORE_PROTOCOL");assert!(!e.message.contains("private"));assert!(e.path.is_none());}
   assert_eq!(Response::parse(br#"{"id":"a","ok":true,"result":null}"#).unwrap().result().unwrap(),Value::Null);
-  assert_eq!(PUBLIC_METHODS.len(),30);assert!(PUBLIC_METHODS.contains(&"dns.cache.clear"));assert!(PUBLIC_METHODS.contains(&"diagnostics.network"));for m in ["network.egress.set","probe.hang","shell","document.delete"]{assert!(validate_public(m,&Value::Null).is_err());}
+  assert_eq!(PUBLIC_METHODS.len(),31);assert!(PUBLIC_METHODS.contains(&"dns.cache.clear"));assert!(PUBLIC_METHODS.contains(&"diagnostics.network"));for m in ["network.egress.set","probe.hang","shell","document.delete"]{assert!(validate_public(m,&Value::Null).is_err());}
  }
 }
 
@@ -152,7 +152,7 @@ pub fn request_timeout(method:&str)->std::time::Duration{std::time::Duration::fr
  #[test]fn only_bounded_presentation_methods_are_added_without_network_authority(){
   use super::*;for m in ["icon.get","group.filter_preview"]{validate_public(m,&serde_json::json!({})).unwrap();assert_eq!(request_timeout(m).as_secs(),15);}
   for m in ["network.egress.set","network.proxy.set","icon.write","group.apply","file.read"]{assert!(validate_public(m,&Value::Null).is_err());}
-  assert_eq!(PUBLIC_METHODS.len(),30);assert!(PUBLIC_METHODS.contains(&"dns.cache.clear"));assert!(PUBLIC_METHODS.contains(&"diagnostics.network"));assert_eq!(MAX_FRAME,2*1024*1024);assert_eq!(MAX_INFLIGHT,16);
+  assert_eq!(PUBLIC_METHODS.len(),31);assert!(PUBLIC_METHODS.contains(&"dns.cache.clear"));assert!(PUBLIC_METHODS.contains(&"diagnostics.network"));assert_eq!(MAX_FRAME,2*1024*1024);assert_eq!(MAX_INFLIGHT,16);
  }
 }
 

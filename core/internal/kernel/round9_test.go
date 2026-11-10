@@ -43,17 +43,28 @@ func TestR9SystemDNSClientEgressUsesPhysicalBootstrapAcrossReload(t *testing.T) 
 	if e != nil {
 		t.Fatal(e)
 	}
+	revBytes, e := os.ReadFile("../clientegress/dns_revision.go")
+	if e != nil {
+		t.Fatal(e)
+	}
+	sysBytes, e := os.ReadFile("../clientegress/system_dns.go")
+	if e != nil {
+		t.Fatal(e)
+	}
 	src := string(b)
 	a := strings.Index(src, "func (p *Policy) Bootstrap")
 	if a < 0 {
 		t.Fatal("bootstrap missing")
 	}
 	src = src[a:]
-	if strings.Contains(src, "net.DefaultResolver") {
-		t.Fatal("physical DNS reenters TUN")
+	for _, content := range []string{string(b), string(revBytes), string(sysBytes)} {
+		if strings.Contains(content, "net.DefaultResolver") {
+			t.Fatal("physical DNS reenters TUN")
+		}
 	}
-	full := string(b)
-	if !strings.Contains(full, "ip := o.DNS") || !strings.Contains(full, "ControlContext: p.Control") || !strings.Contains(src, "p.resolver.LookupNetIP") {
+	revSrc := string(revBytes)
+	sysSrc := string(sysBytes)
+	if !strings.Contains(src, "state.resolver.LookupNetIP") || !strings.Contains(revSrc, "Dial: p.resolverConn") || !strings.Contains(sysSrc, "state.options.DNS") || !strings.Contains(sysSrc, "ControlContext: control") {
 		t.Fatal("physical binding lost")
 	}
 }

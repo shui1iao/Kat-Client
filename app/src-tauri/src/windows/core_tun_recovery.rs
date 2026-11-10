@@ -179,7 +179,13 @@ impl Broker {
  let report=self.recover_after_exit()?;
  if !report.cleanup_complete{return Err(bad("RECOVERY_PENDING"))}
  if let Some(j)=&self.journal{
-  let dead=if let Some(core)=&self.core{pure(retained_core_exited(core))?}else{process_dead(&j.launch)?};
+  let dead=if let Some(core)=&self.core{pure(retained_core_exited(core))?}else{
+   match process_dead(&j.launch) {
+    Ok(v) => v,
+    Err(e) if e.code == "PROCESS_IDENTITY" && pure(completed_retirement_ready(j))? => completed_snapshot_dead(&j.launch)?,
+    Err(e) => return Err(e),
+   }
+  };
   let raw=serde_json::to_vec(j).map_err(|_|bad("JOURNAL_INVALID"))?;
   pure(handoff_v2_journal_decision(&raw,Ok(dead),verify_complete(j).map_err(|_|"RECOVERY_PENDING")))?;
  }
@@ -198,11 +204,36 @@ fn retained_core_exited(core:&VerifiedCore)->journal::Result<bool> {
  }
 }
 fn verify_complete(j:&Journal)->Result<()> {
+ // A durable completed account may outlive its adapter and a recycled LUID.
+ // This proof is read-only and never weakens unfinished-account CAS recovery.
+ if pure(completed_retirement_ready(j))? && native::completed_adapter_absent(&j.adapter)? { return Ok(()) }
  for c in &j.changes {let now=native::read(&j.adapter,c)?;if c.installed.route.is_some(){if now.is_some(){return Err(bad("RECOVERY_PENDING"))}}else if now!=c.before&&!(now.is_none()&&!native::adapter_present(&j.adapter)?){return Err(bad("RECOVERY_PENDING"))}}
  if (j.adapter.luid!=0&&native::adapter_present(&j.adapter)?)||(j.adapter.luid==0&&native::discover_adapter(&j.adapter)?.is_some()){return Err(bad("ADAPTER_REMAINS"))}Ok(())
 }
 #[link(name="ole32")]extern "system"{fn CoCreateGuid(g:*mut windows_sys::core::GUID)->i32;}
 fn new_guid()->Result<String>{let mut g=windows_sys::core::GUID::default();if unsafe{CoCreateGuid(&mut g)}<0{return Err(bad("JOURNAL_GUID"))}Ok(format!("{:08x}-{:04x}-{:04x}-{}-{}",g.data1,g.data2,g.data3,hex::encode(&g.data4[..2]),hex::encode(&g.data4[2..])))}
+#[link(name="ntdll")]
+extern "system" { fn NtQuerySystemInformation(class: u32, buffer: *mut core::ffi::c_void, length: u32, returned: *mut u32) -> i32; }
+// SYSTEM_PROCESS_INFORMATION's Windows x64 prefix has CreateTime at32 and
+// UniqueProcessId at80. Only called after exact-handle query failed for a fully
+// restored complete account; no privilege enablement or arbitrary process I/O.
+fn completed_snapshot_dead(l: &LaunchIdentity) -> Result<bool> {
+ if std::mem::size_of::<usize>() != 8 { return Err(bad("PROCESS_IDENTITY")) }
+ let mut size = 65536usize;
+ for _ in 0..8 {
+  if size > 16 * 1024 * 1024 { return Err(bad("PROCESS_IDENTITY")) }
+  let mut words = vec![0u64; (size + 7) / 8]; let mut returned = 0u32;
+  let status = unsafe { NtQuerySystemInformation(5, words.as_mut_ptr().cast(), size as u32, &mut returned) };
+  if status == 0xc0000004u32 as i32 {
+   size = (size * 2).max((returned as usize).checked_add(65536).ok_or_else(||bad("PROCESS_IDENTITY"))?); continue
+  }
+  if status < 0 || returned < 88 || returned as usize > size { return Err(bad("PROCESS_IDENTITY")) }
+  let bytes = unsafe { std::slice::from_raw_parts(words.as_ptr().cast::<u8>(), returned as usize) };
+  return pure(completed_snapshot_process_dead(bytes, l.core_pid, l.core_created))
+ }
+ Err(bad("PROCESS_IDENTITY"))
+}
+
 fn process_dead(l:&LaunchIdentity)->Result<bool>{unsafe{
  let snap=Handle(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0));if snap.0==INVALID_HANDLE_VALUE{return Err(bad("PROCESS_IDENTITY"))}
  let mut e=PROCESSENTRY32W::default();e.dwSize=std::mem::size_of_val(&e) as u32;

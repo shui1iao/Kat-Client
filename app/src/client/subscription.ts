@@ -61,12 +61,42 @@ export function subscriptionUsage(s:{userinfo?:{upload:number;download:number;to
 }
 export function subscriptionGroup(source:DocumentSource|null,name?:string){return name?source?.subscriptions?.find(s=>s.active!==false&&s.snapshot.groups?.some((g:{name:string})=>g.name===name)):undefined;}
 
+const stableSubscriptionValue=(v:any):any=>Array.isArray(v)?v.map(stableSubscriptionValue):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stableSubscriptionValue(v[k])])):v;
+const stableSubscriptionKey=(v:unknown)=>JSON.stringify(stableSubscriptionValue(v));
 export function sameSubscriptionObject(a:unknown,b:unknown):boolean {
- const stable=(v:any):any=>Array.isArray(v)?v.map(stable):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v;
- return JSON.stringify(stable(a))===JSON.stringify(stable(b));
+ return stableSubscriptionKey(a)===stableSubscriptionKey(b);
+}
+const subscriptionRuleIndex=new WeakMap<object,{overlayRef:unknown;overlayLen:number;snapshotRef:unknown;snapshotLen:number;patches:Map<string,{patch:number;originalKey:string}>;remotes:Map<string,number>}>();
+function getSubscriptionRuleIndex(s:any){
+ const overlayRef=s.overlay?.rules,overlayLen=Array.isArray(overlayRef)?overlayRef.length:0;
+ const snapshotRef=s.snapshot?.rules,snapshotLen=Array.isArray(snapshotRef)?snapshotRef.length:0;
+ let cached=subscriptionRuleIndex.get(s);
+ if(cached&&cached.overlayRef===overlayRef&&cached.overlayLen===overlayLen&&cached.snapshotRef===snapshotRef&&cached.snapshotLen===snapshotLen)return cached;
+ const patches=new Map<string,{patch:number;originalKey:string}>(),remotes=new Map<string,number>();
+ if(Array.isArray(overlayRef))overlayRef.forEach((p:any,i:number)=>{
+  const valKey=stableSubscriptionKey(p?.value),origKey=stableSubscriptionKey(p?.original);
+  if(!patches.has(valKey))patches.set(valKey,{patch:i,originalKey:origKey});
+  if(!patches.has(origKey))patches.set(origKey,{patch:i,originalKey:origKey});
+ });
+ if(Array.isArray(snapshotRef))snapshotRef.forEach((r:unknown,i:number)=>{
+  const k=stableSubscriptionKey(r);if(!remotes.has(k))remotes.set(k,i);
+ });
+ cached={overlayRef,overlayLen,snapshotRef,snapshotLen,patches,remotes};
+ subscriptionRuleIndex.set(s,cached);
+ return cached;
 }
 export function subscriptionRule(source:DocumentSource|null,rule:unknown){
- for(const s of source?.subscriptions??[]){if(s.active===false)continue;const patch=s.overlay?.rules?.findIndex(p=>sameSubscriptionObject(p.value,rule)||sameSubscriptionObject(p.original,rule))??-1;const original=patch>=0?s.overlay?.rules?.[patch]?.original:rule;const remote=s.snapshot.rules?.findIndex((r:unknown)=>sameSubscriptionObject(r,original))??-1;if(patch>=0||remote>=0)return {owner:s,patch,remote};}
+ const subs=source?.subscriptions;if(!subs?.length)return undefined;
+ const ruleKey=stableSubscriptionKey(rule);
+ for(const s of subs){
+  if(s.active===false)continue;
+  const idx=getSubscriptionRuleIndex(s);
+  const hit=idx.patches.get(ruleKey);
+  const patch=hit?hit.patch:-1;
+  const originalKey=hit?hit.originalKey:ruleKey;
+  const remote=idx.remotes.get(originalKey)??-1;
+  if(patch>=0||remote>=0)return {owner:s,patch,remote};
+ }
  return undefined;
 }
 

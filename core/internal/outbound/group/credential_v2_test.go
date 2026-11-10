@@ -67,8 +67,8 @@ func TestV2CredentialEOFSiteFailoverAndDirectedAttribution(t *testing.T) {
 					}
 				}
 				clk.Advance(5*time.Second - time.Nanosecond)
-				if p.count("a") != 1 || len(switches(ev)) != 0 {
-					t.Fatal("verification ran before 5s")
+				if p.count("a") != 1 || len(switches(ev)) != 1 || switches(ev)[0] != ">a" {
+					t.Fatalf("verification ran before 5s: a=%d b=%d switches=%v", p.count("a"), p.count("b"), switches(ev))
 				}
 				clk.Advance(time.Nanosecond)
 				deadline := time.Now().Add(time.Second)

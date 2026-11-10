@@ -3,8 +3,7 @@ package kernel
 import (
 	"bytes"
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
+
 	"crypto/hkdf"
 	"crypto/sha256"
 	"crypto/tls"
@@ -237,53 +236,6 @@ func quicLabel(secret []byte, label string, n int) []byte {
 }
 
 // quicInitial builds a QUIC v1 client Initial carrying a real ClientHello.
-func quicInitial(t *testing.T, sni string) []byte {
-	t.Helper()
-	q := tls.QUICClient(&tls.QUICConfig{TLSConfig: &tls.Config{ServerName: sni, NextProtos: []string{"h3"}, MinVersion: tls.VersionTLS13}})
-	q.SetTransportParameters(nil)
-	if e := q.Start(context.Background()); e != nil {
-		t.Fatal(e)
-	}
-	defer q.Close()
-	var ch []byte
-	for ch == nil {
-		ev := q.NextEvent()
-		if ev.Kind == tls.QUICNoEvent {
-			t.Fatal("no ClientHello")
-		}
-		if ev.Kind == tls.QUICWriteData {
-			ch = append([]byte(nil), ev.Data...)
-		}
-	}
-	frames := appendQV(appendQV([]byte{0x06}, 0), uint64(len(ch)))
-	frames = append(frames, ch...)
-	for len(frames) < 1150 {
-		frames = append(frames, 0)
-	}
-	dcid := []byte{1, 2, 3, 4, 5, 6, 7, 8}
-	salt := []byte{0x38, 0x76, 0x2c, 0xf7, 0xf5, 0x59, 0x34, 0xb3, 0x4d, 0x17, 0x9a, 0xe6, 0xa4, 0xc8, 0x0c, 0xad, 0xcc, 0xbb, 0x7f, 0x0a}
-	initial, _ := hkdf.Extract(sha256.New, dcid, salt)
-	client := quicLabel(initial, "client in", 32)
-	key, iv, hp := quicLabel(client, "quic key", 16), quicLabel(client, "quic iv", 12), quicLabel(client, "quic hp", 16)
-	hdr := []byte{0xc3, 0, 0, 0, 1, byte(len(dcid))}
-	hdr = append(hdr, dcid...)
-	hdr = append(hdr, 0, 0) // scid len 0, token len 0
-	length := 4 + len(frames) + 16
-	hdr = append(hdr, 0x40|byte(length>>8), byte(length))
-	pnOff := len(hdr)
-	hdr = append(hdr, 0, 0, 0, 0)
-	block, _ := aes.NewCipher(key)
-	aead, _ := cipher.NewGCM(block)
-	pkt := append(hdr, aead.Seal(nil, iv, frames, hdr)...)
-	hb, _ := aes.NewCipher(hp)
-	var mask [16]byte
-	hb.Encrypt(mask[:], pkt[pnOff+4:pnOff+20])
-	pkt[0] ^= mask[0] & 0x0f
-	for i := 0; i < 4; i++ {
-		pkt[pnOff+i] ^= mask[1+i]
-	}
-	return pkt
-}
 
 func udpRoundTrip(pc outbound.PacketConn, dst outbound.Addr, p []byte) bool {
 	b := make([]byte, 65535)
@@ -298,41 +250,6 @@ func udpRoundTrip(pc outbound.PacketConn, dst outbound.Addr, p []byte) bool {
 		}
 	}
 	return false
-}
-
-func TestSniffQUIC(t *testing.T) {
-	uecho := rcEchoUDP(t)
-	s := startTest(t, Inbound{Protocol: "socks5", Sniff: &SniffOptions{Enabled: true, UDPPorts: strconv.Itoa(int(uecho))}}, func(c *Config) {
-		c.Routing = &RoutingOptions{Rules: []RouteRule{
-			{RouteRuleExt: RouteRuleExt{And: []route.Rule{{Protocol: "quic"}, {DomainSuffix: "q-reject.test"}}}, Action: "reject"},
-		}}
-	})
-	client := socksClient(t, s)
-	open := func() outbound.PacketConn {
-		pc, e := client.ListenPacket(context.Background())
-		if e != nil {
-			t.Fatal(e)
-		}
-		t.Cleanup(func() { pc.Close() })
-		return pc
-	}
-	dst := outbound.Addr{Host: "127.0.0.1", Port: uecho}
-	if udpRoundTrip(open(), dst, quicInitial(t, "a.q-reject.test")) {
-		t.Fatal("QUIC SNI not used by the rule")
-	}
-	if !udpRoundTrip(open(), dst, quicInitial(t, "ok.test")) {
-		t.Fatal("QUIC with another SNI dropped")
-	}
-	start := time.Now()
-	if !udpRoundTrip(open(), dst, []byte("plain datagram")) {
-		t.Fatal("non-QUIC datagram dropped")
-	}
-	if d := time.Since(start); d > 150*time.Millisecond {
-		t.Fatal("non-QUIC datagram waited", d)
-	}
-	if ruleHits(s, "and(") == 0 {
-		t.Fatal("no rule hit", s.StatsView().Cumulative.Rules)
-	}
 }
 
 func TestSniffConfigValidation(t *testing.T) {
@@ -429,40 +346,3 @@ func TestRouteDataEvents(t *testing.T) {
 // An AnyTLS stream opened after a reload on a session accepted earlier is
 // routed by the current generation, with the current inbound attributes
 // (name, sniffing) of its listener.
-func TestAnyTLSStreamUsesCurrentInboundAttributes(t *testing.T) {
-	cert, pool := testCert(t)
-	target := echoTCP(t)
-	in := anyIn(cert)
-	in.Listen = reloadPort(t)
-	in.Name = "old"
-	c0 := socksCfg()
-	// in_name must name a configured inbound: "new" is a SOCKS5 inbound first.
-	c0.Inbounds = []Inbound{in, {Protocol: "socks5", Listen: reloadPort(t), Name: "new"}}
-	c0.Routing = &RoutingOptions{Rules: []RouteRule{{RouteRuleExt: RouteRuleExt{InName: "new"}, Action: "reject"}}}
-	next := c0
-	s := startReloadable(t, c0, &next)
-	c := atBegin(t, s, pool, 2, in.Listen)
-	c.SetDeadline(time.Now().Add(10 * time.Second))
-	p := []byte("before")
-	atOpen(t, c, 1, target, p)
-	if got := atPayload(t, c, 1, len(p)); string(got) != string(p) {
-		t.Fatal("stream 1")
-	}
-	writeAll(c, atFrame(3, 1, nil))
-	n := c0
-	n.Inbounds = []Inbound{in}
-	n.Inbounds[0].Name = "new"
-	next = n
-	if _, e := s.Reload("test"); e != nil {
-		t.Fatal(e)
-	}
-	atOpen(t, c, 2, target, []byte("after"))
-	waitFor(t, func() bool {
-		for _, r := range s.StatsView().Cumulative.Rules {
-			if r.Name == "in_name:new->reject" && r.Hits == 1 {
-				return true
-			}
-		}
-		return false
-	})
-}

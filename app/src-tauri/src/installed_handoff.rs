@@ -43,7 +43,9 @@ pub fn ordinary_shortcut(bytes:&[u8])->bool{
 
 /// At most four fixed per-user links (Kat and legacy Kat Client, in two folders). The ordinary Setup bridge records
 /// changes before requesting UAC and undoes its own bytes on install failure.
+#[cfg(any(windows, test))]
 pub(crate) struct ShortcutPending{changes:Vec<(std::path::PathBuf,Option<Vec<u8>>,Option<Vec<u8>>)>,committed:bool}
+#[cfg(any(windows, test))]
 impl ShortcutPending{
  pub fn new()->Self{Self{changes:vec![],committed:false}}
  pub fn record(&mut self,path:std::path::PathBuf,before:Option<Vec<u8>>,after:Option<Vec<u8>>){assert!(self.changes.len()<4);self.changes.push((path,before,after));}
@@ -59,10 +61,12 @@ impl ShortcutPending{
   if failed{Err(Error::new("INSTALL_SHORTCUT_FAILED","Cannot restore changed user shortcut; external modifications were retained"))}else{self.committed=true;Ok(())}
  }
 }
+#[cfg(any(windows, test))]
 fn temp_restore(path:&std::path::Path,bytes:&[u8])->std::io::Result<()>{use std::io::Write;let tmp=path.with_extension(format!("kat-rollback-{}",std::process::id()));let mut f=std::fs::OpenOptions::new().write(true).create_new(true).open(&tmp)?;let op=(||{f.write_all(bytes)?;f.sync_all()?;drop(f);
  #[cfg(windows)]{use std::os::windows::ffi::OsStrExt;use windows_sys::Win32::Storage::FileSystem::*;let a:Vec<u16>=tmp.as_os_str().encode_wide().chain(Some(0)).collect();let b:Vec<u16>=path.as_os_str().encode_wide().chain(Some(0)).collect();if unsafe{MoveFileExW(a.as_ptr(),b.as_ptr(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)}==0{return Err(std::io::Error::last_os_error());}Ok(())}
  #[cfg(not(windows))]{std::fs::rename(&tmp,path)}
  })();let _=std::fs::remove_file(tmp);op}
+#[cfg(any(windows, test))]
 impl Drop for ShortcutPending{fn drop(&mut self){if !self.committed{let _=self.rollback();}}}
 #[cfg(test)]mod shortcut_transaction_tests{use super::*;
  #[test]fn either_shortcut_failure_aborts_before_uac_and_restores_own_previous_bytes(){for count in 0..=4{let root=std::env::temp_dir().join(format!("kat-userlinks-{}-{}",std::process::id(),count));std::fs::create_dir(&root).unwrap();let mut u=ShortcutPending::new();for i in 0..count{let p=root.join(format!("{i}.lnk"));std::fs::write(&p,b"new").unwrap();u.record(p,if i==0{Some(b"old".to_vec())}else{None},Some(b"new".to_vec()));}u.rollback().unwrap();if count>0{assert_eq!(std::fs::read(root.join("0.lnk")).unwrap(),b"old");}if count>1{assert!(!root.join("1.lnk").exists());}std::fs::remove_dir_all(root).unwrap();}}

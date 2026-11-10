@@ -84,4 +84,36 @@ impl DiagnosticReply{pub async fn from_core(&mut self,c:&crate::supervisor::Supe
  }
 }
 
-impl DiagnosticReply{pub fn bound_export(&mut self){while serde_json::to_vec(self).map(|b|b.len()>900*1024).unwrap_or(true){self.error("LOG_HISTORY_TRUNCATED");if let Some(s)=self.history.as_mut(){if !s.entries.is_empty(){s.entries.remove(0);continue;}}if !self.host_events.is_empty(){self.host_events.remove(0);continue;}if !self.core_events.is_empty(){self.core_events.remove(0);continue;}break;}}}
+struct ByteCounter(usize);
+impl std::io::Write for ByteCounter{
+ fn write(&mut self,buf:&[u8])->std::io::Result<usize>{self.0+=buf.len();Ok(buf.len())}
+ fn flush(&mut self)->std::io::Result<()>{Ok(())}
+}
+fn encoded_len<T:Serialize>(value:&T)->Option<usize>{
+ let mut c=ByteCounter(0);serde_json::to_writer(&mut c,value).ok().map(|_|c.0)
+}
+fn drain_to_budget(entries:&mut Vec<LogEntry>,len:&mut usize,limit:usize)->bool{
+ if entries.is_empty()||*len<=limit{return false;}
+ let total=entries.len();let mut drop_count=0;
+ for (i,e) in entries.iter().enumerate(){
+  let Some(entry_len)=encoded_len(e) else{break;};
+  let comma=usize::from(i+1<total);
+  *len=len.saturating_sub(entry_len+comma);
+  drop_count=i+1;
+  if *len<=limit{break;}
+ }
+ if drop_count>0{entries.drain(..drop_count);true}else{false}
+}
+impl DiagnosticReply{pub fn bound_export(&mut self){
+ const LIMIT:usize=900*1024;
+ loop{
+  let Some(mut len)=encoded_len(self) else{break;};
+  if len<=LIMIT{return;}
+  let had_err=self.errors.len();self.error("LOG_HISTORY_TRUNCATED");
+  if self.errors.len()!=had_err{let Some(recalc)=encoded_len(self) else{break;};len=recalc;}
+  if let Some(s)=self.history.as_mut(){if drain_to_budget(&mut s.entries,&mut len,LIMIT){continue;}}
+  if drain_to_budget(&mut self.host_events,&mut len,LIMIT){continue;}
+  if drain_to_budget(&mut self.core_events,&mut len,LIMIT){continue;}
+  break;
+ }
+}}

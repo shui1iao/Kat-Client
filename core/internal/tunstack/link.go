@@ -12,9 +12,9 @@ import (
 )
 
 func (r *Runtime) readPackets() {
+	scratch := make([]byte, 65535)
 	for {
-		b := make([]byte, 65535) // payload ownership never aliases the next device read
-		n, e := r.cfg.Device.ReadPacket(b)
+		n, e := r.cfg.Device.ReadPacket(scratch)
 		if e != nil {
 			r.fatal("TUN_DEVICE_READ_FAILED", e)
 			return
@@ -22,12 +22,14 @@ func (r *Runtime) readPackets() {
 		if r.ctx.Err() != nil {
 			return
 		}
-		if n <= 0 || n > len(b) {
+		if n <= 0 || n > len(scratch) {
 			r.dropped.Add(1)
 			continue
 		}
-		p := stack.NewPacketBuffer(stack.PacketBufferOptions{Payload: buffer.MakeWithData(b[:n])})
-		switch header.IPVersion(b[:n]) {
+		b := make([]byte, n)
+		copy(b, scratch[:n])
+		p := stack.NewPacketBuffer(stack.PacketBufferOptions{Payload: buffer.MakeWithData(b)})
+		switch header.IPVersion(b) {
 		case header.IPv4Version:
 			r.link.InjectInbound(header.IPv4ProtocolNumber, p)
 		case header.IPv6Version:
@@ -39,6 +41,7 @@ func (r *Runtime) readPackets() {
 	}
 }
 func (r *Runtime) writePackets() {
+	wbuf := make([]byte, 65535)
 	for {
 		p := r.link.ReadContext(r.ctx)
 		if p == nil {
@@ -47,11 +50,13 @@ func (r *Runtime) writePackets() {
 			}
 			return
 		}
-		b := p.ToBuffer()
+		n := 0
+		for _, s := range p.AsSlices() {
+			n += copy(wbuf[n:], s)
+		}
 		r.writeMu.Lock()
-		e := r.cfg.Device.WritePacket(b.Flatten())
+		e := r.cfg.Device.WritePacket(wbuf[:n])
 		r.writeMu.Unlock()
-		b.Release()
 		p.DecRef()
 		if e != nil {
 			r.fatal("TUN_DEVICE_WRITE_FAILED", e)

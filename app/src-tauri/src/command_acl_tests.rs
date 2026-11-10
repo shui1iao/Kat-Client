@@ -24,16 +24,27 @@ fn declared() -> [BTreeSet<String>; 3] {
     let desktop = include_str!("desktop.rs");
     let build = include_str!("../build.rs");
     let host = include_str!("../permissions/host.toml");
+    let tray = include_str!("../permissions/tray-menu.toml");
     let permission: Vec<_> = host.split("[[permission]]").filter(|section| {
         section.lines().any(|line| line.split_once('=').is_some_and(|(key, value)| {
             key.trim() == "identifier" && value.trim() == "\"host-controls\""
         }))
     }).collect();
     assert_eq!(permission.len(), 1, "expected one host-controls permission");
+    let tray_permission: Vec<_> = tray.split("[[permission]]").filter(|section| {
+        section.lines().any(|line| line.split_once('=').is_some_and(|(key, value)| {
+            key.trim() == "identifier" && value.trim() == "\"tray-menu-controls\""
+        }))
+    }).collect();
+    assert_eq!(tray_permission.len(), 1, "expected one tray-menu-controls permission");
+    let mut allowed = commands(array(permission[0], "commands.allow = ["), true);
+    let tray_allowed = commands(array(tray_permission[0], "commands.allow = ["), true);
+    assert!(allowed.is_disjoint(&tray_allowed), "host and tray-menu permissions must be disjoint");
+    allowed.extend(tray_allowed);
     [
         commands(array(desktop, "tauri::generate_handler!["), false),
         commands(array(build, "AppManifest::new().commands(&["), true),
-        commands(array(permission[0], "commands.allow = ["), true),
+        allowed,
     ]
 }
 

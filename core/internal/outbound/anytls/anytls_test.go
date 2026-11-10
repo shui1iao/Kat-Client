@@ -422,17 +422,17 @@ func TestSYNACKRefusal(t *testing.T) {
 	for i := 0; ; i++ {
 		c, e = o.DialTCP(ctxTimeout(t, 5*time.Second), echo)
 		if e == nil {
-			break
+			e = echoRoundTrip(c, []byte("after refusal"))
+			c.Close()
+			if e == nil {
+				break
+			}
 		}
 		if i > 50 { // server frees its stream slot asynchronously after FIN
 			t.Fatal(e)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if e = echoRoundTrip(c, []byte("after refusal")); e != nil {
-		t.Fatal(e)
-	}
-	c.Close()
 	if n := o.sessionsCreated.Load(); n != 2 {
 		t.Fatalf("sessions created %d, want 2", n)
 	}

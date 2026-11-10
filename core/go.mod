@@ -12,24 +12,16 @@ require (
 
 require (
 	github.com/andybalholm/brotli v1.0.6 // indirect
-	github.com/cloudflare/circl v1.6.3 // indirect
-	github.com/juju/ratelimit v1.0.2 // indirect
-	github.com/kr/pretty v0.3.1 // indirect
-	github.com/pires/go-proxyproto v0.11.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 )
 
 require (
-	github.com/coder/websocket v1.8.14
 	github.com/google/btree v1.1.3 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/refraction-networking/utls v1.8.2
-	github.com/xtls/reality v0.0.0-20260322125925-9234c772ba8f
 	golang.org/x/exp v0.0.0-20260611194520-c48552f49976 // indirect
 	golang.org/x/net v0.60.0
-	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/sys v0.48.0
 	golang.org/x/time v0.15.0 // indirect
 	gvisor.dev/gvisor v0.0.0-20260701204157-69c2d17aea96
 )
-
-replace github.com/xtls/reality => ./third_party/reality

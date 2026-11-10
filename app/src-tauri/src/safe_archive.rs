@@ -2,6 +2,7 @@
 //! the legacy network-last-error.json and .next (each already bounded at 1 MiB).
 //! Fixed 128 KiB segments, no temp/backup files, bounded nonblocking ingress.
 //! Logs are NOT recovery journals: a crash may leave one incomplete final line.
+#![cfg_attr(not(windows), allow(dead_code, unused_imports))]
 use crate::{error::{Error,Result},safe_log::LogEntry};
 use std::{path::PathBuf,fs::{File,OpenOptions},io::{Read,Write},sync::{Arc,Mutex,OnceLock,atomic::{AtomicU64,AtomicU32,Ordering},mpsc::{self,SyncSender}},time::{Duration,SystemTime,UNIX_EPOCH}};
 use serde::{Serialize,Deserialize};

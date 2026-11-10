@@ -2,7 +2,6 @@ import {ProtocolTag,protocolInfo} from '../components/ProtocolTag';
 import {tip} from '../components/Tooltip';
 import { nodeRows } from '../client/nodeRows';
 import { useState } from 'react';
-import { useFormDraft } from '../lib/formDraft';
 import {SubscriptionCard} from '../components/SubscriptionCard';
 import { SubscriptionImport } from '../components/SubscriptionImport';
 import { Card } from '../components/ui';
@@ -16,7 +15,7 @@ import type { Client } from '../client/useClient';
 import type { Outbound } from '../client/types';
 import { useDisplaySort } from '../lib/displaySort';
 import { displaySorted, probeTime, type DisplaySort } from '../client/settings';
-import { delayLabel, latencyTone, probeLabel, probeFailureTitle } from '../lib/format';
+import { latencyTone, probeLabel, probeFailureTitle } from '../lib/format';
 const PROTOCOLS = ['socks5','shadowsocks','trojan','anytls'];
 const METHODS = ['aes-128-gcm','aes-256-gcm','chacha20-ietf-poly1305','2022-blake3-aes-128-gcm','2022-blake3-aes-256-gcm','2022-blake3-chacha20-poly1305'];
 export function Nodes({ c }: { c: Client }) {
@@ -27,9 +26,10 @@ export function Nodes({ c }: { c: Client }) {
   const [deleting,setDeleting]=useState<{kind:'outbounds'|'providers';name:string}|null>(null);
   const [full,setFull]=useState<{initialText?:string;id?:string;refresh?:boolean;initialMode?:'remote'|'local'}|null>(null);
   const source=c.source, providers=source?.kernel.providers ?? [];
+  const runtimeByName=new Map((c.status?.nodes??[]).map(x=>[x.name,x]));
   const rows=nodeRows(source,c.status?.nodes),manualCount=rows.filter(n=>n.manual).length;
-  const nodes=displaySorted(rows,sort,n=>c.label(n.name),n=>c.status?.nodes.find(x=>x.name===n.name)?.probe_ms);
-  const runtimeNames=(c.status?.nodes ?? []).map(n=>n.name);
+  const nodes=displaySorted(rows,sort,n=>c.label(n.name),n=>runtimeByName.get(n.name)?.probe_ms);
+  const runtimeNames=Array.from(runtimeByName.keys());
   const editable=c.connected && !c.doc.saving;
   const remove=async()=>{ if(!deleting)return; if(await c.edit(d=>{removeEntity(d,deleting.kind,deleting.name);validateGraph(d,runtimeNames);}))setDeleting(null); };
   const subscriptionCount=source?.subscriptions?.length??0;
@@ -42,7 +42,7 @@ export function Nodes({ c }: { c: Client }) {
     </div>}
     <Card title={<><span className="card-glyph g-nodes"><Icon name="nodes" size={16}/></span>全部节点<span className="ui-count">{nodes.length} 个{manualCount>0&&` · 手动 ${manualCount}`}</span></>} icon="nodes" className="node-table" extra={<div className="display-sort"><button className="btn sm" disabled={c.status?.runtime.state!=='running'||!!c.probeAllProgress||[...c.busy].some(k=>k.startsWith('probe.node:')||k.startsWith('probe.group:'))} onClick={()=>void c.probeAll()}><Icon name="bolt" size={14}/>{c.probeAllProgress?`测速中 ${c.probeAllProgress.done}/${c.probeAllProgress.total}`:'全部测速'}</button><select className="inp sm" aria-label="节点显示排序" value={sort} onChange={e=>setSort(e.target.value as DisplaySort)}><option value="config">配置顺序</option><option value="name">名称</option><option value="latency">延迟</option></select></div>}>
       <div className="node-table-scroll"><div className="live-node-head"><span>名称</span><span>协议</span><span>来源</span><span>延迟</span><span aria-label="操作"/></div>
-      {nodes.map(n=>{const manual=n.manual,copy=n.copy,runtime=c.status?.nodes?.find(s=>s.name===n.name),busy=c.busy.has('probe.node:'+n.name)||!!c.probeAllProgress?.names.includes(n.name);return <div key={n.name} className="live-node-row" data-node={n.name}><b {...tip(c.label(n.name),true)}>{c.label(n.name)}</b><ProtocolTag type={n.type}/><span className={manual?'node-source manual':'node-source'} {...tip(n.source??'—',true)}>{n.source??'—'}</span><span {...tip(runtime?.probe_at?'最近测速 '+new Date(runtime.probe_at).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}):'最近测速 —')} className={'node-lat num'+(busy?'':runtime?.probe_error?' lat-bad':runtime?.probe_ms==null?' muted':' lat-'+latencyTone(runtime.probe_ms))}>{busy?'测速中…':probeLabel(runtime?.probe_ms,runtime?.probe_error)}</span><div className="row-actions"><button className={'ib'+(busy?' spin':'')} data-slot="1" {...tip('节点测速')} disabled={c.status?.runtime.state!=='running'||busy||!!c.probeAllProgress} onClick={()=>void c.probe('node',n.name)} aria-label="节点测速"><Icon name="bolt" size={14}/></button>{manual&&<button className="ib" data-slot="2" {...tip('编辑节点')} disabled={!editable} onClick={()=>setNode({value:manual,previous:n.name})} aria-label="编辑节点"><Icon name="edit" size={14}/></button>}{copy&&<button className="ib" data-slot="3" {...tip('复制节点')} disabled={!editable} onClick={()=>setNode({value:{...structuredClone(copy),name:copy.name+'-copy'},previous:null})} aria-label="复制节点"><Icon name="copy" size={14}/></button>}{manual&&<button className="ib danger" data-slot="4" {...tip('删除节点')} disabled={!editable} onClick={()=>setDeleting({kind:'outbounds',name:n.name})} aria-label="删除节点"><Icon name="trash" size={14}/></button>}</div></div>})}
+      {nodes.map(n=>{const manual=n.manual,copy=n.copy,runtime=runtimeByName.get(n.name),busy=c.busy.has('probe.node:'+n.name)||!!c.probeAllProgress?.names.includes(n.name);return <div key={n.name} className="live-node-row" data-node={n.name}><b {...tip(c.label(n.name),true)}>{c.label(n.name)}</b><ProtocolTag type={n.type}/><span className={manual?'node-source manual':'node-source'} {...tip(n.source??'—',true)}>{n.source??'—'}</span><span {...tip(runtime?.probe_at?'最近测速 '+probeTime(runtime.probe_at):'最近测速 —')} className={'node-lat num'+(busy?'':runtime?.probe_error?' lat-bad':runtime?.probe_ms==null?' muted':' lat-'+latencyTone(runtime.probe_ms))}>{busy?'测速中…':probeLabel(runtime?.probe_ms,runtime?.probe_error)}</span><div className="row-actions"><button className={'ib'+(busy?' spin':'')} data-slot="1" {...tip('节点测速')} disabled={c.status?.runtime.state!=='running'||busy||!!c.probeAllProgress} onClick={()=>void c.probe('node',n.name)} aria-label="节点测速"><Icon name="bolt" size={14}/></button>{manual&&<button className="ib" data-slot="2" {...tip('编辑节点')} disabled={!editable} onClick={()=>setNode({value:manual,previous:n.name})} aria-label="编辑节点"><Icon name="edit" size={14}/></button>}{copy&&<button className="ib" data-slot="3" {...tip('复制节点')} disabled={!editable} onClick={()=>setNode({value:{...structuredClone(copy),name:copy.name+'-copy'},previous:null})} aria-label="复制节点"><Icon name="copy" size={14}/></button>}{manual&&<button className="ib danger" data-slot="4" {...tip('删除节点')} disabled={!editable} onClick={()=>setDeleting({kind:'outbounds',name:n.name})} aria-label="删除节点"><Icon name="trash" size={14}/></button>}</div></div>})}
       </div>{!nodes.length&&<div className="empty">{c.connected?'暂无节点':'未连接'}</div>}
     </Card>
     {full&&<SubscriptionImport c={c} {...full} close={()=>setFull(null)}/>}

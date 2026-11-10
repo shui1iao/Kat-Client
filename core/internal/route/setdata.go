@@ -244,88 +244,113 @@ func parseRuleSetAs(format, behavior string, b []byte, limit int, env parseEnv) 
 		}
 		return parseLines(behavior, dialMihom, lines, limit, env)
 	}
-	text, err := textOf(b)
+	raw, err := checkText(b)
 	if err != nil {
 		return nil, err
 	}
-	var lines []string
-	for len(text) > 0 {
-		var line string
-		if i := strings.IndexByte(text, '\n'); i >= 0 {
-			line, text = text[:i], text[i+1:]
-		} else {
-			line, text = text, ""
-		}
-		lines = append(lines, line)
-	}
 	switch format {
 	case FormatDomain:
-		return parseLines("domain", dialKat, lines, limit, env)
+		return parseText("domain", dialKat, raw, limit, env)
 	case FormatIPCIDR:
-		return parseLines("ipcidr", dialKat, lines, limit, env)
+		return parseText("ipcidr", dialKat, raw, limit, env)
 	case FormatClassical:
-		return parseLines("classical", dialMihom, lines, limit, env)
+		return parseText("classical", dialMihom, raw, limit, env)
 	case FormatSurgeDomainSet:
-		return parseLines("domain", dialSurge, lines, limit, env)
+		return parseText("domain", dialSurge, raw, limit, env)
 	case FormatSurgeRuleSet:
-		return parseLines("classical", dialSurge, lines, limit, env)
+		return parseText("classical", dialSurge, raw, limit, env)
 	}
 	return nil, errParse
 }
 
-func textOf(b []byte) (string, error) {
+func checkText(b []byte) ([]byte, error) {
 	b = bytes.TrimPrefix(b, []byte("\xef\xbb\xbf"))
 	if bytes.IndexByte(b, 0) >= 0 || !utf8.Valid(b) {
-		return "", errParse
+		return nil, errParse
+	}
+	return b, nil
+}
+
+func textOf(b []byte) (string, error) {
+	b, err := checkText(b)
+	if err != nil {
+		return "", err
 	}
 	return string(b), nil
+}
+
+func parseText(behavior string, dialect int, raw []byte, limit int, env parseEnv) (*setData, error) {
+	bld := newBuilder(limit)
+	for n := 0; len(raw) > 0; n++ {
+		var line []byte
+		if i := bytes.IndexByte(raw, '\n'); i >= 0 {
+			line, raw = raw[:i], raw[i+1:]
+		} else {
+			line, raw = raw, nil
+		}
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 || line[0] == '#' || line[0] == ';' || (len(line) >= 2 && line[0] == '/' && line[1] == '/') {
+			continue
+		}
+		if err := parseOneLine(bld, behavior, dialect, n, string(line), env); err != nil {
+			return nil, err
+		}
+	}
+	return bld.finish()
 }
 
 // parseLines handles every line-oriented behavior (text and YAML payload).
 func parseLines(behavior string, dialect int, lines []string, limit int, env parseEnv) (*setData, error) {
 	bld := newBuilder(limit)
 	for n, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || line[0] == '#' || line[0] == ';' || strings.HasPrefix(line, "//") {
-			continue
-		}
-		var err error
-		switch behavior {
-		case "domain":
-			if bld.d.dom.addDomainEntry(line, dialect) {
-				err = bld.count()
-			} else {
-				bld.skip()
-			}
-		case "ipcidr":
-			if p, ok := parseCIDR(line, true); ok {
-				bld.d.ip.add(p)
-				err = bld.count()
-			} else {
-				bld.skip()
-			}
-		case "classical":
-			var c *cond
-			c, err = parseClassical(line, dialect, env, 0)
-			switch {
-			case err == nil:
-				err = bld.addCond(c)
-			case errors.Is(err, errMalformed):
-				bld.skip()
-				err = nil
-			}
-		default:
-			return nil, errParse
-		}
-		if err != nil {
-			var u *unsupportedError
-			if errors.As(err, &u) {
-				return nil, &unsupportedError{fmt.Sprintf("line %d: %s", n+1, u.msg)}
-			}
+		if err := parseOneLine(bld, behavior, dialect, n, line, env); err != nil {
 			return nil, err
 		}
 	}
 	return bld.finish()
+}
+
+func parseOneLine(bld *setBuilder, behavior string, dialect int, n int, line string, env parseEnv) error {
+	line = strings.TrimSpace(line)
+	if line == "" || line[0] == '#' || line[0] == ';' || strings.HasPrefix(line, "//") {
+		return nil
+	}
+	var err error
+	switch behavior {
+	case "domain":
+		if bld.d.dom.addDomainEntry(line, dialect) {
+			err = bld.count()
+		} else {
+			bld.skip()
+		}
+	case "ipcidr":
+		if p, ok := parseCIDR(line, true); ok {
+			bld.d.ip.add(p)
+			err = bld.count()
+		} else {
+			bld.skip()
+		}
+	case "classical":
+		var c *cond
+		c, err = parseClassical(line, dialect, env, 0)
+		switch {
+		case err == nil:
+			err = bld.addCond(c)
+		case errors.Is(err, errMalformed):
+			bld.skip()
+			err = nil
+		}
+	default:
+		return errParse
+	}
+	if err != nil {
+		var u *unsupportedError
+		if errors.As(err, &u) {
+			return &unsupportedError{fmt.Sprintf("line %d: %s", n+1, u.msg)}
+		}
+		return err
+	}
+	return nil
 }
 
 // ---- classical rules ----

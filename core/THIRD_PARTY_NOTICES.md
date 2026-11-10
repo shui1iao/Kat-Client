@@ -2,10 +2,6 @@
 
 Kat 自研代码保留所有权利；下述第三方组件及其修改继续适用各自原许可。此说明不替代原始法律文本，也不限制第三方许可授予的权利。
 
-## REALITY
-
-`third_party/reality/` 是构建实际使用的 XTLS/REALITY 提交 `9234c772ba8f181f31c3e81dc2b4177322e5a9a9` 源码及本地修改。原始 MPL-2.0 及 Go 许可均在该目录保留，修改及完整源码获取路径见 [MPL 说明](MPL-NOTICE.md)。不要只分发差异而不提供对应受许可源码。
-
 ## juju/ratelimit
 
 二进制包含 `github.com/juju/ratelimit v1.0.2`，版权声明为 Canonical Ltd.，许可为 LGPL-3.0，附原作者提供的静态/动态链接特别例外。库源码未作本地修改。
@@ -18,13 +14,13 @@ Kat 自研代码保留所有权利；下述第三方组件及其修改继续适�
 
 ## 其他组件
 
-`third_party/licenses/` 保留 Go、golang.org/x/crypto、golang.org/x/net、golang.org/x/sys、golang.org/x/text、BLAKE3、cpuid、Brotli、CIRCL、WebSocket、compress、go-proxyproto、uTLS 等组件的原始许可或专利文本。目录中可能保留同一组件的不同版本许可副本，实际编译版本以 `go.mod`、`go.sum` 和二进制构建信息为准，不将旧版本许可副本误称为新增运行依赖。
+`third_party/licenses/` 保留 Go、golang.org/x/crypto、golang.org/x/net、golang.org/x/sys、golang.org/x/text、BLAKE3、cpuid、Brotli、CIRCL、compress、uTLS 等组件的原始许可或专利文本。目录中可能保留同一组件的不同版本许可副本，实际编译版本以 `go.mod`、`go.sum` 和二进制构建信息为准，不将旧版本许可副本误称为新增运行依赖。
 
 产品源码及静态附件不包含独立测试客户端的源码或二进制，产品构建不依赖这些客户端。请勿将未分发的测试工具许可误当作本产品的链接依赖许可。
 
 ## 随二进制提供
 
-`kat-0.7.1-third-party-licenses.txt` 附件汇总本说明、MPL 修改说明、第三方许可原文及其目录路径。对应受许可源码与差异可从 `https://github.com/shui1iao/Kat/tree/v0.7.1` 获取；分发者应保持此获取路径及对应版本源码可用，同时履行各原许可的其他适用义务。原始法律文本不翻译或改写。
+`kat-0.7.1-third-party-licenses.txt` 附件汇总本说明、第三方许可原文及其目录路径。对应受许可源码与差异可从 `https://github.com/shui1iao/Kat/tree/v0.7.1` 获取；分发者应保持此获取路径及对应版本源码可用，同时履行各原许可的其他适用义务。原始法律文本不翻译或改写。
 
 ## maxminddb-golang
 
@@ -52,7 +48,7 @@ PERFORMANCE OF THIS SOFTWARE.
 
 provider 的 Clash YAML 解析链接 `gopkg.in/yaml.v3 v3.0.1`，源码未作修改。该组件部分文件为 MIT，其余为 Apache-2.0，不应将整个组件简单标成单一 MIT 许可。保留上游完整通知：[yaml.v3 LICENSE](third_party/licenses/gopkg.in_yaml.v3@v3.0.1-LICENSE)。对应源码：<https://gopkg.in/yaml.v3>。
 
-## C50 内置 TUN netstack（增量；不覆盖既有组件）
+## 内置 TUN netstack
 
 `internal/tunstack` 直接使用 `gvisor.dev/gvisor v0.0.0-20260701204157-69c2d17aea96` 的 netstack 公共 API，不导入其容器/CLI，也不导入 tun2socks engine/tunnel/proxy。gVisor 主体 Apache-2.0，但实际编译的 `pkg/sync` 有 BSD-style 文件，部分派生自 Go 标准库，须保留 **The Go Authors 和 The gVisor Authors 各原年份版权**，不能以根 Apache 许可替代这些通知。
 
@@ -62,4 +58,4 @@ provider 的 Clash YAML 解析链接 `gopkg.in/yaml.v3 v3.0.1`，源码未作修
 - `internal/tunstack/{stack.go,link.go}` 的初始化/报文桥基于 tun2socks v2.7.0 commit `8dda19e8e4613e014f0b12f3e624fdff5e5f23b3` 的 MIT core/device/iobased；原版权 **Copyright (c) 2019 Jason Lyu**，完整 MIT 在 [LICENSE.tun2socks](internal/tunstack/LICENSE.tun2socks) 和总许可目录。文件已标明 Kat 对生命周期、packet API、UDP/admission/epoch 和错误传播的修改。不引入 tun2socks Go 模块或旧 Kat 桥补丁实现。
 - 新栈的 OS Device 由 tunplatform 的官方 Wintun DLL API wrapper 提供；本 DATA 没有新增 wireguard 或 Wintun Go binding 模块。官方 DLL 的独立 Prebuilt Binaries License 与 MIT Go 源码许可不同，沿已有 network/WINTUN-LICENSE.txt 原样保留，由 OS/打包 owner pin 官方 0.14.1 amd64 字节，不编译驱动源码。
 
-新增运行依赖和复用片段是以上 MIT/Apache/BSD 范围；既有 REALITY/MPL、ratelimit/LGPL+例外等原通知和义务保持，不据此宣称整个既有 Kat 或完整 Source 所有历史材料都只有 MIT/Apache/BSD。此增量不引入 GPL 实现，不以历史独立测试 peer 代替生产依赖证据。
+新增运行依赖和复用片段是以上 MIT/Apache/BSD 范围；仍使用的 ratelimit/LGPL+例外等原通知和义务保持，不据此宣称整个既有 Kat 或完整 Source 所有历史材料都只有 MIT/Apache/BSD。此增量不引入 GPL 实现，不以历史独立测试 peer 代替生产依赖证据。

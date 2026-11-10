@@ -32,9 +32,9 @@ func TestRuleInspectorAcceptedSourceModeProjection(t *testing.T) {
 				t.Fatal(requestErr)
 			}
 			reply := value.(map[string]any)
-			got := reply["result"].(route.OfflineResult)
+			got := reply["result"].(route.TargetResult)
 			t.Logf("real parse accepted mode=%s runtime_final=%s simulated=%+v", mode, doc.config.Routing.Final, got)
-			if got.Policy != "Proxy" || got.Rule != 1 || reply["mode"] != mode || reply["simulation"] != "rule" {
+			if got.Policy != "Proxy" || got.Rule != 1 || reply["mode"] != mode || reply["simulation"] != "target" {
 				t.Fatal(reply)
 			}
 			_, requestErr = riRequest(h, `{"target":"https://a.example.com/","draft":{"routing":{"final":"direct"}}}`)

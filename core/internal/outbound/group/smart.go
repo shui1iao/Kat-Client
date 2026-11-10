@@ -5,6 +5,7 @@ import (
 	"golang.org/x/net/idna"
 	"math"
 	"math/rand/v2"
+
 	"net"
 	"net/netip"
 	"sort"
@@ -510,10 +511,6 @@ type siteEntry struct {
 func (e *siteEntry) failedRecently(i int, now time.Time) bool {
 	r := e.recs[i]
 	return r != nil && !r.failAt.IsZero() && now.Sub(r.failAt) < smartSiteTTL
-}
-func (e *siteEntry) succeededRecently(i int, now time.Time) bool {
-	r := e.recs[i]
-	return r != nil && !r.okAt.IsZero() && now.Sub(r.okAt) < smartSiteTTL && r.failAt.IsZero()
 }
 
 type siteCache struct {

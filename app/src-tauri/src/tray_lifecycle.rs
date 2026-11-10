@@ -18,7 +18,7 @@ pub fn hide_or_minimize<T,E>(available:bool,hide:impl FnOnce()->Result<T,E>,mini
   assert!(d.contains("HostEvent::Tray"));assert!(d.contains("TRAY_CREATE_FAILED"));assert!(d.contains("TRAY_ICON_FAILED"));
   assert_eq!(d.matches("close_to_tray(&").count(),2,"custom close and native close both use availability fallback");
   assert!(d.contains("hide_or_minimize(ensure_tray(app)"));assert!(d.contains("w.show().and_then(|_|w.minimize())"));
-  assert!(d.contains("show_menu_on_left_click(false)"));assert!(d.contains("MouseButtonState::Up"));assert!(d.contains("\"show\"=>show_main(app)"));assert!(d.contains("\"quit\"=>quit(app.clone())"));
+  assert!(d.contains("show_menu_on_left_click(false)"));assert!(d.contains("MouseButtonState::Up"));assert!(d.contains("if id==\"show\"{let _=crate::tray_popup::hide(&app);show_main(&app);return Ok(());}"));assert!(d.contains("if id==\"quit\"{let _=crate::tray_popup::hide(&app);quit(app.clone());return Ok(());}"));
   let conf:serde_json::Value=serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();assert_eq!(conf["app"]["windows"][0]["create"],false);
   assert!(include_str!("../Cargo.toml").contains("features = [\"tray-icon\", \"custom-protocol\"]"));
  }

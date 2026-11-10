@@ -100,7 +100,7 @@ func (h *Host) startProbeBatch(ctx context.Context, groupName, overrideURL strin
 		return nil, fail("probe_failed", "", "无法创建测速轮次标识")
 	}
 	roundCtx, cancel := context.WithCancel(epoch)
-	round := &probeRound{id: hex.EncodeToString(id[:]), ctx: roundCtx, cancel: cancel, server: s, epoch: epoch, generation: s.StatsView().Reload.Generation, total: len(names), pending: map[string]bool{}, results: map[string]kernel.ProbeResult{}, finished: make(chan struct{})}
+	round := &probeRound{id: hex.EncodeToString(id[:]), ctx: roundCtx, cancel: cancel, server: s, epoch: epoch, generation: s.GenerationID(), total: len(names), pending: map[string]bool{}, results: map[string]kernel.ProbeResult{}, finished: make(chan struct{})}
 	for _, n := range names {
 		round.pending[n] = true
 	}
@@ -159,7 +159,7 @@ func (h *Host) startProbeBatch(ctx context.Context, groupName, overrideURL strin
 		// verify captured ownership before publishing; no old epoch can overwrite.
 		h.manualWG.Done()
 		h.mu.Lock()
-		if epoch.Err() == nil && h.server == s && h.manualCtx == epoch && s.StatsView().Reload.Generation == round.generation {
+		if epoch.Err() == nil && h.server == s && h.manualCtx == epoch && s.GenerationID() == round.generation {
 			if roundCtx.Err() == nil {
 				for _, r := range results {
 					if !r.At.IsZero() && !r.At.Before(h.probes[r.Name].At) {

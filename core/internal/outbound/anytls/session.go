@@ -149,11 +149,11 @@ func (s *session) fail(err error) {
 
 // openStream registers a stream and queues [settings]+SYN+PSH(first). It does
 // not wait; await observes the server's answer.
-func (s *session) openStream(first []byte) (*stream, error) {
+func (s *session) openStream(first []byte) (*stream, *writeReq, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.err != nil {
-		return nil, s.err
+		return nil, nil, s.err
 	}
 	s.nextID++
 	st := newStream(s, s.nextID)
@@ -163,8 +163,9 @@ func (s *session) openStream(first []byte) (*stream, error) {
 	wire = appendFrame(wire, cmdSYN, st.id, nil)
 	wire = appendFrame(wire, cmdPSH, st.id, first)
 	st.sentAt = time.Now().UnixNano()
-	s.enqueueLocked(&writeReq{wire: wire, done: make(chan error, 1)})
-	return st, nil
+	req := &writeReq{wire: wire, done: make(chan error, 1)}
+	s.enqueueLocked(req)
+	return st, req, nil
 }
 
 func (s *session) enqueueLocked(r *writeReq) {

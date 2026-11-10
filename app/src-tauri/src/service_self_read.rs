@@ -149,7 +149,7 @@ impl<S: Object> Drop for Grant<S> {
         assert!(adapter.contains("DACL_SECURITY_INFORMATION | protection"));
         let write=adapter.split("fn write_dacl(").nth(1).unwrap();for forbidden in ["OWNER_SECURITY_INFORMATION","GROUP_SECURITY_INFORMATION","SACL_SECURITY_INFORMATION","LABEL_SECURITY_INFORMATION","TokenDefaultDacl","AdjustTokenPrivileges","ACCESS_SYSTEM_SECURITY"]{assert!(!write.contains(forbidden));}
         assert!(adapter.contains("TokenPrimary"));assert!(adapter.contains("GetCurrentProcess()"));assert!(adapter.contains("pin_runtime_chain(&root, true)"));assert!(adapter.contains("FILE_FLAG_OPEN_REPARSE_POINT"));assert!(adapter.contains("validate_binding(Some(&record)"));
-        assert!(run.find("self_read::acquire").unwrap()<run.find("Engine::new").unwrap());assert!(run.find("grant.finish").unwrap()>run.find("run_bound(").unwrap());assert!(run.contains("combine(operation, combine(joined, cleanup))"));
+        assert!(run.find("self_read::acquire").unwrap()<run.find("Engine::new").unwrap());assert!(run.find("grant.finish").unwrap()>run.find("run_bound(").unwrap());assert!(run.contains("combine(operation, combine(elevated_cleanup, combine(joined, cleanup)))"));
         assert!(run.find("let operation = (||").unwrap()<run.find("pipe::accept").unwrap());assert!(run.find("let cleanup =").unwrap()>run.find("monitor_thread.join()").unwrap());
     }
 }

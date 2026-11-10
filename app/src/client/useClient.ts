@@ -1,5 +1,4 @@
 import {handleTrayAction,selectGroupMember,traySnapshot,type TrayAPI} from './tray';
-import {hasUnsavedFormDrafts} from '../lib/formDraft';
 import {connectionRates,withConnectionSnapshot} from './presentation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
@@ -13,6 +12,21 @@ import { updatePreferences } from './daily';
 import { DocumentSession } from './session';
 import type { ConnectionsReply, DesktopPreferences, DesktopSettingsReply, CoreMethod, CoreStatus, DocumentReply, DocumentSource, HostCommand, NetworkStatus, ProbeResult, SubscriptionPreview, SubscriptionStatus } from './types';
 export interface Sample { at: number; down: number; up: number }
+export function appendSample(old: readonly Sample[], sample: Sample, now = sample.at): Sample[] {
+  const cutoff = now - 3600000, keepLast = sample.at > cutoff ? 1 : 0;
+  let count = keepLast, start = old.length;
+  while (start > 0 && count < 1801) {
+    start--;
+    if (old[start].at > cutoff) count++;
+  }
+  const out = new Array<Sample>(count);
+  let w = 0;
+  for (let i = start; i < old.length; i++) {
+    if (old[i].at > cutoff) out[w++] = old[i];
+  }
+  if (keepLast) out[w] = sample;
+  return out;
+}
 export function useClient() {
   const [, redraw] = useState(0);
   const [status, setStatus] = useState<CoreStatus | null>(null);
@@ -75,10 +89,14 @@ export function useClient() {
     } catch(e) { if(active(life)&&request===statusRequest.current){observeUncertain(e);coreReachable.current=false;setStatus(null);}throw e; }
     if(!active(life)||request!==statusRequest.current)return s;
     const next={at:Date.now(),items:s.runtime.state==='running'?s.connections.items:[]};
-    setConnectionSpeeds(connectionRates(lastConnections.current,next));lastConnections.current=next;
+    const nextRates=connectionRates(lastConnections.current,next);
+    setConnectionSpeeds(old=>Object.keys(old).length===0&&Object.keys(nextRates).length===0?old:nextRates);lastConnections.current=next;
     coreReachable.current=true;
     setStatus(s);
-    if (s.traffic?.down_rate != null && s.traffic?.up_rate != null) setSamples(old => [...old, { at: Date.now(), down: s.traffic.down_rate!, up: s.traffic.up_rate! }].filter(x => x.at > Date.now() - 3600000).slice(-1801));
+    if (s.traffic?.down_rate != null && s.traffic?.up_rate != null) setSamples(old => {
+      const now = Date.now();
+      return appendSample(old, { at: now, down: s.traffic.down_rate!, up: s.traffic.up_rate! }, now);
+    });
     return s;
   }
   async function refreshNetwork() { const request=++networkRequest.current,life=lifetime.current;try { const n=await host<NetworkStatus>('network_status');if(active(life)&&request===networkRequest.current)setNetwork(n);return n; } catch(e) { if(active(life)&&request===networkRequest.current){observeUncertain(e);setNetwork(null);}throw e; } }
@@ -127,7 +145,7 @@ export function useClient() {
         if(doc.uncertain)await reconcileAccepted();else if(doc.saved===null)doc.load(reply);
         // Startup-only background refresh: core instantly returns fresh or stale
         // disk data, refreshing expired bytes without blanking the visible map.
-        void (async()=>{for(const g of doc.source?.kernel.groups??[]){if(!g.icon||!cachedIcon(g.icon))continue;try{const r=await core<{data_uri:string}>('icon.get',{url:g.icon,group:g.name});hydrateIcons({[g.icon]:r.data_uri});}catch{/* quiet icon task */}}})();
+        void (async()=>{const seen=new Set<string>();for(const g of doc.source?.kernel.groups??[]){if(!active(life))break;if(!g.icon||seen.has(g.icon)||!cachedIcon(g.icon))continue;seen.add(g.icon);try{const r=await core<{data_uri:string}>('icon.get',{url:g.icon,group:g.name});if(active(life))hydrateIcons({[g.icon]:r.data_uri});}catch{/* quiet icon task */}}})();
 
       }
       if(active(life)){
@@ -203,7 +221,8 @@ export function useClient() {
   const probeGroupProgress:NonNullable<CoreStatus['probe_group_rounds']>=status?.probe_group_rounds??{};
   // Frozen Policies interface: a group operation never globally locks peers.
   const groupProbing=(name:string)=>busy.has('probe.group:'+name)||!!probeGroupProgress[name];
-  const memberProbing=(name:string)=>busy.has('probe.node:'+name)||!!probeAllProgress?.names.includes(name)||Object.values(probeGroupProgress).some(round=>round.names.includes(name));
+  const probingNames=new Set<string>(probeAllProgress?.names);for(const k of Object.keys(probeGroupProgress))for(const n of probeGroupProgress[k].names)probingNames.add(n);
+  const memberProbing=(name:string)=>busy.has('probe.node:'+name)||probingNames.has(name);
   const probeLocked=status?.runtime.state!=='running'||!!probeAllProgress||doc.installing||kernelRestarting||appRestarting;
   const probe = (kind: 'node' | 'group', name: string) => run(`probe.${kind}:${name}`, async () => {
     if(kind==='group'){
@@ -324,8 +343,10 @@ export function useClient() {
   };
   const trayAPI=useRef<TrayAPI|null>(null);trayAPI.current={blocked:trayBlocked,lifecycleBlocked,restartCore,restartApp,quit:()=>run('window',()=>host('window_action',{action:'quit'}),reportOperationError),mode:m=>edit(d=>{d.client.mode=m},reportOperationError),select:selectMember,network:(cmd,enabled)=>os(cmd,{enabled}),show:()=>host('window_action',{action:'show'}),error:reportOperationError};
   const trayListenerReady=useRef(false);
-  const trayState=JSON.stringify(traySnapshot(projectedSource,projectedStatus,network,trayProjectionBlocked(),label));
-  const trayPayload=useMemo(()=>JSON.parse(trayState) as ReturnType<typeof traySnapshot>,[trayState]);
+  const lastTray=useRef<{state:string;payload:ReturnType<typeof traySnapshot>}|null>(null);
+  const nextTray=traySnapshot(projectedSource,projectedStatus,network,trayProjectionBlocked(),label),trayState=JSON.stringify(nextTray);
+  if(lastTray.current?.state!==trayState)lastTray.current={state:trayState,payload:nextTray};
+  const trayPayload=lastTray.current.payload;
   const trayStateRef=useRef(trayPayload);trayStateRef.current=trayPayload;
   useEffect(()=>{
     if(!hasHost())return;let live=true;const stops:Array<()=>void>=[];

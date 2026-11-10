@@ -144,18 +144,18 @@ func (db *siteDB) compile(key string) *siteMatcher {
 		if f != 2 || w != 2 {
 			continue
 		}
-		typ, value, has, ok := decodeSiteDomain(val)
+		typ, rawVal, has, ok := decodeSiteDomain(val)
 		if !ok || !attrMatch(attrs, has) {
 			continue
 		}
-		value = strings.ToLower(value)
+		value := string(rawVal)
 		switch typ {
 		case 0:
 			if k, ok := normKeyword(value); ok {
 				d.keywords = append(d.keywords, k)
 			}
 		case 1:
-			if re, err := compileDomainRegex(value); err == nil {
+			if re, err := compileDomainRegex(strings.ToLower(value)); err == nil {
 				d.regex = append(d.regex, re)
 			}
 		case 2:
@@ -171,24 +171,24 @@ func (db *siteDB) compile(key string) *siteMatcher {
 	return sm
 }
 
-func decodeSiteDomain(b []byte) (typ uint64, value string, attrs []string, ok bool) {
+func decodeSiteDomain(b []byte) (typ uint64, value []byte, attrs []string, ok bool) {
 	for len(b) > 0 {
 		f, w, num, val, rest, err := protoField(b)
 		if err != nil {
-			return 0, "", nil, false
+			return 0, nil, nil, false
 		}
 		b = rest
 		switch {
 		case f == 1 && w == 0:
 			typ = num
 		case f == 2 && w == 2:
-			value = string(val)
+			value = val
 		case f == 3 && w == 2:
 			a := val
 			for len(a) > 0 {
 				f3, w3, _, v3, r3, err := protoField(a)
 				if err != nil {
-					return 0, "", nil, false
+					return 0, nil, nil, false
 				}
 				a = r3
 				if f3 == 1 && w3 == 2 {
@@ -197,7 +197,7 @@ func decodeSiteDomain(b []byte) (typ uint64, value string, attrs []string, ok bo
 			}
 		}
 	}
-	return typ, value, attrs, value != ""
+	return typ, value, attrs, len(value) > 0
 }
 
 // attrMatch: every "attr" must be present and every "!attr" absent.

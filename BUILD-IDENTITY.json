@@ -1,43 +1,39 @@
 {
-  "candidate": "candidate50-m2-udp-044",
-  "source_archive": {
-    "sha256": "ea2d4a4b931610eb5331c6cc37b6a1dd4c393857c826929709ef51ad120439ab",
-    "bytes": 54858164
-  },
-  "source_manifest_sha256": "f40d1696fef199d75c2141196fdd4b0ea51273ff4d44615d1aa7caff0fd39792",
-  "core_source_fingerprint": "c40a0ccbf0f83239ec8ab75dc306f71056090ebf666dc5c160e4256dcf9efe63",
+  "candidate": "v0.2.2-release-20261110",
+  "not_published": false,
+  "app_version": "0.2.2",
+  "windows_clientcore_version": "0.8.1",
+  "sequence": 1794300002,
+  "core_source_fingerprint": "f9f9d354ed3e551138964fde957cb0e2371e761cce5776d098bae80a2b33c560",
+  "core_build_commit": "f9f9d354ed3e551138964fde957cb0e2371e761c",
+  "source_manifest_sha256": "6422a27e7a9e2966a1fdf6aa685e88e4436344f469c49e3b13cfba434c43d2a7",
   "executables": {
     "kat-client-core.exe": {
-      "bytes": 19717632,
-      "sha256": "1271016b470f604da2ab3c99fbcbb8fcf13fbb72c40d4470210c525bee235a20"
+      "bytes": 16657408,
+      "sha256": "8beb464141230cca3ee361bd586fbccdf2f77de1f9474d5d7e1dafa87fe0a1b4"
     },
     "kat-desktop.exe": {
-      "bytes": 11712512,
-      "sha256": "70c6212d73bc47bac3c812e86b07bdad36be603923b1b4ef0d56a599f8233102"
+      "bytes": 11852800,
+      "sha256": "796d42d159ccff895ab77cc2ce4da14ea891df7539f7ea605f0026f1e459d2c9"
     },
     "kat-elevate-helper.exe": {
       "bytes": 585728,
-      "sha256": "668f57ade9aabc4f8c2aa1fc3f1e35d33a1e0e281d03260b5f15ba89698cb35b"
+      "sha256": "bf494dc31bfc7e9cb1c7faf13cc056f190ff8a0ee093e0242b93279ad9ca2829"
     },
     "kat-install-helper.exe": {
-      "bytes": 1284608,
-      "sha256": "4d5eb3005aaa61a3fa4c2c1e029ab67b280f128f2e9fc2862f7bc491ea51df2f"
+      "bytes": 1291264,
+      "sha256": "75dd0ffbb1ea3154414c2a1bec234c19823b234b1bd7772f31f135f303fcc9b0"
     },
     "kat-network-service.exe": {
-      "bytes": 1821696,
-      "sha256": "55ed63a968db5a7829d92eac1c34055fb418daa29e1183f79ae0a80d4be79836"
+      "bytes": 1827328,
+      "sha256": "b2779da39bec61eb7cdf02d43f7da11c32bb75f7010dddacd341cc4305a9976c"
     },
     "kat-proxy-watchdog.exe": {
       "bytes": 481280,
-      "sha256": "eae48ae14dd8a323ff28a78f352512c1fcc9606f5d927572a52d2e7331346c26"
+      "sha256": "550acab5f56b88e6b947046a7662af62496655c3f01e5ee9fa24fe37d7315427"
     }
   },
-  "app_version": "0.2.0",
-  "windows_clientcore_version": "0.8.0",
-  "sequence": 1794300000,
-  "diagnostic_build": false,
-  "diagnostic_build_field_scope": "legacy memory-profile build, not tun-reason diagnostics",
-  "tun_reason_diagnostic_only": false,
   "signature_key_id": "0afa646ee76f17d8",
-  "not_published": false
+  "diagnostic_build": false,
+  "tun_reason_diagnostic_only": false
 }

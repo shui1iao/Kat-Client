@@ -18,7 +18,10 @@ func TestK3ProcessDetailsKnownUnknownAndPSL(t *testing.T) {
 		ctx := withInboundMeta(context.Background(), &Inbound{Protocol: "socks5"}, &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 7891}, &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 23456})
 		s := &Server{core: &core{connectionSink: func(ConnectionEvent) {}, started: time.Now()}}
 		f := &flow{s: s, network: "tcp"}
-		f.initDetails(ctx, Address{Host: "api.example.co.uk", Port: 443})
+		addr := Address{Host: "api.example.co.uk", Port: 443}
+		f.initDetails(ctx, addr)
+		f.scheduleDetails(ctx, addr)
+		waitFor(t, func() bool { return f.info(time.Now()).ProcessStatus == status })
 		ci := f.info(time.Now())
 		if ci.DomainSuffix != "example.co.uk" {
 			t.Fatal(ci.DomainSuffix)

@@ -4,30 +4,25 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
-	"encoding/binary"
 	"errors"
-	"io"
 	"net"
 )
 
 type request struct {
 	Context   context.Context
-	UDPRead   func() (packet, error)
-	UDPWrite  func(Address, []byte) error
 	Reply     func(net.Conn, net.Addr, bool) error
 	Command   byte
 	Target    Address
 	Mode      string
 	UserIndex int      // -1 for intentionally unauthenticated loopback SOCKS
 	Stream    net.Conn // optional transforming stream; never expose raw TCP if transforms remain
-	Datagrams datagramCodec
 }
 type adapter func(net.Conn, Inbound) (request, error)
 
 // errSOCKSAuth is a wrong SOCKS5 username or password.
 var errSOCKSAuth = errors.New("authentication failed")
 
-var adapters = map[string]adapter{"socks5": parseSOCKS, "trojan": parseTrojan, "vless": parseVLESS}
+var adapters = map[string]adapter{"socks5": parseSOCKS}
 
 func (r request) respond(c net.Conn, bound net.Addr, ok bool) error {
 	if r.Reply != nil {
@@ -43,11 +38,7 @@ func (r request) respond(c net.Conn, bound net.Addr, ok bool) error {
 		if bound != nil {
 			a = addrFromNet(bound)
 		}
-		return writeAll(c, appendAddress([]byte{5, rep, 0}, a, false))
-	case "vless":
-		if ok {
-			return writeAll(c, []byte{0, 0})
-		}
+		return writeAll(c, appendAddress([]byte{5, rep, 0}, a))
 	}
 	return nil
 }
@@ -135,121 +126,14 @@ func parseSOCKS(c net.Conn, in Inbound) (request, error) {
 		return r, errors.New("invalid SOCKS request")
 	}
 	r.Command = h[1]
-	if r.Command != 1 && r.Command != 3 && (r.Command != 2 || in.bindOptions() == nil) {
+	if r.Command != 1 && r.Command != 3 {
 		_ = writeAll(c, []byte{5, 7, 0, 1, 0, 0, 0, 0, 0, 0})
 		return r, errors.New("unsupported SOCKS command")
 	}
-	r.Target, e = readAddress(c, false)
+	r.Target, e = readAddress(c)
 	if e != nil {
 		_ = writeAll(c, []byte{5, 8, 0, 1, 0, 0, 0, 0, 0, 0})
 		return r, e
 	}
 	return r, nil
-}
-func expectCRLF(r io.Reader) error {
-	b, e := readN(r, 2)
-	if e != nil {
-		return e
-	}
-	if b[0] != 13 || b[1] != 10 {
-		return errors.New("invalid CRLF")
-	}
-	return nil
-}
-func parseVLESS(c net.Conn, in Inbound) (request, error) {
-	r := request{Mode: "vless", UserIndex: -1, Datagrams: vlessDatagrams{}}
-	b, e := readN(c, 18)
-	if e != nil {
-		return r, e
-	}
-	if b[0] != 0 {
-		return r, errors.New("unsupported VLESS wire version")
-	}
-	match := 0
-	for i, u := range in.Users {
-		uuid, _ := parseUUID(u.UUID)
-		m := subtle.ConstantTimeCompare(b[1:17], uuid[:])
-		match |= m
-		if m == 1 {
-			r.UserIndex = i
-		}
-	}
-	if match == 0 {
-		return r, errors.New("authentication failed")
-	}
-	addons, e := readN(c, int(b[17]))
-	if e != nil {
-		return r, e
-	}
-	if e = validateAddons(addons); e != nil {
-		return r, e
-	}
-	cmd, e := readN(c, 1)
-	if e != nil {
-		return r, e
-	}
-	r.Command = cmd[0]
-	if r.Command != 1 && r.Command != 2 {
-		return r, errors.New("unsupported VLESS command")
-	}
-	port, e := readN(c, 2)
-	if e != nil {
-		return r, e
-	}
-	r.Target, e = readHost(c, true)
-	r.Target.Port = binary.BigEndian.Uint16(port)
-	if e != nil {
-		return r, e
-	}
-	if r.Command == 2 {
-		r.Command = 3
-	}
-	return r, nil
-}
-
-// Minimal protobuf wire reader: known nonempty flow/seed rejected; well-formed
-// unknown varint/fixed/bytes fields skipped. Groups are deliberately unsupported.
-func validateAddons(b []byte) error {
-	for len(b) > 0 {
-		key, n := binary.Uvarint(b)
-		if n <= 0 || key>>3 == 0 || key>>3 > 1<<29-1 {
-			return errors.New("invalid addons key")
-		}
-		b = b[n:]
-		field, wire := key>>3, key&7
-		if (field == 1 || field == 2) && wire != 2 {
-			return errors.New("invalid known addons field type")
-		}
-		switch wire {
-		case 0:
-			_, n = binary.Uvarint(b)
-			if n <= 0 {
-				return errors.New("invalid addons varint")
-			}
-			b = b[n:]
-		case 1:
-			if len(b) < 8 {
-				return io.ErrUnexpectedEOF
-			}
-			b = b[8:]
-		case 2:
-			length, k := binary.Uvarint(b)
-			if k <= 0 || length > uint64(len(b)-max(k, 0)) {
-				return errors.New("invalid addons length")
-			}
-			b = b[k:]
-			if (field == 1 || field == 2) && length > 0 {
-				return errors.New("VLESS flow/encryption not implemented")
-			}
-			b = b[int(length):]
-		case 5:
-			if len(b) < 4 {
-				return io.ErrUnexpectedEOF
-			}
-			b = b[4:]
-		default:
-			return errors.New("unsupported addons wire type")
-		}
-	}
-	return nil
 }

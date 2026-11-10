@@ -261,12 +261,8 @@ func normInType(s string) (string, bool) {
 		return "anytls", true
 	case "trojan":
 		return "trojan", true
-	case "vless":
-		return "vless", true
 	case "socks5", "socks", "socks5h":
 		return "socks5", true
-	case "snell":
-		return "snell", true
 	}
 	return "", false
 }

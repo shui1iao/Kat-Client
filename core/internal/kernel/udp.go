@@ -25,8 +25,6 @@ type udpAssociation struct {
 	tunSend func(context.Context, packet, time.Duration)
 
 	server                       *Server
-	writeBack                    func(Address, []byte) error
-	ssNative                     bool // only native SS uses bidirectional target idle refresh
 	ctx                          context.Context
 	cancel                       context.CancelFunc
 	stream                       net.Conn
@@ -156,9 +154,6 @@ func (s *Server) serveUDP(c net.Conn, r request) (retErr error) {
 		}
 		defer a.native.Close()
 	}
-	if r.Mode == "vless" && r.Target.Port == 0 {
-		return errors.New("zero UDP destination")
-	}
 	var bound net.Addr
 	if a.native != nil {
 		bound = a.native.LocalAddr()
@@ -195,7 +190,7 @@ func (s *Server) serveUDP(c net.Conn, r request) (retErr error) {
 		go func() { defer a.wg.Done(); defer cancel(); var b [1]byte; _, _ = c.Read(b[:]) }()
 		e = a.nativeLoop()
 	} else {
-		e = a.streamLoop()
+		e = errors.New("missing local SOCKS5 UDP socket")
 	}
 	cancel()
 	a.wg.Wait()
@@ -269,7 +264,7 @@ func (a *udpAssociation) nativeLoop() error {
 			continue
 		}
 		reader := bytes.NewReader(b[3:n])
-		target, e := readAddress(reader, false)
+		target, e := readAddress(reader)
 		if e != nil || reader.Len() > maxDatagram || target.Port == 0 {
 			a.server.counters.Dropped.Add(1)
 			a.server.failure(failUDPInvalid, "udp", -1)
@@ -295,27 +290,6 @@ func (a *udpAssociation) nativeLoop() error {
 			}
 		}
 		a.enqueue(packet{target, payload})
-	}
-}
-func (a *udpAssociation) streamLoop() error {
-	if a.req.UDPRead != nil {
-		for {
-			p, e := a.req.UDPRead()
-			if e != nil {
-				return e
-			}
-			a.enqueue(p)
-		}
-	}
-	if a.req.Datagrams == nil {
-		return errors.New("missing datagram codec")
-	}
-	for {
-		p, e := a.req.Datagrams.ReadPacket(a.stream, a.req.Target)
-		if e != nil {
-			return e
-		}
-		a.enqueue(p)
 	}
 }
 func (a *udpAssociation) sendLoop() {
@@ -462,7 +436,7 @@ func (a *udpAssociation) send(ctx context.Context, p packet, idle time.Duration)
 	}
 	a.flow.dialIPs(ips, target.Addr())
 	a.flow.udpUp(rt, len(p.payload))
-	if !a.ssNative {
+	{
 		a.activity.Store(time.Now().UnixNano())
 	}
 }
@@ -565,16 +539,12 @@ func (a *udpAssociation) output(client netip.AddrPort, source Address, payload [
 	var e error
 	a.outputMu.Lock()
 	defer a.outputMu.Unlock()
-	if a.writeBack != nil {
-		e = a.writeBack(source, payload)
-	} else if a.req.UDPWrite != nil {
-		a.stream.SetWriteDeadline(time.Now().Add(idle))
-		e = a.req.UDPWrite(source, payload)
+	if a.native != nil {
 	} else if a.native != nil {
 		if client.Port() == 0 {
 			return nil
 		}
-		out := appendAddress([]byte{0, 0, 0}, source, false)
+		out := appendAddress([]byte{0, 0, 0}, source)
 		out = append(out, payload...)
 		if len(out) > maxDatagram {
 			a.server.counters.Dropped.Add(1)
@@ -583,10 +553,6 @@ func (a *udpAssociation) output(client netip.AddrPort, source Address, payload [
 		}
 		a.native.SetWriteDeadline(time.Now().Add(a.server.cfg.Limits.DialTimeout.value()))
 		_, e = a.native.WriteToUDPAddrPort(out, client)
-	} else {
-		out := a.req.Datagrams.AppendPacket(nil, source, payload)
-		a.stream.SetWriteDeadline(time.Now().Add(idle))
-		e = writeAll(a.stream, out)
 	}
 	return e
 }
@@ -595,10 +561,6 @@ func (a *udpAssociation) output(client netip.AddrPort, source Address, payload [
 
 // ssIdleExpired uses the same last-valid-activity timestamp as target readers.
 // It is SS-only: other protocols retain their existing idle/default behavior.
-func (a *udpAssociation) ssIdleExpired(now time.Time) bool {
-	return now.Sub(time.Unix(0, a.activity.Load())) >= a.server.cfg.Limits.UDPIdle.value()
-}
-
 // An exact target must already be authorized and not idle-expired BEFORE a reply
 // can renew it. Unknown/expired sources and oversized datagrams never keep it alive.
 // Refreshing only native SS preserves other protocol target-expiry semantics.
@@ -607,25 +569,17 @@ func (a *udpAssociation) acceptReturn(src netip.AddrPort, n int, now time.Time, 
 	defer a.mu.Unlock()
 	last, ok := a.allowed[src]
 	expired := now.Sub(last) > idle
-	if a.ssNative {
-		expired = now.Sub(last) >= idle
-	}
 	if !ok || expired || n > maxDatagram {
 		return false
 	}
-	if a.ssNative {
-		if now.After(last) {
-			a.allowed[src] = now
-		}
-		a.touchSSActivity(now)
-	} else {
-		a.activity.Store(now.UnixNano())
-	}
+	a.activity.Store(now.UnixNano())
 	return true
 }
 
 // Concurrent SS readers/replies must not move the idle deadline backwards.
-func (a *udpAssociation) touchSSActivity(now time.Time) {
+
+// touchActivity preserves the monotonic activity timestamp shared by TUN workers.
+func (a *udpAssociation) touchActivity(now time.Time) {
 	n := now.UnixNano()
 	for old := a.activity.Load(); n > old; old = a.activity.Load() {
 		if a.activity.CompareAndSwap(old, n) {

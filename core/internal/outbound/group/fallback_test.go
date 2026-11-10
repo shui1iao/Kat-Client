@@ -32,6 +32,11 @@ func TestFallbackFirstFailsUsesSecond(t *testing.T) {
 	g.Start(context.Background())
 	dial(t, g, "x.test")
 	waitRounds(t, g, 1)
+	if g.Current() != "a" {
+		t.Fatal("single failure round changed selection")
+	}
+	clk.Advance(5 * time.Second)
+	waitRounds(t, g, 2)
 	if g.Current() != "b" || dial(t, g, "x.test") != "b" {
 		t.Fatalf("a failed its probe: current %q, want b", g.Current())
 	}
@@ -62,6 +67,11 @@ func TestFallbackSwitchesBackWhenFirstRecovers(t *testing.T) {
 	g.Start(context.Background())
 	dial(t, g, "x.test")
 	waitRounds(t, g, 1)
+	if g.Current() != "a" {
+		t.Fatal("single failure round changed selection")
+	}
+	clk.Advance(5 * time.Second)
+	waitRounds(t, g, 2)
 	if g.Current() != "b" {
 		t.Fatalf("current %q", g.Current())
 	}
@@ -70,7 +80,7 @@ func TestFallbackSwitchesBackWhenFirstRecovers(t *testing.T) {
 	if got := dial(t, g, "x.test"); got != "b" { // round runs in background
 		t.Fatalf("dial via %q", got)
 	}
-	waitRounds(t, g, 2)
+	waitRounds(t, g, 3)
 	if g.Current() != "b" {
 		t.Fatal("single success bypassed recovery")
 	}
@@ -96,7 +106,7 @@ func TestFallbackSwitchesBackWhenFirstRecovers(t *testing.T) {
 	p.set("a", 10*ms_, false)
 	clk.Advance(11 * time.Minute)
 	dial(t, g, "x.test")
-	waitRounds(t, g, 4)
+	waitRounds(t, g, 5)
 	clk.Advance(5 * time.Second)
 	probeNow(t, g)
 	clk.Advance(5 * time.Second)

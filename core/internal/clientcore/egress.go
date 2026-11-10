@@ -1,7 +1,6 @@
 package clientcore
 
 import (
-	"context"
 	"net/netip"
 	"time"
 
@@ -110,8 +109,4 @@ func (h *Host) transitionEgressLocked(p *clientegress.Policy, o clientegress.Opt
 	h.egressGeneration++
 	h.logs.record(kernel.ClientLogEvent{Time: time.Now(), Level: "info", Event: "egress_committed", Generation: h.egressGeneration})
 	return h.egressViewLocked(), nil
-}
-
-func (h *Host) refreshDNS(ctx context.Context, revision uint64, fingerprint string) (any, *Error) {
-	return nil, fail("TUN_ENGINE_RETIRED", "dns", "DNS revision lifecycle is owned by core TUN Manager")
 }

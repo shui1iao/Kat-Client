@@ -65,6 +65,7 @@ pub struct UpdateTransport {
 }
 impl UpdateTransport {
     pub fn direct() -> Self { Self { port: None, identity: None, valid: Arc::new(|| true), publication: Arc::new(Mutex::new(())) } }
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub(crate) fn owned(port: Option<u16>, identity: (u64,u64), publication: Arc<Mutex<()>>, valid: impl Fn() -> bool + Send + Sync + 'static) -> Self {
         Self { port, identity: Some(identity), valid: Arc::new(valid), publication }
     }

@@ -85,7 +85,7 @@ func (a *udpAssociation) sendProxy(name string, dst Address, payload []byte, tar
 		}
 	}
 	a.flow.udpUp(rt, len(payload))
-	if !a.ssNative {
+	{
 		a.activity.Store(time.Now().UnixNano())
 	}
 }
@@ -185,11 +185,7 @@ func (a *udpAssociation) proxyReturnLoop(ses *proxySession) {
 		}
 		now := time.Now()
 		ses.last.Store(now.UnixNano())
-		if a.ssNative {
-			a.touchSSActivity(now)
-		} else {
-			a.activity.Store(now.UnixNano())
-		}
+		a.activity.Store(now.UnixNano())
 		host := src.Host
 		if ip, e := netip.ParseAddr(host); e == nil {
 			host = ip.WithZone("").Unmap().String()

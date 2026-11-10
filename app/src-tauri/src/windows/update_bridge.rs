@@ -2,7 +2,7 @@
 //! core, or network controller starts here. Only the installed helper elevates.
 use crate::error::{Error,Result};use super::{identity::{self,wide,Handle},security,update_handoff,installed_handoff};
 use windows_sys::Win32::{Foundation::*,System::Threading::*,UI::{Shell::*,WindowsAndMessaging::*}};
-use std::{os::windows::ffi::OsStrExt,path::Path};
+use std::os::windows::ffi::OsStrExt;
 fn bad()->Error{Error::new("UPDATE_BRIDGE","更新交接未完成；未强制终止任何进程，请保留恢复材料")}
 pub fn elevate(action:&str,id:&str)->Result<()>{identity::require_normal_user()?;if !matches!(action,"--core-update"|"--update-finalize"|"--update-rollback")||!id.bytes().all(|b|b.is_ascii_digit()||(b'a'..=b'f').contains(&b))||if action=="--core-update"{id.len()!=64}else{id.len()!=32}{return Err(bad());}
  let root=identity::install_root()?;let r=super::install_location::read()?.ok_or_else(bad)?;let helper=if action=="--update-rollback"{std::env::current_exe().map_err(|_|bad())?.parent().ok_or_else(bad)?.join("kat-install-helper.exe")}else{root.join("kat-install-helper.exe")};if security::same_path(&helper,&root.join("kat-install-helper.exe")){security::verify_approved(&r,&helper,"kat-install-helper.exe")?;}else{let b=crate::user_store::read_selected(&helper,128*1024*1024)?;use sha2::{Sha256,Digest};if r.hashes.as_ref().and_then(|m|m.get("kat-install-helper.exe"))!=Some(&hex::encode(Sha256::digest(b))){return Err(bad());}}

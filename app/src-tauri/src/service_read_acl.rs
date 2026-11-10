@@ -89,8 +89,8 @@ impl GrantUpdate {
   assert_eq!(READ_ACCESS,5);assert_eq!(new_service_sddl("S-1-5-21-1-2-3-1000"),"D:P(A;;0x000f01ff;;;SY)(A;;0x000f01ff;;;BA)(A;;0x00000005;;;S-1-5-21-1-2-3-1000)");
   let old=descriptor(vec![ace(1,0,0x20,99),ace(0,0,0xf01ff,18),ace(0,0,4,42),ace(0,0,0x14,98),ace(0,0x10,4,42)]);
   let g=GrantUpdate::prepare(old.clone(),&sid(42)).unwrap();let mut want=old.clone();want.dacl[8+40+4..8+40+8].copy_from_slice(&5u32.to_le_bytes());assert_eq!(g.next,want);assert_eq!(GrantUpdate::prepare(want.clone(),&sid(42)).unwrap().next,want);
-  let installer=include_str!("windows/installer.rs");let adapter=include_str!("windows/service_acl.rs");
-  assert!(installer.contains("self.acl_update.as_mut().ok_or_else"));assert!(installer.contains("GrantUpdate::prepare(store.read()?"));assert!(installer.find("phase=\"recover_stop\"").unwrap()>installer.find("acl.restore(").unwrap());assert!(installer.contains("service-security.json"));assert!(adapter.contains("new_service_sddl(sid)"));assert!(adapter.contains("SERVICE_QUERY_CONFIG|SERVICE_QUERY_STATUS"));assert!(adapter.contains("AccessCheck("));
+  let installer=include_str!("windows/installer.rs");let ui=include_str!("windows/update_install.rs");let adapter=include_str!("windows/service_acl.rs");
+  assert!(installer.contains("self.acl_update.as_mut().ok_or_else"));assert!(installer.contains("GrantUpdate::prepare(store.read()?"));assert!(installer.contains("acl.restore("));assert!(ui.find("stop_release(&service)?").unwrap()<ui.find("store.write_dacl(sd)?").unwrap());assert!(installer.contains("service-security.json"));assert!(adapter.contains("new_service_sddl(sid)"));assert!(adapter.contains("SERVICE_QUERY_CONFIG|SERVICE_QUERY_STATUS"));assert!(adapter.contains("AccessCheck("));
   let rec=crate::installer_update::at("recover_service_acl",bad());assert!(rec.message.contains("stage=recover_service_acl"));
   let core=include_str!("../../../core/internal/procattr/service_windows.go");assert!(core.contains("windows.SERVICE_QUERY_STATUS|windows.SERVICE_QUERY_CONFIG"));assert!(core.contains("windows.QueryServiceConfig"));
  }

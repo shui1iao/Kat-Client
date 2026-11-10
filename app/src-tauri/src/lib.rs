@@ -54,9 +54,6 @@ pub mod install_location;
 
 pub mod service_read_acl;
 
-#[cfg(all(test, not(windows)))]
-#[path = "windows/bridge_image_path.rs"]
-mod bridge_image_path_tests;
 
 pub mod service_self_read;
 

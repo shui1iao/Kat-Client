@@ -12,7 +12,7 @@ export function SubscriptionImport({c,close,initialText='',id,refresh=false,init
  const old=c.source?.subscriptions?.find(s=>s.id===id);
  const [mode,setMode]=useState<'remote'|'local'>(initialMode??(old?old.url?'remote':'local':initialText&&!/^https:\/\//i.test(initialText.trim())?'local':'remote'));
  const [text,setText]=useState(initialText||old?.url||''),[name,setName]=useState(old?.name??''),[interval,setInterval]=useState(old?.auto_update===false?'0':old?.follow_interval?'follow':String(old?.interval??3600)),[downloadMode,setDownloadMode]=useState<'auto'|'direct'|'proxy'>(old?.download_mode??'auto'),[show,setShow]=useState(false),[error,setError]=useState(refresh&&!c.subscriptionReviews[id??'new']?c.subscriptionNotices[id??'']??'':''),[review,setReview]=useState<SubscriptionPreview|null>(c.subscriptionReviews[id??'new']?.preview??null);
- const inputFile=useRef<ImportedDocument|null>(null),alive=useRef(true);
+ const alive=useRef(true);
  const key=id??'new';
  const [fields,setFields]=useState<Record<string,string>>({});
  const [deleting,setDeleting]=useState(false);
@@ -27,8 +27,8 @@ export function SubscriptionImport({c,close,initialText='',id,refresh=false,init
 
  useEffect(()=>{alive.current=true;c.pauseSubscriptions(true);return()=>{alive.current=false;c.pauseSubscriptions(false);};},[]);
  const invalidate=()=>{setReview(null);setError('');setFields({});c.clearSubscriptionReview(key);};
- const change=(value:string)=>{inputFile.current=null;invalidate();setText(value);};
- const readFile=()=>c.run('subscription-file',async()=>{const f=await host<ImportedDocument|null>('document_import');if(f&&alive.current){change(f.text);inputFile.current=f;}},e=>setError(errorText(e)));
+ const change=(value:string)=>{invalidate();setText(value);};
+ const readFile=()=>c.run('subscription-file',async()=>{const f=await host<ImportedDocument|null>('document_import');if(f&&alive.current)change(f.text);},e=>setError(errorText(e)));
  const importNow=async()=>{
   setError('');const errors=subscriptionFieldErrors({mode,text,name,interval});setFields(errors);if(Object.keys(errors).length)return;const result=await c.startSubscription({...(mode==='remote'?{url:text.trim()}:{text}),...(id?{id}:{}),...(name?{name}:{}),interval:interval==='0'?(old?.interval??3600):interval==='follow'?(old?.interval??3600):Number(interval),follow_interval:interval==='follow',auto_update:mode==='remote'&&interval!=='0',full_only:true,download_mode:downloadMode},key,false,message=>{if(!alive.current)return false;setError(message);return true;},!!review);
   if(!alive.current)return;

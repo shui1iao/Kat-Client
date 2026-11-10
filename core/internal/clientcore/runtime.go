@@ -443,7 +443,17 @@ func (h *Host) applyContext(ctx context.Context, text string, formats ...Documen
 			next = nil
 			h.bridge.start()
 			old.retire()
-			h.retiredBridges = append(h.retiredBridges, old)
+			prevLen := len(h.retiredBridges)
+			alive := h.retiredBridges[:0]
+			for _, rb := range h.retiredBridges {
+				if !rb.isClosed() {
+					alive = append(alive, rb)
+				}
+			}
+			for i := len(alive); i < prevLen; i++ {
+				h.retiredBridges[i] = nil
+			}
+			h.retiredBridges = append(alive, old)
 		} else {
 			h.bridge.setSOCKSPort(d.client.SOCKSPort)
 		}
@@ -478,6 +488,7 @@ func (h *Host) applyContext(ctx context.Context, text string, formats ...Documen
 		}
 		h.fullPending = nil
 	}
+	h.pruneStaleCandidatesLocked(acceptedDir)
 	if applied {
 		h.resetManualLocked()
 		h.localReady = h.checkLocal()

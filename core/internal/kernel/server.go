@@ -2,16 +2,13 @@ package kernel
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"github.com/shui1iao/Kat/internal/outbound"
 	"github.com/shui1iao/Kat/internal/outbound/direct"
 	"github.com/shui1iao/Kat/internal/procattr"
 	"github.com/shui1iao/Kat/internal/route"
-	"github.com/shui1iao/Kat/internal/ss"
 	"github.com/shui1iao/Kat/internal/stats"
-	"github.com/shui1iao/Kat/internal/tlscert"
 	"net"
 	"net/netip"
 	"sync"
@@ -19,22 +16,7 @@ import (
 	"time"
 )
 
-type TestDiagnostics struct {
-	VisionReadDirect  int64 `json:"vision_read_direct"`
-	VisionWriteDirect int64 `json:"vision_write_direct"`
-	HTTPEarlyData     int64 `json:"http_early_data"`
-	XHTTPH1           int64 `json:"xhttp_h1"`
-	XHTTPH2           int64 `json:"xhttp_h2"`
-	XHTTPPacket       int64 `json:"xhttp_packet_up"`
-	XHTTPStreamUp     int64 `json:"xhttp_stream_up"`
-	XHTTPStreamOne    int64 `json:"xhttp_stream_one"`
-}
-
-func (s *Server) Diagnostics() TestDiagnostics {
-	return TestDiagnostics{VisionReadDirect: s.visionRead.Load(), VisionWriteDirect: s.visionWrite.Load(), HTTPEarlyData: s.httpEarly.Load(), XHTTPH1: s.xhttpH1.Load(), XHTTPH2: s.xhttpH2.Load(), XHTTPPacket: s.xhttpPacket.Load(), XHTTPStreamUp: s.xhttpStreamUp.Load(), XHTTPStreamOne: s.xhttpStreamOne.Load()}
-}
-
-type acceptedState struct{ ss, hand bool }
+type acceptedState struct{ hand bool }
 
 // core is the process-wide state shared by every configuration generation:
 // budgets, connection registry, logging, statistics, management API and the
@@ -42,24 +24,21 @@ type acceptedState struct{ ss, hand bool }
 type core struct {
 	clientDiagnostics sync.Map // private loopback socket tuple -> *ClientDiagnostic
 
-	failures                                                     *failureLog
-	events                                                       *eventLog
-	xhttpH1, xhttpH2, xhttpPacket, xhttpStreamUp, xhttpStreamOne atomic.Int64
-	httpEarly                                                    atomic.Int64
-	logicalSlots                                                 *slots
-	logical                                                      atomic.Int64
-	ctx                                                          context.Context
-	cancel                                                       context.CancelFunc
-	nativeCancel                                                 context.CancelFunc
-	nativeContext                                                context.Context
-	mu                                                           sync.Mutex
-	active                                                       map[net.Conn]*acceptedState
-	closing                                                      bool
-	wg                                                           sync.WaitGroup
-	accepts                                                      sync.WaitGroup
-	connSlots, handSlots, dialSlots, udpSlots                    *slots
-	counters                                                     Counters
-	visionRead, visionWrite                                      atomic.Int64
+	failures                                  *failureLog
+	events                                    *eventLog
+	logicalSlots                              *slots
+	logical                                   atomic.Int64
+	ctx                                       context.Context
+	cancel                                    context.CancelFunc
+	nativeCancel                              context.CancelFunc
+	nativeContext                             context.Context
+	mu                                        sync.Mutex
+	active                                    map[net.Conn]*acceptedState
+	closing                                   bool
+	wg                                        sync.WaitGroup
+	accepts                                   sync.WaitGroup
+	connSlots, handSlots, dialSlots, udpSlots *slots
+	counters                                  Counters
 
 	// 0.7.0 runtime: log sink, statistics, connection registry, management API.
 	log                    *logger
@@ -73,8 +52,6 @@ type core struct {
 	closedNext, closedSize int
 	connectionSink         func(ConnectionEvent)
 	tcpFlows               atomic.Int64
-	api                    *apiState
-	apiMu                  sync.Mutex // serializes API ownership changes
 	statsMu                sync.Mutex // guards statsPath/statsRelease/lockedFile/selPath
 	statsPath              string     // persisted statistics file ("" = not persisted)
 	lockedFile             string     // statistics file whose instance lock is held
@@ -95,10 +72,7 @@ type core struct {
 	gens           map[uint64]*Server // live generations (current and retained)
 	reloadMu       sync.Mutex         // serializes Reload, Select and Close's registry access
 	bindMu         sync.RWMutex       // socket bindings: read per accepted connection, written by commit
-	runners        map[*xhttpRunner]bool
 	tcpEntries     map[string]*tcpEntry
-	udpMu          sync.Mutex
-	udpEntries     map[string]*ssUDPListener
 	reloads        atomic.Int64
 	reloadFailures atomic.Int64
 	lastReload     atomic.Pointer[ReloadResult]
@@ -106,7 +80,6 @@ type core struct {
 
 	providers  map[string]*providerRT
 	provMu     sync.Mutex
-	rebuildCh  chan struct{}
 	providerWG sync.WaitGroup
 
 	// select groups: runtime choices (persisted next to the statistics file).
@@ -115,11 +88,7 @@ type core struct {
 	selPath    string
 
 	// Server certificates and inbound protection are process-owned.
-	tlsrt      tlsRuntime
-	guard      *sourceGuard
-	frags      fragmentPool
-	bindActive atomic.Int64
-	fallbacks  atomic.Int64
+	frags fragmentPool
 }
 
 // Server is one configuration generation. Connections accepted while it is
@@ -137,7 +106,6 @@ type Server struct {
 	pool         *bufferPool
 	keys         *statKeys
 	listeners    []net.Listener
-	ssListeners  []*ssUDPListener
 	byListen     map[string]int
 
 	id           uint64
@@ -185,13 +153,8 @@ func newCore(c *Config) (*core, error) {
 	k.reg = stats.New(nil, nil, nil, nil, k.started)
 	k.nativeContext, k.nativeCancel = context.WithCancel(ctx)
 	k.tcpEntries = map[string]*tcpEntry{}
-	k.runners = map[*xhttpRunner]bool{}
-	k.api = &apiState{}
-	k.udpEntries = map[string]*ssUDPListener{}
 	k.providers = map[string]*providerRT{}
-	k.rebuildCh = make(chan struct{}, 1)
 	k.selections = map[string]selRecord{}
-	k.guard = newSourceGuard(k)
 	return k, nil
 }
 
@@ -249,27 +212,18 @@ func Start(c Config) (*Server, error) {
 	}
 	k.commit(s, plan)
 	k.installProviders(prov)
-	k.providerWG.Add(1)
-	go func() { defer k.providerWG.Done(); k.rebuildLoop() }()
 	k.startStats(&c)
-	k.startAPI(&c)
 	k.reloadMu.Unlock()
 	return s, nil
 }
 
 // startError maps a preparation error to the 0.6.x startup errors.
 func startError(e error) error {
-	var rb *ssRcvBufError
 	var pe *prepareError
-	switch {
-	case errors.As(e, &rb):
-		return e
-	case errors.As(e, &pe):
+	if errors.As(e, &pe) {
 		switch pe.stage {
 		case "bind_tcp":
 			return errors.New("cannot bind inbound listener")
-		case "bind_udp":
-			return errors.New("cannot bind SS UDP listener")
 		case "routing":
 			return errors.New("cannot build outbounds, groups or routing")
 		}
@@ -331,25 +285,13 @@ func (k *core) acceptLoop(e *tcpEntry) {
 			continue
 		}
 		delay = 0
-		g, idx, xr := k.refEntry(e)
+		g, idx := k.refEntry(e)
 		if g == nil {
 			c.Close()
 			continue
 		}
-		if !g.screen(c, &g.cfg.Inbounds[idx]) {
-			g.unref()
-			continue
-		}
-		if xr != nil {
-			in := &g.cfg.Inbounds[idx]
-			cfg, timeout := in.tlsConfig, g.cfg.Limits.HandshakeTimeout.value()
-			g.unref()
-			k.acceptXHTTP(c, xr, cfg, timeout)
-			continue
-		}
 		in := g.cfg.Inbounds[idx]
 		if !g.admit(c, in) {
-			k.guard.releaseConn(addrIP(c.RemoteAddr()))
 			g.unref()
 			continue
 		}
@@ -361,11 +303,6 @@ func (k *core) acceptLoop(e *tcpEntry) {
 // On false the connection has been closed.
 func (s *Server) admit(c net.Conn, in Inbound) bool {
 	refuse := func() {
-		if in.ssRuntime != nil {
-			if tcp, ok := c.(*net.TCPConn); ok {
-				tcp.SetLinger(0)
-			}
-		}
 		c.Close()
 	}
 	if !s.connSlots.try() {
@@ -389,7 +326,7 @@ func (s *Server) admit(c net.Conn, in Inbound) bool {
 		refuse()
 		return false
 	}
-	s.active[c] = &acceptedState{ss: in.ssRuntime != nil, hand: true}
+	s.active[c] = &acceptedState{hand: true}
 	s.wg.Add(1)
 	s.mu.Unlock()
 	s.counters.Accepted.Add(1)
@@ -422,7 +359,6 @@ func (s *Server) handle(raw net.Conn, in Inbound) {
 		s.mu.Lock()
 		delete(s.active, raw)
 		s.mu.Unlock()
-		s.guard.releaseConn(addrIP(raw.RemoteAddr()))
 		s.counters.Active.Add(-1)
 		s.connSlots.release()
 		if pinned {
@@ -431,63 +367,15 @@ func (s *Server) handle(raw net.Conn, in Inbound) {
 		s.wg.Done()
 	}()
 	raw.SetDeadline(time.Now().Add(s.cfg.Limits.HandshakeTimeout.value()))
-	if in.Protocol == "vless" {
-		s.handleVLESS(raw, in, releaseHand)
-		return
-	}
-	if in.Protocol == "snell" {
-		s.handleSnell(raw, in, releaseHand)
-		return
-	}
 	var c net.Conn = raw
 	// The client address travels in the context for src_ip_cidr routing and,
 	// truncated, for the optional details/access log; the inbound index marks
 	// client traffic for statistics and the destination guard.
 	ctx := withInboundMeta(withInbound(withSource(s.trafficContext(), raw.RemoteAddr()), in.logIndex), &in, raw.LocalAddr(), raw.RemoteAddr())
-	if in.tlsConfig != nil {
-		tc := tls.Server(raw, in.tlsConfig)
-		if e := tc.HandshakeContext(s.ctx); e != nil {
-			if !quietFailure(e) {
-				s.failure(failTLS, in.Protocol, in.logIndex)
-			}
-			return
-		}
-		if tc.ConnectionState().NegotiatedProtocol == tlscert.ALPNProto {
-			return // TLS-ALPN-01 validation: the handshake was the whole exchange
-		}
-		c = tc
-	}
-	if in.anytlsServer != nil {
-		releaseHand()
-		c.SetDeadline(time.Time{})
-		// An AnyTLS session is a long-lived multiplexed carrier (clients pool
-		// them); every stream takes its own reference on the generation that
-		// routes it, so the session itself must not pin the accepting one.
-		// Only the inbound codec and statistics keys of s are used after this,
-		// and neither is closed by a release.
-		pinned = false
-		s.unref()
-		s.serveAnyTLS(ctx, c, in)
-		return
-	}
 	var req request
 	var e error
-	if in.ssRuntime != nil {
-		req, e = s.acceptSS(raw, in)
-	} else {
-		req, e = adapters[in.Protocol](c, in)
-	}
+	req, e = parseSOCKS(c, in)
 	if e != nil {
-		var tr *trojanReject
-		trojan := errors.As(e, &tr)
-		if trojan && tr.auth || errors.Is(e, errSOCKSAuth) || errors.Is(e, ss.ErrAuth) {
-			s.authFailed(raw.RemoteAddr(), &in)
-		}
-		if trojan && in.Fallback != "" {
-			releaseHand()
-			s.trojanFallback(c, tr.head, &in)
-			return
-		}
 		if !quietFailure(e) {
 			s.failure(failHandshake, in.Protocol, in.logIndex)
 		}
@@ -498,12 +386,6 @@ func (s *Server) handle(raw net.Conn, in Inbound) {
 		c = req.Stream
 	}
 	c.SetDeadline(time.Time{})
-	if req.Command == 2 {
-		if e := s.serveBind(ctx, c, req, &in); !quietFailure(e) {
-			s.failure(failTCPIO, in.Protocol, in.logIndex)
-		}
-		return
-	}
 	if req.Command == 1 {
 		// Sniffing (0.7.0): a SOCKS5 client waits for the reply before it
 		// sends data, so it is answered first on sniffed ports.
@@ -550,11 +432,7 @@ func (s *Server) handle(raw net.Conn, in Inbound) {
 		}
 		failureStage = "relay"
 		// fctx is s.ctx plus values (and, with details, a per-connection cancel).
-		if in.ssRuntime != nil && in.ssRuntime.v2022 {
-			e = s.relaySS2022(fctx, c, ss2022DownTarget(in, out))
-		} else {
-			e = s.relay(fctx, c, ssDownTarget(in, out))
-		}
+		e = s.relay(fctx, c, out)
 	} else {
 		if req.Context == nil {
 			req.Context = ctx
@@ -697,23 +575,9 @@ func (s *Server) Close(ctx context.Context) error {
 	k.mu.Lock()
 	k.closing = true
 	k.mu.Unlock()
-	k.guard.close()
-	k.apiMu.Lock()
-	k.api.close()
-	k.apiMu.Unlock()
 	for _, e := range k.tcpEntries {
 		e.closed.Store(true)
 		e.ln.Close()
-	}
-	k.udpMu.Lock()
-	udps := make([]*ssUDPListener, 0, len(k.udpEntries))
-	for _, u := range k.udpEntries {
-		udps = append(udps, u)
-		u.socket.Close()
-	}
-	k.udpMu.Unlock()
-	for r := range k.runners {
-		r.close()
 	}
 	k.reloadMu.Unlock()
 	k.stopProviders()
@@ -754,12 +618,7 @@ func (s *Server) Close(ctx context.Context) error {
 		k.flowMu.Unlock()
 		k.mu.Lock()
 		var toClose []net.Conn
-		for c, state := range k.active {
-			if state.ss && state.hand {
-				if tcp, ok := c.(*net.TCPConn); ok {
-					tcp.SetLinger(0)
-				}
-			}
+		for c := range k.active {
 			toClose = append(toClose, c)
 		}
 		k.mu.Unlock()
@@ -769,9 +628,6 @@ func (s *Server) Close(ctx context.Context) error {
 		<-done
 	}
 	// Sockets are closed and every reader/association has finished.
-	for _, u := range udps {
-		u.releaseRcvBuf()
-	}
 	k.cancel()
 	k.providerWG.Wait()
 	// Every connection has ended: the current generation is the last one.

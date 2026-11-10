@@ -502,30 +502,10 @@ func skippedLines(name string, res provider.Result) []string {
 
 // requestRebuild asks for a new generation with the current provider nodes
 // (coalesced; served by rebuildLoop). rebuildCh: make(chan struct{}, 1).
-func (k *core) requestRebuild() {
-	select {
-	case k.rebuildCh <- struct{}{}:
-	default:
-	}
-}
-
 // rebuildLoop: start in Start after the first commit. Server.reload(trigger,
 // reread) is the planned refactor of Reload: load = re-parse Config.raw of
 // the current generation (NOT re-reading the file), expand, Validate,
 // prepare, commit, installProviders.
-func (k *core) rebuildLoop() {
-	for {
-		select {
-		case <-k.ctx.Done():
-			return
-		case <-k.rebuildCh:
-		}
-		if g := k.gen.Load(); g != nil {
-			_, _ = g.reload("provider", false)
-		}
-	}
-}
-
 // providerPlan is the provider set of a prepared generation.
 type providerPlan struct {
 	next  map[string]*providerRT

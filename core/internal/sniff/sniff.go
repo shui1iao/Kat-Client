@@ -68,6 +68,18 @@ func TLSClientHello(b []byte) (string, Status) {
 			}
 			return "", NeedMore
 		}
+		if len(hs) == 0 && n >= 4 {
+			if b[5] != 1 {
+				return "", NotMatch
+			}
+			total := 4 + (int(b[6])<<16 | int(b[7])<<8 | int(b[8]))
+			if total > MaxStream {
+				return "", NotMatch
+			}
+			if n >= total {
+				return ClientHelloSNI(b[5 : 5+total])
+			}
+		}
 		hs = append(hs, b[5:5+n]...)
 		b = b[5+n:]
 		if len(hs) >= 4 {
@@ -210,23 +222,34 @@ func stripPort(v string) string {
 // domainOnly returns the lower-case name without trailing dot, or "" for IP
 // literals and names that are not plain DNS names.
 func domainOnly(s string) string {
-	s = strings.ToLower(strings.TrimSuffix(s, "."))
+	s = strings.TrimSuffix(s, ".")
 	if s == "" || len(s) > 253 {
 		return ""
 	}
-	if _, e := netip.ParseAddr(s); e == nil {
-		return ""
-	}
-	for _, l := range strings.Split(s, ".") {
-		if len(l) == 0 || len(l) > 63 || l[0] == '-' || l[len(l)-1] == '-' {
-			return ""
-		}
-		for k := 0; k < len(l); k++ {
-			c := l[k]
-			if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-') {
+	lower := true
+	start := 0
+	for i := 0; i <= len(s); i++ {
+		if i == len(s) || s[i] == '.' {
+			l := s[start:i]
+			if len(l) == 0 || len(l) > 63 || l[0] == '-' || l[len(l)-1] == '-' {
 				return ""
 			}
+			start = i + 1
+			continue
 		}
+		switch c := s[i]; {
+		case c >= 'a' && c <= 'z', c >= '0' && c <= '9', c == '-':
+		case c >= 'A' && c <= 'Z':
+			lower = false
+		default:
+			return ""
+		}
+	}
+	if !lower {
+		s = strings.ToLower(s)
+	}
+	if _, e := netip.ParseAddr(s); e == nil {
+		return ""
 	}
 	return s
 }

@@ -15,7 +15,7 @@ type FieldName = keyof typeof labels;
 type Values = Record<FieldName, string>;
 const empty: Values = { target: '', network: '', target_port: '', process_name: '', source_ip: '', source_port: '', inbound_name: '', inbound_type: '', inbound_port: '', protocol: '' };
 const portFields: FieldName[] = ['target_port', 'source_port', 'inbound_port'];
-const missingLabels: Record<string, string> = { ...labels, destination_ip: '目的 IP（离线不解析 DNS）', rule_set_data: '已加载的规则集资源' };
+const missingLabels: Record<string, string> = { ...labels, destination_ip: '目的 IP（需 DNS 解析）', rule_set_data: '已加载的规则集资源' };
 const portSources: Record<string, string> = { url_explicit: 'URL 显式', url_default: 'URL 默认', manual: '手填', unspecified: '未指定' };
 const modeNames: Record<string, string> = { rule: '规则', global: '全局', direct: '直连' };
 interface KnownInput {
@@ -34,7 +34,11 @@ interface RuleDecision {
 interface ConditionalAfter extends RuleDecision {
   assumption: { rule: number; rule_set?: string; condition: string; matches: false };
 }
+interface SkippedRule { rule: number; condition: string; policy: string; missing: string[] }
+interface RuleDNS { status: 'not_needed' | 'resolved' | 'failed'; addresses: string[]; selected_ip?: string; message?: string; different_rules?: boolean }
+interface RuleIPResult { ip: string; status: string; rule: number; policy: string }
 interface RuleResult extends RuleDecision {
+  skipped?: SkippedRule[]; skipped_more?: number; dns?: RuleDNS; ip_results?: RuleIPResult[];
   target: string; known: KnownInput; admission_warnings?: string[]; conditional_after?: ConditionalAfter | null;
 }
 // Older/empty peers may encode lists as null. Preserve absence of a branch,
@@ -53,7 +57,7 @@ function conditionalText(after: ConditionalAfter, label: (name: string) => strin
   if (after.status === 'matched') return `后续命中第 ${after.rule} 条 · ` + label(after.policy);
   return '后续仍需' + after.missing.map(name => missingLabels[name] ?? name).join('、') + `（第 ${after.blocked_rule ?? after.rule} 条）`;
 }
-interface InspectorReply { mode: string; simulation: 'rule'; ipv6_enabled: boolean; result: RuleResult }
+interface InspectorReply { mode: string; simulation: 'rule' | 'target'; ipv6_enabled: boolean; result: RuleResult }
 const resourceName = (r: RelatedResource) => r.name || ({ geoip: 'GeoIP', asn: 'ASN', geosite: 'Geosite' } as Record<string, string>)[r.kind] || r.kind;
 const resourceWarning = (r: RelatedResource) => r.warning === 'not_loaded' ? '尚未加载；当前按空资源快照判定'
   : r.warning === 'refresh_failed_using_loaded' ? '最近刷新失败；继续使用已加载数据'
@@ -61,6 +65,7 @@ const resourceWarning = (r: RelatedResource) => r.warning === 'not_loaded' ? '�
 function generalError(e: unknown): string {
   const code = e && typeof e === 'object' ? (e as { code?: string }).code : '';
   if (code === 'core_not_running' || code === 'not_running') return '请先启动内核，判定使用当前已生效规则';
+  if (code === 'rule_test_stale') return '规则、资源或模式已变化，请重新判定';
   if (code === 'rule_test_unavailable') return '当前规则或资源无法安全判定，请检查已生效配置与资源状态';
   if (code === 'invalid_params') return '判定参数无效，请检查补充条件';
   return errorText(e);
@@ -129,7 +134,7 @@ export function RuleInspector({ c, close }: { c: Client; close: () => void }) {
   const r = reply?.result;
   const known = r?.known;
   const after = r?.status === 'unknown' ? r.conditional_after : null;
-  const status = r?.status === 'unknown' ? '条件不足，无法唯一确定'
+  const status = r?.status === 'unknown' ? (r.dns?.status === 'failed' ? 'DNS 未成功，无法确定 IP 规则' : '条件不足，无法唯一确定')
     : r?.status === 'final' ? '未命中前序规则' : r ? `命中第${r.rule}条规则` : '';
   const conditionType = r ? (r.condition.startsWith('and(') ? 'AND' : r.condition.startsWith('or(') ? 'OR'
     : r.condition.startsWith('not(') ? 'NOT' : r.status === 'final' ? 'MATCH'
@@ -154,7 +159,7 @@ export function RuleInspector({ c, close }: { c: Client; close: () => void }) {
   async function copyResult() {
     if (!r) return;
     const epoch = revision.current;
-    const lines = ['规则判定 · 离线按规则模拟', `当前模式：${modeNames[mode] ?? '未知'}`, `目标：${r.target}`, status,
+    const lines = ['规则判定 · 目标匹配（必要时仅 DNS）', `当前模式：${modeNames[mode] ?? '未知'}`, `目标：${r.target}`, status,
       r.status === 'unknown' ? '策略：未确定' : `策略：${c.label(r.policy)}`,
       `规则：${r.status === 'final' ? 'MATCH · 第' + r.display_row + '行（runtime rule=0）' : '#' + r.rule + ' · ' + r.condition}`,
       `规范化目标：${r.known.host || r.known.ip || '—'}`, `目标端口：${r.known.port ?? '未指定'} · ${portSources[r.known.port_source] ?? '未指定'}`];
@@ -164,6 +169,12 @@ export function RuleInspector({ c, close }: { c: Client; close: () => void }) {
         if (value) lines.push(labels[name] + '：' + value);
       }
     }
+    if (r.dns) {
+      lines.push('DNS：' + (r.dns.status === 'resolved' ? r.dns.addresses.join('、') : r.dns.status === 'failed' ? (r.dns.message ?? '解析失败') : '无需解析'));
+      if (r.dns.selected_ip) lines.push('判定 IP：' + r.dns.selected_ip);
+    }
+    for (const item of r.skipped ?? []) lines.push(`跳过第 ${item.rule} 条：${item.condition} · 缺少 ${item.missing.map(n => missingLabels[n] ?? n).join('、')}`);
+    if (r.skipped_more) lines.push(`另有 ${r.skipped_more} 条缺条件规则被跳过`);
     if (r.missing.length) lines.push('缺少：' + r.missing.map(n => missingLabels[n] ?? n).join('、'));
     if (r.candidate_policy) lines.push('可能策略：' + c.label(r.candidate_policy));
     for (const item of r.resource_warnings) lines.push('正式判定资源 · ' + resourceName(item) + '：' + resourceWarning(item));
@@ -182,14 +193,14 @@ export function RuleInspector({ c, close }: { c: Client; close: () => void }) {
   return <Modal readOnly title="规则判定" className="rule-inspector" closeLabel="关闭" close={dismiss}>
     <div className="rule-inspector-body" onKeyDown={onKeyDown}>
       <div className="rule-inspector-scope">
-        <div className="rule-inspector-meta"><span>离线 · 按规则模拟</span><span>当前模式：{modeNames[mode] ?? '未知'}</span></div>
-        {(mode === 'global' || mode === 'direct') && <p className="rule-inspector-mode-note">当前为{modeNames[mode]}；下方是规则模式模拟，实际模式不按该规则决定</p>}
+        <div className="rule-inspector-meta"><span>目标匹配 · 必要时仅查 DNS</span><span>当前模式：{modeNames[mode] ?? '未知'}</span></div>
+        {(mode === 'global' || mode === 'direct') && <p className="rule-inspector-mode-note">当前为{modeNames[mode]}；下方测试规则匹配；实际连接仍遵循当前模式，不会切换模式</p>}
       </div>
       <div className="rule-inspector-target">
         <label htmlFor={id + '-target'}>目标地址</label>
         <div className="rule-inspector-input-row">{input('target', 2048, '域名、URL 或 IP')}<button type="button" className="btn primary" disabled={busy || !c.connected} onClick={() => void run()}>{busy ? '判定中…' : '判定'}</button></div>
         {fields.target && <small id={id + '-target-error'} className="field-error" role="alert">{fields.target}</small>}
-        <p className="rule-inspector-help">只读取已生效规则，不连接目标地址</p>
+        <p className="rule-inspector-help">按已生效规则顺序匹配；必要时仅查 DNS，不连接目标地址</p>
         {(c.doc.dirty || !!c.doc.draftFilename) && <p className="rule-inspector-draft">未保存修改不参与判定</p>}
       </div>
       <div className="rule-inspector-supplement">
@@ -197,7 +208,7 @@ export function RuleInspector({ c, close }: { c: Client; close: () => void }) {
           <Icon name={expanded ? 'chevDown' : 'chevRight'} size={14} />补充条件<span>已填 {count} 项</span>
         </button>
         {expanded && <div id={supplementalId} className="rule-inspector-conditions">
-          <p className="rule-inspector-help">仅使用手动模拟值；未指定条件保持未知。传输协议与嗅探协议分开判定。</p>
+          <p className="rule-inspector-help">仅使用手动模拟值。缺少进程、来源或端口等条件的规则会跳过并列出；不会伪造这些条件。</p>
           <div className="rule-inspector-grid">
             {field('network', select('network', [['tcp', 'TCP'], ['udp', 'UDP']]))}
             {field('target_port', input('target_port', 5, '1–65535'))}
@@ -205,7 +216,7 @@ export function RuleInspector({ c, close }: { c: Client; close: () => void }) {
             {field('source_ip', input('source_ip', 64, 'IP 字面量，不含区域标识'))}
             {field('source_port', input('source_port', 5, '1–65535'))}
             {field('inbound_name', input('inbound_name', 64))}
-            {field('inbound_type', select('inbound_type', [['shadowsocks', 'Shadowsocks'], ['anytls', 'AnyTLS'], ['trojan', 'Trojan'], ['vless', 'VLESS'], ['socks5', 'SOCKS5'], ['snell', 'Snell']]))}
+            {field('inbound_type', select('inbound_type', [['shadowsocks', 'Shadowsocks'], ['anytls', 'AnyTLS'], ['trojan', 'Trojan'], ['socks5', 'SOCKS5']]))}
             {field('inbound_port', input('inbound_port', 5, '1–65535'))}
             {field('protocol', select('protocol', [['http', 'HTTP'], ['tls', 'TLS'], ['quic', 'QUIC']]))}
           </div>
@@ -240,10 +251,18 @@ export function RuleInspector({ c, close }: { c: Client; close: () => void }) {
             </div>}
             <p className="rule-inspector-conditional-note">{conditionalNote}</p>
           </section>}
+          {((r.skipped?.length ?? 0) > 0 || !!r.skipped_more) && <section className="rule-inspector-conditional" aria-label="跳过的条件规则">
+            <h4>已跳过缺少条件的规则</h4>
+            <p>这是仅按所填条件的目标匹配；补齐进程、来源或端口后，结果可能改变。</p>
+            <ul>{r.skipped?.map(item => <li key={item.rule}>第 {item.rule} 条 · <code>{item.condition}</code> · 缺少 {item.missing.map(n => missingLabels[n] ?? n).join('、')}</li>)}</ul>
+            {!!r.skipped_more && <p>另有 {r.skipped_more} 条缺条件规则被跳过</p>}
+          </section>}
           <dl className="rule-inspector-details rule-inspector-input-details">
             <dt>输入原文</dt><dd className="rule-inspector-mono">{r.target}</dd>
             <dt>规范化目标</dt><dd className="rule-inspector-mono">{known?.host || known?.ip || '—'}</dd>
             <dt>目标端口</dt><dd>{known?.port ?? '未指定'} · {portSources[known?.port_source ?? ''] ?? '未指定'}</dd>
+            {r.dns && <><dt>DNS 判定</dt><dd>{r.dns.status === 'not_needed' ? '无需解析，未查询 DNS' : r.dns.status === 'failed' ? r.dns.message : <>已解析：{r.dns.addresses.join('、')}{r.dns.selected_ip && <><br/>判定 IP：{r.dns.selected_ip}</>}</>}</dd></>}
+            {r.dns?.different_rules && <><dt>多 IP 结果</dt><dd><p>不同地址命中不同规则；与内核一致，采用首个非拒绝地址。</p><ul>{r.ip_results?.map(item => <li key={item.ip}>{item.ip} · {item.rule ? `第 ${item.rule} 条` : 'MATCH'} · {c.label(item.policy)}</li>)}</ul></dd></>}
             {(Object.keys(labels) as FieldName[]).filter(name => name !== 'target' && name !== 'target_port').map(name => {
               const value = known?.[name as keyof KnownInput];
               return value ? <Fragment key={name}><dt>{labels[name]}</dt><dd className="rule-inspector-mono">{value}</dd></Fragment> : null;
@@ -252,7 +271,7 @@ export function RuleInspector({ c, close }: { c: Client; close: () => void }) {
           </dl>
           {(r.resource_warnings.length > 0 || !!r.resource_warnings_more) && <div className="rule-inspector-warnings">{r.resource_warnings.map(item => <p key={item.kind + ':' + item.name}><Icon name="info" size={14} /><span>正式判定资源 · {resourceName(item)}：{resourceWarning(item)}</span></p>)}{!!r.resource_warnings_more && <p>正式判定另有 {r.resource_warnings_more} 项相关资源提示</p>}</div>}
           {reply?.ipv6_enabled === false && <p className="rule-inspector-admission"><Icon name="info" size={14} /><span>{r.admission_warnings?.includes('ipv6_disabled') ? '该 IPv6 输入的实际准入受当前 IPv6 关闭设置限制；规则策略保持模拟结果。' : '当前 IPv6 已关闭；规则模拟不会更改此设置。'}</span></p>}
-          <div className="rule-inspector-result-end"><p>按本次已加载资源判定，不代表最终出口节点或连接成功</p><button type="button" className="link-btn" onClick={() => void copyResult()}><Icon name="copy" size={12} />{copied || '复制结果'}</button></div>
+          <div className="rule-inspector-result-end"><p>按本次已加载资源与所填条件判定；不连接目标，不代表出口节点或连接成功</p><button type="button" className="link-btn" onClick={() => void copyResult()}><Icon name="copy" size={12} />{copied || '复制结果'}</button></div>
         </>}
       </section>
     </div>

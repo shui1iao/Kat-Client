@@ -4,9 +4,18 @@ import type { CoreStatus, DocumentSource } from './types';
 // Match their exact internal IDs, never display names or naming conventions.
 export function nodeRows(source: DocumentSource | null, runtime: CoreStatus['nodes'] = []) {
   const configured = source?.kernel.outbounds ?? [];
+  const ownerByName = new Map<string, string>();
+  for (const s of source?.subscriptions ?? []) {
+    if (s.active === false) continue;
+    for (const o of (s.snapshot?.outbounds ?? []) as { name: string }[]) {
+      if (o?.name && !ownerByName.has(o.name)) ownerByName.set(o.name, s.name);
+    }
+  }
+  const configuredNames = new Set<string>();
   const rows = configured.map(value => {
-    const subscription = source?.subscriptions?.find(s => s.active!==false&&s.snapshot.outbounds?.some((o: {name:string}) => o.name === value.name));
-    return { name: value.name, type: value.type, source: subscription?.name ?? '手动', manual: subscription ? undefined : value, copy: value };
+    configuredNames.add(value.name);
+    const subName = ownerByName.get(value.name);
+    return { name: value.name, type: value.type, source: subName ?? '手动', manual: subName !== undefined ? undefined : value, copy: value };
   });
-  return [...rows, ...runtime.filter(n => !configured.some(s => s.name === n.name)).map(n => ({...n, manual: undefined, copy: undefined}))];
+  return [...rows, ...runtime.filter(n => !configuredNames.has(n.name)).map(n => ({...n, manual: undefined, copy: undefined}))];
 }

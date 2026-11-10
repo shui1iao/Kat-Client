@@ -1,7 +1,7 @@
 //! Main-window update coordinator. The WebView supplies only an action and an
 //! already verified offer/nonce; it never supplies URLs or executable paths.
 use super::{Host,show_main,save_window_now};
-use crate::{error::{Error,Result},update_manifest::{UpdateKind,CurrentVersions},update_check::{UpdateChecker,CheckOutcome,VerifiedOffer,UpdateTransport},user_store::Store};
+use crate::{error::{Error,Result},update_manifest::UpdateKind,update_check::{UpdateChecker,CheckOutcome,VerifiedOffer,UpdateTransport},user_store::Store};
 use std::{sync::{Mutex,Arc,atomic::{AtomicBool,Ordering}},time::{Duration,Instant,SystemTime,UNIX_EPOCH}};
 use serde::{Serialize,Deserialize};use tauri::{Manager,Emitter};
 fn now()->u64{SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()}
@@ -165,7 +165,6 @@ pub fn confirm_install(app:tauri::AppHandle)->Result<()>{
   confirmation(&app,pending,false,&message);app.state::<State>().confirming.store(false,Ordering::SeqCst);
  });Ok(())
 }
-pub fn report(app:&tauri::AppHandle,e:Error){*app.state::<State>().error.lock().unwrap()=e.message;emit(app);show_main(app);}
 
 pub fn keep_core_stopped(store:&Store)->Result<bool>{let Some(v)=store.load::<serde_json::Value>("update-resume.json",1024)?else{return Ok(false)};store.remove("update-resume.json")?;if v["schema"]!=1||v["at"].as_u64().is_none()||now().saturating_sub(v["at"].as_u64().unwrap_or(0))>86400{return Ok(false);}Ok(v["core_running"]==false)}
 

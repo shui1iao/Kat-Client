@@ -126,20 +126,18 @@ func withHops(ctx context.Context, h *hops) context.Context {
 type underlay struct{ d outbound.Dialer }
 
 func strip(ctx context.Context) context.Context {
-	ctx = outbound.WithEndpointIndependent(ctx, false)
-	// Carrier traffic is not the protected DNS target itself.
-	ctx = context.WithValue(ctx, protectedDNSKey{}, false)
-	ctx = context.WithValue(ctx, bootstrapDNSKey{}, true)
 	// A typed nil hop recorder marks an already-stripped underlay context.
-	// Protocol hops never reattach a client observer; avoid three redundant
+	// Protocol hops never reattach a client observer; avoid redundant
 	// value contexts per subsequent hop (a typed nil interface is not nil).
 	hopValue, client := ctx.Value(hopsKey{}), isClient(ctx)
 	if h, stripped := hopValue.(*hops); stripped && h == nil && !client {
 		return ctx
 	}
-	if client || hopValue != nil {
-		ctx = context.WithValue(context.WithValue(ctx, clientKey{}, false), hopsKey{}, (*hops)(nil))
-	}
+	ctx = outbound.WithEndpointIndependent(ctx, false)
+	// Carrier traffic is not the protected DNS target itself.
+	ctx = context.WithValue(ctx, protectedDNSKey{}, false)
+	ctx = context.WithValue(ctx, bootstrapDNSKey{}, true)
+	ctx = context.WithValue(context.WithValue(ctx, clientKey{}, false), hopsKey{}, (*hops)(nil))
 	return outbound.WithDialObserver(ctx, nil)
 }
 func (u underlay) DialTCP(ctx context.Context, dst outbound.Addr) (net.Conn, error) {
@@ -483,17 +481,6 @@ func (f *flow) setSource(ip netip.Addr) {
 	f.mu.Lock()
 	if !f.src.IsValid() {
 		f.src = ip
-	}
-	f.mu.Unlock()
-}
-
-func (f *flow) setResult(r string) {
-	if f == nil {
-		return
-	}
-	f.mu.Lock()
-	if f.result == "" {
-		f.result = r
 	}
 	f.mu.Unlock()
 }

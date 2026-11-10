@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	A "github.com/shui1iao/Kat/internal/anytls"
 	"github.com/shui1iao/Kat/internal/route"
-	"github.com/shui1iao/Kat/internal/ss"
 	"io"
 	"net"
 	"os"
@@ -141,26 +139,7 @@ func (s *Server) failure(k failureKind, protocol string, inbound int) {
 	s.failures.emit(k, protocol, inbound, time.Now())
 }
 func quietFailure(e error) bool {
-	var h *ss.HandshakeError
-	if errors.As(e, &h) && h.EmptyEOF() {
-		return true
-	}
 	return e == nil || errors.Is(e, io.EOF) || errors.Is(e, net.ErrClosed) || errors.Is(e, os.ErrClosed) || errors.Is(e, context.Canceled) || errors.Is(e, io.ErrClosedPipe) || errors.Is(e, syscall.ECONNRESET) || errors.Is(e, syscall.ECONNABORTED) || errors.Is(e, syscall.EPIPE)
-}
-func anyTLSFailure(e error) (failureKind, bool) {
-	if quietFailure(e) || errors.Is(e, A.ErrStreamClosed) {
-		return 0, false
-	}
-	switch {
-	case errors.Is(e, A.ErrAuthentication):
-		return failAnyAuth, true
-	case errors.Is(e, A.ErrProtocol):
-		return failAnyProtocol, true
-	case errors.Is(e, A.ErrSessionLimit), errors.Is(e, A.ErrStreamLimit), errors.Is(e, A.ErrQueueLimit), errors.Is(e, A.ErrSlowConsumer):
-		return failAnyBudget, true
-	default:
-		return failAnyIO, true
-	}
 }
 func (s *Server) outboundFailure(e error) {
 	if quietFailure(e) {

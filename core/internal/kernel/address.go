@@ -21,25 +21,13 @@ func readN(r io.Reader, n int) ([]byte, error) {
 	_, e := io.ReadFull(r, b)
 	return b, e
 }
-func readHost(r io.Reader, vless bool) (Address, error) {
+func readHost(r io.Reader) (Address, error) {
 	var a Address
 	b, e := readN(r, 1)
 	if e != nil {
 		return a, e
 	}
 	t := b[0]
-	if vless {
-		switch t {
-		case 1:
-			t = 1
-		case 2:
-			t = 3
-		case 3:
-			t = 4
-		default:
-			return a, errors.New("unsupported address type")
-		}
-	}
 	var raw []byte
 	switch t {
 	case 1:
@@ -72,7 +60,7 @@ func readHost(r io.Reader, vless bool) (Address, error) {
 	}
 	return a, e
 }
-func appendAddress(b []byte, a Address, vless bool) []byte {
+func appendAddress(b []byte, a Address) []byte {
 	ip, e := netip.ParseAddr(a.Host)
 	if e == nil {
 		ip = ip.Unmap()
@@ -82,18 +70,12 @@ func appendAddress(b []byte, a Address, vless bool) []byte {
 			b = append(b, x[:]...)
 		} else {
 			t := byte(4)
-			if vless {
-				t = 3
-			}
 			b = append(b, t)
 			x := ip.As16()
 			b = append(b, x[:]...)
 		}
 	} else {
 		t := byte(3)
-		if vless {
-			t = 2
-		}
 		b = append(b, t, byte(len(a.Host)))
 		b = append(b, a.Host...)
 	}
@@ -118,8 +100,8 @@ func writeAll(w io.Writer, b []byte) error {
 	return nil
 }
 
-func readAddress(r io.Reader, vless bool) (Address, error) {
-	a, e := readHost(r, vless)
+func readAddress(r io.Reader) (Address, error) {
+	a, e := readHost(r)
 	if e != nil {
 		return a, e
 	}

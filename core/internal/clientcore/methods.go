@@ -30,7 +30,7 @@ func (h *Host) Request(ctx context.Context, method string, params json.RawMessag
 	if ctx.Err() != nil {
 		return nil, requestCanceled()
 	}
-	if h.tunSession != nil && method != "network.egress.get" && (method == "network.egress.set" || method == "network.egress.pause" || method == "network.egress.dns.refresh") {
+	if h.tunSession != nil && method != "network.egress.get" && (method == "network.egress.set" || method == "network.egress.pause") {
 		return nil, fail("TUN_ENGINE_RETIRED", "network.egress", "Physical lifecycle is owned by core TUN Manager")
 	}
 	switch method {
@@ -47,7 +47,7 @@ func (h *Host) Request(ctx context.Context, method string, params json.RawMessag
 	case "host.resume-update":
 		return h.resumeUpdate(params)
 	case "rules.test":
-		return h.testRules(params)
+		return h.testRules(ctx, params)
 	case "diagnostics.network":
 		return h.diagnosticsNetwork(ctx, params)
 	case "icon.cached":
@@ -211,18 +211,6 @@ func (h *Host) Request(ctx context.Context, method string, params json.RawMessag
 		return h.cancelSubscription(params)
 	case "import.parse":
 		return h.importParse(ctx, params)
-	case "network.egress.dns.refresh":
-		var p struct {
-			Revision    uint64 `json:"revision"`
-			Fingerprint string `json:"fingerprint"`
-		}
-		if e := decodeParams(params, &p); e != nil {
-			return nil, e
-		}
-		if p.Revision == 0 || len(p.Fingerprint) != 64 {
-			return nil, fail("invalid_params", "dns", "DNS revision identifiers required")
-		}
-		return h.refreshDNS(ctx, p.Revision, p.Fingerprint)
 	case "network.egress.get":
 		if e := decodeParams(params, &struct{}{}); e != nil {
 			return nil, e
@@ -304,7 +292,7 @@ func (h *Host) probe(ctx context.Context, isGroup bool, name, url string) (any, 
 		url = h.doc.client.ProbeURL
 	}
 	epoch, policy := h.manualCtx, h.manualPolicy
-	generation := s.StatsView().Reload.Generation
+	generation := s.GenerationID()
 	budget := time.Duration(h.doc.client.ProbeRoundTimeout)
 	lctx, cancel := context.WithCancel(ctx)
 	if !isGroup {
@@ -339,7 +327,7 @@ func (h *Host) probe(ctx context.Context, isGroup bool, name, url string) (any, 
 		return nil, fail("probe_failed", "params.name", "Unknown or unavailable node/group")
 	}
 	h.mu.Lock()
-	if complete && h.server == s && h.manualCtx == epoch && s.StatsView().Reload.Generation == generation {
+	if complete && h.server == s && h.manualCtx == epoch && s.GenerationID() == generation {
 		for _, r := range results {
 			if !r.At.IsZero() && !r.At.Before(h.probes[r.Name].At) {
 				h.probes[r.Name] = r

@@ -44,9 +44,6 @@ const spliceChunk = 256 << 10
 
 // copyM is copy with payload metering: m counts the bytes written to dst.
 func (s *Server) copyM(dst, src net.Conn, m meter) error {
-	if t, ok := ss2022DownSource(src); ok {
-		return s.copySS2022DownM(dst, src, t, m)
-	}
 	if !s.cfg.Limits.DisableFastPath {
 		if d, ok := dst.(*net.TCPConn); ok {
 			if r, ok := src.(*net.TCPConn); ok {

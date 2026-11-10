@@ -1,7 +1,7 @@
 import {weightedProbe,smartProbe,groupSummary,groupTypeLabel,resolveGroupPath} from '../client/groupDisplay';
 import {subscriptionGroup} from '../client/subscription';
 import {Segmented} from '../components/ui';
-import {smartHeaderMember,durationNumber} from '../client/groupSelection';
+import {durationNumber} from '../client/groupSelection';
 import {ProtocolTag} from '../components/ProtocolTag';
 import { useState, useEffect, useLayoutEffect, type KeyboardEvent } from 'react';
 import {PolicyReveal} from '../components/PolicyReveal';
@@ -13,7 +13,7 @@ import { tip } from '../components/Tooltip';
 import { Field, LocalError, Modal } from '../components/Editors';
 import { useDisplaySort } from '../lib/displaySort';
 import { displaySorted, probeTime, type DisplaySort } from '../client/settings';
-import { latencyTone, probeLabel, probeFailureTitle } from '../lib/format';
+import { latencyTone, probeFailureTitle } from '../lib/format';
 import { errorText } from '../lib/errors';
 import { groupFormValue, groupProbeURLError, groupProbeInterval } from '../client/entityValidation';
 import { groupFormSources, selectGroupSource, previewGroupSource, type GroupPreviewReply } from '../client/groupSource';
@@ -32,17 +32,22 @@ export function Policies({c}:{c:Client}) {
   const toggle=(name:string)=>setOpen(old=>{const s=new Set(old);s.has(name)?s.delete(name):s.add(name);return s;});
   const allOpen=groups.length>0&&groups.every(g=>open.has(g.name));
   const editMember=(name:string,member:string,unpin=false)=>void c.selectMember(name,member,unpin);
-  return <div className="pg-page"><div className="pg-toolbar"><div className="pg-sum">策略组 <span className="ui-count">{groups.length}</span></div><select className="inp sm member-sort" aria-label="成员显示排序" value={sort} onChange={e=>setSort(e.target.value as DisplaySort)}><option value="config">配置顺序</option><option value="name">名称</option><option value="latency">延迟</option></select><button className="btn" onClick={()=>setOpen(allOpen?new Set():new Set(groups.map(g=>g.name)))}>{allOpen?'全部收起':'全部展开'}</button><button className="btn primary" disabled={!c.connected||c.doc.saving} onClick={()=>setDraft({previous:null,value:{name:'',type:'select',members:[]}})} data-action="new-group"><Icon name="plus" size={15}/>新建策略组</button></div>
+  const runningGroups=c.status?.runtime.state==='running'?c.status.groups:[];
+  const runtimeGroupByName=new Map((c.status?.groups??[]).map(s=>[s.name,s]));
+  const runtimeNodeNames=(c.status?.nodes??[]).map(n=>n.name);
+  const groupNames=groups.map(g=>g.name),groupNameSet=new Set(groupNames);
+  return <div className="pg-page"><div className="pg-toolbar"><div className="pg-sum">策略组 <span className="ui-count">{groups.length}</span></div><select className="inp sm member-sort" aria-label="成员显示排序" value={sort} onChange={e=>setSort(e.target.value as DisplaySort)}><option value="config">配置顺序</option><option value="name">名称</option><option value="latency">延迟</option></select><button className="btn" onClick={()=>setOpen(allOpen?new Set():new Set(groupNames))}>{allOpen?'全部收起':'全部展开'}</button><button className="btn primary" disabled={!c.connected||c.doc.saving} onClick={()=>setDraft({previous:null,value:{name:'',type:'select',members:[]}})} data-action="new-group"><Icon name="plus" size={15}/>新建策略组</button></div>
     <div className="pg-list">{groups.map((g,i)=>{
-      const runtime=c.status?.groups?.find(s=>s.name===g.name),wt=weighted(g.type),pin=pinnable(g.type),isOpen=open.has(g.name),busy=c.groupProbing(g.name);
+      const runtime=runtimeGroupByName.get(g.name),runtimeMembers=new Map((runtime?.members??[]).map(m=>[m.name,m])),wt=weighted(g.type),pin=pinnable(g.type),isOpen=open.has(g.name),busy=c.groupProbing(g.name);
       const site=g.type==='smart'&&(runtime?.selection_mode??g.smart?.scope??'site')==='site';
       const headerMember=site?(runtime?.most_used_member||runtime?.current):runtime?.current;
-      const currentProbe=headerMember?policyMemberProbe(c.status,g.name,headerMember):undefined;
-      const headerWeight=wt&&headerMember?(g.priority?.[headerMember]??1):1;
       const memberNames=[...new Set([...(g.members??[]),...(runtime?.members??[]).map(m=>m.name)])];
-      const members=displaySorted(memberNames,sort,m=>c.label(m),m=>{const ms=policyMemberProbe(c.status,g.name,m);return ms?.probe_ms==null?null:ms.probe_ms*(wt?(g.priority?.[m]??1):1);});
+      const memberProbes=new Map(memberNames.map(m=>[m,policyMemberProbe(c.status,g.name,m)]));
+      const currentProbe=headerMember?(memberProbes.get(headerMember)??policyMemberProbe(c.status,g.name,headerMember)):undefined;
+      const headerWeight=wt&&headerMember?(g.priority?.[headerMember]??1):1;
+      const members=displaySorted(memberNames,sort,m=>c.label(m),m=>{const ms=memberProbes.get(m);return ms?.probe_ms==null?null:ms.probe_ms*(wt?(g.priority?.[m]??1):1);});
 
- const path=resolveGroupPath(g.name,c.status?.runtime.state==='running'?c.status.groups:[],(c.status?.nodes??[]).map(n=>n.name),groups.map(g=>g.name)),currentLabel=path.node?c.label(path.node):'无可用节点',summary=site?'Smart · '+(headerMember?c.label(headerMember):'无可用节点'):groupSummary(g.type,[...path.via.map(c.label),currentLabel].join(' · '));
+ const path=resolveGroupPath(g.name,runningGroups,runtimeNodeNames,groupNames),currentLabel=path.node?c.label(path.node):'无可用节点',summary=site?'Smart · '+(headerMember?c.label(headerMember):'无可用节点'):groupSummary(g.type,[...path.via.map(c.label),currentLabel].join(' · '));
 
       return <section key={g.name} className={'pcard'+(isOpen?' open':'')} data-group={g.name}>
         <div className="pc-head" role="button" tabIndex={0} aria-expanded={isOpen} onClick={()=>toggle(g.name)} onKeyDown={e=>activate(e,()=>toggle(g.name))}>
@@ -54,7 +59,7 @@ export function Policies({c}:{c:Client}) {
         </div>
         <PolicyReveal open={isOpen}><div className="pc-body">
           <div className="node-grid">{members.map(m=>{
-            const member=runtime?.members?.find(x=>x.name===m),probe=policyMemberProbe(c.status,g.name,m),ms={...member,probe_ms:probe?.probe_ms,probe_error:probe?.probe_error,probe_at:probe?.probe_at},selected=!site&&runtime?.current===m,isGroup=groups.some(x=>x.name===m),testing=c.memberProbing(m),w=wt?(g.priority?.[m]??1):1,measuredAt=probeTime(ms?.probe_at),nestedNode=isGroup?resolveGroupPath(m,c.status?.runtime.state==='running'?c.status.groups:[],(c.status?.nodes??[]).map(n=>n.name),groups.map(g=>g.name)).node:null;
+            const member=runtimeMembers.get(m),probe=memberProbes.get(m),ms={...member,probe_ms:probe?.probe_ms,probe_error:probe?.probe_error,probe_at:probe?.probe_at},selected=!site&&runtime?.current===m,isGroup=groupNameSet.has(m),testing=c.memberProbing(m),w=wt?(g.priority?.[m]??1):1,measuredAt=probeTime(ms?.probe_at),nestedNode=isGroup?resolveGroupPath(m,runningGroups,runtimeNodeNames,groupNames).node:null;
             return <div key={m} className={'ntile'+(wt?' wt':'')+(selected||g.fixed===m?' sel':'')+(g.fixed===m?' pinned':'')} role="button" aria-disabled={c.doc.saving||(!pin&&g.type!=='select')} tabIndex={0} data-member={m} onClick={()=>{if(!c.doc.saving&&(pin||g.type==='select'))editMember(g.name,m);}} onKeyDown={e=>activate(e,()=>{if(!c.doc.saving&&(pin||g.type==='select'))editMember(g.name,m);})}>
               <div className="nt-copy"><span className="nt-name" {...tip(c.label(m),true)}>{c.label(m)}</span><span className={'nt-sub'+(isGroup?' nt-nested'+(!nestedNode?' muted':''):'')} {...tip(isGroup?(nestedNode?c.label(nestedNode):'无可用节点'):PROTOCOL[ms?.protocol??'']??ms?.protocol??'—',true)}><span className="nt-sub-line">{isGroup?(nestedNode?c.label(nestedNode):'无可用节点'):<ProtocolTag type={ms?.protocol??'—'}/>}</span></span></div>
               {g.fixed===m&&<span className="nt-pin"><Icon name="pin" size={12}/></span>}<button className={'nt-test num'+(testing?' spin':' lat-'+(ms?.probe_error?'bad':latencyTone(ms?.probe_ms??null)))} data-weight={w} {...tip('成员测速'+(ms?.probe_error?' · '+probeFailureTitle(ms.probe_error):'')+(measuredAt==='—'?'':' · '+measuredAt))} disabled={c.probeLocked||testing||m==='direct'||m==='reject'} onClick={e=>{e.stopPropagation();void c.probe('node',m);}} onKeyDown={e=>e.stopPropagation()} aria-label={'成员测速'+(ms?.probe_error?' · '+probeFailureTitle(ms.probe_error):'')+(measuredAt==='—'?'':' · '+measuredAt)}>{testing?<Icon name="refresh" size={14}/>:g.type==='smart'?smartProbe(ms?.probe_ms,ms?.probe_error,w):weightedProbe(ms?.probe_ms,ms?.probe_error,w)}</button>

@@ -23,10 +23,12 @@ export function patchProbe(d:DocumentSource,v:ProbeDraft,changed:ReadonlySet<key
  for(const k of changed)setField(d.client,k,next[k]);
 }
 export type DisplaySort='config'|'name'|'latency';
+const probeTimeFmt=new Intl.DateTimeFormat('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
 export function displaySorted<T>(items:readonly T[],sort:DisplaySort,name:(x:T)=>string,latency:(x:T)=>number|null|undefined):T[]{
+ if(sort==='config')return [...items];
  const score=(v:T)=>{const n=latency(v);return typeof n==='number'&&Number.isFinite(n)&&n>=0?n:Infinity;};
- return items.map((value,index)=>({value,index})).sort((a,b)=>(sort==='name'?name(a.value).localeCompare(name(b.value)):sort==='latency'?(score(a.value)-score(b.value)||0):0)||a.index-b.index).map(x=>x.value);
+ return items.map((value,index)=>({value,index,label:sort==='name'?name(value):'',score:sort==='latency'?score(value):0})).sort((a,b)=>(sort==='name'?a.label.localeCompare(b.label):(a.score-b.score||0))||a.index-b.index).map(x=>x.value);
 }
-export function probeTime(at:string|null|undefined){if(!at||!/^\d{4}-\d{2}-\d{2}T/.test(at))return '—';const d=new Date(at);return Number.isFinite(d.getTime())?d.toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}):'—';}
+export function probeTime(at:string|null|undefined){if(!at||!/^\d{4}-\d{2}-\d{2}T/.test(at))return '—';const d=new Date(at);return Number.isFinite(d.getTime())?probeTimeFmt.format(d):'—';}
 export function desktopExtras(p:DesktopPreferences){return {remember_window:p.remember_window??false,tray_click:p.tray_click??'show',proxy_bypass_mode:p.proxy_bypass_mode??'inherit',proxy_bypass:p.proxy_bypass??''};}
 export function validateBypass(value:string){if([...value].length>32768||/[\x00-\x1f\x7f-\x9f]/u.test(value))throw Error('绕过规则须≤32768字符且无控制字符');}

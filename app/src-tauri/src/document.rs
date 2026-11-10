@@ -26,7 +26,7 @@ pub struct Counts { pub nodes: u64, pub groups: u64, pub rules: u64, pub provide
 struct Input { text: String, format: Option<DocumentFormat> }
 /// Reject malformed format/shape before any host-side network mutation. Omitted format stays omitted.
 pub fn validation_params(params: &Value) -> Result<Value> {
-    let input: Input = serde_json::from_value(params.clone()).map_err(|_|Error::new("INVALID_PARAMS", "Document text and optional json/yaml/yml format are required"))?;
+    let input = Input::deserialize(params).map_err(|_|Error::new("INVALID_PARAMS", "Document text and optional json/yaml/yml format are required"))?;
     // Explicit null is not an omitted format in the frozen IPC.
     if params.get("format").is_some_and(Value::is_null) { return Err(Error::new("INVALID_PARAMS", "Document format must be json, yaml or yml")); }
     let mut out = json!({"text": input.text});
@@ -37,7 +37,7 @@ pub fn validation_params(params: &Value) -> Result<Value> {
 pub struct AcceptedDocument { pub text: String, pub format: DocumentFormat }
 impl AcceptedDocument {
     pub fn from_reply(value: &Value) -> Result<Self> {
-        let format = serde_json::from_value(value["format"].clone()).map_err(|_|protocol())?;
+        let format = DocumentFormat::deserialize(&value["format"]).map_err(|_|protocol())?;
         let text = value["text"].as_str().ok_or_else(protocol)?;
         if text.len() > crate::backups::LIMIT { return Err(Error::new("FILE_LIMIT", "Configuration exceeds 1 MiB")); }
         Ok(Self { text: text.into(), format })
@@ -50,9 +50,9 @@ pub struct ValidatedDocument { advanced_dns:bool,text: String, format: DocumentF
 impl ValidatedDocument {
     pub fn from_reply(text: &str, expected: DocumentFormat, value: &Value) -> Result<Self> {
         if value["valid"] != true { return Err(Error::new("DOCUMENT_INVALID", "Document validation failed")); }
-        let format: DocumentFormat = serde_json::from_value(value["format"].clone()).map_err(|_|protocol())?;
-        let ports: Ports = serde_json::from_value(value["ports"].clone()).map_err(|_|protocol())?;
-        let counts = serde_json::from_value(value["counts"].clone()).map_err(|_|protocol())?;
+        let format = DocumentFormat::deserialize(&value["format"]).map_err(|_|protocol())?;
+        let ports = Ports::deserialize(&value["ports"]).map_err(|_|protocol())?;
+        let counts = Counts::deserialize(&value["counts"]).map_err(|_|protocol())?;
         if format != expected || ports.http == 0 || ports.socks == 0 { return Err(protocol()); }
         if text.len() > crate::backups::LIMIT { return Err(Error::new("FILE_LIMIT", "Configuration exceeds 1 MiB")); }
         Ok(Self { advanced_dns:value["advanced_dns"].as_bool().unwrap_or(false),text: text.into(), format, ports, counts })
@@ -104,6 +104,6 @@ mod tests {
   assert!(network.contains("p==next.ports()"));assert!(!network.contains("serde_json::from_str"));assert!(!network.contains("apply_policy::ports("));
   let desktop=include_str!("desktop.rs");assert!(desktop.contains("Kind::ConfigExport(saved.format)"));assert!(desktop.contains("dialogs::save_document(path,&saved)"));assert_eq!(desktop.matches("\"text\":b.text,\"format\":b.format").count(),2);
   let dialogs=include_str!("windows/dialogs.rs");assert!(dialogs.contains("*.json;*.yaml;*.yml"));assert!(dialogs.contains("backups::exported(path,document)"));
-  assert_eq!(crate::protocol::PUBLIC_METHODS.len(),30);assert!(crate::protocol::PUBLIC_METHODS.contains(&"dns.cache.clear"));assert!(crate::protocol::PUBLIC_METHODS.contains(&"diagnostics.network"));assert!(crate::protocol::PUBLIC_METHODS.contains(&"icon.cached"));assert!(!crate::protocol::PUBLIC_METHODS.iter().any(|m|m.starts_with("network.")));
+  assert_eq!(crate::protocol::PUBLIC_METHODS.len(),31);assert!(crate::protocol::PUBLIC_METHODS.contains(&"dns.cache.clear"));assert!(crate::protocol::PUBLIC_METHODS.contains(&"diagnostics.network"));assert!(crate::protocol::PUBLIC_METHODS.contains(&"icon.cached"));assert!(!crate::protocol::PUBLIC_METHODS.iter().any(|m|m.starts_with("network.")));
  }
 }

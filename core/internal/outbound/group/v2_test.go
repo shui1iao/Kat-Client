@@ -174,6 +174,12 @@ func TestV2FailureImmediateAndRecoveryHysteresis(t *testing.T) {
 			v2Round(g, c, 100*ms_, 300*ms_)
 			c.Advance(time.Second)
 			g.RecordProbe("a", 0, c.Now(), errors.New("down"))
+			if kind == TypeFallback {
+				if g.Current() != "a" {
+					t.Fatal("partial sample convicted fallback")
+				}
+				acceptedFallbackFailure(t, g, c, "a")
+			}
 			if kind != TypeLoadBalance && g.Current() != "b" {
 				t.Fatal(kind, "not immediate", g.Current())
 			}

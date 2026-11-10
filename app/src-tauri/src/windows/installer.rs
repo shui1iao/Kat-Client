@@ -78,7 +78,7 @@ pub(super) fn secure_create(path:&std::path::Path,directory:bool,users_read:bool
  else{let h=CreateFileW(name.as_ptr(),GENERIC_WRITE,0,&sa,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,std::ptr::null_mut());LocalFree(sd);if h==INVALID_HANDLE_VALUE{return Err(Error::new("INSTALL_COPY","Cannot create protected installer file"));}Ok(Some(std::fs::File::from_raw_handle(h)))}
 }}
 fn private_file(p:&std::path::Path)->Result<std::fs::File>{secure_create(p,false,false)?.ok_or_else(||Error::new("INSTALL_COPY","Cannot create staging file"))}
-pub(super) fn protected_dir(path:&std::path::Path,read:bool)->Result<()>{if path.exists(){security::verify_protected(path)}else{secure_create(path,true,read)?;Ok(())}}
+fn sha256_file(path:&std::path::Path,code:&str)->Result<String>{use std::io::Read;use sha2::{Digest,Sha256};let mut f=std::fs::File::open(path).map_err(|e|Error::io(code,&e))?;let mut sha=Sha256::new();let mut buf=[0u8;65536];loop{let n=f.read(&mut buf).map_err(|e|Error::io(code,&e))?;if n==0{break;}sha.update(&buf[..n]);}Ok(hex::encode(sha.finalize()))}
 struct WindowsUpdate{
  journal:Option<super::update_install::Journal>,
  old_display_name:Option<String>,
@@ -131,17 +131,18 @@ impl crate::installer_update::UpdateSteps for WindowsUpdate{
   let rw=self.journal.as_ref().unwrap().work(true);secure_create(&rw,true,false)?;self.runtime_work=Some(rw.clone());
   let rf=crate::installer_files::FileUpdate::stage_selected(&self.source,&self.runtime,&rw,crate::installer_files::RUNTIME_FILES,|p|{secure_create(p,true,false)?;Ok(())},private_file)?;
   security::verify_vendor(&rf.staged_root())?;
-  use sha2::{Digest,Sha256};let service_bytes=std::fs::read(rf.staged_root().join("kat-network-service.exe")).map_err(|e|Error::io("INSTALL_PACKAGE",&e))?;
-  if option_env!("KAT_INSTALL_APPROVED_SERVICE_SHA256")!=Some(hex::encode(Sha256::digest(service_bytes)).as_str()){return Err(Error::new("INSTALL_PACKAGE","The service payload is not approved by this installer build"));}
+  let service_hash=sha256_file(&rf.staged_root().join("kat-network-service.exe"),"INSTALL_PACKAGE")?;
+  if option_env!("KAT_INSTALL_APPROVED_SERVICE_SHA256")!=Some(service_hash.as_str()){return Err(Error::new("INSTALL_PACKAGE","The service payload is not approved by this installer build"));}
   let mut hashes=std::collections::BTreeMap::new();
-  for (names,staged) in [(crate::installer_files::APP_FILES,self.files.as_ref().unwrap().staged_root()),(crate::installer_files::RUNTIME_FILES,rf.staged_root())]{for &n in names{let bytes=std::fs::read(staged.join(n)).map_err(|e|Error::io("INSTALL_COPY",&e))?;hashes.insert(n.to_string(),hex::encode(Sha256::digest(bytes)));}}
+  hashes.insert("kat-network-service.exe".to_string(),service_hash);
+  for (names,staged) in [(crate::installer_files::APP_FILES,self.files.as_ref().unwrap().staged_root()),(crate::installer_files::RUNTIME_FILES,rf.staged_root())]{for &n in names{if n=="kat-network-service.exe"{continue;}hashes.insert(n.to_string(),sha256_file(&staged.join(n),"INSTALL_COPY")?);}}
   let clients=option_env!("KAT_INSTALL_APPROVED_CLIENTS_SHA256").ok_or_else(||Error::new("INSTALL_PACKAGE","Installer approval of ordinary client components missing"))?;
   let approved_clients=clients.split(':').collect::<Vec<_>>();if approved_clients.len()!=4||["kat-desktop.exe","kat-client-core.exe","kat-proxy-watchdog.exe","kat-elevate-helper.exe"].iter().zip(approved_clients).any(|(n,h)|hashes.get(*n).map(String::as_str)!=Some(h)){return Err(Error::new("INSTALL_PACKAGE","Client components differ from the installer build approval"));}
   let staged=self.files.as_ref().unwrap().staged_root();
   let auth=crate::update_manifest::verify_package(&std::fs::read(staged.join("kat-package-auth.json")).map_err(|e|Error::io("INSTALL_PACKAGE",&e))?,&std::fs::read(staged.join("kat-package-auth.sig")).map_err(|e|Error::io("INSTALL_PACKAGE",&e))?).map_err(|e|Error::new("INSTALL_PACKAGE",&e.message))?;
   if auth.app_version!=env!("CARGO_PKG_VERSION")||auth.components.iter().any(|(n,h)|hashes.get(n)!=Some(h)){return Err(Error::new("INSTALL_PACKAGE","Signed package components differ from private stage"));}
   let helper=std::env::current_exe().map_err(|e|Error::io("INSTALL_PACKAGE",&e))?;
-  if hashes.get("kat-install-helper.exe")!=Some(&hex::encode(Sha256::digest(std::fs::read(helper).map_err(|e|Error::io("INSTALL_PACKAGE",&e))?))){return Err(Error::new("INSTALL_PACKAGE","Staged helper differs from executing trusted installer"));}
+  if hashes.get("kat-install-helper.exe")!=Some(&sha256_file(&helper,"INSTALL_PACKAGE")?){return Err(Error::new("INSTALL_PACKAGE","Staged helper differs from executing trusted installer"));}
   self.journal.as_mut().unwrap().prepared_setup(&self.dir,&hashes)?;
   self.approved=Some(hashes);self.runtime_files=Some(rf);
   if self.old_binding.is_some(){let mut input=std::fs::File::open(&binding).map_err(|e|Error::io("INSTALL_BINDING",&e))?;let mut output=private_file(&work.join("binding.json"))?;std::io::copy(&mut input,&mut output).map_err(|e|Error::io("INSTALL_BINDING",&e))?;output.sync_all().map_err(|e|Error::io("INSTALL_BINDING",&e))?;}Ok(())

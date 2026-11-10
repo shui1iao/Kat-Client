@@ -2,12 +2,14 @@ package clientcore
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"github.com/shui1iao/Kat/internal/kernel"
 	"github.com/shui1iao/Kat/internal/route"
 )
 
-func (h *Host) testRules(raw json.RawMessage) (any, *Error) {
+func (h *Host) testRules(ctx context.Context, raw json.RawMessage) (any, *Error) {
 	if len(raw) > 32<<10 {
 		return nil, fail("invalid_params", "params", "判定参数超过长度限制")
 	}
@@ -78,17 +80,45 @@ func (h *Host) testRules(raw json.RawMessage) (any, *Error) {
 		*p.dst = &value
 	}
 	h.mu.Lock()
-	defer h.mu.Unlock()
-	if h.server == nil {
+	s := h.server
+	if s == nil {
+		h.mu.Unlock()
 		return nil, fail("core_not_running", "runtime", "请先启动内核，判定使用当前已生效规则")
 	}
-	result, e := h.server.OfflineRuleViewWithContext(h.doc.ruleRouting, in)
+	routing, mode, ipv6 := h.doc.ruleRouting, h.doc.client.Mode, h.doc.client.IPv6
+	generation := s.GenerationID()
+	qctx, cancel := context.WithCancel(ctx)
+	var stop func() bool
+	if h.probeCtx != nil {
+		stop = context.AfterFunc(h.probeCtx, cancel)
+	}
+	h.probeWG.Add(1)
+	h.mu.Unlock()
+	result, e := s.TargetRuleViewWithContext(qctx, routing, in)
+	if stop != nil {
+		stop()
+	}
+	cancel()
+	// Stop/Apply can wait under mu; release our ownership before reacquiring it.
+	h.probeWG.Done()
 	if e != nil {
 		var invalid *route.OfflineInputError
 		if errors.As(e, &invalid) {
 			return nil, fail("invalid_params", invalid.Field, invalid.Message)
 		}
+		if ctx.Err() != nil {
+			return nil, requestCanceled()
+		}
+		if errors.Is(e, kernel.ErrCoreNotRunning) {
+			return nil, fail("core_not_running", "runtime", "请先启动内核，判定使用当前已生效规则")
+		}
 		return nil, fail("rule_test_unavailable", "runtime", "当前规则或资源无法安全判定，请检查已生效配置与资源状态")
 	}
-	return map[string]any{"result": result, "mode": h.doc.client.Mode, "simulation": "rule", "ipv6_enabled": h.doc.client.IPv6}, nil
+	h.mu.Lock()
+	stale := h.server != s || h.doc.ruleRouting != routing || h.doc.client.Mode != mode || h.doc.client.IPv6 != ipv6 || s.GenerationID() != generation
+	h.mu.Unlock()
+	if stale {
+		return nil, fail("rule_test_stale", "runtime", "规则、资源或模式已变化，请重新判定")
+	}
+	return map[string]any{"result": result, "mode": mode, "simulation": "target", "ipv6_enabled": ipv6}, nil
 }

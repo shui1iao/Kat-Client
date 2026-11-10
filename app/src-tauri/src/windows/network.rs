@@ -19,7 +19,6 @@ pub struct NetworkController {
  pub(super) core:Option<Supervisor>,
  pub(super) desired_tun:std::sync::atomic::AtomicBool,
  pub(super) tun_safety_stop:std::sync::atomic::AtomicBool,
- pub(super) tun_unready:std::sync::atomic::AtomicU32,
  pub(super) tun_engaged:std::sync::atomic::AtomicBool,
  pub(super) tun_fallback_ready:std::sync::atomic::AtomicBool,
  pub(super) operation:tokio::sync::Mutex<()>,
@@ -35,7 +34,7 @@ impl NetworkController {
   if workspace!=identity::workspace()?{return Err(Error::new("WORKSPACE_IDENTITY","Unexpected user workspace"));}
   // Startup recovery only runs after desktop's single-instance lock is acquired.
   let err=proxy::restore().err().map(|e|e.code);
-  Ok(Self{events:std::sync::Arc::new(Mutex::new(crate::safe_log::Ring::default())),tun_seen:Mutex::new((0,0)),tun_attempt:std::sync::atomic::AtomicU64::new(0),core,desired_tun:std::sync::atomic::AtomicBool::new(false),tun_safety_stop:std::sync::atomic::AtomicBool::new(false),tun_unready:std::sync::atomic::AtomicU32::new(0),tun_engaged:std::sync::atomic::AtomicBool::new(false),tun_fallback_ready:std::sync::atomic::AtomicBool::new(false),operation:tokio::sync::Mutex::new(()),proxy_error:Mutex::new(err),watchdog:Mutex::new(None),tun_error:Mutex::new(None),quit_waiting:std::sync::atomic::AtomicBool::new(false),quit_notice:Mutex::new(None),last_status:Mutex::new(None)})
+  Ok(Self{events:std::sync::Arc::new(Mutex::new(crate::safe_log::Ring::default())),tun_seen:Mutex::new((0,0)),tun_attempt:std::sync::atomic::AtomicU64::new(0),core,desired_tun:std::sync::atomic::AtomicBool::new(false),tun_safety_stop:std::sync::atomic::AtomicBool::new(false),tun_engaged:std::sync::atomic::AtomicBool::new(false),tun_fallback_ready:std::sync::atomic::AtomicBool::new(false),operation:tokio::sync::Mutex::new(()),proxy_error:Mutex::new(err),watchdog:Mutex::new(None),tun_error:Mutex::new(None),quit_waiting:std::sync::atomic::AtomicBool::new(false),quit_notice:Mutex::new(None),last_status:Mutex::new(None)})
  }
  /// No operation lock survives this bounded snapshot; long HTTP workers never hold it.
  pub(crate) async fn update_transport_snapshot(&self,deadline:std::time::Instant)->Result<crate::update_check::UpdateTransport>{

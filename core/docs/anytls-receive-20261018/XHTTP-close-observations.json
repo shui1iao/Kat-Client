@@ -1,9 +1,0 @@
-{
-  "normal_race_observations": [
-    "XHTTP_CLOSE_OBSERVATION returned=<nil> elapsed=54.464\u00b5s snapshot={Connections:0 Requests:0 Sessions:0 Unpaired:0 Handlers:0 BufferedPackets:0 BufferedBytes:0 Retired:1}",
-    "XHTTP_CLOSE_OBSERVATION returned=<nil> elapsed=212.653\u00b5s snapshot={Connections:0 Requests:0 Sessions:0 Unpaired:0 Handlers:0 BufferedPackets:0 BufferedBytes:0 Retired:1}"
-  ],
-  "production_or_assertion_change": false,
-  "diagnostic_test_not_merged": true,
-  "history_qualification_remains": true
-}

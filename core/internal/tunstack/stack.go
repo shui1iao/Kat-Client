@@ -21,7 +21,7 @@ import (
 )
 
 func (r *Runtime) initStack() error {
-	r.link = channel.New(1024, MTU, "")
+	r.link = channel.New(4096, MTU, "")
 	s := stack.New(stack.Options{NetworkProtocols: []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol}, TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol, icmp.NewProtocol4, icmp.NewProtocol6}})
 	r.stack = s
 	tf := tcp.NewForwarder(s, 0, 256, func(req *tcp.ForwarderRequest) {

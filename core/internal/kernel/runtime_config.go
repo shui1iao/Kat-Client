@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/netip"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -29,14 +28,6 @@ type StatsOptions struct {
 	Connections  bool     `json:"connections,omitempty"`   // active connection details in memory, default off
 }
 
-// APIOptions is the optional root "api" block (management interface).
-type APIOptions struct {
-	Enabled *bool  `json:"enabled,omitempty"` // default true (Unix socket)
-	Socket  string `json:"socket,omitempty"`  // empty = the CLI default path
-	Listen  string `json:"listen,omitempty"`  // optional loopback TCP listener, e.g. 127.0.0.1:9090
-	Secret  string `json:"secret,omitempty"`  // required with listen: Bearer token, >= 16 bytes
-}
-
 // SecurityOptions is the optional root "security" block. allow_loopback and
 // block_private apply to the final direct dial of proxied client traffic
 // (TCP and UDP); auth_ban and max_connections_per_ip to accepted inbound
@@ -46,15 +37,12 @@ type SecurityOptions struct {
 	BlockPrivate  bool `json:"block_private,omitempty"`  // default false: private/link-local destinations allowed
 
 	// 0.7.0 inbound protection (security_inbound.go), both off by default.
-	AuthBan             *AuthBanOptions `json:"auth_ban,omitempty"`
-	MaxConnectionsPerIP int             `json:"max_connections_per_ip,omitempty"`
 }
 
 const (
 	defaultLogMaxSizeMB  = 10
 	defaultLogMaxBackups = 3
 	defaultSaveInterval  = 60 * time.Second
-	minAPISecret         = 16
 )
 
 func (c *Config) validateRuntime() error {
@@ -91,33 +79,10 @@ func (c *Config) validateRuntime() error {
 			return errors.New("stats.file must be an absolute path")
 		}
 	}
-	if a := c.API; a != nil {
-		if a.Socket != "" && !filepath.IsAbs(a.Socket) {
-			return errors.New("api.socket must be an absolute path")
-		}
-		if a.Listen != "" {
-			ap, e := netip.ParseAddrPort(a.Listen)
-			if e != nil || ap.Port() == 0 {
-				return errors.New("api.listen must be a literal loopback IP and non-zero port")
-			}
-			if ip := ap.Addr(); ip.Zone() != "" || !ip.Unmap().IsLoopback() {
-				return errors.New("api.listen must be a loopback address (127.0.0.0/8 or ::1)")
-			}
-			if len(a.Secret) < minAPISecret || strings.TrimSpace(a.Secret) != a.Secret {
-				return errors.New("api.listen requires api.secret of at least 16 bytes without surrounding spaces")
-			}
-		} else if a.Secret != "" {
-			return errors.New("api.secret is only used with api.listen")
-		}
-	}
 	return nil
 }
 
 // apiEnabled reports whether the management API should run at all.
-func (c *Config) apiEnabled() bool {
-	return c.API != nil && (c.API.Enabled == nil || *c.API.Enabled) && (c.API.Socket != "" || c.API.Listen != "")
-}
-
 // persistStats reports whether statistics are loaded from and saved to a file.
 func (c *Config) persistStats() bool {
 	return c.Stats != nil && c.Stats.File != "" && (c.Stats.Persist == nil || *c.Stats.Persist)
@@ -143,12 +108,6 @@ func (c *Config) accessLog() bool { return c.Log != nil && c.Log.Access }
 // files unless configured explicitly.
 func (c *Config) ApplyDefaultPaths(socket, statsFile string) {
 	c.defaults = [2]string{socket, statsFile}
-	if c.API == nil {
-		c.API = &APIOptions{}
-	}
-	if c.API.Socket == "" && (c.API.Enabled == nil || *c.API.Enabled) {
-		c.API.Socket = socket
-	}
 	if c.Stats == nil {
 		c.Stats = &StatsOptions{}
 	}
@@ -161,13 +120,6 @@ func (c *Config) ApplyDefaultPaths(socket, statsFile string) {
 }
 
 // APISocket returns the configured management socket path ("" = none).
-func (c *Config) APISocket() string {
-	if c.API == nil || (c.API.Enabled != nil && !*c.API.Enabled) {
-		return ""
-	}
-	return c.API.Socket
-}
-
 // destination guard ---------------------------------------------------------
 
 var privatePrefixes = []netip.Prefix{
@@ -210,4 +162,9 @@ func (c *Config) blockedDestination(ip netip.Addr) bool {
 		return true
 	}
 	return sec.BlockPrivate && privateDestination(ip)
+}
+
+// DirectOptions configures the built-in direct outbound.
+type DirectOptions struct {
+	TCPFastOpen bool `json:"tcp_fast_open,omitempty"`
 }

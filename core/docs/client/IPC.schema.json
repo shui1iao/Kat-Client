@@ -1005,30 +1005,58 @@
               "type": "string"
             },
             "method": {
-              "const": "network.egress.dns.refresh"
+              "const": "rules.test"
             },
             "params": {
               "type": "object",
               "properties": {
-                "revision": {
-                  "type": "integer",
-                  "minimum": 1
+                "target": {
+                  "type": "string"
                 },
-                "fingerprint": {
-                  "type": "string",
-                  "pattern": "^[0-9a-fA-F]{64}$"
+                "network": {
+                  "type": "string"
+                },
+                "process_name": {
+                  "type": "string"
+                },
+                "source_ip": {
+                  "type": "string"
+                },
+                "inbound_name": {
+                  "type": "string"
+                },
+                "inbound_type": {
+                  "type": "string"
+                },
+                "protocol": {
+                  "type": "string"
+                },
+                "target_port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                },
+                "source_port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
+                },
+                "inbound_port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535
                 }
               },
               "required": [
-                "revision",
-                "fingerprint"
+                "target"
               ],
               "additionalProperties": false
             }
           },
           "required": [
             "id",
-            "method"
+            "method",
+            "params"
           ],
           "additionalProperties": false
         }
@@ -4679,30 +4707,139 @@
       },
       "description": "Existing local subscription edit/select preview, then same document.apply acceptance. add_rule explicitly owns a generated connection rule in the active local overlay; ordinary new-rule behavior remains manual."
     },
-    "network.egress.dns.refresh": {
+    "rules.test": {
       "params": {
         "type": "object",
         "properties": {
-          "revision": {
-            "type": "integer",
-            "minimum": 1
+          "target": {
+            "type": "string"
           },
-          "fingerprint": {
-            "type": "string",
-            "pattern": "^[0-9a-fA-F]{64}$"
+          "network": {
+            "type": "string"
+          },
+          "process_name": {
+            "type": "string"
+          },
+          "source_ip": {
+            "type": "string"
+          },
+          "inbound_name": {
+            "type": "string"
+          },
+          "inbound_type": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "target_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "source_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "inbound_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
           }
         },
         "required": [
-          "revision",
-          "fingerprint"
+          "target"
         ],
         "additionalProperties": false
       },
+      "description": "Target-only first-match lookup against accepted rules and loaded resources. Missing connection metadata skips that whole undecidable rule and is reported. DNS only when destination IP is required; never connects to target, probes, selects an outbound, attributes a process or increments traffic/rule hits. Rule-mode matching remains explicit when current mode is global/direct.",
       "result": {
-        "$ref": "#/$defs/egress"
-      },
-      "hostOnly": true,
-      "description": "IDs only; core pulls pending route-prepared endpoints from pinned SYSTEM service under the existing core lease. Updates DNS revision/cancellation/cache only, not business generation."
+        "type": "object",
+        "properties": {
+          "mode": {
+            "enum": [
+              "rule",
+              "global",
+              "direct"
+            ]
+          },
+          "simulation": {
+            "const": "target"
+          },
+          "ipv6_enabled": {
+            "type": "boolean"
+          },
+          "result": {
+            "type": "object",
+            "required": [
+              "status",
+              "target",
+              "known",
+              "rule",
+              "display_row",
+              "condition",
+              "policy",
+              "missing",
+              "resources",
+              "resource_warnings",
+              "skipped",
+              "dns"
+            ],
+            "properties": {
+              "status": {
+                "enum": [
+                  "matched",
+                  "final",
+                  "unknown"
+                ]
+              },
+              "skipped": {
+                "type": "array",
+                "maxItems": 32,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "rule",
+                    "condition",
+                    "policy",
+                    "missing"
+                  ]
+                }
+              },
+              "dns": {
+                "type": "object",
+                "required": [
+                  "status",
+                  "addresses"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "not_needed",
+                      "resolved",
+                      "failed"
+                    ]
+                  },
+                  "addresses": {
+                    "type": "array",
+                    "maxItems": 16
+                  },
+                  "selected_ip": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "mode",
+          "simulation",
+          "ipv6_enabled",
+          "result"
+        ]
+      }
     }
   },
   "x-limits": {

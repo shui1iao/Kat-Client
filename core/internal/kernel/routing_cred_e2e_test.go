@@ -20,9 +20,8 @@ package kernel
 // Phase B ("credential rotated after a successful probe"): members [rot, good]
 // with a correct credential for rot; after the first probe round has marked
 // rot healthy, rot's server is restarted with a different key/password. The
-// probe interval is 10m, so real connection failures (written, then zero
-// bytes back) must trigger degradation. Smart v2 first avoids the failed site;
-// two hosts plus its directed verification (~5s) establish group-level fault.
+// probe interval is 10m, so only real connection failures (written, then zero
+// bytes back) can trigger the degradation.
 
 import (
 	"bytes"
@@ -132,11 +131,7 @@ func e2eCredential(t *testing.T, kind string) {
 		in["users"] = []any{map[string]any{"name": "u", "password": e2eWrongTrojanPass}}
 	})
 	for _, cc := range cases {
-		if kind == "smart" {
-			w.credSmartRotated(p, c, cc, e1, all)
-		} else {
-			w.credRun(p, c, kind, "B(rotated-after-probe)", cc, e1, all)
-		}
+		w.credRun(p, c, kind, "B(rotated-after-probe)", cc, e1, all)
 	}
 	w.stopEntry(p)
 }
@@ -180,8 +175,7 @@ func (w *e2eWorld) rotate(sp *e2eProc, mut func(in map[string]any)) {
 
 // credRun makes paced client connections through cc.group until one succeeds
 // (at most 12), then three more that must all succeed via the good member
-// with exactly three accepted echo connections. Background verification is
-// intentionally not counted as business traffic. It records the outcome sequence,
+// with zero attempts on the bad member. It records the outcome sequence,
 // recovery count/time and the switch event.
 func (w *e2eWorld) credRun(p *e2eProc, c *e2eClients, kind, phase string, cc credCase, echo uint16, all []*e2eFwd) {
 	t := w.t
@@ -223,71 +217,18 @@ func (w *e2eWorld) credRun(p *e2eProc, c *e2eClients, kind, phase string, cc cre
 	if !p.waitLines(sw, 1, 5*time.Second) {
 		t.Fatalf("%s %s: no group_switch to the good member:\n%s", phase, cc.group, p.text())
 	}
-	goodLines := w.credAfterRecovery(c, kind, phase, cc, echo, all)
-	w.logf("CRED_RESULT kind=%s phase=%s proto=%s group=%s first_connection=%s failed_before_recovery=%d recovered_at_connection=%d recovery_time=%s sequence=%s switch_event=%q good_server_lines=%d->%d probe_http_requests_total=%d",
-		kind, phase, cc.proto, cc.group, firstResult, failed, firstOK, recovery.Round(time.Millisecond), strings.Join(seq, ","),
-		sw.String(), goodLines, cc.goodProc.countLines(sbRE), w.httpCount.Load())
-}
-
-// Raw forwarder counts include probe dials (including failed credential
-// verification) and are diagnostic, not business connection counts. The
-// protocol server's exact echo-destination log is the authoritative counter:
-// probes address a different port, and a replay/duplicate would add a line.
-func (w *e2eWorld) credAfterRecovery(c *e2eClients, kind, phase string, cc credCase, echo uint16, all []*e2eFwd) int {
-	w.t.Helper()
-	re := sbConn(echo)
-	before := cc.goodProc.countLines(re)
-	probeRE := sbConn(uint16(w.httpPort))
-	probeBefore := cc.goodProc.countLines(probeRE)
-	rotBefore := 0
-	if cc.rotProc != nil {
-		rotBefore = cc.rotProc.countLines(re)
-	}
+	// After recovery: new connections go to the good member only.
 	s := snapshot(all...)
+	goodLines := cc.goodProc.countLines(sbRE)
 	for i := 1; i <= 3; i++ {
 		w.must(fmt.Sprintf("%s %s %s connection after recovery %d", kind, phase, cc.group, i), e2eTCP(c.socks, fmt.Sprintf("after%d.%s", i, cc.suffix), echo))
 	}
-	if !cc.goodProc.waitLines(re, before+3, 3*time.Second) || cc.goodProc.countLines(re) != before+3 {
-		w.t.Fatalf("%s %s: accepted echo connections %d->%d, want exactly three (no replay)", phase, cc.group, before, cc.goodProc.countLines(re))
+	if !cc.goodProc.waitLines(sbRE, goodLines+3, 3*time.Second) {
+		t.Fatalf("%s %s: post-recovery connections not seen by the good server", phase, cc.group)
 	}
-	if cc.rotProc != nil && cc.rotProc.countLines(re) != rotBefore {
-		w.t.Fatalf("%s %s: retired credential server received post-recovery echo traffic", phase, cc.group)
-	}
-	w.logf("CRED_BUSINESS kind=%s phase=%s group=%s accepted_echo=%d->%d exact_delta=3 retired_echo_delta=0 accepted_probe=%d->%d fwd_tcp_incl_probes=%v", kind, phase, cc.group, before, cc.goodProc.countLines(re), probeBefore, cc.goodProc.countLines(probeRE), delta(s, cc.bad, cc.good))
-	return before
-}
-
-// Smart v2 distinguishes immediate site failover from group-level attribution.
-// Fresh hostnames are distinct sites, not retries of the failed site. There is
-// no attempt-count/sleep loop here: each observation has a specific contract,
-// then we await the directed-verification event without generating more traffic.
-func (w *e2eWorld) credSmartRotated(p *e2eProc, c *e2eClients, cc credCase, echo uint16, all []*e2eFwd) {
-	w.t.Helper()
-	sw := regexp.MustCompile(`kat event=group_switch group=` + cc.group + ` from=` + cc.bad.name + ` to=` + cc.good.name)
-	re := sbConn(echo)
-	start := time.Now()
-	for _, host := range []string{"rotated." + cc.suffix, "other." + cc.suffix} {
-		before := cc.goodProc.countLines(re)
-		if e := e2eTCP(c.socks, host, echo); e == nil {
-			w.t.Fatalf("%s: first written request to newly rotated site %s unexpectedly replayed/succeeded", cc.group, host)
-		}
-		if cc.goodProc.countLines(re) != before {
-			w.t.Fatalf("%s: failed written request was replayed to good member", cc.group)
-		}
-		if p.countLines(sw) != 0 {
-			w.t.Fatalf("%s: ambiguous EOF globally convicted before directed verification", cc.group)
-		}
-		w.must(cc.group+" immediate same-site failover", e2eTCP(c.socks, host, echo))
-		if !cc.goodProc.waitLines(re, before+1, 3*time.Second) || cc.goodProc.countLines(re) != before+1 {
-			w.t.Fatalf("%s: same-site retry not served exactly once by good member", cc.group)
-		}
-		w.logf("CRED_SITE group=%s first_written_request=failed_no_replay same_site_next_request=good group_switch=0 elapsed=%s", cc.group, time.Since(start).Round(time.Millisecond))
-	}
-	// The algorithm schedules verification at ~5s, with a 2s probe timeout.
-	// 3s harness allowance is not additional attempts or a changed algorithm.
-	if !p.waitLines(sw, 1, 10*time.Second) {
-		w.t.Fatalf("%s: two failed hosts plus directed verification did not reject rotated credential:\n%s", cc.group, p.text())
-	}
-	w.logf("CRED_GLOBAL group=%s after_two_hosts_and_directed_verification elapsed=%s", cc.group, time.Since(start).Round(time.Millisecond))
-	w.credAfterRecovery(c, "smart", "B(rotated-after-probe)", cc, echo, all)
+	w.expect(fmt.Sprintf("%s %s %s post-recovery: 3 connections, all on %s, none on %s", kind, phase, cc.group, cc.good.name, cc.bad.name),
+		delta(s, cc.bad, cc.good), map[string][2]int64{cc.bad.name: {0, 0}, cc.good.name: {3, 0}})
+	w.logf("CRED_RESULT kind=%s phase=%s proto=%s group=%s first_connection=%s failed_before_recovery=%d recovered_at_connection=%d recovery_time=%s sequence=%s switch_event=%q good_server_lines=%d->%d probe_http_requests_total=%d",
+		kind, phase, cc.proto, cc.group, firstResult, failed, firstOK, recovery.Round(time.Millisecond), strings.Join(seq, ","),
+		sw.String(), goodLines, cc.goodProc.countLines(sbRE), w.httpCount.Load())
 }

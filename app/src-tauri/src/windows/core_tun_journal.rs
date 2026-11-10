@@ -138,6 +138,108 @@ pub fn retire_exited_capability<T>(
  Ok(())
 }
 
+/// Parse only the documented x64 process prefix from a successful bounded
+/// kernel snapshot. Validate the whole linked list before accepting absence or
+/// a different creation stamp. This never grants a process handle or mutation.
+pub fn completed_snapshot_process_dead(bytes: &[u8], pid: u32, created: u64) -> Result<bool> {
+ const PREFIX: usize = 88;
+ if bytes.len() < PREFIX || bytes.len() > 16 * 1024 * 1024 || pid == 0 || created == 0 { return Err("PROCESS_IDENTITY") }
+ let mut offset = 0usize;
+ let mut seen = None;
+ for _ in 0..65536 {
+  let row = bytes.get(offset..offset.checked_add(PREFIX).ok_or("PROCESS_IDENTITY")?).ok_or("PROCESS_IDENTITY")?;
+  let next = u32::from_le_bytes(row[0..4].try_into().unwrap()) as usize;
+  let row_created = u64::from_le_bytes(row[32..40].try_into().unwrap());
+  let row_pid = u64::from_le_bytes(row[80..88].try_into().unwrap());
+  if row_pid == pid as u64 {
+   if row_created == 0 || seen.is_some() { return Err("PROCESS_IDENTITY") }
+   seen = Some(row_created);
+  }
+  if next == 0 { return Ok(seen.is_none_or(|stamp| stamp != created)) }
+  if next < PREFIX || next % 8 != 0 { return Err("PROCESS_IDENTITY") }
+  offset = offset.checked_add(next).ok_or("PROCESS_IDENTITY")?;
+ }
+ Err("PROCESS_IDENTITY")
+}
+
+#[cfg(test)]
+mod completed_snapshot_tests {
+ use super::*;
+ fn row(pid: u64, created: u64, next: u32) -> Vec<u8> {
+  let mut b = vec![0; 88]; b[0..4].copy_from_slice(&next.to_le_bytes());
+  b[32..40].copy_from_slice(&created.to_le_bytes()); b[80..88].copy_from_slice(&pid.to_le_bytes()); b
+ }
+ #[test] fn exact_stamp_is_alive_recycled_stamp_or_full_absence_is_dead() {
+  assert_eq!(completed_snapshot_process_dead(&row(23, 7, 0), 23, 7), Ok(false));
+  assert_eq!(completed_snapshot_process_dead(&row(23, 8, 0), 23, 7), Ok(true));
+  assert_eq!(completed_snapshot_process_dead(&row(24, 7, 0), 23, 7), Ok(true));
+ }
+ #[test] fn malformed_tail_cannot_certify_a_recycled_pid_or_absence() {
+  assert!(completed_snapshot_process_dead(&row(23, 8, 88), 23, 7).is_err());
+  assert!(completed_snapshot_process_dead(&row(24, 7, 4), 23, 7).is_err());
+  assert!(completed_snapshot_process_dead(&row(23, 0, 0), 23, 7).is_err());
+  assert!(completed_snapshot_process_dead(&[0; 20], 23, 7).is_err());
+ }
+ #[test] fn duplicate_pid_is_not_trusted() {
+  let mut b = row(23, 8, 88); b.extend(row(23, 9, 0));
+  assert!(completed_snapshot_process_dead(&b, 23, 7).is_err());
+ }
+}
+
+/// Only a fully restored, completed protected account can use identity-only
+/// retirement. Active/recovering accounts still use the original exact-LUID CAS.
+pub fn completed_retirement_ready(j: &Journal) -> Result<bool> {
+ j.validate()?;
+ if j.phase != "complete" { return Ok(false) }
+ if j.changes.iter().any(|c| c.desired || c.state != "restored") {
+  return Err("RECOVERY_PENDING")
+ }
+ Ok(true)
+}
+
+/// A recycled LUID is not the retired adapter. GUID or alias collisions remain
+/// conflicts; callers must still prove full-table and PnP absence read-only.
+pub fn retired_row_owned(a: &Adapter, guid: &str, name: &str) -> Result<bool> {
+ let same_guid = guid == a.guid;
+ let same_alias = name == a.alias;
+ if same_guid != same_alias { return Err("RECOVERY_CONFLICT") }
+ Ok(same_guid)
+}
+
+#[cfg(test)]
+mod completed_retirement_tests {
+ use super::*;
+ fn complete() -> Journal {
+  let launch = LaunchIdentity { schema: SCHEMA, engine: ENGINE.into(), epoch: "a".repeat(32), core_pid: 2, core_created: 7, owner_sid: "S-1-5-21-1".into(), session: 1, package_sha256: "b".repeat(64), core_sha256: "c".repeat(64) };
+  let adapter = Adapter { alias: alias(&launch.owner_sid), guid: "11111111-1111-1111-1111-111111111111".into(), luid: 77, compartment: 1 };
+  let value = |v: &str| Value { route: None, address: None, interface: None, dns: Some(DnsValue { servers: v.into() }) };
+  Journal { schema: SCHEMA, engine: ENGINE.into(), launch, adapter, seq: 9, phase: "complete".into(), changes: vec![Change { id: "dns".into(), before: Some(value("")), installed: value("198.18.0.2"), desired: false, state: "restored".into() }], last_request: "d".repeat(32), last_digest: "e".repeat(64) }
+ }
+ #[test] fn only_complete_fully_restored_accounts_can_retire() {
+  let mut j = complete(); assert_eq!(completed_retirement_ready(&j), Ok(true));
+  j.phase = "active".into(); assert_eq!(completed_retirement_ready(&j), Ok(false));
+  j.phase = "recovering".into(); assert_eq!(completed_retirement_ready(&j), Ok(false));
+  j.phase = "complete".into(); j.changes[0].desired = true;
+  assert_eq!(completed_retirement_ready(&j), Err("RECOVERY_PENDING"));
+  j.changes[0].desired = false; j.changes[0].state = "pending".into();
+  assert_eq!(completed_retirement_ready(&j), Err("RECOVERY_PENDING"));
+ }
+ #[test] fn foreign_identity_is_not_owned_even_when_luid_was_recycled() {
+  let j = complete(); assert_eq!(j.adapter.luid, 77);
+  assert_eq!(retired_row_owned(&j.adapter, "22222222-2222-2222-2222-222222222222", "KatBenchSB"), Ok(false));
+  assert_eq!(retired_row_owned(&j.adapter, &j.adapter.guid, &j.adapter.alias), Ok(true));
+ }
+ #[test] fn partial_guid_or_alias_matches_still_block() {
+  let j = complete();
+  assert_eq!(retired_row_owned(&j.adapter, &j.adapter.guid, "foreign"), Err("RECOVERY_CONFLICT"));
+  assert_eq!(retired_row_owned(&j.adapter, "22222222-2222-2222-2222-222222222222", &j.adapter.alias), Err("RECOVERY_CONFLICT"));
+ }
+ #[test] fn invalid_accounts_never_gain_the_retirement_fast_path() {
+  let mut j = complete(); j.schema = 1; assert!(completed_retirement_ready(&j).is_err());
+  let mut j = complete(); j.changes[0].state = "unknown".into(); assert!(completed_retirement_ready(&j).is_err());
+ }
+}
+
 #[cfg(test)]mod tests {
  use super::*;
  fn route()->Change {let v=Value{route:Some(RouteValue{destination:"0.0.0.0".into(),prefix:1,next_hop:"0.0.0.0".into(),scope:0,metric:5,protocol:3,site_prefix:0,valid_lifetime:u32::MAX,preferred_lifetime:u32::MAX,loopback:false,autoconfigure:false,publish:false,immortal:false,origin:0}),address:None,interface:None,dns:None};Change{id:"route:0.0.0.0/1".into(),before:None,installed:v,desired:true,state:"pending".into()}}

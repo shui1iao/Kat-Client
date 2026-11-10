@@ -75,7 +75,7 @@ export class DocumentSession {
     this.assertEditorsCurrent();
     if (this.saving) throw new Error('正在保存');
     if (this.saved === null) throw new Error('配置未连接');
-    parseDocument(text, format);
+    const parsed = parseDocument(text, format);
     const revision = this.revision, preserveDraft=background&&(this.dirty||!!this.draftFilename);
     this.saving = true; this.changed();
     try {
@@ -86,7 +86,7 @@ export class DocumentSession {
       this.assertEditorsCurrent();
       const reply = await this.api.apply(text, format);
       this.assertWritable();
-      const acceptedFormat = replyFormat(reply.format), source = parseDocument(reply.text, acceptedFormat);
+      const acceptedFormat = replyFormat(reply.format), source = reply.text === text && acceptedFormat === format ? parsed : parseDocument(reply.text, acceptedFormat);
       this.saved = reply.text; this.source = source; this.path = reply.path; this.savedFormat = acceptedFormat;
       if (this.revision === revision && !preserveDraft) { this.draft = reply.text; this.draftFormat = acceptedFormat; this.draftFilename = ''; this.revision++; }
       this.changed();

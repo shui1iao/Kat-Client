@@ -13,6 +13,7 @@ import (
 	"github.com/shui1iao/Kat/internal/outbound/group"
 	"github.com/shui1iao/Kat/internal/userio"
 	"net"
+	"os"
 
 	"path/filepath"
 	"reflect"
@@ -423,7 +424,7 @@ func (h *Host) previewSubscription(ctx context.Context, raw json.RawMessage) (an
 		name = old.Name
 		interval = old.Interval
 	}
-	if p.Name == "" && (old == nil || regexp.MustCompile(`^完整配置 [0-9a-f]{6}$`).MatchString(old.Name)) {
+	if p.Name == "" && (old == nil || defaultFullSubscriptionNameRx.MatchString(old.Name)) {
 		if n := subscriptionName(ctx, p.URL); n != "" {
 			name = n
 		}
@@ -733,7 +734,7 @@ func (h *Host) previewSubscription(ctx context.Context, raw json.RawMessage) (an
 		if p.FullOnly {
 			return nil, fail("subscription_conflict", "graph", "订阅图引用校验失败，原配置已保留")
 		}
-		preview.Issues = append(preview.Issues, "配置校验未通过："+regexp.MustCompile(`"[^"\n]*"`).ReplaceAllString(e.Error(), "[名称]"))
+		preview.Issues = append(preview.Issues, "配置校验未通过："+quotedNameRx.ReplaceAllString(e.Error(), "[名称]"))
 		return preview, nil
 	}
 	for from, to := range sub.Names {
@@ -1054,6 +1055,7 @@ func (h *Host) previewSubscription(ctx context.Context, raw json.RawMessage) (an
 	if h.fullCandidates == nil {
 		h.fullCandidates = map[string]*subscriptionPending{}
 	}
+	h.pruneStaleCandidatesLocked(ownedDir)
 	if prior := h.fullCandidates[id]; prior != nil {
 		h.expireFullPendingLocked(prior)
 		if prior.Dir != "" && prior.Dir != ownedDir {
@@ -1370,21 +1372,47 @@ func subscriptionSetNeeds(s route.RuleSetOptions, b []byte) (bool, bool, error) 
 			return false, false, errors.New("payload required")
 		}
 		lines = p.Payload
-	} else {
-		lines = strings.Split(string(b), "\n")
 	}
 	country, asn := false, false
-	rx := regexp.MustCompile(`(?:^|[,(])\s*(GEOIP|SRC-GEOIP|IP-ASN|SRC-IP-ASN)\s*,\s*([^,)]+)`)
-	for _, l := range lines {
+	scanLine := func(l string) {
 		l = strings.TrimSpace(l)
 		if l == "" || strings.HasPrefix(l, "#") || strings.HasPrefix(l, ";") || strings.HasPrefix(l, "//") {
-			continue
+			return
 		}
-		for _, m := range rx.FindAllStringSubmatch(l, -1) {
+		if !strings.Contains(l, "GEOIP") && !strings.Contains(l, "IP-ASN") {
+			return
+		}
+		for _, m := range subscriptionSetNeedsRx.FindAllStringSubmatch(l, -1) {
 			if strings.Contains(m[1], "ASN") {
 				asn = true
 			} else if !strings.EqualFold(m[2], "LAN") && !strings.EqualFold(m[2], "private") {
 				country = true
+			}
+		}
+	}
+	if lines != nil {
+		for _, l := range lines {
+			scanLine(l)
+			if country && asn {
+				break
+			}
+		}
+	} else {
+		for rem := b; len(rem) > 0; {
+			var line []byte
+			if idx := bytes.IndexByte(rem, '\n'); idx >= 0 {
+				line = rem[:idx]
+				rem = rem[idx+1:]
+			} else {
+				line = rem
+				rem = nil
+			}
+			if !bytes.Contains(line, []byte("GEOIP")) && !bytes.Contains(line, []byte("IP-ASN")) {
+				continue
+			}
+			scanLine(string(line))
+			if country && asn {
+				break
 			}
 		}
 	}
@@ -1423,7 +1451,7 @@ func subscriptionSetIssues(index int, err error) []string {
 			label = "未通过校验"
 		}
 		typ := issue.RuleType
-		if !regexp.MustCompile(`^[A-Z][A-Z0-9-]{0,40}$`).MatchString(typ) {
+		if !subscriptionRuleTypeRx.MatchString(typ) {
 			typ = "未识别"
 		}
 		dep := ""
@@ -1435,9 +1463,64 @@ func subscriptionSetIssues(index int, err error) []string {
 	return out
 }
 
+var (
+	defaultFullSubscriptionNameRx = regexp.MustCompile(`^完整配置 [0-9a-f]{6}$`)
+	quotedNameRx                  = regexp.MustCompile(`"[^"\n]*"`)
+	subscriptionSetNeedsRx        = regexp.MustCompile(`(?:^|[,(])\s*(GEOIP|SRC-GEOIP|IP-ASN|SRC-IP-ASN)\s*,\s*([^,)]+)`)
+	subscriptionRuleTypeRx        = regexp.MustCompile(`^[A-Z][A-Z0-9-]{0,40}$`)
+)
+
 func (h *Host) expireFullPendingLocked(p *subscriptionPending) {
 	if h.expiredFullTexts == nil || len(h.expiredFullTexts) >= 64 {
 		h.expiredFullTexts = map[[32]byte]bool{}
 	}
 	h.expiredFullTexts[sha256.Sum256([]byte(p.Text))] = true
+}
+
+func (h *Host) pruneStaleCandidatesLocked(keepDir string) {
+	now := time.Now()
+	sharedDirs := map[string]bool{}
+	for id, p := range h.fullCandidates {
+		if p.Base == h.doc.text && p.Format == h.doc.format && now.Sub(p.Created) <= 30*time.Minute {
+			if p.Dir != "" {
+				sharedDirs[p.Dir] = true
+			}
+			continue
+		}
+		h.expireFullPendingLocked(p)
+		delete(h.fullCandidates, id)
+		if h.fullPending == p {
+			h.fullPending = nil
+		}
+		if p.Dir == "" || p.Dir == keepDir || sharedDirs[p.Dir] || h.resourceUsing[p.Dir] > 0 {
+			continue
+		}
+		stilReferenced := false
+		for _, other := range h.fullCandidates {
+			if other.Dir == p.Dir {
+				stilReferenced = true
+				break
+			}
+		}
+		if stilReferenced {
+			continue
+		}
+		name := h.resourceDir(p.Dir)
+		if name == "" || filepath.Join(h.workspace, name) != filepath.Clean(p.Dir) {
+			continue
+		}
+		if safeCacheDir(p.Dir) != nil {
+			h.cacheFailure()
+			continue
+		}
+		if _, err := userio.Lstat(filepath.Join(p.Dir, acceptedResourceMarker)); !os.IsNotExist(err) {
+			if err != nil {
+				h.cacheFailure()
+			}
+			continue
+		}
+		if err := removeResourceVersion(h.workspace, name); err != nil && !os.IsNotExist(err) {
+			h.cacheFailure()
+		}
+	}
 }

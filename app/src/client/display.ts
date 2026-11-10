@@ -29,7 +29,9 @@ export function ruleSlices(rules: CoreStatus['traffic']['rules']) {
   const rest = valid.slice(5).reduce((n, r) => n + r.hits, 0);
   return rest > 0 ? [...top, { label: '其他规则', value: rest, color: colors[5] }] : top;
 }
-export const countStr = (v: number | null | undefined) => v == null ? '—' : v.toLocaleString('en-US');
+const countFmt = new Intl.NumberFormat('en-US');
+const clockFmt = new Intl.DateTimeFormat('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+export const countStr = (v: number | null | undefined) => v == null ? '—' : countFmt.format(v);
 export const durationStr = (ms: number | null | undefined) => {
   if (ms == null || !Number.isFinite(ms)) return '—';
   const s = Math.floor(ms / 1000);
@@ -40,7 +42,7 @@ export const durationStr = (ms: number | null | undefined) => {
 export const clockStr = (iso: string | null | undefined) => {
   if (!iso) return '—';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleTimeString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' });
+  return Number.isNaN(d.getTime()) ? '—' : clockFmt.format(d);
 };
 
 export function policySlices(targets:CoreStatus['traffic']['rule_targets']){

@@ -191,6 +191,9 @@ func (r *logRing) read(after uint64, limit int) LogsReply {
 	return out
 }
 func (h *Host) runtimeConfig(c kernel.Config) kernel.Config {
+	if c.Limits.BufferSize == 16384 {
+		c.Limits.BufferSize = 32768
+	}
 	c = h.withEgress(c)
 	c.SetClientLogSink(h.logs.record)
 	c.SetConnectionSink(h.connectionLogs.record)

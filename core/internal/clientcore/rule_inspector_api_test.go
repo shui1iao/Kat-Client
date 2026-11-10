@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -28,10 +29,11 @@ func riHost(t *testing.T, mode string) *Host {
 	s := &kernel.Server{}
 	v := reflect.ValueOf(s).Elem()
 	riWritable(v.FieldByName("core")).Set(reflect.New(v.FieldByName("core").Type().Elem()))
+	riWritable(v.FieldByName("core").Elem().FieldByName("ctx")).Set(reflect.ValueOf(context.Background()))
 	rt := reflect.New(v.FieldByName("rt").Type().Elem())
 	riWritable(rt.Elem().FieldByName("engine")).Set(reflect.ValueOf(e))
 	riWritable(v.FieldByName("rt")).Set(rt)
-	cfg := kernel.Config{Routing: &kernel.RoutingOptions{Final: "direct"}}
+	cfg := kernel.Config{Routing: &kernel.RoutingOptions{Final: "direct"}, Limits: kernel.Limits{DialTimeout: kernel.Duration(5 * time.Second)}}
 	cfg.SetClientIPv6(false)
 	riWritable(v.FieldByName("cfg")).Set(reflect.ValueOf(cfg))
 	riWritable(v.FieldByName("refs")).Addr().Interface().(*atomic.Int64).Store(1)
@@ -115,9 +117,9 @@ func TestRuleInspectorAPIModeProjectionNoDraftAndIPv6(t *testing.T) {
 					t.Fatal(err)
 				}
 				m := v.(map[string]any)
-				g := m["result"].(route.OfflineResult)
+				g := m["result"].(route.TargetResult)
 				t.Logf("mode=%s response=%+v result=%+v", mode, m, g)
-				if m["mode"] != mode || m["simulation"] != "rule" || m["ipv6_enabled"] != false || g.Policy != "Proxy" || g.Status != "matched" {
+				if m["mode"] != mode || m["simulation"] != "target" || m["ipv6_enabled"] != false || g.Policy != "Proxy" || g.Status != "matched" {
 					t.Fatal(m, g)
 				}
 				if (target == "2001:db8::1") != (len(g.AdmissionWarnings) == 1) {
@@ -134,7 +136,7 @@ func TestRuleInspectorAPIModeProjectionNoDraftAndIPv6(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			g := v.(map[string]any)["result"].(route.OfflineResult)
+			g := v.(map[string]any)["result"].(route.TargetResult)
 			if g.Policy != "reject" || g.Known.Network != "udp" || g.Known.Protocol != "quic" || g.Known.ProcessName != "app.exe" || g.Known.SourceIP != "198.51.100.2" || g.Known.SourcePort != 65535 || g.Known.InboundType != "socks5" {
 				t.Fatal(g)
 			}
@@ -148,7 +150,7 @@ func TestRuleInspectorAPIExactKeysRejectAmbiguity(t *testing.T) {
 	h := riHost(t, "rule")
 	h.doc.ruleRouting = &kernel.RoutingOptions{Rules: []kernel.RouteRule{{Network: "udp", Action: "reject"}}, Final: "Tail"}
 	control, controlErr := riRequest(h, `{"target":"example.com","network":"udp"}`)
-	if controlErr != nil || control.(map[string]any)["result"].(route.OfflineResult).Policy != "reject" {
+	if controlErr != nil || control.(map[string]any)["result"].(route.TargetResult).Policy != "reject" {
 		t.Fatal("canonical control", control, controlErr)
 	}
 	t.Logf("canonical network=udp control response=%+v", control)

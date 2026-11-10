@@ -104,7 +104,7 @@ mod tests {
         assert!(source.contains("let shell_return=unsafe{ShellExecuteExW(&mut info)};\n let shell_error=unsafe{GetLastError()};"));
         assert!(source.contains("elevation_failure(shell_return,shell_error,shell_hinst,shell_process)"));
         assert!(source.contains("info.fMask=SEE_MASK_NOCLOSEPROCESS|SEE_MASK_NOASYNC"));
-        assert!(source.contains("info.nShow=SW_HIDE"));
+        assert!(source.contains("info.nShow=SW_SHOWNORMAL"));
         assert!(!source.contains("CoInitializeEx"));
         let bridge = include_str!("windows/setup_bridge.rs");
         assert!(bridge.contains("crate::setup_feedback::error_text(&e,uninstall)"));
@@ -163,7 +163,7 @@ mod tests {
         for forbidden in ["ownership::save", "std::fs::", "identity::workspace", "OpenOptions"] {
             assert!(!helper.contains(forbidden), "helper must never write results with ambient elevation");
         }
-        assert!(helper.find("UserResultWriter::capture").unwrap() < helper.find("installer::install").unwrap());
+        assert!(helper.find("UserResultWriter::capture").unwrap() < helper.find("installer::setup").unwrap());
         assert!(helper.contains("writer.write(&InstallerOutcome::from_result(&result))"));
     }
 }
@@ -207,6 +207,7 @@ pub struct AclProjection {
  pub masks_first3:[Option<u32>;3], pub mapped_masks_first3:[Option<u32>;3],
  pub generic_bits_present:bool,
 }
+#[cfg(any(windows, test))]
 fn service_mask(mask:u32)->u32{
  let mut out=mask&!0xf0000000;
  for(generic,specific)in [(0x80000000,0x0002008d),(0x40000000,0x00020002),(0x20000000,0x00020170),(0x10000000,0x000f01ff)]{
@@ -214,6 +215,7 @@ fn service_mask(mask:u32)->u32{
  }out
 }
 /// Observation only. Mapping never changes the actual DACL or pass/fail check.
+#[cfg(any(windows, test))]
 fn project_acl(acl:&[u8])->Option<(AclProjection,Vec<u8>)>{
  if acl.len()<8||acl.len()>u16::MAX as usize{return None;}
  let word=|i:usize|u16::from_le_bytes([acl[i],acl[i+1]]);
@@ -238,15 +240,22 @@ pub struct ServiceAclDiagnostic {
  pub accesscheck_api_ok:Option<bool>, pub accesscheck_allowed:Option<bool>, pub accesscheck_granted:Option<u32>,
  pub accesscheck_buffer_bytes:Option<u32>, pub accesscheck_retried:bool,
 }
+#[cfg(any(windows, test))]
 impl ServiceAclDiagnostic{
  fn new()->Self{Self{schema:1,stage:AclStage::SddlConvert,failed_at:None,failure:None,win32:None,sddl_ok:None,set_dacl_ok:None,descriptor_read_ok:None,expected:None,actual:None,actual_control:None,acl_raw_equal:None,acl_equal_after_generic_mapping:None,protected_bit:None,accesscheck_api_ok:None,accesscheck_allowed:None,accesscheck_granted:None,accesscheck_buffer_bytes:None,accesscheck_retried:false}}
 }
 std::thread_local!{static ACL_DIAGNOSTIC:std::cell::RefCell<(bool,Option<ServiceAclDiagnostic>)>=const{std::cell::RefCell::new((false,None))};}
+#[cfg(any(windows, test))]
 pub(crate) fn acl_diag_begin(){ACL_DIAGNOSTIC.with(|d|*d.borrow_mut()=(true,Some(ServiceAclDiagnostic::new())));}
+#[cfg(any(windows, test))]
 pub(crate) fn acl_diag_end(){ACL_DIAGNOSTIC.with(|d|d.borrow_mut().0=false);}
+#[cfg(any(windows, test))]
 pub(crate) fn acl_diag_update(f:impl FnOnce(&mut ServiceAclDiagnostic)){ACL_DIAGNOSTIC.with(|d|{let mut d=d.borrow_mut();if d.0{if let Some(v)=d.1.as_mut(){f(v);}}});}
+#[cfg(any(windows, test))]
 pub(crate) fn acl_diag_fail(failure:AclFailure,win32:Option<u32>){acl_diag_update(|d|{if d.failed_at.is_none(){d.failed_at=Some(d.stage);d.failure=Some(failure);d.win32=win32;}});}
+#[cfg(any(windows, test))]
 pub(crate) fn acl_diag_expected(bytes:&[u8]){acl_diag_update(|d|d.expected=project_acl(bytes).map(|p|p.0));}
+#[cfg(any(windows, test))]
 pub(crate) fn acl_diag_actual(expected:&[u8],actual:&[u8],control:u16){acl_diag_update(|d|{
  d.descriptor_read_ok=Some(true);d.actual_control=Some(control);d.protected_bit=Some(control&0x1000!=0);d.acl_raw_equal=Some(expected==actual);
  d.actual=project_acl(actual).map(|p|p.0);d.acl_equal_after_generic_mapping=project_acl(expected).zip(project_acl(actual)).map(|(e,a)|e.1==a.1);

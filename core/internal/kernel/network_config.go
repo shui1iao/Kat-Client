@@ -224,17 +224,29 @@ func dnsName(s string) (string, error) {
 	if len(s) < 1 || len(s) > 253 {
 		return "", errNetworkConfig
 	}
-	for _, label := range strings.Split(s, ".") {
-		if len(label) < 1 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
-			return "", errNetworkConfig
-		}
-		for _, c := range label {
-			if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-') {
+	lower := true
+	start := 0
+	for i := 0; i <= len(s); i++ {
+		if i == len(s) || s[i] == '.' {
+			label := s[start:i]
+			if len(label) < 1 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
 				return "", errNetworkConfig
 			}
+			start = i + 1
+			continue
+		}
+		switch c := s[i]; {
+		case c >= 'a' && c <= 'z', c >= '0' && c <= '9', c == '-':
+		case c >= 'A' && c <= 'Z':
+			lower = false
+		default:
+			return "", errNetworkConfig
 		}
 	}
-	return strings.ToLower(s), nil
+	if !lower {
+		s = strings.ToLower(s)
+	}
+	return s, nil
 }
 
 type dnsEndpoint struct{ scheme, host, port, url string }

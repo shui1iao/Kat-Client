@@ -1,4 +1,4 @@
-use crate::{error::{Error, Result}, protocol::{Request, Response, MAX_FRAME, MAX_INFLIGHT}};
+use crate::{error::{Error, Result}, protocol::{Response, MAX_FRAME, MAX_INFLIGHT}};
 use serde_json::Value;
 use std::{collections::HashMap, path::{Path, PathBuf}, sync::{Arc, Mutex, atomic::{AtomicBool, AtomicU64, Ordering}}, time::Duration};
 use tokio::{io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader}, process::Command, sync::{mpsc, oneshot, watch, Semaphore}};
@@ -25,8 +25,17 @@ fn update_in_progress()->Error{update_error("CORE_UPDATE_IN_PROGRESS","Core requ
 // private bounded in-memory tracking, not a new IPC cancellation/transaction API.
 struct MutationFlight { terminal: AtomicBool }
 pub fn mutation_uncertain()->Error{Error::new("CORE_MUTATION_UNCERTAIN","内核变更结果尚未确认，请等待状态核对，暂勿重复保存或切换网络")}
-fn tracked_mutation(method:&str)->bool{matches!(method,"document.apply"|"core.start"|"core.stop"|"network.tun.disable"|"network.tun.prepare"|"network.tun.commit"|"core.reload"|"network.egress.set"|"network.egress.pause"|"network.egress.dns.refresh")}
+fn tracked_mutation(method:&str)->bool{matches!(method,"document.apply"|"core.start"|"core.stop"|"network.tun.disable"|"network.tun.prepare"|"network.tun.commit"|"core.reload"|"network.egress.set"|"network.egress.pause")}
 impl Inner {
+    fn observe_runtime_sample(&self,r:&Response,frame_len:usize){
+        if let Some(v)=r.result.as_ref().filter(|_|r.ok){
+            if v.get("runtime").is_some()&&v.get("connections").is_some(){
+                let mut s=crate::safe_log::RuntimeEvidence::new("ipc_response","ok",self.transport);s.sampled_unix_ms=Some(unix_ms());s.response_bytes=Some(frame_len as u64);s.inflight=Some(self.pending.lock().unwrap().len()as u64);
+                s.active=v.pointer("/connections/active").and_then(Value::as_u64);s.tcp=v.pointer("/connections/tcp").and_then(Value::as_u64);s.udp=v.pointer("/connections/udp").and_then(Value::as_u64);s.memory_bytes=v.pointer("/runtime/memory_bytes").and_then(Value::as_u64);s.snapshot_unavailable=Some(false);
+                if s.valid(){*self.recent.lock().unwrap()=Some(s);}
+            }
+        }
+    }
     fn observe_unmatched(&self,id:&str,frame_len:usize){
         let mut detail=crate::transport_diagnostics::Detail::new(crate::transport_diagnostics::Branch::IdUnmatched);detail.frame_len=Some(frame_len as u64);detail.id_len=Some(id.len()as u64);detail.request_id=id.strip_prefix('h').and_then(|v|v.parse::<u64>().ok()).filter(|n|*n<=9007199254740991);
         let mut d=crate::safe_log::RuntimeEvidence::new("ipc_response","ok",self.transport);d.transport=Some(detail);d.inflight=Some(self.pending.lock().unwrap().len()as u64);d.response_bytes=Some(frame_len as u64);
@@ -138,13 +147,7 @@ impl Supervisor {
                 match crate::transport_diagnostics::read_frame(&mut reader).await {
                     Ok(Some(frame)) => match Response::parse_observed(&frame) {
                         Ok(r) => {
-                            if let Some(v)=r.result.as_ref().filter(|_|r.ok){
-                                if v.get("runtime").is_some()&&v.get("connections").is_some(){
-                                    let mut s=crate::safe_log::RuntimeEvidence::new("ipc_response","ok","stdio");s.sampled_unix_ms=Some(unix_ms());s.response_bytes=Some(frame.len()as u64);s.inflight=Some(i.pending.lock().unwrap().len()as u64);
-                                    s.active=v.pointer("/connections/active").and_then(Value::as_u64);s.tcp=v.pointer("/connections/tcp").and_then(Value::as_u64);s.udp=v.pointer("/connections/udp").and_then(Value::as_u64);s.memory_bytes=v.pointer("/runtime/memory_bytes").and_then(Value::as_u64);s.snapshot_unavailable=Some(false);
-                                    if s.valid(){*i.recent.lock().unwrap()=Some(s);}
-                                }
-                            }
+                            i.observe_runtime_sample(&r, frame.len());
                             let tx = i.pending.lock().unwrap().remove(&r.id);
                             // Late replies to timed-out/cancelled requests are harmless and never reused.
                             if let Some(tx) = tx { let _ = tx.send(r.result()); }else{i.observe_unmatched(&r.id,frame.len());}
@@ -193,6 +196,7 @@ impl Supervisor {
         Ok(Self(inner))
     }
     fn observe_admission(&self){let mut d=crate::safe_log::RuntimeEvidence::new("ipc_admission","busy",self.0.transport);d.inflight=Some(self.pending()as u64);d.queued=Some((MAX_INFLIGHT-self.0.write.capacity())as u64);crate::safe_log::runtime_event_at(self.0.component_instance.load(Ordering::Acquire),crate::log_context::Component::Core,"diagnostics.collect",None,d);}
+    #[cfg(windows)]
     pub(crate) fn same_instance(&self,other:&Self)->bool{Arc::ptr_eq(&self.0,&other.0)}
     pub fn life(&self) -> watch::Receiver<Life> { self.0.life.subscribe() }
     pub fn pid(&self) -> u32 { self.0.pid }
@@ -256,8 +260,11 @@ impl Supervisor {
         let permit_pool = if method == "logs.get" { &self.0.log_permits } else { &self.0.permits };
         let _permit = permit_pool.clone().try_acquire_owned().map_err(|_| {self.observe_admission();Error::new("CORE_BUSY", "Core request limit reached")})?;
         if let Life::Exited(e) = &*self.0.life.borrow() { return Err(e.clone()); }
-        let id = format!("h{}", self.0.next.fetch_add(1, Ordering::Relaxed));
-        let frame = serde_json::to_vec(&Request { id: id.clone(), method: method.into(), params }).map_err(|_| Error::new("INVALID_PARAMS", "Invalid core request"))?;
+        #[derive(serde::Serialize)]
+        struct OutboundRequest<'a> { id: &'a str, method: &'a str, #[serde(skip_serializing_if = "Value::is_null")] params: &'a Value }
+        let seq = self.0.next.fetch_add(1, Ordering::Relaxed);
+        let id = format!("h{seq}");
+        let frame = serde_json::to_vec(&OutboundRequest { id: &id, method, params: &params }).map_err(|_| Error::new("INVALID_PARAMS", "Invalid core request"))?;
         if frame.len() > MAX_FRAME { return Err(Error::new("FRAME_TOO_LARGE", "Core request limit exceeded")); }
         let (tx, rx) = oneshot::channel();
         {
@@ -266,7 +273,7 @@ impl Supervisor {
             if let Life::Exited(e) = &*self.0.life.borrow() { return Err(e.clone()); }
             p.insert(id.clone(), tx);
         }
-        let request_id=id.strip_prefix('h').and_then(|s|s.parse::<u64>().ok());let request_bytes=frame.len()as u64;
+        let request_id=Some(seq);let request_bytes=frame.len()as u64;
         let _guard = PendingGuard { inner: self.0.clone(), id };
         let wait=async {
             self.0.write.send(Write::Frame(frame)).await.map_err(|_| Error::new("CORE_WRITE", "Core input closed"))?;

@@ -43,7 +43,6 @@ fn write(path:&Path,exe:&Path,accepted:&[String],local:&Path,source:&Path)->Resu
 
 /// Done by ordinary Setup before UAC; any I/O failure rolls back the earlier link.
 /// Foreign/modified links are deliberately left in place and reported as warnings.
-pub(crate) fn prepare(root:&Path,uninstall:bool)->Result<(crate::installed_handoff::ShortcutPending,bool)>{prepare_with_desktop(root,uninstall,true)}
 pub(crate) fn desktop_default(new_install:bool)->Result<bool>{
  let desktop=identity::known_folder(GUID::from_u128(0xb4bfcc3a_db2c_424c_b029_7fe99a87c641))?;
  Ok(new_install||desktop.join("Kat.lnk").exists()||desktop.join("Kat Client.lnk").exists())

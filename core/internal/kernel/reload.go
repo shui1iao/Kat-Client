@@ -9,11 +9,8 @@ import (
 	"net/netip"
 	"sort"
 	"strconv"
-	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/shui1iao/Kat/internal/api"
 )
 
 // ---- configuration generations ----
@@ -41,7 +38,6 @@ type tcpEntry struct {
 	key    string
 	ln     net.Listener
 	bind   atomic.Pointer[binding]
-	xh     atomic.Pointer[xhttpRunner] // set while the bound inbound uses XHTTP
 	closed atomic.Bool
 	done   chan struct{}
 	tfo    bool // TCP_FASTOPEN set on ln (reloadMu)
@@ -63,15 +59,15 @@ func ephemeralPort(key string) bool {
 
 // refEntry returns the generation bound to e with one reference taken, or
 // nil when e no longer accepts.
-func (k *core) refEntry(e *tcpEntry) (*Server, int, *xhttpRunner) {
+func (k *core) refEntry(e *tcpEntry) (*Server, int) {
 	k.bindMu.RLock()
 	defer k.bindMu.RUnlock()
 	if e.closed.Load() {
-		return nil, 0, nil
+		return nil, 0
 	}
 	b := e.bind.Load()
 	b.g.refs.Add(1) // current generation: refs >= 1 while bindMu is held
-	return b.g, b.idx, e.xh.Load()
+	return b.g, b.idx
 }
 
 // tryRef takes a reference unless the generation is already released.
@@ -157,31 +153,20 @@ func (e *prepareError) Unwrap() error { return e.err }
 
 // plan holds what prepare created and commit installs (or abort undoes).
 type plan struct {
-	keys    []string
-	newTCP  map[string]net.Listener
-	newUDP  map[string]*ssUDPListener
-	logger  *logger // non-nil: replace the log sink
-	created []*xhttpRunner
-	sel     map[string]selRecord
-	selLog  []string
-	tls     tlsPlan
-	api     *api.Prepared
-	state   *statePlan
+	keys   []string
+	newTCP map[string]net.Listener
+	logger *logger // non-nil: replace the log sink
+	sel    map[string]selRecord
+	selLog []string
+	state  *statePlan
 }
 
 func (p *plan) abort() {
-	if p.api != nil {
-		p.api.Abort()
-	}
 	if p.state != nil {
 		p.state.abort()
 	}
 	for _, ln := range p.newTCP {
 		ln.Close()
-	}
-	for _, u := range p.newUDP {
-		u.socket.Close()
-		u.releaseRcvBuf()
 	}
 	if p.logger != nil {
 		p.logger.shutdown()
@@ -206,7 +191,7 @@ func (k *core) prepareContext(ctx context.Context, c Config, prev *Server) (*Ser
 	} else {
 		g.pool = newBufferPool(l.BufferSize, l.PoolBuffers)
 	}
-	p := &plan{newTCP: map[string]net.Listener{}, newUDP: map[string]*ssUDPListener{}}
+	p := &plan{newTCP: map[string]net.Listener{}}
 	fail := func(stage string, e error) (*Server, *plan, error) {
 		p.abort()
 		if g.clientCancel != nil {
@@ -290,21 +275,6 @@ func (k *core) prepareContext(ctx context.Context, c Config, prev *Server) (*Ser
 		return fail("canceled", e)
 	}
 	p.sel, p.selLog = k.applySelections(g)
-	if e := g.prepareAnyTLS(prev); e != nil {
-		return fail("inbound", e)
-	}
-	if e := g.prepareXHTTP(prev); e != nil {
-		return fail("inbound", e)
-	}
-	if e := g.prepareVLESS(prev); e != nil {
-		return fail("inbound", e)
-	}
-	if e := g.prepareEncrypted(prev); e != nil {
-		return fail("inbound", e)
-	}
-	if e := g.prepareTLS(p); e != nil {
-		return fail("tls", e)
-	}
 	seen := map[string]bool{}
 	ephemeral := map[string]int{}
 	for i := range g.cfg.Inbounds {
@@ -326,36 +296,12 @@ func (k *core) prepareContext(ctx context.Context, c Config, prev *Server) (*Ser
 		}
 		seen[key] = true
 		p.keys = append(p.keys, key)
-		var addr net.Addr
-		if e := k.tcpEntries[key]; e != nil {
-			addr = e.ln.Addr()
-		} else {
+		if k.tcpEntries[key] == nil {
 			ln, err := net.Listen("tcp", in.Listen)
 			if err != nil {
 				return fail("bind_tcp", fmt.Errorf("inbound %d: cannot listen on %s: %w", i, in.Listen, err))
 			}
 			p.newTCP[key] = ln
-			addr = ln.Addr()
-		}
-		if in.ssRuntime != nil {
-			k.udpMu.Lock()
-			u := k.udpEntries[key]
-			k.udpMu.Unlock()
-			if u == nil {
-				u, err := g.listenSSUDP(*in, addr)
-				if err != nil {
-					var rb *ssRcvBufError
-					if errors.As(err, &rb) {
-						p.abort()
-						g.rt.close()
-						g.closeDNS()
-						return nil, nil, err
-					}
-					return fail("bind_udp", fmt.Errorf("inbound %d: cannot listen on udp %s: %w", i, in.Listen, err))
-				}
-				u.key = key
-				p.newUDP[key] = u
-			}
 		}
 	}
 	if prev != nil && logSinkChanged(prev.cfg.Log, c.Log) {
@@ -366,10 +312,6 @@ func (k *core) prepareContext(ctx context.Context, c Config, prev *Server) (*Ser
 		p.logger = lg
 	}
 	if prev != nil {
-		p.api, e = k.prepareAPI(&c)
-		if e != nil {
-			return fail("api", e)
-		}
 		p.state, e = k.prepareState(&c, p.sel)
 		if e != nil {
 			return fail("stats", e)
@@ -416,15 +358,10 @@ func (k *core) commitContext(caller context.Context, g *Server, p *plan) error {
 	ctx, cancel := context.WithCancel(k.ctx)
 	g.bgCancel = cancel
 	var starts []*tcpEntry
-	var udpStarts []*ssUDPListener
-	var drains []*ssUDPListener
 	var removed []*tcpEntry
-	var retire []*xhttpRunner
-	udpUsed := map[string]bool{}
 	k.bindMu.Lock()
 	used := map[string]bool{}
 	for i := range g.cfg.Inbounds {
-		in := &g.cfg.Inbounds[i]
 		key := p.keys[i]
 		used[key] = true
 		e := k.tcpEntries[key]
@@ -434,57 +371,15 @@ func (k *core) commitContext(caller context.Context, g *Server, p *plan) error {
 			starts = append(starts, e)
 		}
 		e.bind.Store(&binding{g, i})
-		old := e.xh.Load()
-		if in.xhttpServer != nil {
-			if old != nil && old.codec == in.xhttpServer {
-				old.bind.Store(&binding{g, i})
-			} else {
-				r := newXHTTPRunner(in.xhttpServer)
-				r.bind.Store(&binding{g, i})
-				e.xh.Store(r)
-				p.created = append(p.created, r)
-				if old != nil {
-					retire = append(retire, old)
-				}
-			}
-		} else if old != nil {
-			e.xh.Store(nil)
-			retire = append(retire, old)
-		}
 		g.listeners = append(g.listeners, e.ln)
-		if in.ssRuntime != nil {
-			udpUsed[key] = true
-			k.udpMu.Lock()
-			u := k.udpEntries[key]
-			if u == nil {
-				u = p.newUDP[key]
-				k.udpEntries[key] = u
-				udpStarts = append(udpStarts, u)
-			}
-			u.bind.Store(&udpBinding{g: g, idx: i, runtime: in.ssRuntime})
-			u.draining.Store(false)
-			k.udpMu.Unlock()
-			g.ssListeners = append(g.ssListeners, u)
-		}
 	}
 	for key, e := range k.tcpEntries {
 		if !used[key] {
 			e.closed.Store(true)
 			delete(k.tcpEntries, key)
 			removed = append(removed, e)
-			if r := e.xh.Swap(nil); r != nil {
-				retire = append(retire, r)
-			}
 		}
 	}
-	k.udpMu.Lock()
-	for key, u := range k.udpEntries {
-		if !udpUsed[key] && !u.draining.Load() {
-			u.draining.Store(true)
-			drains = append(drains, u)
-		}
-	}
-	k.udpMu.Unlock()
 	k.gen.Store(g)
 	k.bindMu.Unlock()
 	k.selMu.Lock()
@@ -502,27 +397,11 @@ func (k *core) commitContext(caller context.Context, g *Server, p *plan) error {
 	for _, e := range removed {
 		e.ln.Close()
 	}
-	for _, r := range p.created {
-		k.runners[r] = true
-		k.accepts.Add(1)
-		go k.runXHTTP(r)
-	}
-	for _, r := range retire {
-		k.retireRunner(r)
-	}
 	for _, e := range starts {
 		k.accepts.Add(1)
 		go k.acceptLoop(e)
 	}
-	for _, u := range udpStarts {
-		k.accepts.Add(1)
-		go k.loopSSUDP(u)
-	}
-	for _, u := range drains {
-		k.closeIfDrained(u)
-	}
 	k.applyTFO(g, p)
-	k.commitTLS(g, p)
 	k.checkTFO(&g.cfg)
 	if prev != nil {
 		k.applyRuntime(prev, g, p)
@@ -570,12 +449,6 @@ func (k *core) applyRuntime(prev, g *Server, p *plan) {
 	if p.state != nil {
 		p.state.commit()
 	}
-	if p.api != nil {
-		k.apiMu.Lock()
-		k.api.srv = p.api.Commit()
-		k.apiMu.Unlock()
-	}
-	k.guard.configure(&g.cfg)
 }
 
 func configuredLevel(o *LogOptions) logLevel {
@@ -711,15 +584,6 @@ func (s *Server) reloadCandidateLockedContext(ctx context.Context, trigger strin
 			if prev.cfg.defaults != [2]string{} {
 				c.ApplyDefaultPaths(prev.cfg.defaults[0], prev.cfg.defaults[1])
 			}
-			if prev.cfg.stateDir != "" {
-				c.ApplyDefaultStateDir(prev.cfg.stateDir)
-			}
-			for i := range c.Inbounds {
-				if i < len(prev.cfg.Inbounds) && prev.cfg.Inbounds[i].ephemeralTLS {
-					c.Inbounds[i].ephemeralTLS = true
-					c.Inbounds[i].tlsConfig = prev.cfg.Inbounds[i].tlsConfig
-				}
-			}
 		}
 	}
 	if e != nil {
@@ -823,80 +687,3 @@ func (k *core) reloadView() ReloadView {
 }
 
 // ---- SS UDP sockets across generations ----
-
-type udpBinding struct {
-	g       *Server
-	idx     int
-	runtime *ssRuntime
-}
-
-// closeIfDrained closes a removed SS UDP socket once no association created
-// on it is left. Until then it only serves existing associations.
-func (k *core) closeIfDrained(u *ssUDPListener) {
-	if !u.draining.Load() || u.assocs.Load() != 0 {
-		return
-	}
-	k.udpMu.Lock()
-	if u.draining.Load() && u.assocs.Load() == 0 && k.udpEntries[u.key] == u {
-		delete(k.udpEntries, u.key)
-		k.udpMu.Unlock()
-		u.socket.Close()
-		u.releaseRcvBuf()
-		return
-	}
-	k.udpMu.Unlock()
-}
-
-// ---- XHTTP across generations ----
-
-// xhttpRunner is one running XHTTP server fed with TLS connections by the
-// accept loop of its socket. An unchanged XHTTP configuration keeps its
-// runner (and its HTTP sessions) across reloads; a replaced runner keeps
-// serving its open HTTP connections and stops when they are gone.
-type xhttpRunner struct {
-	codec  xhttpCodec
-	ready  chan net.Conn
-	closed chan struct{}
-	once   sync.Once
-	bind   atomic.Pointer[binding]
-}
-
-func newXHTTPRunner(codec xhttpCodec) *xhttpRunner {
-	return &xhttpRunner{codec: codec, ready: make(chan net.Conn), closed: make(chan struct{})}
-}
-
-func (r *xhttpRunner) close() { r.once.Do(func() { close(r.closed) }) }
-
-// ref returns the generation of r with one reference taken.
-func (k *core) refRunner(r *xhttpRunner) (*Server, int) {
-	k.bindMu.RLock()
-	defer k.bindMu.RUnlock()
-	b := r.bind.Load()
-	if !b.g.tryRef() {
-		return nil, 0
-	}
-	return b.g, b.idx
-}
-
-func (k *core) retireRunner(r *xhttpRunner) {
-	go func() {
-		t := time.NewTicker(2 * time.Second)
-		defer t.Stop()
-		for {
-			select {
-			case <-r.closed:
-				return
-			case <-k.ctx.Done():
-				return
-			case <-t.C:
-				if r.codec.Stats().Connections == 0 {
-					k.reloadMu.Lock()
-					delete(k.runners, r)
-					k.reloadMu.Unlock()
-					r.close()
-					return
-				}
-			}
-		}
-	}()
-}

@@ -90,13 +90,34 @@ pub fn authorize_core_lookup(bound_sid:&str,caller_sid:&str,caller_session:u32,p
 
 #[cfg(test)]mod round11_dns_tests{
  use super::*;
+ fn ep(address:&str,scope_id:u32)->SystemDnsEndpoint{SystemDnsEndpoint{address:address.into(),owner_luid:10,if_index:7,scope_id}}
  #[test]fn mixed_dns_skips_unusable_preserves_order_and_deduplicates(){
- let v=["fe80::1","fe80::1%12","127.0.0.1","::1","224.0.0.1","::","0.0.0.0","192.168.1.1","192.168.1.1","2001:4860:4860::8888"];
- assert_eq!(physical_dns(v.map(str::to_string)).unwrap(),vec!["192.168.1.1","2001:4860:4860::8888"]);
+  let v=[ep("fe80::1",7),ep("fe80::1%12",7),ep("127.0.0.1",0),ep("::1",0),ep("224.0.0.1",0),ep("::",0),ep("0.0.0.0",0),ep("198.18.0.2",0),ep("192.168.1.1",0),ep("192.168.1.1",0),ep("2001:4860:4860::8888",0)];
+  let filtered=physical_dns(v).unwrap();
+  assert_eq!(filtered,vec![ep("fe80::1",7),ep("192.168.1.1",0),ep("2001:4860:4860::8888",0)]);
+  let p=Physical{system_dns:filtered,..Physical::waiting()};
+  assert_eq!(p.host_dns(),vec!["192.168.1.1","2001:4860:4860::8888"]);
  }
- #[test]fn only_linklocal_reports_actionable_closed_code(){let e=physical_dns(["fe80::1".into(),"fe80::2%7".into()]).unwrap_err();assert_eq!(e.code,"DNS_UNSUPPORTED");assert_eq!(e.message,DNS_UNUSABLE_MESSAGE);}
- #[test]fn over16_keeps_first16_usable_unique(){let v=(1..=32).flat_map(|n|["fe80::1".into(),format!("192.0.2.{n}"),format!("192.0.2.{n}")]);let out=physical_dns(v).unwrap();assert_eq!(out.len(),16);assert_eq!(out[0],"192.0.2.1");assert_eq!(out[15],"192.0.2.16");}
- #[test]fn collection_filters_before_fingerprint_and_strict_protocol_stays_closed(){let s=include_str!("windows/netapi.rs");assert!(s.find("let dns=crate::service_protocol::physical_dns(dns)?").unwrap()<s.find("details.extend(dns.clone())").unwrap());let p=Physical{ipv4_if_index:Some(1),ipv6_if_index:None,bootstrap_dns:vec!["fe80::1".into(),"1.1.1.1".into()],fingerprint:"a".repeat(64)};assert!(p.validate().is_err());let p=Physical{bootstrap_dns:physical_dns(p.bootstrap_dns.clone()).unwrap(),..p};assert!(p.validate().is_ok());}
+ #[test]fn invalid_or_unusable_dns_reports_closed_code(){
+  let e=physical_dns([ep("127.0.0.1",0),ep("0.0.0.0",0),ep("fe80::2%7",7)]).unwrap_err();
+  assert_eq!(e.code,"DNS_UNSUPPORTED");assert_eq!(e.message,DNS_UNUSABLE_MESSAGE);
+  assert_eq!(physical_dns([ep("fe80::1",0)]).unwrap_err().code,"DNS_SCOPE");
+  assert_eq!(physical_dns([ep("1.1.1.1",7)]).unwrap_err().code,"DNS_SCOPE");
+ }
+ #[test]fn over16_keeps_first16_usable_unique(){
+  let v=(1..=32).flat_map(|n|[ep("127.0.0.1",0),ep(&format!("192.0.2.{n}"),0),ep(&format!("192.0.2.{n}"),0)]);
+  let out=physical_dns(v).unwrap();
+  assert_eq!(out.len(),16);assert_eq!(out[0].address,"192.0.2.1");assert_eq!(out[15].address,"192.0.2.16");
+ }
+ #[test]fn collection_filters_before_fingerprint_and_strict_protocol_stays_closed(){
+  let s=include_str!("windows/netapi.rs");
+  assert!(s.find("let dns=crate::service_protocol::physical_dns(dns)?").unwrap()<s.find("details.push(serde_json::to_string(&dns)").unwrap());
+  let hex64="a".repeat(64);
+  let p=Physical{metric_digest:hex64.clone(),gateway_digest:hex64.clone(),address_digest:hex64.clone(),schema:EGRESS_SCHEMA,ipv4_if_index:Some(7),ipv6_if_index:None,ipv4_luid:Some(10),ipv6_luid:None,system_dns:vec![ep("127.0.0.1",0),ep("1.1.1.1",0)],identity:hex64.clone(),fingerprint:hex64};
+  assert!(p.validate().is_err());
+  let p=Physical{system_dns:physical_dns(p.system_dns.clone()).unwrap(),..p};
+  assert!(p.validate().is_ok());
+ }
 }
 
 /// Legacy schema-1 journal may be removed only after owned routes/settings are restored,

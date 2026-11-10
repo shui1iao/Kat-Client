@@ -24,7 +24,7 @@ const maxInflated = 512 << 20
 
 // yamlPayload returns the payload strings of a Clash rule-provider file.
 func yamlPayload(b []byte) ([]string, error) {
-	if _, err := textOf(b); err != nil {
+	if _, err := checkText(b); err != nil {
 		return nil, err
 	}
 	var doc map[string]any
@@ -700,7 +700,7 @@ func (b *setBuilder) addSB(c *cond, sb *sbRule) error {
 // ---- sing-box source JSON ----
 
 func parseSingBoxJSON(b []byte, limit int, env parseEnv) (*setData, error) {
-	if _, err := textOf(b); err != nil {
+	if _, err := checkText(b); err != nil {
 		return nil, err
 	}
 	var top map[string]json.RawMessage

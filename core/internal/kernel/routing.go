@@ -4,16 +4,11 @@ import (
 	"context"
 	"errors"
 	"net/netip"
-	"strings"
 
 	"github.com/shui1iao/Kat/internal/route"
 )
 
 var errRouteReject = errors.New("destination rejected by routing")
-
-func (r RouteRule) matchDomain(name string) bool {
-	return name != "" && (r.Domain == name || r.DomainSuffix != "" && (name == r.DomainSuffix || strings.HasSuffix(name, "."+r.DomainSuffix)))
-}
 
 // Only explicit system DNS with no rules/final proxy keeps the original fast path.
 func (s *Server) networkPolicy() bool {
@@ -23,18 +18,6 @@ func (s *Server) networkPolicy() bool {
 // routeDirect is the legacy (pre-engine) per-candidate evaluation of legacy
 // rules. Forwarding uses the route engine (decide); this is kept as the
 // reference the existing selector-normalization tests compare against.
-func (s *Server) routeDirect(name string, ip netip.Addr) bool {
-	if s.cfg.Routing == nil {
-		return true
-	}
-	ip = ip.Unmap()
-	for _, r := range s.cfg.Routing.Rules {
-		if r.matchDomain(name) || r.IPCIDR != "" && r.prefix.Contains(ip) {
-			return r.Action == "direct"
-		}
-	}
-	return true
-}
 
 // routeUDP decides one datagram. Without a network policy it is exactly the
 // original resolve (system DNS, first address). Otherwise it holds one shared

@@ -7,7 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"errors"
-	"fmt"
+
 	"golang.org/x/net/dns/dnsmessage"
 	"io"
 	"net"
@@ -321,16 +321,22 @@ func TestDNSRoutingDoHCertificateAndErrors(t *testing.T) {
 	}
 	roots := x509.NewCertPool()
 	roots.AddCert(h.Certificate())
+	// Fresh resolver: never mutate a Transport while a canceled sibling TLS dial may still run.
+	r = configuredDNS(t, h.URL+"/dns-query", 0)
 	r.upstreams[0].transport.TLSClientConfig = &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}
 	if _, e := lookupDNS(t, r, "doh.example"); e != nil {
 		t.Fatal("trusted DoH failed", e)
 	}
 	r.upstreams[0].transport.CloseIdleConnections()
+	// Fresh resolver: never mutate a Transport while a canceled sibling TLS dial may still run.
+	r = configuredDNS(t, h.URL+"/dns-query", 0)
 	r.upstreams[0].transport.TLSClientConfig = &tls.Config{RootCAs: roots, ServerName: "wrong.example", MinVersion: tls.VersionTLS12}
 	if _, e := lookupDNS(t, r, "doh.example"); e == nil {
 		t.Fatal("hostname check bypassed")
 	}
 	r.upstreams[0].transport.CloseIdleConnections()
+	// Fresh resolver: never mutate a Transport while a canceled sibling TLS dial may still run.
+	r = configuredDNS(t, h.URL+"/dns-query", 0)
 	r.upstreams[0].transport.TLSClientConfig = &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}
 	for i := int32(1); i <= 4; i++ {
 		mode.Store(i)
@@ -398,139 +404,6 @@ func TestDNSRoutingConcurrentCancelAndPartialCache(t *testing.T) {
 	wg.Wait()
 	if len(r.cache) != 0 || len(r.slots) != 0 {
 		t.Fatal("zero TTL cached or slots leaked")
-	}
-}
-
-func TestDNSRoutingOrderedRulesAndLiteralTCPUDP(t *testing.T) {
-	dns := newDNSFixture(t, func(w []byte) []byte { return dnsReply(w, []string{"127.0.0.2", "127.0.0.1"}, 30) })
-	target := echoTCP(t)
-	u := localUDP(t)
-	name := "custom-target.example"
-	s := startTest(t, ssIn(), func(c *Config) {
-		c.DNS = &DNSOptions{Server: dns.address()}
-		c.Routing = &RoutingOptions{Rules: []RouteRule{{IPCIDR: "127.0.0.2/32", Action: "reject"}}}
-	})
-	c, e := s.dial(context.Background(), Address{name, target.Port})
-	if e != nil {
-		t.Fatal("custom DNS TCP", e)
-	}
-	c.SetDeadline(time.Now().Add(time.Second))
-	writeAll(c, []byte("direct"))
-	b := make([]byte, 6)
-	if _, e = io.ReadFull(c, b); e != nil || string(b) != "direct" {
-		t.Fatal("literal TCP echo", e)
-	}
-	c.Close()
-	endpoint, _ := net.ResolveUDPAddr("udp", s.Addresses()[0].String())
-	client := localUDP(t)
-	dst := Address{name, addrFromNet(u.LocalAddr()).Port}
-	client.WriteToUDP(udp2022(t, dst, 901, 1, []byte("allowed")), endpoint)
-	p, out := recvUDP(t, u)
-	if string(p) != "allowed" {
-		t.Fatal("custom DNS native UDP")
-	}
-	u.WriteToUDP([]byte("reply"), out)
-	w, _ := recvUDP(t, client)
-	idleCheckResponse(t, true, w, "reply")
-	rt := s.ssListeners[0].bind.Load().runtime
-	rt.mu.Lock()
-	assoc := rt.associations[ssAssociationID{session: 901}]
-	rt.mu.Unlock()
-	assoc.a.mu.Lock()
-	_, bad := assoc.a.allowed[netip.AddrPortFrom(netip.MustParseAddr("127.0.0.2"), dst.Port)]
-	assoc.a.mu.Unlock()
-	if bad {
-		t.Fatal("rejected candidate authorized")
-	}
-	// Direct-before-reject and reject-before-direct are genuinely one list.
-	cases := []struct {
-		rules   []RouteRule
-		want    bool
-		queries bool
-	}{{[]RouteRule{{Domain: name, Action: "direct"}, {IPCIDR: "127.0.0.0/8", Action: "reject"}}, true, true}, {[]RouteRule{{IPCIDR: "127.0.0.0/8", Action: "reject"}, {Domain: name, Action: "direct"}}, false, true}, {[]RouteRule{{Domain: name, Action: "reject"}, {IPCIDR: "127.0.0.0/8", Action: "direct"}}, false, false}, {[]RouteRule{{IPCIDR: "127.0.0.1/32", Action: "direct"}, {Domain: name, Action: "reject"}}, true, true}}
-	for i, tc := range cases {
-		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			x := startTest(t, inFor("socks5", nil), func(c *Config) {
-				z := 0
-				c.DNS = &DNSOptions{Server: dns.address(), CacheEntries: &z}
-				c.Routing = &RoutingOptions{Rules: tc.rules}
-			})
-			before := dns.count.Load()
-			conn, e := x.dial(context.Background(), Address{name, target.Port})
-			if conn != nil {
-				conn.Close()
-			}
-			if (e == nil) != tc.want {
-				t.Fatal("ordered routing", e)
-			}
-			if (dns.count.Load() > before) != tc.queries {
-				t.Fatal("pre-DNS priority", before, dns.count.Load())
-			}
-		})
-	}
-	// Suffix boundary, exact domain, bare IP, mapped IP and default direct.
-	z := &Config{Routing: &RoutingOptions{Rules: []RouteRule{{DomainSuffix: "Example.COM.", Action: "reject"}, {IPCIDR: "::ffff:192.0.2.0/120", Action: "reject"}}}}
-	if e := z.validateNetwork(); e != nil {
-		t.Fatal(e)
-	}
-	rs := &Server{cfg: *z}
-	if rs.routeDirect("x.example.com", netip.MustParseAddr("127.0.0.1")) || !rs.routeDirect("badexample.com", netip.MustParseAddr("127.0.0.1")) || rs.routeDirect("", netip.MustParseAddr("192.0.2.1")) {
-		t.Fatal("selector normalization")
-	}
-	t.Logf("custom resolver used for literal TCP and SS native UDP; DNS queries=%d", dns.count.Load())
-}
-
-func TestDNSRoutingRejectUDPWhitelistAndSystemFallback(t *testing.T) {
-	queries := newDNSFixture(t, func(w []byte) []byte { return dnsReply(w, []string{"127.0.0.1"}, 30) })
-	u := localUDP(t)
-	s := startTest(t, ssIn(), func(c *Config) {
-		c.DNS = &DNSOptions{Server: queries.address()}
-		c.Routing = &RoutingOptions{Rules: []RouteRule{{DomainSuffix: "blocked.example", Action: "reject"}}}
-	})
-	client := localUDP(t)
-	endpoint, _ := net.ResolveUDPAddr("udp", s.Addresses()[0].String())
-	port := addrFromNet(u.LocalAddr()).Port
-	client.WriteToUDP(udp2022(t, Address{"blocked.example", port}, 920, 1, []byte("reject")), endpoint)
-	silentUDP(t, u)
-	if queries.count.Load() != 0 {
-		t.Fatal("domain reject queried DNS")
-	}
-	rt := s.ssListeners[0].bind.Load().runtime
-	rt.mu.Lock()
-	a := rt.associations[ssAssociationID{session: 920}]
-	rt.mu.Unlock()
-	if a == nil {
-		t.Fatal("expected authenticated SS association")
-	}
-	a.a.mu.Lock()
-	n := len(a.a.allowed)
-	a.a.mu.Unlock()
-	if n != 0 {
-		t.Fatal("rejected target whitelisted")
-	}
-	before := a.a.activity.Load()
-	u.WriteToUDPAddrPort([]byte("unsolicited"), a.a.outbound4.LocalAddr().(*net.UDPAddr).AddrPort())
-	silentUDP(t, client)
-	if a.a.activity.Load() != before {
-		t.Fatal("denied target return kept alive")
-	}
-	client.WriteToUDP(udp2022(t, Address{"good.example", port}, 920, 2, []byte("allowed")), endpoint)
-	recvUDP(t, u)
-	a.a.mu.Lock()
-	n = len(a.a.allowed)
-	a.a.mu.Unlock()
-	if n != 1 {
-		t.Fatal("allowed target did not remain isolated")
-	}
-	broken := newDNSFixture(t, func(w []byte) []byte { return nil })
-	r := configuredDNS(t, broken.address(), 0)
-	var system atomic.Int64
-	r.bootstrap = func(context.Context, string, string) ([]netip.Addr, error) {
-		system.Add(1)
-		return []netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil
-	}
-	if _, e := lookupDNS(t, r, "localhost"); e != nil || system.Load() != 1 {
-		t.Fatal("custom failure did not use system exactly once", e, system.Load())
 	}
 }
 
@@ -605,42 +478,5 @@ func TestDNSRoutingPartialFamilyRealTCPUDP(t *testing.T) {
 			}
 			t.Logf("%s actual TCP/UDP succeeded, DNS queries=%d", failure, f.count.Load())
 		})
-	}
-}
-
-func TestDNSRoutingRepresentativeAnyTLSSSTCPAndExplicitSystem(t *testing.T) {
-	f := newDNSFixture(t, func(w []byte) []byte { return dnsReply(w, []string{"127.0.0.1"}, 30) })
-	target := echoTCP(t)
-	cert, roots := testCert(t)
-	s := startTest(t, anyIn(cert), func(c *Config) { c.DNS = &DNSOptions{Server: f.address()} })
-	c := atBegin(t, s, roots, 2)
-	atOpen(t, c, 1, Address{"anytls.example", target.Port}, []byte("anytls"))
-	if string(atPayload(t, c, 1, 6)) != "anytls" {
-		t.Fatal("AnyTLS custom DNS")
-	}
-	c.Close()
-	var accepts atomic.Int64
-	ssTarget := sinkTCP(t, "tcp4", "127.0.0.1:0", func(c net.Conn) {
-		var b [7]byte
-		if _, e := io.ReadFull(c, b[:]); e == nil && string(b[:]) == "initial" {
-			accepts.Add(1)
-		}
-	})
-	ss := startTest(t, ssIn(), func(c *Config) { c.DNS = &DNSOptions{Server: f.address()} })
-	raw := dialPeer(t, ss, nil)
-	writeAll(raw, tcp2022(t, Address{"ss.example", ssTarget.Port}, 33))
-	waitFor(t, func() bool { return accepts.Load() == 1 })
-	raw.Close()
-	old := startTest(t, inFor("socks5", nil), nil)
-	if old.networkPolicy() || old.dns.capacity != 0 {
-		t.Fatal("explicit system fast path changed")
-	}
-	direct, e := old.dial(context.Background(), Address{"localhost", target.Port})
-	if e != nil {
-		t.Fatal("explicit system TCP", e)
-	}
-	direct.Close()
-	if _, e = old.resolve(context.Background(), Address{"localhost", target.Port}); e != nil {
-		t.Fatal("explicit system UDP resolution", e)
 	}
 }

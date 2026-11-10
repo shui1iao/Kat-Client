@@ -81,6 +81,17 @@ func TestR10StartupRetryNotForServerOrSuccessOrManual(t *testing.T) {
 			} else {
 				waitRounds(t, g, 1)
 			}
+			if mode == "server" {
+				clk.Advance(5*time.Second - time.Nanosecond)
+				if g.roundsRun.Load() != 1 {
+					t.Fatal("confirmation before 5s")
+				}
+				clk.Advance(time.Nanosecond)
+				waitRounds(t, g, 2)
+				if !g.st[0].recovery.down {
+					t.Fatal("independent second failure not applied")
+				}
+			}
 			before := g.roundsRun.Load()
 			clk.Advance(15 * time.Second)
 			time.Sleep(5 * time.Millisecond)

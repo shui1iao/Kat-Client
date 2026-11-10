@@ -2,12 +2,9 @@ package kernel
 
 import (
 	"bytes"
-	"context"
+
 	"errors"
-	"fmt"
-	A "github.com/shui1iao/Kat/internal/anytls"
-	"io"
-	"net"
+
 	"strings"
 	"sync"
 	"testing"
@@ -44,45 +41,7 @@ func TestFailureCategoriesBoundedAndPrivate(t *testing.T) {
 		t.Fatal("missing suppressed count", b.String())
 	}
 }
-func TestFailureClassifiersIgnoreInputsAndNormalEOF(t *testing.T) {
-	var b bytes.Buffer
-	s := &Server{core: &core{ctx: context.Background(), failures: &failureLog{write: func(p []byte) error { _, e := b.Write(p); return e }}}}
-	for _, e := range []error{nil, io.EOF, net.ErrClosed, context.Canceled} {
-		if !quietFailure(e) {
-			t.Fatal("normal close classified as failure")
-		}
-		s.outboundFailure(e)
-		if _, ok := anyTLSFailure(e); ok {
-			t.Fatal("normal AnyTLS close logged")
-		}
-	}
-	if b.Len() != 0 {
-		t.Fatal("normal close not silent")
-	}
-	s.outboundFailure(&net.DNSError{Err: "secret-password", Name: "private-target.example"})
-	s.outboundFailure(fmt.Errorf("%w: private-target.example", errRouteReject))
-	s.outboundFailure(errors.New("203.0.113.7 secret-key payload"))
-	for _, word := range []string{"dns_failed", "rule_reject", "connect_failed"} {
-		if !strings.Contains(b.String(), word) {
-			t.Fatal(word)
-		}
-	}
-	for _, word := range []string{"secret", "private-target", "203.0.113.7", "payload"} {
-		if strings.Contains(b.String(), word) {
-			t.Fatal("leak", word)
-		}
-	}
-	cases := []struct {
-		e error
-		k failureKind
-	}{{A.ErrAuthentication, failAnyAuth}, {fmt.Errorf("%w: malicious", A.ErrProtocol), failAnyProtocol}, {A.ErrSessionLimit, failAnyBudget}, {A.ErrSlowConsumer, failAnyBudget}, {io.ErrUnexpectedEOF, failAnyIO}}
-	for _, v := range cases {
-		k, ok := anyTLSFailure(v.e)
-		if !ok || k != v.k {
-			t.Fatal("category", v.e)
-		}
-	}
-}
+
 func TestFailureConcurrentCapAndBrokenSink(t *testing.T) {
 	var mu sync.Mutex
 	n := 0

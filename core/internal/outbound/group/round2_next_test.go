@@ -72,6 +72,11 @@ func TestRound2SoftFixedLifecycle(t *testing.T) {
 			}
 			check("b")
 			g.RecordProbe("b", 0, at.Add(time.Second), errors.New("failed"))
+			if kind == TypeFallback {
+				check("b")
+				acceptedFallbackFailure(t, g, clk, "b")
+				at = clk.Now()
+			}
 			check("a")
 			if g.cfg.fixed != "b" {
 				t.Fatal("lost fixed on failure")
@@ -87,6 +92,12 @@ func TestRound2SoftFixedLifecycle(t *testing.T) {
 			unpinned := newAuto(t, Options{Type: kind, Probe: &ProbeOptions{URL: "http://probe.test/", ClientHead: true}}, members(newFake("a"), newFake("b")), clk, nil, nil)
 			if unpinned.Snapshot().Fixed != "" {
 				t.Fatal("unpin persisted")
+			}
+			if kind == TypeSmart {
+				if unpinned.Current() != "" {
+					t.Fatal("cold Smart selected before complete round")
+				}
+				v2Round(unpinned, clk, 10*time.Millisecond, 40*time.Millisecond)
 			}
 			if unpinned.Current() != "a" {
 				t.Fatal("unpin did not restore automatic")

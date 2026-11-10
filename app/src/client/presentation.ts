@@ -1,7 +1,18 @@
 import type {ConnectionInfo,ConnectionsReply,CoreStatus,SourceObject} from './types';
 import {trafficSlices} from './display';
 import {MATCH_FIELDS,simpleMatch,targetOf} from './rules';
-export function policyColor(name:string,status:CoreStatus|null,label:(n:string)=>string=(n)=>n){if(name==='direct')return '#F97316';if(name==='reject')return '#64748B';return trafficSlices(status?.traffic.groups?.map(g=>({...g,name:label(g.name)}))).find(g=>g.label===label(name))?.color??'#64748B';}
+const policyColorCache=new WeakMap<CoreStatus,{labelRef:(n:string)=>string;colors:Map<string,string>}>();
+export function policyColor(name:string,status:CoreStatus|null,label:(n:string)=>string=(n)=>n){
+ if(name==='direct')return '#F97316';
+ if(name==='reject'||!status)return '#64748B';
+ let cached=policyColorCache.get(status);
+ if(!cached||cached.labelRef!==label){
+  const colors=new Map<string,string>();
+  for(const g of trafficSlices(status.traffic.groups?.map(g=>({...g,name:label(g.name)}))))if(!colors.has(g.label))colors.set(g.label,g.color);
+  cached={labelRef:label,colors};policyColorCache.set(status,cached);
+ }
+ return cached.colors.get(label(name))??'#64748B';
+}
 export function connectionRates(previous:{at:number;items:ConnectionInfo[]}|null,next:{at:number;items:ConnectionInfo[]}){const result:Record<number,number|null>={};const old=new Map(previous?.items.map(x=>[x.id,x])??[]),dt=previous?(next.at-previous.at)/1000:0;for(const c of next.items){const p=old.get(c.id);result[c.id]=p&&p.start===c.start&&dt>0&&c.up>=p.up&&c.down>=p.down?((c.up-p.up)+(c.down-p.down))/dt:null;}return result;}
 export function topConnections(items:ConnectionInfo[],rates:Record<number,number|null>){return [...items].sort((a,b)=>(rates[b.id]??0)-(rates[a.id]??0)||(b.up+b.down)-(a.up+a.down)||(Date.parse(b.start)||0)-(Date.parse(a.start)||0)).slice(0,5);}
 export function ruleKindLabel(kind:string,payload=''){return ({final:'MATCH',ip_cidr:payload.includes(':')?'IP-CIDR6':'IP-CIDR',ip_asn:'IP-ASN',src_ip_cidr:'SRC-IP',dst_port:'DST-PORT',process_name:'PROCESS-NAME'} as Record<string,string>)[kind]??kind.toUpperCase().replaceAll('_','-');}

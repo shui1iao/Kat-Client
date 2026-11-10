@@ -1,8 +1,8 @@
 # Kat client core IPC v1 + v1.1 + v1.2 safe logs
 
 `cmd/kat-client-core --workspace <absolute per-user app-data directory>` embeds the
-real Kat kernel. It never elevates, installs services/drivers, or changes OS
-proxy/DNS/routes. It owns one private workspace; a second instance is refused.
+real Kat kernel. Ordinary mode is unprivileged; authenticated elevated mode owns the integrated TUN
+with the installed Windows service. System proxy settings remain owned by the native host. It owns one private workspace; a second instance is refused.
 No remote nodes, traffic, latency, or history are fabricated on first launch.
 
 `IPC.schema.json` defines JSONL requests/responses and `x-methods` maps each
@@ -14,7 +14,7 @@ for probe examples. A stopped-state response is included, without credentials.
 - Responses can arrive out of order; `id` is returned unchanged. stdout is only
   protocol. Diagnostics never contain documents, node credentials, or raw URLs.
 - EOF cancels child requests, joins workers, and shuts down only this instance.
-- Manual node/group HTTP(S) probes share a concurrency limit of four, use Kat's
+- Manual node/group HTTP(S) probes share the configured concurrency limit (default 50, maximum 50), use Kat's
   existing HTTP prober and outbound graph, and do not temporarily select nodes.
 - `probe.group` collects the configured-order results, then commits one complete
   health/EWMA round and reevaluates once. Smart's first manual round is independent
@@ -61,41 +61,19 @@ unknown is `[]`. Nested groups may count the same flow at each policy-group hop.
 
 ## Trusted native host / Windows egress
 
-**Rust public `core_request` must reject `network.egress.*` from WebView.** Only
-trusted native host code uses these sidecar methods. `status.local` readiness
-requires actual SOCKS greeting and HTTP protocol health responses, not a TCP
-connect alone.
+The public WebView bridge rejects private `network.egress.*`, `network.tun.*`
+and host lifecycle methods. Current physical egress is schema 3. The authenticated
+Windows core role owns Wintun and a single gVisor stack; the service supplies
+trusted physical identity and journal/cleanup coordination. Ordinary system proxy
+mode retains the local HTTP/CONNECT bridge over SOCKS5. Both loopback listeners
+use actual protocol readiness, not just TCP connect success.
 
-On Windows, `network.egress.set/get` require private **schema 2** and hello
-capabilities `network.egress.v2` and `network.dns-revision.v1` (JSONL protocol stays 1). Old bare `bootstrap_dns`
-payloads are rejected, not downgraded. `system_dns` contains up to 16 immutable
-`{address,owner_luid,if_index,scope_id}` endpoints; `ipv4_luid`/`ipv6_luid` identify
-the existing physical default owners and `fingerprint` binds the complete native
-snapshot; `identity` separately binds the physical default-route/adapter identity. Native Prepare/Commit also require schema 2. GUI, core and service must
-be rebuilt/approved together; mixed old components cannot enable TUN.
-
-Ordinary remote TCP/UDP first hops, providers, probes and later reloads retain
-IP_UNICAST_IF/IPV6_UNICAST_IF controls and the business IPv6 gate. System DNS uses
-one separate wire exchange for Go PreferGo/StrictErrors lookup/bootstrap and raw
-TUN gateway requests. It can only dial registered literal endpoints on port 53,
-binding the endpoint's owner-family ifIndex and matching numeric scope. Only
-this narrow transport may use IPv6 when business IPv6 is off; it never enables
-AAAA answers or business IPv6. No unbound retry or public fallback is added.
-Same-owner candidates use at most four workers; different authorized owners are
-tried sequentially in default IPv4 then IPv6 priority, under one deadline.
-NXDOMAIN/NODATA are terminal. Custom roots/policy order and remote fail_closed
-remain separate. Interface/binding/lease failures remain closed.
-
-The native host must remove its TUN routes before enabling/changing/disabling
-egress, then wait for successful ready/generation/coverage before adding routes.
-Switching egress closes only this client's old flows, DNS/provider/protocol
-pools and instance, then rebuilds. Ordinary document reload does not do this.
-A binding failure marks policy readiness false; no missing-family IPv6 bypass.
-Linux cannot mutate physical egress and does not advertise `network.egress.v2`.
-
-Windows compilation is not Windows runtime/TUN/recovery proof. These executables
-are unsigned. This package does not claim service/driver/OS-network integration
-has been accepted on a Win11 machine.
+Physical sockets and system DNS remain bound to authorized physical interfaces.
+A changed or unavailable binding fails closed; TUN routing never makes client
+outbound sockets recurse into the tunnel. The obsolete external-bridge
+DNS-refresh RPC has been removed; current DNS/physical lifecycle is owned by the
+core TUN manager. Network helper authentication, image hashes and per-user file
+I/O permissions remain mandatory. Build success is not Windows runtime proof.
 
 ## Bounded verification
 
@@ -273,7 +251,7 @@ No default drain budget is enlarged by this change.
 
 ## 第四轮客户端契约：完整订阅、全部测速、关闭连接
 
-客户端只提供完整订阅。`provider.refresh`已删除，hello不再宣告该能力；`resources.list/refresh`不再提供provider。共享服务端kernel/provider能力、后台遗留资源运行语义保持。节点页及配置/诊断中的“订阅”计数只算完整订阅；为兼容验证投影，counts.providers字段名保留，但值为完整subscriptions数量。
+客户端只提供完整订阅。`provider.refresh`已删除，hello不再宣告该能力；`resources.list/refresh`不再提供provider。底层provider解析与已接纳旧配置的后台刷新语义保持。节点页及配置/诊断中的“订阅”计数只算完整订阅；为兼容验证投影，counts.providers字段名保留，但值为完整subscriptions数量。
 
 - 新写入/修改kernel.providers、在新组加入use或include_all_providers会以`legacy_provider_unsupported`拒绝：“节点订阅已不再支持，请使用完整订阅”。已接纳旧文档可原样保留或删减旧provider/use，不能借遗留例外创建新项。Clash proxy-providers继续拒绝。
 - 初次连接时客户端按原顺序逐provider调用`subscription.migrate {name}`：它只产生绑定当前文档字节/format的完整候选，不直接接纳。随后仍经原生document.apply链：校验前后文档 → 现有最多10份备份机制持久化原文 → 既有可回滚文件/内核事务。失败后候选取消；该provider及引用原样保留，启动时再尝试，或待转换卡片手动重试。没有provider时循环为空，不请求迁移、不备份、不写文件、不改文档任何字节。
@@ -293,7 +271,7 @@ No default drain budget is enlarged by this change.
 
 ## 第七轮桌面测速与展示API
 
-手动测速默认目标5秒、逐节点整轮10秒、并发50；源文档里已有的自定义值原样保留（并发可配1..50），不自动写回默认。全部/组测速均由core接纳后台批次，`status.probe_round`给真实完成数，不受共享整组截止影响；`probe.group`现立即返回`{started:true,total}`。组探测URL优先于客户端默认URL，IPC显式URL优先。嵌套组成员以`probe.node`探测当前选择路线，不展开测整个子组。所有客户端手动HTTP探测为HEAD（仅405/501在同一时限内回退GET）、拨号开始至响应头；后台组及普通服务端旧探测不改。UI四舍五入整数毫秒、<500绿/≥500黄、超时或失败红、不弹测速完成/失败toast。Select的手动结果投影来自Host独立手动结果表，不要求Select有自动健康记录。
+手动测速默认目标5秒、逐节点整轮10秒、并发50；源文档里已有的自定义值原样保留（并发可配1..50），不自动写回默认。全部/组测速均由core接纳后台批次，`status.probe_round`给真实完成数，不受共享整组截止影响；`probe.group`现立即返回`{started:true,total}`。组探测URL优先于客户端默认URL，IPC显式URL优先。嵌套组成员以`probe.node`探测当前选择路线，不展开测整个子组。所有客户端手动HTTP探测为HEAD（仅405/501在同一时限内回退GET）、拨号开始至响应头；后台组探测保持既有语义。UI四舍五入整数毫秒、<500绿/≥500黄、超时或失败红、不弹测速完成/失败toast。Select的手动结果投影来自Host独立手动结果表，不要求Select有自动健康记录。
 
 组展示字段`icon`仅接受≤2048字节HTTP(S) URL或≤64KiB内联SVG，不参与内核路由。`icon.get {url}`在运行时通过原本地SOCKS入口按规则出站，停止时直连保留订阅下载的公网SSRF校验；所有重定向拒绝（比仅拒跨主机更严、与现有下载器一致）。响应≤512KiB且按内容嗅探PNG/JPEG/WebP/GIF/ICO/SVG；返回data URI，前端只用img，不开放远程CSP。图标私有目录URL哈希缓存7天，过期后台刷新保留旧图，失败返回旧图/空占位，不抛原始错误。
 
@@ -312,51 +290,14 @@ logs.get新增闭集图标失败事件icon_{url_check,resolve,connect,tls,http_s
 Linux不支持Windows进程归属，完整真实订阅原样运行会在外部规则集PROCESS子句fail closed；Hytron正向取图测量仅在临时隔离资源副本剔除14条PROCESS子句且临时用系统DNS，其它实际节点/组/域名/IP规则保留。Windows另有真实OS owner+process_name路由行为测试（仅跨编译，不等于Windows执行）。Bero含TUN的原生效果由主控部署Agent复验。
 
 
-## 候选16 网络（IPv6、域名 DNS、Hosts、缓存）
+## 当前 Windows 网络与 DNS
 
-`client.ipv6` 为严格布尔值（不接受 null/字符串），新文档/缺省值 false。c16 首次打开现有文档也写入 false；按用户决定执行一次，后续显式开启不会在重启后被重置。原文精确备份在私有 `client-before-c16-network.{json,yaml,yml}`，`c16-network-migration.json` 记录 `client.ipv6=false: c16 upgrade default applied`。失败不标记完成、保留正常文档事务回滚；文档仍为 schema_version 1。
-
-关闭时内置解析只查 A，系统/bootstrap 使用 ip4；DNS 工具 AAAA 返回空列表（server=`IPv6 已关闭`）。本机直连、节点第一跳、UDP、测速/provider、订阅/资源/图标和外部 HTTP 代理第一跳均不使用 IPv6；字面 IPv6 业务明确拒绝（内核 `ipv6_disabled`）。mapped-v4 按 IPv4。远端代理按域名解析时可能选 IPv6，不代表本机 IPv6 外连，不强制改变远端语义。开关改变后取消旧连接代、旧测速和自有下载 epoch，既有 IPv6 池不继续服务；普通 DNS/规则编辑仍按原无损 reload。
-
-TUN **两态都保留**现有 IPv6 地址与 `::/1 + 8000::/1`。SYSTEM service 权限、租约、桥／原 flow 协议与 journal 恢复边界不变；私有 egress 载荷协调为 schema 2。仅自有 TUN 网卡的 DNS 入口改为 `198.18.0.2`（`198.18.0.1/30` 的 peer，IPv4 入口也可承载 AAAA 问题），不改物理 Windows 网卡 DNS。保留原非 link-local DNS host routes 的兼容捕获；fe80 上游不造无 scope 的 /128 入 TUN。现有 SOCKS 数据面、originalResolver 直通之前仍仅接管已进入 TUN 的普通 TCP/UDP 53；system 上游通过独立的 owner/scope 绑定传输，不经过该入口。每个普通 DNS 查询使用当前文档代，即便应用保留旧 DNS TCP/UDP 会话。AAAA 关闭时返回 NOERROR/NODATA；开启时返回上游；A、CNAME、TTL、NXDOMAIN/NODATA、其它记录与 EDNS 原样保留，UDP 截断重试 TCP，下行按 UDP 容量截断。无 TUN 时系统代理仅约束进入 Kat 的业务，不声称控制未代理程序。浏览器 DoH/DoT 不做 MITM，应用缓存/更具体 LAN/VPN 路由不在全机防漏承诺内。
-
-### 桌面真实 DNS 网关（不再提供 FakeIP）
-
-仅 TUN 受控出口启用时，在既有 SOCKS 数据面接管普通 TCP/UDP 53。TUN 关闭／仅系统代理不接管应用 DNS；内核自己的业务、Direct／IP 规则和节点 bootstrap 仍按各自角色解析。真实 DNS 网关继续原 Hosts、有序分流、显式根优先及 transport／回退，未指定根上游（包括仅 Hosts／Rules／cache_entries 的对象，含 0）默认系统 DNS，不隐式启用 CF／Google。高级 remote 仅原有明确 servers 才启用代理保护链，detour／fail_closed 与三角色避环不变。
-
-A／AAAA 返回真实上游结果，CNAME、TTL、NXDOMAIN／NODATA 及 HTTPS／SVCB／ANY 等记录沿原网关返回，不再因 FakeIP 合成而先查／压制记录。IPv6 关闭时 AAAA 仍返回 NOERROR／NODATA，普通 IPv6 业务仍拒绝；只允许已授权网卡登记的 system DNS 端点使用 IPv6 传输，不扩及 custom IPv6 服务器或任意 IPv6 目的地。Hosts 的既有本地答复与 TTL、EDNS／截断处理不变。系统 DNS 接管本身不保证防污染或全机防泄漏。
-
-`client.tun_dns.fake_ip` 与 `fake_ip_filter` 只作废弃兼容字段，仍严格校验布尔值／域名数组及原数量限制（拒绝 null／错类型／非法名称），原文不自动迁移或重写；**省略、false、true 均不能启用 FakeIP，filter 不再影响真实 DNS**。不再装载、分配、提交或恢复 FakeIP 身份，也不新建／写入 `tun-fakeip-identities.json` 或 `tun-fakeip-initialized.json`；旧私有文件原样保留，即使损坏也不再是启动依赖。不再新增专用池路由或因池冲突阻止 TUN；旧 schema-1 journal 仍按原所有权／CAS 清理其已拥有资源。
-
-旧合成地址的连接与上游池地址仍安全拒绝；旧池 PTR 只本地 NXDOMAIN，不查旧身份或转发。升级后应用缓存的旧 FakeIP 可能暂时失败，不主动全局 flush／删文件／修改物理网卡。真实 IP 不与域名可靠一一对应，因此不建立真实 IP→域名映射，也不保证所有 TUN 流恢复原名：系统代理客户端提供的域名仍可用，TUN 仅已有成功嗅探覆盖的范围可用，不强开 sniff。原 tuple／FlowOrigin／进程 unknown fail-closed 仍独立保留。
-
-system DNS 端点来自既有认可物理默认出口网卡集合，保留 owner LUID、该族 ifIndex、OS 原 scope；link-local 的 OS scope 为 0 时仅用该 owner 的已知 IPv6 ifIndex 补齐，冲突／未知归属拒绝。不要求该网卡同时有 IPv6 公网默认路由。排除 loopback／unspecified／multicast、自家 TUN /30、/126 和旧 Fake 池，不引入 all-up VPN 网卡。同已授权物理 owner／租约内的 DNS-only 变化由原 monitor 准备独立 revision：服务先 writeahead 安装新兼容 host routes（新旧并存、journal 总量仍限 32），再由 core 通过已固定 SYSTEM service peer 和当前 core lease 读取服务核定端点，而非接收 GUI 任意地址。`network.egress.dns.refresh` 只传 revision／fingerprint；core 原子替换 DNS 快照、取消旧 DNS context／socket、以 epoch 隔离并清除 current／retained 代缓存和旧 DNS idle transport，不 stop/start 业务 kernel、不改变配置／egress generation、不打断或重判已建 TCP／UDP。core ack 后 service 按 CAS 移除旧 host routes，journal 记录在成功删除后才移除并 checkpoint。pending 最多 20 秒；核验／绑定／权限／提交失败安全 cleanup，未完成资源保原 journal 可恢复，不先热切未拥有路由。物理 LUID、family index、adapter GUID、默认路由身份／租约变化仍 cleanup／EGRESS_CHANGED，绝不原租约跨网迁移。专用 DNS peer 不随上游变；不新增 daemon／守护平台。原 monitor 已有 EGRESS_CHANGED 新租约重新 prepare 流程保留，普通配置 reload 旧流语义不变。
-
-常规 DNS 界面只显示“系统 DNS”与“自定义 DNS”。nil／仅 Hosts、Rules、cache（含 0）与显式 system 显示同一项，内部仍区分省略根／显式根；打开界面或只改端口／cache 不自动迁移、写根或归零 cache。高级 remote 有明确 servers 且无显式根、在非 direct 模式生效时归自定义并提示“原文中的高级 DNS 配置生效”，不抄进普通根、不丢 detour。明确从 custom 切 system 写显式根覆盖但不删除 remote；非 0 cache 仍按显式 system 原约束报错，不偷偷改 0。旧单 server 保只读。界面只沿用现有类，不改样式。
-
-这是已实现的兼容路径，不是用户现场根因鉴定或所有网络可用承诺。system 表示授权网卡 DNS 端点，不承诺复制 Windows NRPT／企业 split-DNS／系统加密 DNS／mDNS／LLMNR；应用显式物理绑定、DoH／DoT、其它更具体 LAN/VPN 路由可能绕过 TUN，不加 WFP／严格路由或监听服务。
-
-原生字段示例（以下服务器只示范语法，不会自动写入用户配置）：
-```yaml
-client:
-  ipv6: false
-kernel:
-  dns:
-    server: system
-    rules:
-      - match: domain_suffix  # domain_suffix / domain / keyword
-        domain: example.com
-        servers: [1.1.1.1, 'tcp://8.8.8.8:53']
-    hosts:
-      '*.example.net': [192.0.2.1, '2001:db8::1']
-```
-规则按数组顺序首个匹配；未命中走旧默认 DNS 链。显式分流内服务器按顺序尝试，失败不偷退系统解析。Hosts 优先：完整域名优先于最长通配后缀；`*.example.net` 不匹配根域，支持子域多层，AAAA 在 IPv6 关闭时不生效。限制：规则最多 256、Hosts 最多 1024、每主机最多 16 地址；不做 fake-IP、缓存持久化或 DNS 出口策略。
-
-可直接使用 mihomo 风格 `kernel.dns.nameserver-policy` 替代 `rules`，两者非空时互斥，例 `{"+.example.com": ["1.1.1.1"]}`；值可单服务器或数组。`+.域名` 导入为后缀匹配，完整域名导入为完整匹配，保留声明顺序。**互转规则已定：只要规则含关键字，JSON/YAML 均原样保留 Kat 原生 `kernel.dns.rules` 数组，不尝试转换成 mihomo nameserver-policy，也不报错；不含关键字时，导出仍保持源文档已有的 rules 或 nameserver-policy 写法，不自动改写。**Hosts 与 mihomo 同样接受地址字符串或数组。geosite/rule-set/正则/别名 Host 等未实现的导入形式仍明确拒绝；不生成伴随 rule-set/provider。原文未编辑时保持字段拼写、顺序、标量/数组、注释；界面编辑分流时仅将该字段转为原生顺序数组，原有其它字段保真。完整订阅原有本机 DNS 不覆盖边界不变。
-
-`dns.cache.clear {}` → `{cleared:N}`：清除所有存活代（包括旧连接保留代）的内核 IP 缓存与普通 DNS 报文缓存（含分流子链），N 是实际移除条目数；不写文档，不清 Windows/浏览器缓存。停止态返回 core_not_running。清空后再次解析走上游；保存 DNS 设置本身也换代失效旧缓存。
-
-Windows 实机路由、抓包、原生服务恢复等仍须单独验收，Linux 单元测试/隔离 IPC 截图不替代 Windows 验证。仅 IPv6 的网络/节点/DNS 在开关关闭时可能不可用，不擅自代换公共服务器。
+保留 IPv6 开关、系统 DNS 和自定义 DNS；基础上游支持 UDP、TCP、DoH。
+TUN 使用真实 DNS 网关，不分配 FakeIP；仅系统代理时不接管应用 DNS。
+旧 Hosts、rules、nameserver-policy、remote、fake_ip 配置仅保留原文识别和
+明确退役提示，不执行这些高级路径，也不在查看配置时静默迁移原文。
+UDP 使用源关联与物理安全 epoch 隔离的 EIM/EIF；进程归属按原始连接/包
+二元组取证。未知归属不伪造身份。网络切换、取消和清理保留既有安全边界。
 
 ## 候选16 K1：稳定选择 / Smart v2 / 手动切组断旧连接
 
@@ -445,17 +386,29 @@ IPC `status.groups[]` 新增 `selection_mode / algorithm_version=2 / default_mem
 - 不传 `include_group` 时保留原合同：非空 `filter` 从所有普通节点预览；空 `filter` 返回空集合。不能用 JS 正则替代 Go 的预览结果。
 
 
-## 当前 Windows 原始流身份会话（network.flow-session.v1）
+## 当前客户端/服务器边界
 
-TUN 仍是 SYSTEM 受控原桥 → 本地 SOCKS → 普通 core。桥字节、katflow Register/Close/ACK wire、身份来源和进程 unknown fail-closed 不变。新 core 归因只走固定 `\\.\pipe\KatClientNetwork-flow-v1`，不再占 GUI/DNS 控制 pipe；TUN enable 必须同时有 `network.egress.v2`、`network.dns-revision.v1`、`network.flow-session.v1`，不允许旧混组件降级。
+客户端只提供本机 HTTP、SOCKS5 和内置 TUN 接入，不再包含服务器 CLI、
+对外加密入站监听、管理 HTTP API、ACME 或服务器来源封禁。协议出站为
+Shadowsocks、AnyTLS、Trojan、SOCKS5；保留链式代理、六类策略组和规则分流。
+VLESS、Snell、REALITY 和其专用传输已移除。旧 provider 仅保兼容运行和
+迁移，完整订阅及其解析器继续有效。版本协议与已有用户数据格式不变。
 
-- 每当前 lease 一个活动身份会话；客户端 fixed open → 服务原 core_caller → 服务 hello（协议1、epoch、core/gui/bridge PID与创建stamp）。SDDL、REJECT_REMOTE、首实例名称保留沿原控制边界；只有当前已安装 core 能通过认证。请求 ≤4096 B、回复 ≤32768 B，严格字段/重复键/ID/epoch，最多64在途；单查询含排队/认证/交换的context为800ms上限（本地同步OS/文件认证调用本身不可强制取消，但返回后不再接受逾期结果），建连I/O最多2s并受上层更短context约束，连续失败250ms至2s退避。协议/peer错误关会话并fail所有在途。
-- 完整 pin/hash/ACL/SCM配置、SYSTEM token/session、镜像/PID/stamp/pipePID 认证内容不减；core **整会话持有原no-write/no-delete-share pin**，不是握手后释放pin的永久授权缓存。每次发送/结果交付前重核受保护HKLM批准记录、held对象/ACL、SCM/活进程，空闲liveness亦撤销。服务每请求/交付前核同lease epoch、core/gui/bridge存活stamp/SIDsession和批准记录；Prepare/cleanup/退出/桥失效/批准改变旧会话不可继续授权。
-- 原更新先网络cleanup、core正常停机，再stop_release等旧服务进程实际退出才替换字节。会话Cancel/reap/EOF/Reset释放core持pin，服务退出释放原批准pin；不增加更新流程、权限或角色。DNS-only revision不reset身份会话，也不重建业务代；物理出口变化仍原EGRESS_CHANGED边界。
-- 只有已核桥登记表的完整原tuple可查询；mid索引O(1)，昂贵原进程proof在engine/表锁外，回填前核entry id/epoch。TCP core-owner首查、首known仅在有效entry/原每flow once范围复用；**UDP每次确实需要进程条件的决策鲜取，包括未知结果也不跨数据报缓存**。不跳lookupLocal原入口判定。
-- 显示与路由分离：最多16异步display，满只略显示，不省略规则必需归因；TCP显示/路由共享原process.once。空target UDP ASSOCIATE不查，每关联只尝试一次异步显示，不再每包originDetails。closed/context/会话epoch失效不回写详情；不保证每条短流关闭前都能显示进程。
-- bridge协议/version/session/id/control/mid和明确活跃其它PID身份违规仍ACK0fatal。仅单条合法但不可归因/表满/目标不支持ACK1**不入表**，之后查询未知仍failclosed；重复mid以新id替换，旧Close不能删新项，合法已知范围内未知Close幂等ACK1。满表有界单快照懒清理，不开放任意PID/path或全表查询。
+## 规则测试（目标匹配）
 
-P2诊断独立于转发：`ProcessUnavailableError`记`failure/process_unavailable`、`error_stage=process`；真实解析错误仍`dns_failed`，其它决策错误`route_failed`。`logs.get`/安全导出新增有限`process_attribution_failed {reason,rule,cause,win32?}`：cause只有固定枚举，win32仅立即失败API返回值，无法可靠取得时省略，不读陈旧GetLastError、不导出路径/请求内容。Go producer/ring、IPC严格schema、Rust白名单、TS类型同步；原始`logs.kernel`消息仍是另一私有通道，不与typed导出混淆。无新面板。
+`rules.test` 接受域名、IP或HTTP(S) URL；只用当前已生效的规则与已加载资源，
+不采纳未保存草稿。按原规则顺序判断，遇到仍缺进程、来源、网络或端口等
+连接条件的整条规则时跳过并返回 `skipped`（最多32条，其余计数）。逻辑
+条件若已能确定真/假，不因无关未知项阻塞；不把未知当作真或伪造进程。
 
-持久文档/订阅/选择/权重/历史/统计、TunJournal1、安装Record2/binding1/public manifest1/protocol1/23roles/floor保持；GUI/core/service须整套重建并重新approve/hash/sign/core pin，tun2socks hash不变。本变更不是“现场所有应用已恢复”的验收结论。
+域名只有在目的IP规则实际需要时才调用当前内核规则DNS解析器；IP输入、
+已由域名规则决定或no-resolve可决定时不查询。DNS不会连接目标端口或请求
+目标URL。多IP按原解析顺序逐个判断，沿用首个非拒绝候选决定，返回
+`dns.selected_ip` 与必要的多IP差异；DNS失败不猜后续IP规则结果。
+未加载规则集沿用运行时空资源不匹配行为，并保留未加载提示。
+
+结果 `simulation=target` 是按所填条件的规则匹配，不宣称未知进程的完整
+连接路线；global/direct模式仍明确提示实际连接模式不受本测试改变。
+解析在宿主锁外进行，受原超时/停止取消约束；规则/模式/资源代际变化后
+返回 `rule_test_stale`，不会把旧快照结果冒充新运行态。只允许DNS网络路径，
+不做连接、测速、策略选择、进程探测或流量/规则命中计数。

@@ -1,6 +1,6 @@
 //! Bounded observation only. No endpoint, process identity or policy input lives here.
 use serde::{Deserialize, Serialize};
-use std::{collections::VecDeque, time::{SystemTime, UNIX_EPOCH}};
+use std::{collections::VecDeque, time::SystemTime};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all="snake_case")]

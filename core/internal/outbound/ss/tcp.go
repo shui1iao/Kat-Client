@@ -1,6 +1,7 @@
 package ss
 
 import (
+	"bufio"
 	"context"
 	"crypto/cipher"
 	"crypto/rand"
@@ -141,12 +142,16 @@ type tcpConn struct {
 	wn      nonce
 	wdead   bool
 	werr    error
+	wbuf    []byte
 
 	rmu     sync.Mutex
+	br      *bufio.Reader
 	dec     cipher.AEAD
 	rn      nonce
 	rdead   bool
 	pending []byte
+	rbuf    []byte
+	hbuf    [64]byte
 	rerr    error
 }
 
@@ -298,12 +303,17 @@ func (c *tcpConn) Write(p []byte) (int, error) {
 	const batch = 4 * maxChunk2017
 	for len(p) > 0 {
 		n := min(len(p), batch)
-		w, e := c.appendChunks(make([]byte, 0, n+(n/maxChunk2017+1)*(2+2*tagSize)), p[:n])
+		need := n + (n/maxChunk2017+1)*(2+2*tagSize)
+		if cap(c.wbuf) < need {
+			c.wbuf = make([]byte, 0, need)
+		}
+		w, e := c.appendChunks(c.wbuf[:0], p[:n])
 		if e == nil {
 			e = writeFull(c.Conn, w)
 		}
 		if e != nil {
 			c.werr = e
+			c.wbuf = nil
 			return total, e
 		}
 		total += n
@@ -355,6 +365,9 @@ func (c *tcpConn) Read(p []byte) (int, error) {
 	}
 	c.rmu.Lock()
 	defer c.rmu.Unlock()
+	if c.br == nil {
+		c.br = bufio.NewReaderSize(c.Conn, 32<<10)
+	}
 	for len(c.pending) == 0 {
 		if c.rerr != nil {
 			return 0, c.rerr
@@ -362,6 +375,7 @@ func (c *tcpConn) Read(p []byte) (int, error) {
 		if e := c.readRecord(); e != nil {
 			c.rerr = e
 			c.pending = nil
+			c.rbuf = nil
 			return 0, e
 		}
 	}
@@ -371,8 +385,16 @@ func (c *tcpConn) Read(p []byte) (int, error) {
 }
 
 func (c *tcpConn) readFull(n int) ([]byte, error) {
-	b := make([]byte, n)
-	_, e := io.ReadFull(c.Conn, b)
+	var b []byte
+	if n <= len(c.hbuf) {
+		b = c.hbuf[:n]
+	} else {
+		if cap(c.rbuf) < n {
+			c.rbuf = make([]byte, n)
+		}
+		b = c.rbuf[:n]
+	}
+	_, e := io.ReadFull(c.br, b)
 	return b, e
 }
 

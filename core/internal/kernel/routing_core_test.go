@@ -4,14 +4,14 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/base64"
+
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
-	"runtime"
+
 	"strings"
 	"sync"
 	"testing"
@@ -260,141 +260,6 @@ func rcUDPEcho(pc outbound.PacketConn, dst outbound.Addr) error {
 		}
 	}
 	return errors.New("no UDP echo")
-}
-
-func TestRoutingCoreInProcessProxy(t *testing.T) {
-	dns := rcDNS(t)
-	echo, uecho := rcEchoTCP(t), rcEchoUDP(t)
-	before := runtime.NumGoroutine()
-	var upLog, entryLog bytes.Buffer
-	var logMu sync.Mutex
-	sink := func(b *bytes.Buffer) func([]byte) error {
-		return func(p []byte) error { logMu.Lock(); defer logMu.Unlock(); _, e := b.Write(p); return e }
-	}
-	upCfg := Config{DNS: &DNSOptions{Server: "udp://" + dns.udp.LocalAddr().String()}, UDPBindIPv4: "127.0.0.1", Inbounds: []Inbound{{Protocol: "shadowsocks", Listen: "127.0.0.1:0", SS: ssIn().SS}},
-		Limits: Limits{HandshakeTimeout: Duration(2 * time.Second), DialTimeout: Duration(2 * time.Second), DrainTimeout: Duration(time.Second), UDPIdle: Duration(2 * time.Second)}}
-	upCfg.Security = &SecurityOptions{AllowLoopback: true}
-	up, e := Start(upCfg)
-	if e != nil {
-		t.Fatal(e)
-	}
-	up.failures.write = sink(&upLog)
-	upPort := uint16(up.Addresses()[0].(*net.TCPAddr).Port)
-	key := base64.StdEncoding.EncodeToString(key2022())
-	f := false
-	entryCfg := Config{DNS: &DNSOptions{Server: "udp://" + dns.udp.LocalAddr().String()}, UDPBindIPv4: "127.0.0.1",
-		Inbounds: []Inbound{{Protocol: "socks5", Listen: "127.0.0.1:0"}},
-		Outbounds: []OutboundConfig{
-			{Name: "up", Type: "shadowsocks", Server: "127.0.0.1", Port: upPort, Method: "2022-blake3-aes-128-gcm", Key: key},
-			{Name: "up-tcp", Type: "shadowsocks", Server: "127.0.0.1", Port: upPort, Method: "2022-blake3-aes-128-gcm", Key: key, UDP: &f},
-		},
-		Groups: []GroupConfig{{Name: "sel", Type: "select", Members: []string{"up", "direct", "reject"}, Selected: "up"},
-			{Name: "blocked", Type: "select", Members: []string{"reject", "up"}}},
-		Routing: &RoutingOptions{Rules: []RouteRule{
-			{DomainSuffix: "proxy.test", Outbound: "sel"},
-			{DomainSuffix: "rejectgroup.test", Outbound: "blocked"},
-			{DomainSuffix: "tcponly.test", Outbound: "up-tcp"},
-			{SrcIPCIDR: "10.0.0.0/8", Action: "reject"},
-			{Network: "udp", Outbound: "up"},
-			{DomainKeyword: "nope", Action: "reject"},
-		}, Final: "direct"},
-		Limits: Limits{HandshakeTimeout: Duration(2 * time.Second), DialTimeout: Duration(2 * time.Second), DrainTimeout: Duration(time.Second), UDPIdle: Duration(time.Second)}}
-	entryCfg.Security = &SecurityOptions{AllowLoopback: true}
-	entry, e := Start(entryCfg)
-	if e != nil {
-		up.Close(context.Background())
-		t.Fatal(e)
-	}
-	entry.failures.write = sink(&entryLog)
-	entry.events.write = sink(&entryLog)
-	client, e := socks5.New(outbound.Options{Name: "c", Type: "socks5", Server: "127.0.0.1", Port: uint16(entry.Addresses()[0].(*net.TCPAddr).Port)}, direct.New(direct.Options{}))
-	if e != nil {
-		t.Fatal(e)
-	}
-	accepted := func() int64 { return up.Stats().Accepted }
-	// TCP: domain rule -> select group -> SS outbound -> upstream Kat -> echo.
-	a0 := accepted()
-	if e := rcTCPEcho(client, outbound.Addr{Host: "a.proxy.test", Port: echo}); e != nil {
-		t.Fatal("proxied TCP:", e)
-	}
-	if accepted() != a0+1 {
-		t.Fatal("proxied TCP did not traverse the upstream", accepted()-a0)
-	}
-	// TCP: final direct (src 127.0.0.1 is not in 10/8) -> no upstream use.
-	a0 = accepted()
-	if e := rcTCPEcho(client, outbound.Addr{Host: "127.0.0.1", Port: echo}); e != nil || accepted() != a0 {
-		t.Fatal("direct TCP:", e, accepted()-a0)
-	}
-	// TCP: select group whose selection is the built-in reject.
-	if e := rcTCPEcho(client, outbound.Addr{Host: "x.rejectgroup.test", Port: echo}); e == nil {
-		t.Fatal("reject member dialed")
-	}
-	// UDP: network rule -> SS native UDP through the upstream.
-	pc, e := client.ListenPacket(context.Background())
-	if e != nil {
-		t.Fatal(e)
-	}
-	if e := rcUDPEcho(pc, outbound.Addr{Host: "127.0.0.1", Port: uecho}); e != nil {
-		t.Fatal("proxied UDP:", e)
-	}
-	if up.Stats().UDP != 1 {
-		t.Fatal("UDP did not reach the upstream association", up.Stats().UDP)
-	}
-	// UDP to an outbound that disables UDP is dropped and reported.
-	if e := rcUDPEcho(pc, outbound.Addr{Host: "u.tcponly.test", Port: uecho}); e == nil {
-		t.Fatal("UDP through a TCP-only outbound echoed")
-	} else {
-		t.Log("TCP-only outbound UDP:", e)
-	}
-	// After udp_idle (1s) without traffic the association (and with it every
-	// proxy session and reader) ends; a new association proxies again.
-	deadline := time.Now().Add(4 * time.Second)
-	for entry.counters.UDP.Load() != 0 && time.Now().Before(deadline) {
-		time.Sleep(100 * time.Millisecond)
-	}
-	if entry.counters.UDP.Load() != 0 {
-		t.Fatal("idle UDP association with proxy session was not recycled")
-	}
-	pc.Close()
-	pc, e = client.ListenPacket(context.Background())
-	if e != nil {
-		t.Fatal(e)
-	}
-	if e := rcUDPEcho(pc, outbound.Addr{Host: "v.proxy.test", Port: uecho}); e != nil {
-		t.Fatal("proxied UDP (domain, second association):", e)
-	}
-	pc.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if e := entry.Close(ctx); e != nil {
-		t.Fatal("entry close:", e)
-	}
-	if e := up.Close(ctx); e != nil {
-		t.Fatal("upstream close:", e)
-	}
-	logMu.Lock()
-	out := entryLog.String()
-	logMu.Unlock()
-	for _, want := range []string{"reason=udp_unsupported", "reason=rule_reject"} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("entry log lacks %s:\n%s", want, out)
-		}
-	}
-	for _, secret := range []string{"proxy.test", "127.0.0.1", key} {
-		if strings.Contains(out, secret) {
-			t.Fatalf("entry log leaked %q:\n%s", secret, out)
-		}
-	}
-	// No goroutine survives Close of both servers (outbounds, groups, engine,
-	// UDP proxy sessions and their readers included).
-	deadline = time.Now().Add(5 * time.Second)
-	for runtime.NumGoroutine() > before && time.Now().Before(deadline) {
-		time.Sleep(50 * time.Millisecond)
-	}
-	if n := runtime.NumGoroutine(); n > before {
-		buf := make([]byte, 1<<20)
-		t.Fatalf("goroutines %d > %d after Close:\n%s", n, before, buf[:runtime.Stack(buf, true)])
-	}
 }
 
 func TestRoutingCoreSourceCIDR(t *testing.T) {

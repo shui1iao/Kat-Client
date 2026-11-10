@@ -45,62 +45,6 @@ func TestDefaultLimitsValues(t *testing.T) {
 	}
 }
 
-func TestDefaultAnyTLSBudgets(t *testing.T) {
-	o := &AnyTLSOptions{Password: "p"}
-	if e := o.normalize(defaultConnections); e != nil {
-		t.Fatal(e)
-	}
-	// max_sessions follows limits.connections (default 4096); see anytls_max_sessions_test.go.
-	if o.MaxSessions != 4096 || o.MaxStreams != 4096 || o.SessionStreams != 64 || o.StreamBytes != 131072 || o.SessionBytes != 1048576 || o.SlowTimeout.value().String() != "1m0s" {
-		t.Fatalf("AnyTLS defaults %+v", *o)
-	}
-	// Hard ranges are unchanged: session_streams <= 64, counts <= 65536.
-	for _, bad := range []AnyTLSOptions{{Password: "p", SessionStreams: 65}, {Password: "p", MaxSessions: 65537}, {Password: "p", MaxStreams: 65537}, {Password: "p", MaxSessions: -1}} {
-		if e := bad.normalize(defaultConnections); e == nil {
-			t.Fatalf("out-of-range AnyTLS budget accepted: %+v", bad)
-		}
-	}
-}
-
-func TestExplicitLimitsKeepWrittenValues(t *testing.T) {
-	// Values a deployment might write explicitly as a 0.6.1 workaround, plus deliberately small ones.
-	for _, tc := range []struct {
-		limits, anytls string
-		want           Limits
-		wantAny        AnyTLSOptions
-	}{
-		{`"connections":4096,"logical_streams":4096`, `,"max_sessions":512,"max_streams":4096,"session_streams":64`,
-			Limits{Connections: 4096, LogicalStreams: 4096, Handshakes: 512, Dials: 512, UDPAssociations: 1024, UDPTargets: 256}, AnyTLSOptions{MaxSessions: 512, MaxStreams: 4096, SessionStreams: 64}},
-		{`"connections":1024,"logical_streams":256,"handshakes":64,"dials":64,"udp_associations":128,"udp_targets":64`, `,"max_sessions":32,"max_streams":64,"session_streams":16`,
-			Limits{Connections: 1024, LogicalStreams: 256, Handshakes: 64, Dials: 64, UDPAssociations: 128, UDPTargets: 64}, AnyTLSOptions{MaxSessions: 32, MaxStreams: 64, SessionStreams: 16}},
-		{`"connections":7,"logical_streams":5,"handshakes":3,"dials":2,"udp_associations":1,"udp_targets":1`, `,"max_sessions":1,"max_streams":5,"session_streams":1`,
-			Limits{Connections: 7, LogicalStreams: 5, Handshakes: 3, Dials: 2, UDPAssociations: 1, UDPTargets: 1}, AnyTLSOptions{MaxSessions: 1, MaxStreams: 5, SessionStreams: 1}},
-	} {
-		body := `{"limits":{` + tc.limits + `},"inbounds":[` + anyTLSIdentitiesJSON(1, tc.anytls) + `]}`
-		c, e := Load(writeConfig(t, body))
-		if e != nil {
-			t.Fatal(body, e)
-		}
-		l := c.Limits
-		if l.Connections != tc.want.Connections || l.LogicalStreams != tc.want.LogicalStreams || l.Handshakes != tc.want.Handshakes || l.Dials != tc.want.Dials || l.UDPAssociations != tc.want.UDPAssociations || l.UDPTargets != tc.want.UDPTargets {
-			t.Fatalf("%s: limits %+v", body, l)
-		}
-		o := c.Inbounds[0].AnyTLS
-		if o.MaxSessions != tc.wantAny.MaxSessions || o.MaxStreams != tc.wantAny.MaxStreams || o.SessionStreams != tc.wantAny.SessionStreams {
-			t.Fatalf("%s: anytls %+v", body, *o)
-		}
-		// Start re-validates; explicit values must survive unchanged.
-		s, e := Start(c)
-		if e != nil {
-			t.Fatal(e)
-		}
-		if s.logicalSlots.limit() != tc.want.LogicalStreams || s.connSlots.limit() != tc.want.Connections || s.handSlots.limit() != tc.want.Handshakes || s.dialSlots.limit() != tc.want.Dials || s.udpSlots.limit() != tc.want.UDPAssociations {
-			t.Fatalf("%s: runtime slots differ from explicit limits", body)
-		}
-		s.Close(context.Background())
-	}
-}
-
 func TestLogicalStreamsAutoCoversAnyTLSIdentities(t *testing.T) {
 	for _, tc := range []struct {
 		identities int

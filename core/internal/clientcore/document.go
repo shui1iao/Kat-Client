@@ -25,13 +25,13 @@ const maxDocument = 1 << 20
 const initialDocument = `{"schema_version":1,"client":{"mode":"rule","global_group":"","probe_url":"https://www.gstatic.com/generate_204","http_port":7890,"socks_port":7891,"ipv6":false},"kernel":{}}` + "\n"
 
 type Error struct {
-	Transport *TransportDiagnostic `json:"transport,omitempty"`
-	Code    string                  `json:"code"`
-	Reason  string                  `json:"reason,omitempty"`
-	Message string                  `json:"message"`
-	Path    string                  `json:"path,omitempty"`
-	Detail  *ResourceDetail         `json:"detail,omitempty"`
-	Tun     *tunplatform.Diagnostic `json:"tun,omitempty"`
+	Transport *TransportDiagnostic    `json:"transport,omitempty"`
+	Code      string                  `json:"code"`
+	Reason    string                  `json:"reason,omitempty"`
+	Message   string                  `json:"message"`
+	Path      string                  `json:"path,omitempty"`
+	Detail    *ResourceDetail         `json:"detail,omitempty"`
+	Tun       *tunplatform.Diagnostic `json:"tun,omitempty"`
 }
 
 func (e *Error) Error() string { return e.Code + ": " + e.Message }
@@ -289,7 +289,6 @@ func parseDocument(text, workspace string, formats ...DocumentFormat) (document,
 	}
 	c.Log = &kernel.LogOptions{Level: level}
 	off := false
-	c.API = &kernel.APIOptions{Enabled: &off}
 	if c.Stats == nil {
 		c.Stats = &kernel.StatsOptions{}
 	}

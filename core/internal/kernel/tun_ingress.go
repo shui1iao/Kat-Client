@@ -149,4 +149,4 @@ func (i *TUNIngress) HandleUDP(parent context.Context, t tunstack.Flow, c net.Co
 }
 
 func timeoutError(e error) bool     { var ne net.Error; return errors.As(e, &ne) && ne.Timeout() }
-func maxActivity(a *udpAssociation) { a.touchSSActivity(time.Now()) } // atomic max, not the SS target policy
+func maxActivity(a *udpAssociation) { a.touchActivity(time.Now()) } // monotonic activity across concurrent TUN send/return paths

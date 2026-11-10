@@ -378,7 +378,7 @@ func (o *Options) validateLeaf(r *Rule, sets map[string]bool) error {
 	case r.InType != "":
 		v, ok := normInType(r.InType)
 		if !ok {
-			return errors.New("in_type must be shadowsocks, anytls, trojan, vless, socks5 or snell")
+			return errors.New("in_type must be shadowsocks, anytls, trojan or socks5")
 		}
 		r.InType = v
 	case r.Protocol != "":
@@ -480,6 +480,12 @@ func (o *Options) ReferencedOutbounds() []string {
 	}
 	if o.GeoIP != nil {
 		add(o.GeoIP.Via)
+	}
+	if o.Geosite != nil {
+		add(o.Geosite.Via)
+	}
+	if o.ASN != nil {
+		add(o.ASN.Via)
 	}
 	return out
 }

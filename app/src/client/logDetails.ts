@@ -18,20 +18,29 @@ function connBaseKey(e:ConnLogEntry){
  if(!name||!e.target)return '';
  return [e.network,name,sub||e.target,e.rule,(e.chain||[]).join('>'),e.outcome].join('|');
 }
-function sameGroup(a:ConnLogEntry,b:ConnLogEntry){
- const ka=connBaseKey(a),kb=connBaseKey(b);
+const baseKeyCache=new WeakMap<ConnLogEntry,string>();
+function cachedBaseKey(e:ConnLogEntry){
+ let k=baseKeyCache.get(e);
+ if(k===undefined){k=connBaseKey(e);baseKeyCache.set(e,k);}
+ return k;
+}
+function sameGroupKey(a:ConnLogEntry,kb:string,bProc?:string){
+ const ka=cachedBaseKey(a);
  if(!ka||ka!==kb)return false;
- return !a.process_name||!b.process_name||a.process_name===b.process_name;
+ return !a.process_name||!bProc||a.process_name===bProc;
 }
 function attachFlows(entry:ConnLogEntry,map:Map<string,{up:number;down:number}>){mergedFlows.set(entry,map);return entry;}
 export function mergeConnectionLogs(old:ConnLogEntry[],incoming:ConnLogEntry[]){
- let out=[...old];
+ if(incoming.length===0)return old.length<=2000?old:old.slice(0,2000);
+ const out=[...old];
  for(const e of incoming){
   const fid=e.flow_id;
-  if(e.ended&&fid&&out.some(x=>x.flow_id===fid||mergedFlows.get(x)?.has(fid))){
-   out=out.map(x=>{
-    const map=mergedFlows.get(x);
-    if(x.flow_id!==fid&&!map?.has(fid))return x;
+  if(e.ended&&fid){
+   let matched=false;
+   for(let i=0;i<out.length;i++){
+    const x=out[i],map=mergedFlows.get(x);
+    if(x.flow_id!==fid&&!map?.has(fid))continue;
+    matched=true;
     const meta={
      process_name:e.process_name||x.process_name,
      process_path:e.process_path||x.process_path,
@@ -45,15 +54,16 @@ export function mergeConnectionLogs(old:ConnLogEntry[],incoming:ConnLogEntry[]){
      const nextMap=new Map(map);
      nextMap.set(fid,{up:e.up??0,down:e.down??0});
      let up=0,down=0;for(const v of nextMap.values()){up+=v.up;down+=v.down;}
-     return attachFlows({...x,...meta,up,down,end:e.end??x.end,duration_ms:(x.duration_ms??0)+(e.duration_ms??0),ended:true},nextMap);
+     out[i]=attachFlows({...x,...meta,up,down,end:e.end??x.end,duration_ms:(x.duration_ms??0)+(e.duration_ms??0),ended:true},nextMap);
+    }else{
+     const next:ConnLogEntry={...x,...meta,up:e.up,down:e.down,start:e.start,end:e.end,duration_ms:e.duration_ms,ended:true};
+     out[i]=attachFlows(next,new Map([[fid,{up:e.up??0,down:e.down??0}]]));
     }
-    const next:ConnLogEntry={...x,...meta,up:e.up,down:e.down,start:e.start,end:e.end,duration_ms:e.duration_ms,ended:true};
-    attachFlows(next,new Map([[fid,{up:e.up??0,down:e.down??0}]]));
-    return next;
-   });
-   continue;
+   }
+   if(matched)continue;
   }
-  const existingIdx=connBaseKey(e)?out.findIndex(x=>sameGroup(x,e)):-1;
+  const ke=cachedBaseKey(e);
+  const existingIdx=ke?out.findIndex(x=>sameGroupKey(x,ke,e.process_name)):-1;
   if(existingIdx>=0){
    const x=out[existingIdx];
    const nextMap=new Map(mergedFlows.get(x)??(x.flow_id?[[x.flow_id,{up:x.up??0,down:x.down??0}]]:[]));
@@ -71,22 +81,32 @@ export function mergeConnectionLogs(old:ConnLogEntry[],incoming:ConnLogEntry[]){
    out.unshift(fresh);
   }
  }
- return out.slice(0,2000);
+ return out.length<=2000?out:out.slice(0,2000);
+}
+const flowReplyIndex=new WeakMap<ConnectionsReply,Map<string,ConnectionsReply['active'][number]|ConnectionsReply['closed'][number]>>();
+function getFlowLookup(list:ConnectionsReply){
+ let map=flowReplyIndex.get(list);
+ if(map)return map;
+ map=new Map();
+ for(const x of list.active)if(x.flow_id&&!map.has(x.flow_id))map.set(x.flow_id,x);
+ for(const x of list.closed)if(x.flow_id&&!map.has(x.flow_id))map.set(x.flow_id,x);
+ flowReplyIndex.set(list,map);
+ return map;
 }
 export function flowLog(e:ConnLogEntry,list:ConnectionsReply|null){
  if(!e.flow_id||!list)return e;
+ const lookup=getFlowLookup(list);
  const map=mergedFlows.get(e);
  if(map&&map.size>1){
   let up=0,down=0;
-  const all=[...list.active,...list.closed];
   for(const [fid,v] of map.entries()){
-   const f=all.find(x=>x.flow_id===fid);
+   const f=lookup.get(fid);
    up+=f?f.up:v.up;
    down+=f?f.down:v.down;
   }
   return {...e,up,down};
  }
- const f=[...list.active,...list.closed].find(x=>x.flow_id===e.flow_id);
+ const f=lookup.get(e.flow_id);
  return f?{...e,up:f.up,down:f.down,start:f.start,end:'end' in f&&typeof f.end==='string'?f.end:undefined,duration_ms:f.duration_ms}:e;
 }
 export const inboundLabel=(s?:string)=>({tun:'TUN',system_proxy:'系统代理(HTTP)',socks:'SOCKS',http:'HTTP'}[s??'']??'—');

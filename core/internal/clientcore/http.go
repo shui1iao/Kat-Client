@@ -27,6 +27,10 @@ type httpBridge struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 	mu         sync.Mutex
+	conns      int
+	inFlight   int
+	serveDone  bool
+	retired    bool
 	closed     bool
 	wg         sync.WaitGroup
 	log        func(kernel.ClientLogEvent)
@@ -46,18 +50,21 @@ func newHTTPBridge(hp, sp int, sinks ...func(kernel.ClientLogEvent)) (*httpBridg
 	b.transport = &http.Transport{Proxy: nil, DialContext: b.dial, DisableCompression: true, MaxResponseHeaderBytes: 64 << 10, ResponseHeaderTimeout: 30 * time.Second}
 	b.server = &http.Server{Handler: b, DisableGeneralOptionsHandler: true, ReadHeaderTimeout: 10 * time.Second, MaxHeaderBytes: 64 << 10, ErrorLog: log.New(io.Discard, "", 0)}
 	b.server.ConnContext = func(ctx context.Context, c net.Conn) context.Context {
-		t := b.transport.Clone()
 		origin := procattr.NewOrigin(c.RemoteAddr(), c.LocalAddr())
 		b.mu.Lock()
-		b.transports[c] = t
+		b.conns++
 		b.mu.Unlock()
-		return context.WithValue(ctx, httpOriginKey{}, &httpOrigin{origin: origin, transport: t, bridgeID: nextHTTPObservationID.Add(1)})
+		return context.WithValue(ctx, httpOriginKey{}, &httpOrigin{conn: c, origin: origin, bridgeID: nextHTTPObservationID.Add(1)})
 	}
 	b.server.ConnState = func(c net.Conn, state http.ConnState) {
 		if state == http.StateClosed || state == http.StateHijacked {
 			b.mu.Lock()
 			t := b.transports[c]
 			delete(b.transports, c)
+			if state == http.StateClosed && b.conns > 0 {
+				b.conns--
+			}
+			b.tryFinishRetireLocked()
 			b.mu.Unlock()
 			if t != nil {
 				t.CloseIdleConnections()
@@ -78,11 +85,20 @@ func (b *httpBridge) setSOCKSPort(p int) {
 		b.transport.CloseIdleConnections()
 	}
 }
-func (b *httpBridge) start() { go func() { _ = b.server.Serve(b.listener) }() }
+func (b *httpBridge) start() {
+	go func() {
+		_ = b.server.Serve(b.listener)
+		b.mu.Lock()
+		b.serveDone = true
+		b.tryFinishRetireLocked()
+		b.mu.Unlock()
+	}()
+}
 func (b *httpBridge) close() {
 	b.mu.Lock()
 	if b.closed {
 		b.mu.Unlock()
+		b.wg.Wait()
 		return
 	}
 	b.closed = true
@@ -134,9 +150,16 @@ func (b *httpBridge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Proxy stopped", 503)
 		return
 	}
+	b.inFlight++
 	b.wg.Add(1)
 	b.mu.Unlock()
-	defer b.wg.Done()
+	defer func() {
+		b.wg.Done()
+		b.mu.Lock()
+		b.inFlight--
+		b.tryFinishRetireLocked()
+		b.mu.Unlock()
+	}()
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 	stop := context.AfterFunc(b.ctx, cancel)
@@ -162,7 +185,7 @@ func (b *httpBridge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	stripHop(req.Header)
 	transport := b.transport
 	if v, _ := ctx.Value(httpOriginKey{}).(*httpOrigin); v != nil {
-		transport = v.transport
+		transport = v.transportFor(b)
 	}
 	resp, e := transport.RoundTrip(req)
 	trace.record("response_header", "none", "", e, 0)
@@ -204,6 +227,11 @@ func (b *httpBridge) connect(ctx context.Context, w http.ResponseWriter, r *http
 	if e != nil {
 		return
 	}
+	b.mu.Lock()
+	if b.conns > 0 {
+		b.conns--
+	}
+	b.mu.Unlock()
 	defer trace.close("client", "handler_return", 0, client.Close)
 	// After Hijack, net/http's buffered reader may cancel the request context
 	// on a normal upload EOF. The tunnel still owns the response direction.
@@ -251,14 +279,64 @@ func (b *httpBridge) connect(ctx context.Context, w http.ResponseWriter, r *http
 
 // retire closes only the old accepting socket. Existing CONNECT/HTTP bodies
 // survive a normal document reload; EOF/Stop owns their final cancellation.
-func (b *httpBridge) retire() { b.listener.Close(); b.server.SetKeepAlivesEnabled(false) }
+func (b *httpBridge) retire() {
+	b.listener.Close()
+	b.server.SetKeepAlivesEnabled(false)
+	b.mu.Lock()
+	if b.retired || b.closed {
+		b.mu.Unlock()
+		return
+	}
+	b.retired = true
+	for _, t := range b.transports {
+		t.CloseIdleConnections()
+	}
+	b.tryFinishRetireLocked()
+	b.mu.Unlock()
+	if b.transport != nil {
+		b.transport.CloseIdleConnections()
+	}
+}
+
+func (b *httpBridge) tryFinishRetireLocked() {
+	if !b.retired || b.closed || !b.serveDone || b.conns != 0 || b.inFlight != 0 {
+		return
+	}
+	b.closed = true
+	b.cancel()
+	if b.transport != nil {
+		b.transport.CloseIdleConnections()
+	}
+}
+
+func (b *httpBridge) isClosed() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.closed
+}
 
 type httpOriginKey struct{}
 type httpOrigin struct {
+	conn      net.Conn
 	origin    *procattr.Origin
 	transport *http.Transport
 	bridgeID  uint64
 }
+
+func (o *httpOrigin) transportFor(b *httpBridge) *http.Transport {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if o.transport != nil {
+		return o.transport
+	}
+	t := b.transport.Clone()
+	o.transport = t
+	if o.conn != nil && !b.closed {
+		b.transports[o.conn] = t
+	}
+	return t
+}
+
 type httpSOCKSConn struct {
 	net.Conn
 	writer interface{ CloseWrite() error }

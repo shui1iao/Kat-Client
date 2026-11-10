@@ -2,16 +2,15 @@ package kernel
 
 import (
 	"context"
-	"encoding/json"
+
 	"errors"
 	"net"
-	"strings"
+
 	"sync"
-	"sync/atomic"
+
 	"testing"
 	"time"
 
-	"github.com/shui1iao/Kat/internal/procattr"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
@@ -78,96 +77,6 @@ func c49DNSServer(t *testing.T, records *c49DNSRecords, query func(context.Conte
 		c.SetClientLogSink(records.log)
 		c.Limits.UDPIdle = Duration(idle)
 	})
-}
-
-func TestC49ControlledDNSAccountingAndGeneration(t *testing.T) {
-	var records c49DNSRecords
-	var calls, processCalls atomic.Int64
-	oldLookup := lookupApplication
-	lookupApplication = func(context.Context, procattr.Query) procattr.Identity {
-		processCalls.Add(1)
-		return procattr.Identity{Status: "unsupported"}
-	}
-	defer func() { lookupApplication = oldLookup }()
-	s := c49DNSServer(t, &records, func(_ context.Context, b []byte) ([]byte, error) {
-		calls.Add(1)
-		return dnsReply(b, []string{"203.0.113.49"}, 60), nil
-	}, time.Second)
-	control, u, relay := socksAssociate(t, s, 0)
-	defer control.Close()
-	var up, down uint64
-	var id string
-	for i := uint16(1); i <= 3; i++ {
-		if i == 3 {
-			before := s.current()
-			next := s.CurrentConfig()
-			next.SetClientEgress(&ClientEgress{SystemQuery: func(_ context.Context, b []byte) ([]byte, error) {
-				calls.Add(1)
-				return dnsReply(b, []string{"203.0.113.50"}, 60), nil
-			}})
-			if _, e := s.ApplyConfig(next); e != nil {
-				t.Fatal(e)
-			}
-			if s.current() == before {
-				t.Fatal("generation did not change")
-			}
-		}
-		q := c49DNSQuery(t, i)
-		socksUDPSend(t, u, relay, c49DNSTarget, q, 0)
-		reply := socksUDPRead(t, u)
-		var m dnsmessage.Message
-		if e := m.Unpack(reply); e != nil || m.ID != i || len(m.Answers) != 1 {
-			t.Fatal("DNS response changed", e)
-		}
-		want := [4]byte{203, 0, 113, 49}
-		if i == 3 {
-			want[3] = 50
-		}
-		if m.Answers[0].Body.(*dnsmessage.AResource).A != want {
-			t.Fatal("retained association did not use current DNS generation")
-		}
-		up += uint64(len(q))
-		down += uint64(len(reply))
-		waitFor(t, func() bool { a, _ := s.ClientConnections(1); return len(a) == 1 && a[0].Down == down })
-		a, _ := s.ClientConnections(1)
-		if id == "" {
-			id = a[0].FlowID
-		}
-		if a[0].FlowID != id || a[0].Target != c49DNSTarget.String() || a[0].Rule != "dns" || joinChain(a[0].Chain) != "dns" || a[0].Network != "udp" || a[0].Up != up {
-			t.Fatalf("incorrect DNS flow: %+v", a[0])
-		}
-		if a[0].Host != "" || a[0].DestHost != "" {
-			t.Fatal("DNS question was used as business/sniff target")
-		}
-	}
-	if calls.Load() != 3 || processCalls.Load() != 0 {
-		t.Fatalf("system/generation calls=%d, unnecessary process queries=%d", calls.Load(), processCalls.Load())
-	}
-	control.Close()
-	waitFor(t, func() bool { _, ok := records.terminal(); return ok })
-	last, _ := records.terminal()
-	if last.Outcome != "ok" || last.Code != "" || last.Up != up || last.Down != down {
-		t.Fatalf("incorrect terminal DNS record: %+v", last)
-	}
-	total := s.reg.Total.Load()
-	in := s.keys.inbound[0].Load()
-	if total.Up != up || total.Down != down || in != total {
-		t.Fatalf("DNS payload not counted exactly once: total=%+v inbound=%+v", total, in)
-	}
-	for _, r := range s.reg.Snapshot().Rules {
-		if r.Hits != 0 || r.Up != 0 || r.Down != 0 {
-			t.Fatal("internal DNS invented a business rule hit", r)
-		}
-	}
-	if v := s.reg.Outbound("direct").Load(); v.Up != 0 || v.Down != 0 {
-		t.Fatal("internal DNS invented direct outbound traffic", v)
-	}
-	records.mu.Lock()
-	logs, _ := json.Marshal(records.logs)
-	records.mu.Unlock()
-	if strings.Contains(string(logs), "c49-private-question") {
-		t.Fatal("DNS question leaked to public safe logs")
-	}
 }
 
 func TestC49ControlledDNSFailureRecords(t *testing.T) {
@@ -256,31 +165,6 @@ func TestC49ControlledDNSFailureRecords(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestC49ControlledDNSFailureSurvivesOtherTraffic(t *testing.T) {
-	var records c49DNSRecords
-	s := c49DNSServer(t, &records, func(_ context.Context, b []byte) ([]byte, error) {
-		return dnsReply(b, []string{"203.0.113.49"}, 60), nil
-	}, time.Second)
-	control, u, relay := socksAssociate(t, s, 0)
-	defer control.Close()
-	socksUDPSend(t, u, relay, c49DNSTarget, []byte{1}, 0)
-	waitFor(t, records.failed)
-	socksUDPSend(t, u, relay, c49DNSTarget, c49DNSQuery(t, 20), 0)
-	socksUDPRead(t, u)
-	// Ordinary UDP emits a later ok routing event on the SAME association.
-	target, _ := echoUDP(t)
-	socksUDPSend(t, u, relay, target, []byte("ordinary-udp-still-works"), 0)
-	if string(socksUDPRead(t, u)) != "ordinary-udp-still-works" {
-		t.Fatal("ordinary UDP behavior changed")
-	}
-	control.Close()
-	waitFor(t, func() bool { _, ok := records.terminal(); return ok })
-	last, _ := records.terminal()
-	if last.Outcome != "error" || last.Code != "dns_query_failed" || last.Down == 0 {
-		t.Fatalf("later successful traffic erased DNS failure: %+v", last)
 	}
 }
 

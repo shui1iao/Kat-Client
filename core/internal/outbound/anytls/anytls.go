@@ -258,7 +258,7 @@ func (o *Outbound) open(ctx context.Context, target []byte, tcp bool) (*stream, 
 		if e != nil {
 			return nil, e
 		}
-		st, e := s.openStream(target)
+		st, req, e := s.openStream(target)
 		if e != nil {
 			o.release(s)
 			if !fresh && ctx.Err() == nil {
@@ -267,7 +267,11 @@ func (o *Outbound) open(ctx context.Context, target []byte, tcp bool) (*stream, 
 			}
 			return nil, e
 		}
-		e = st.await(ctx, tcp)
+		if !fresh && tcp {
+			e = st.awaitWrite(ctx, req)
+		} else {
+			e = st.await(ctx, tcp)
+		}
 		if e == nil {
 			// A nested AnyTLS hop may itself have reused a carrier. Propagate
 			// its actual route to the outer carrier rather than losing it.

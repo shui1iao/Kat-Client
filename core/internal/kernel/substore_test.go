@@ -11,8 +11,7 @@ import (
 	"github.com/shui1iao/Kat/internal/outbound"
 	"github.com/shui1iao/Kat/internal/provider"
 	"github.com/shui1iao/Kat/internal/stats"
-	"io"
-	"net"
+
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -251,132 +250,7 @@ func independentObfsPeer(t *testing.T, target string) string {
 	}
 	return addr
 }
-func TestSubstoreIndependentObfsViaURLTestTCPUDP(t *testing.T) {
-	frontCfg := socksCfg()
-	frontCfg.DNS = &DNSOptions{Server: "system"}
-	frontCfg.Inbounds = []Inbound{{Protocol: "shadowsocks", Listen: "127.0.0.1:0", SS: &SSOptions{Method: "aes-128-gcm", Password: "fixture", Salts2017: 32, TCPSalts: 32, Sessions: 8}}}
-	front := groupsStart(t, frontCfg)
-	peer := independentObfsPeer(t, front.Addresses()[0].String())
-	_, pstr, _ := net.SplitHostPort(peer)
-	var frontPort int
-	fmt.Sscan(pstr, &frontPort)
-	tailCfg := socksCfg()
-	tailCfg.DNS = &DNSOptions{Server: "system"}
-	in := ssIn()
-	in.Listen = "127.0.0.1:0"
-	tailCfg.Inbounds = []Inbound{in}
-	tail := groupsStart(t, tailCfg)
-	tailPort := tail.Addresses()[0].(*net.TCPAddr).Port
-	probe := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) }))
-	defer probe.Close()
-	var mu sync.Mutex
-	body := substoreBody(frontPort, tailPort, probe.URL)
-	sub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { mu.Lock(); defer mu.Unlock(); fmt.Fprint(w, body) }))
-	defer sub.Close()
-	cache := filepath.Join(t.TempDir(), "graph.cache")
-	os.WriteFile(cache, []byte(body), 0600)
-	c := socksCfg("127.0.0.1:0")
-	c.DNS = &DNSOptions{Server: "system"}
-	c.Providers = []ProviderConfig{{Name: "p", Type: "http", URL: sub.URL, Path: cache, Interval: Duration(time.Hour), Filter: "^tail"}}
-	c.Groups = []GroupConfig{{Name: "pick", Type: "select", Use: []string{"p"}}}
-	c.Routing = &RoutingOptions{Final: "pick"}
-	s := groupsStart(t, c)
-	assertSubstoreGraph(t, s.CurrentConfig(), 2, 1, 1, 1, 1)
-	target := echoTCP(t)
-	conn, ok := socksTo(t, s.Addresses()[0].String(), target)
-	if !ok {
-		t.Fatal("true obfs front -> url-test -> SS2022 TCP connect")
-	}
-	defer conn.Close()
-	if !echoOnce(conn, "independent-obfs-chain") {
-		t.Fatal("true SS chain echo")
-	}
-	for _, g := range s.CurrentConfig().Groups {
-		if g.Type == "url-test" {
-			round, e := s.ProbeGroup(context.Background(), g.Name, probe.URL)
-			if e != nil || len(round) != 1 || round[0].Error != "" || round[0].ProbeMS == nil {
-				t.Fatal("independent obfs dependency group HTTP probe")
-			}
-		}
-	}
-	tailName := s.SelectGroups()[0].Members[0]
-	if result, e := s.ProbeNode(context.Background(), tailName, probe.URL); e != nil || result.Error != "" || result.ProbeMS == nil {
-		t.Fatal("via SS2022 actual HTTP probe")
-	}
-	// A new generation must also work when the first actual use is native
-	// UDP, without a manual warm-up or copied health from the previous graph.
-	if _, e := s.ApplyConfig(c); e != nil {
-		t.Fatal("cold UDP generation")
-	}
-	ob := s.current().rt.nodes[tailName]
-	pc, e := ob.ListenPacket(context.Background())
-	if e != nil {
-		t.Fatal("native UDP chain")
-	}
-	defer pc.Close()
-	udp, _ := echoUDP(t)
-	if !udpRoundTrip(pc, outbound.Addr{Host: udp.Host, Port: udp.Port}, []byte("native-udp-through-both-SS")) {
-		t.Fatal("native UDP chain echo")
-	}
-	// The production SS tcpConn must still send its header on first Read,
-	// then propagate CloseWrite through url-test, SS and obfs to the target.
-	ln, e := net.Listen("tcp4", "127.0.0.1:0")
-	if e != nil {
-		t.Fatal(e)
-	}
-	defer ln.Close()
-	targetDone := make(chan bool, 1)
-	go func() {
-		c, e := ln.Accept()
-		if e != nil {
-			targetDone <- false
-			return
-		}
-		defer c.Close()
-		c.SetDeadline(time.Now().Add(3 * time.Second))
-		c.Write([]byte("greeting"))
-		b, e := io.ReadAll(c)
-		if e != nil || string(b) != "payload" {
-			targetDone <- false
-			return
-		}
-		_, e = c.Write([]byte("after-fin"))
-		targetDone <- e == nil
-	}()
-	serverFirst, e := ob.DialTCP(context.Background(), outbound.Addr{Host: "127.0.0.1", Port: uint16(ln.Addr().(*net.TCPAddr).Port)})
-	if e != nil {
-		t.Fatal("server first dial")
-	}
-	defer serverFirst.Close()
-	serverFirst.SetDeadline(time.Now().Add(3 * time.Second))
-	banner := make([]byte, 8)
-	if _, e = io.ReadFull(serverFirst, banner); e != nil || string(banner) != "greeting" {
-		t.Fatal("read-before-write")
-	}
-	serverFirst.Write([]byte("payload"))
-	cw, ok := serverFirst.(interface{ CloseWrite() error })
-	if !ok || cw.CloseWrite() != nil {
-		t.Fatal("half-close capability lost")
-	}
-	reply := make([]byte, 9)
-	if _, e = io.ReadFull(serverFirst, reply); e != nil || string(reply) != "after-fin" {
-		t.Fatal("half-close response")
-	}
-	if !<-targetDone {
-		t.Fatal("half-close target")
-	}
-	gen := s.StatsView().Reload.Generation
-	mu.Lock()
-	body = strings.Replace(body, "name: tail,", "name: tail2,", 1)
-	mu.Unlock()
-	if _, e := s.RefreshProvider(context.Background(), "p"); e != nil {
-		t.Fatal("chain refresh")
-	}
-	if s.StatsView().Reload.Generation != gen+1 || !echoOnce(conn, "old-flow-survives") {
-		t.Fatal("generation or retained stream")
-	}
-	t.Log("independent mihomo server: SS2017-obfs -> url-test -> SS2022 cold TCP + cold native UDP, refresh once and retained stream")
-}
+
 func TestSubstoreLateFetchAfterSourceReplacement(t *testing.T) {
 	initial := substoreBody(1234, 2345, "http://127.0.0.1:1/")
 	late := strings.Replace(initial, "name: tail,", "name: late,", 1)

@@ -31,7 +31,12 @@ func (c *packetConn) WriteTo(p []byte, dst outbound.Addr) (int, error) {
 	}
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
-	wire := make([]byte, 0, len(p)+2*262+4)
+	addrCap := 4 + max(len(dst.Host), 16)
+	hdrCap := addrCap + 2
+	if !c.headerSent {
+		hdrCap += 1 + addrCap
+	}
+	wire := make([]byte, 0, len(p)+hdrCap)
 	var e error
 	if !c.headerSent {
 		wire = append(wire, 0) // non-connected: per-packet addresses
@@ -59,6 +64,7 @@ func (c *packetConn) ReadFrom(p []byte) (int, outbound.Addr, error) {
 	for {
 		src, payload, used, ok, e := parseUoTPacket(c.rbuf)
 		if e != nil {
+			c.rbuf = nil
 			_ = c.st.Close()
 			return 0, outbound.Addr{}, e
 		}
