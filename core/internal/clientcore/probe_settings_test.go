@@ -103,7 +103,7 @@ func TestProbeSettingsValidationAndPreservation(t *testing.T) {
 	if _, e := h.Start(); e != nil {
 		t.Fatal(e)
 	}
-	gen := h.server.StatsView().Reload.Generation
+	gen := h.server.GenerationID()
 	for _, patch := range []map[string]any{
 		{"probe_timeout": nil}, {"probe_round_timeout": nil}, {"probe_concurrency": nil},
 		{"probe_timeout": "0s"}, {"probe_timeout": "99ms"}, {"probe_timeout": "60.001s"}, {"probe_timeout": 5}, {"probe_timeout": "NaN"},
@@ -114,7 +114,7 @@ func TestProbeSettingsValidationAndPreservation(t *testing.T) {
 			t.Fatal("invalid probe setting accepted")
 		}
 	}
-	if b, _ := os.ReadFile(h.path); string(b) != text || h.server.StatsView().Reload.Generation != gen {
+	if b, _ := os.ReadFile(h.path); string(b) != text || h.server.GenerationID() != gen {
 		t.Fatal("bad document changed file/runtime")
 	}
 	for _, patch := range []map[string]any{{"probe_timeout": "100ms", "probe_round_timeout": "100ms", "probe_concurrency": 1}, {"probe_timeout": "60s", "probe_round_timeout": "300s", "probe_concurrency": 4}} {
@@ -217,15 +217,14 @@ func TestProbeSettingsSharedPermitsAndQueueBudget(t *testing.T) {
 		e *Error
 	}
 	done := make(chan answer, 3)
-	for _, g := range []bool{false, true, false} {
-		go func(g bool) {
-			name := "direct"
-			if g {
-				name = "auto"
-			}
+	for _, item := range []struct {
+		g    bool
+		name string
+	}{{false, "direct"}, {true, "auto"}, {false, "p"}} {
+		go func(g bool, name string) {
 			r, e := h.probe(context.Background(), g, name, target.URL)
 			done <- answer{r, e}
-		}(g)
+		}(item.g, item.name)
 	}
 	for range 3 {
 		select {

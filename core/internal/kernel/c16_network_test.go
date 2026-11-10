@@ -178,10 +178,13 @@ func TestK2GatewayWireSemanticsAndTCP(t *testing.T) {
 				}
 			}
 			// Actual association send path used by tun2socks UDP, not just resolver.
-			var got []byte
-			a := &udpAssociation{server: s.current(), ctx: ctx, writeBack: func(_ Address, b []byte) error { got = append([]byte(nil), b...); return nil }}
+			nativeSock, clientSock := localUDP(t), localUDP(t)
+			a := &udpAssociation{server: s.current(), ctx: ctx, native: nativeSock, client: addrPort(clientSock.LocalAddr())}
 			a.send(ctx, packet{target: Address{"192.0.2.53", 53}, payload: wire}, time.Second)
-			if len(got) == 0 {
+			_ = clientSock.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+			buf := make([]byte, 2048)
+			nRead, _, _ := clientSock.ReadFromUDP(buf)
+			if nRead == 0 {
 				t.Fatal("UDP gate did not answer")
 			}
 		}

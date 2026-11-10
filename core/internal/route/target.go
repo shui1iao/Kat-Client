@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"strings"
 )
 
-// TargetSkippedRule explains a rule omitted only because the caller supplied
-// no connection-specific metadata. It is never presented as a false match.
+// TargetSkippedRule is retained as an empty compatibility slice type.
+// Undecidable rules block at first-match boundary rather than being skipped.
 type TargetSkippedRule struct {
 	Rule      int      `json:"rule"`
 	Condition string   `json:"condition"`
@@ -65,23 +66,30 @@ func hasTargetMissing(fields []string, field string) bool {
 	return false
 }
 
-// targetFrom retains first-match ordering. Only connection-context unknowns
-// are skipped. An unresolved IP is a hard boundary until DNS has answered.
+func targetMissingReason(missing []string) string {
+	if len(missing) == 1 && missing[0] == "destination_ip" {
+		return "需要目的 IP；仅做 DNS 查询，不访问目标"
+	}
+	labels := make([]string, 0, len(missing))
+	for _, field := range missing {
+		if field == "destination_ip" {
+			labels = append(labels, "目的 IP")
+			continue
+		}
+		labels = append(labels, offlineMissingLabel(field))
+	}
+	return "该规则还需要" + strings.Join(labels, "、")
+}
+
+// targetFrom retains strict first-match ordering. Any undecidable rule (missing
+// connection context or unresolved destination IP) is a hard boundary and is
+// never skipped to fabricate a later deterministic match.
 func (v *offlineEvaluation) targetFrom(options Options, conditions []*cond, m Metadata, x *ipInfo, start int, out TargetResult) TargetResult {
 	q := query{host: m.Host, port: m.Port, network: m.Network, src: m.Source, srcPort: m.SrcPort, inPort: m.InPort, inName: m.InName, inType: m.InType, protocol: m.Protocol, processName: m.ProcessName, processStatus: m.ProcessStatus}
 	for i := start; i < len(options.Rules); i++ {
 		r := options.Rules[i]
 		value, missing := v.condition(conditions[i], &q, x, false)
 		if value == triFalse {
-			continue
-		}
-		if value == triUnknown && !hasTargetMissing(missing, "destination_ip") && !hasTargetMissing(missing, "rule_set_data") {
-			skipped := TargetSkippedRule{Rule: i + 1, Condition: condString(&r), Policy: ruleTarget(r.Action, r.Outbound), Missing: append([]string(nil), missing...)}
-			if len(out.Skipped) < 32 {
-				out.Skipped = append(out.Skipped, skipped)
-			} else {
-				out.SkippedMore++
-			}
 			continue
 		}
 		out.Rule = i + 1
@@ -94,7 +102,7 @@ func (v *offlineEvaluation) targetFrom(options Options, conditions []*cond, m Me
 			out.Missing = missing
 			out.BlockedRule = i + 1
 			out.CandidatePolicy = ruleTarget(r.Action, r.Outbound)
-			out.Reason = "需要目的 IP；仅做 DNS 查询，不访问目标"
+			out.Reason = targetMissingReason(missing)
 			return out
 		}
 		out.Status = "matched"
@@ -171,7 +179,6 @@ func (e *Engine) TestTarget(ctx context.Context, options Options, in OfflineInpu
 				}
 				var selected *TargetResult
 				results := make([]TargetIPResult, 0, len(ips))
-				// out includes only context skips encountered before the DNS boundary.
 				prefix := cloneTarget(out)
 				for _, ip := range ips {
 					branch := forkTargetEvaluation(v)

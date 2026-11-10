@@ -99,12 +99,12 @@ func TestK1ManualSwitchClosesOnlyNestedGroupOldTCP(t *testing.T) {
 				case "unpin":
 					delete(child, "fixed")
 				}
-				gen := h.server.StatsView().Reload.Generation
+				gen := h.server.GenerationID()
 				next, _ := json.Marshal(root)
 				if _, e := h.Apply(string(next)); e != nil {
 					t.Fatal(e)
 				}
-				if h.server.StatsView().Reload.Generation != gen {
+				if h.server.GenerationID() != gen {
 					t.Fatal("manual selection rebuilt generation")
 				}
 				e = echo(a)

@@ -225,12 +225,26 @@
   },
   {
     "service": "Gemini",
-    "want": "unknown",
-    "evidence": "Structural excerpt of public 2026-11-03 app response (not complete raw body): build marker, sign-in and empty orchestrator are not anonymous acceptance",
+    "want": "unlocked",
+    "evidence": "Served country code in Google configuration block not in unsupported country list (service-unlock v0.5.8 classifyGemini)",
     "pages": [
       {
-        "url": "https://gemini.google.com/app?hl=en",
-        "body": "<title>Google Gemini</title><script>window.WIZ_global_data = {\"cfb2h\":\"boq_gemini-web-uiserver_20261102.01_p1\",\"eptZe\":\"/_/BardChatUi/\"};</script><a>Sign in</a><chat-app-orchestrator id=\"app-root\"></chat-app-orchestrator>",
+        "url": "https://gemini.google.com/app",
+        "body": "<!DOCTYPE html><html><head><title>Google Gemini</title></head><body><script>var _bar_={CONFIG:[[[0,\"www.gstatic.com\",\"\",2,1,200,\"USA\",null,null,\"269\"]]]}</script></body></html>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Gemini",
+    "want": "blocked",
+    "evidence": "Served country code in unsupported country list (service-unlock v0.5.8 geminiUnsupported)",
+    "pages": [
+      {
+        "url": "https://gemini.google.com/app",
+        "body": "<!DOCTYPE html><html><head><title>Google Gemini</title></head><body><script>var _bar_={CONFIG:[[[0,\"www.gstatic.com\",\"\",2,1,200,\"CHN\",null,null,\"269\"]]]}</script></body></html>",
         "status": 200,
         "location": "",
         "method": "GET"
@@ -243,7 +257,7 @@
     "evidence": "Synthetic explicit visitor region-denial sentence, NOT a captured Google response",
     "pages": [
       {
-        "url": "https://gemini.google.com/app?hl=en",
+        "url": "https://gemini.google.com/app",
         "body": "<h1>Gemini isn't available in your country yet.</h1>",
         "status": 200,
         "location": "",
@@ -257,7 +271,7 @@
     "evidence": "Synthetic verification precedes region-denial text",
     "pages": [
       {
-        "url": "https://gemini.google.com/app?hl=en",
+        "url": "https://gemini.google.com/app",
         "body": "<p>Our systems have detected unusual traffic from your computer network.</p><h1>Gemini isn't available in your country yet.</h1>",
         "status": 200,
         "location": "",
@@ -268,11 +282,11 @@
   {
     "service": "Gemini",
     "want": "unknown",
-    "evidence": "A country marker and blocklist complement are not Gemini functionality",
+    "evidence": "Page without served region configuration block is inconclusive",
     "pages": [
       {
-        "url": "https://gemini.google.com/app?hl=en",
-        "body": "<script>const data=[null,2,1,200,\"USA\"];</script><h1>Google Gemini</h1>",
+        "url": "https://gemini.google.com/app",
+        "body": "<title>Google Gemini</title><script>window.WIZ_global_data = {\"cfb2h\":\"boq_gemini-web-uiserver_20261102.01_p1\",\"eptZe\":\"/_/BardChatUi/\"};</script><a>Sign in</a><chat-app-orchestrator id=\"app-root\"></chat-app-orchestrator>",
         "status": 200,
         "location": "",
         "method": "GET"
@@ -282,10 +296,24 @@
   {
     "service": "Gemini",
     "want": "unknown",
-    "evidence": "Hidden/template/bundle denial text is not a visitor message",
+    "evidence": "Conflicting region codes in page configuration block fail closed",
     "pages": [
       {
-        "url": "https://gemini.google.com/app?hl=en",
+        "url": "https://gemini.google.com/app",
+        "body": "<script>const a=[null,2,1,200,\"USA\"];const b=[null,2,1,200,\"SGP\"];</script><h1>Google Gemini</h1>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Gemini",
+    "want": "unknown",
+    "evidence": "Hidden/template/bundle denial text without region config is not a visitor message",
+    "pages": [
+      {
+        "url": "https://gemini.google.com/app",
         "body": "<script>const text=\"Gemini isn't available in your country yet\"</script><template><h1>Gemini isn't available in your country yet</h1></template><div hidden><h1>Gemini isn't available in your country yet</h1></div>",
         "status": 200,
         "location": "",
@@ -299,7 +327,7 @@
     "evidence": "A generic HTTP rejection with words about country is not a region denial",
     "pages": [
       {
-        "url": "https://gemini.google.com/app?hl=en",
+        "url": "https://gemini.google.com/app",
         "body": "<h1>Gemini isn't available in your country yet.</h1>",
         "status": 403,
         "location": "",
@@ -308,13 +336,146 @@
     ]
   },
   {
-    "service": "Gemini",
-    "want": "unknown",
-    "evidence": "An ordinary login page is not anonymous functional availability",
+    "service": "Claude",
+    "want": "unlocked",
+    "evidence": "Ordinary Claude entry page without region refusal plus valid service trace",
     "pages": [
       {
-        "url": "https://gemini.google.com/app?hl=en",
-        "body": "<h1>Sign in</h1><button>Continue with Google</button>",
+        "url": "https://claude.ai/",
+        "body": "<!DOCTYPE html><html><body><div id=\"root\"></div></body></html>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      },
+      {
+        "url": "https://claude.ai/cdn-cgi/trace",
+        "body": "ip=203.0.113.9\nloc=US\n",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Claude",
+    "want": "blocked",
+    "evidence": "Explicit Claude region refusal page",
+    "pages": [
+      {
+        "url": "https://claude.ai/",
+        "body": "<!DOCTYPE html><html><head><title>Claude</title></head><body><h1>Unfortunately, Claude isn't available here.</h1><p>Claude is not yet available in your region.</p></body></html>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Claude",
+    "want": "challenge",
+    "evidence": "Cloudflare challenge echoing /app-unavailable-in-region is still a challenge, not a block",
+    "pages": [
+      {
+        "url": "https://claude.ai/",
+        "body": "<!DOCTYPE html><html><head><title>Just a moment...</title></head><body><form id=\"challenge-form\" action=\"/app-unavailable-in-region?__cf_chl_tk=test\" method=\"POST\"></form><script>window._cf_chl_opt={};</script></body></html>",
+        "status": 403,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Claude",
+    "want": "unknown",
+    "evidence": "Bare HTTP 403 without region refusal markers is inconclusive",
+    "pages": [
+      {
+        "url": "https://claude.ai/",
+        "body": "Forbidden",
+        "status": 403,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Google",
+    "want": "unlocked",
+    "evidence": "Google Search page without captcha/abuse block plus official embedded locale region",
+    "pages": [
+      {
+        "url": "https://www.google.com/search?q=cats",
+        "body": "<!DOCTYPE html><html><head><title>cats - Google Search</title></head><body><script>const _bar_=[null,2,1,200,\"USA\"]</script></body></html>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Google",
+    "want": "blocked",
+    "evidence": "Google Search unusual traffic / abuse block marker",
+    "pages": [
+      {
+        "url": "https://www.google.com/search?q=cats",
+        "body": "<!DOCTYPE html><html><body>Our systems have detected unusual traffic from your computer network.</body></html>",
+        "status": 403,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "Google",
+    "want": "unknown",
+    "evidence": "Bare HTTP 403 without captcha/block marker is inconclusive",
+    "pages": [
+      {
+        "url": "https://www.google.com/search?q=cats",
+        "body": "Forbidden",
+        "status": 403,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "YouTube",
+    "want": "unlocked",
+    "evidence": "YouTube Premium offer page with ad-free wording and served countryCode",
+    "pages": [
+      {
+        "url": "https://www.youtube.com/premium",
+        "body": "<!DOCTYPE html><html><body>YouTube Premium ad-free <script>{\"countryCode\":\"JP\"}</script></body></html>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "YouTube",
+    "want": "blocked",
+    "evidence": "YouTube Premium explicit country refusal sentence",
+    "pages": [
+      {
+        "url": "https://www.youtube.com/premium",
+        "body": "<!DOCTYPE html><html><body>YouTube Premium is not available in your country <script>{\"countryCode\":\"CN\"}</script></body></html>",
+        "status": 200,
+        "location": "",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "service": "YouTube",
+    "want": "unknown",
+    "evidence": "Page with neither offer nor refusal wording is inconclusive",
+    "pages": [
+      {
+        "url": "https://www.youtube.com/premium",
+        "body": "<!DOCTYPE html><html><body><script>{\"countryCode\":\"JP\"}</script></body></html>",
         "status": 200,
         "location": "",
         "method": "GET"

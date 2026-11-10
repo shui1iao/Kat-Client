@@ -209,13 +209,13 @@ func TestRestoredSmartInvalidApplyAndOpenLeaveSourceUntouched(t *testing.T) {
 			text := string(rawJSON(root))
 			before := h.doc.text
 			running := h.server
-			generation := running.StatsView().Reload.Generation
+			generation := running.GenerationID()
 			disk, _ := os.ReadFile(h.path)
 			if _, e := h.Apply(text); e == nil {
 				t.Fatal("invalid apply accepted")
 			}
 			after, _ := os.ReadFile(h.path)
-			if h.doc.text != before || !bytes.Equal(disk, after) || h.server != running || h.server.StatsView().Reload.Generation != generation {
+			if h.doc.text != before || !bytes.Equal(disk, after) || h.server != running || h.server.GenerationID() != generation {
 				t.Fatal("invalid apply affected source")
 			}
 			dir := t.TempDir()

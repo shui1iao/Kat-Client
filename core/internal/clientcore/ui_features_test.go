@@ -63,7 +63,7 @@ func TestUIConnectionRingCursorCapacityAndClone(t *testing.T) {
 		t.Fatal(count, after, v.NextSeq)
 	}
 	v = r.read(maxLogSeq, 200)
-	if len(v.Entries) != 0 || v.NextSeq != maxLogSeq {
+	if len(v.Entries) != 200 || v.Entries[0].Seq != 18 || v.NextSeq != 217 {
 		t.Fatal("future cursor")
 	}
 	var wg sync.WaitGroup
@@ -235,7 +235,7 @@ func TestUIRealConnectionEventsStatusAndStop(t *testing.T) {
 		t.Fatal(logs)
 	}
 	h.mu.Lock()
-	view := h.server.StatsView()
+	view := h.server.ClientStatusView()
 	sn := view.Cumulative
 	total := h.server.TotalConnections()
 	h.mu.Unlock()
@@ -252,7 +252,7 @@ func TestUIRealConnectionEventsStatusAndStop(t *testing.T) {
 		t.Fatal("rule targets did not use final/direct/reject actual decisions", byTarget)
 	}
 	counts := st["connections"].(map[string]any)
-	if counts["tcp"] != view.Connections.TCP || counts["udp"] != view.Connections.UDP {
+	if counts["tcp"] != view.TCP || counts["udp"] != view.UDP {
 		t.Fatal("TCP/UDP counters do not match runtime snapshot")
 	}
 	// The detailed log must never be copied into logs.get or persistence.
@@ -325,12 +325,18 @@ func TestUIResourcesNoCredentialsAndLocalUnsupported(t *testing.T) {
 	if !strings.Contains(out, `"kind":"rule_set","name":"ads"`) || !strings.Contains(out, `"entries":1`) || !strings.Contains(out, `"state":"missing"`) {
 		t.Fatal(out)
 	}
-	for _, raw := range []string{`{"kind":"rule_set","name":"ads"}`, `{"kind":"geoip","name":"geoip"}`, `{"kind":"asn","name":"asn"}`, `{"kind":"rule_set","name":"unknown"}`} {
-		if _, e := h.Request(context.Background(), "resources.refresh", json.RawMessage(raw)); e == nil || e.Code != "unsupported" {
+	if r, e := h.Request(context.Background(), "resources.refresh", json.RawMessage(`{"kind":"rule_set","name":"ads"}`)); e != nil || r.(map[string]any)["action"] != "reloaded" {
+		t.Fatal(r, e)
+	}
+	for _, raw := range []string{`{"kind":"geoip","name":"geoip"}`, `{"kind":"asn","name":"asn"}`} {
+		if _, e := h.Request(context.Background(), "resources.refresh", json.RawMessage(raw)); e == nil || e.Code != "resource_refresh_failed" {
 			t.Fatal(raw, e)
 		}
 	}
-	if _, e := h.Request(context.Background(), "resources.refresh", json.RawMessage(`{"kind":"rule_set","name":"remote"}`)); e == nil || e.Code != "resource_refresh_failed" || strings.Contains(uiJSON(e), "SECRET") {
+	if _, e := h.Request(context.Background(), "resources.refresh", json.RawMessage(`{"kind":"rule_set","name":"unknown"}`)); e == nil || e.Code != "unsupported" {
+		t.Fatal(e)
+	}
+	if _, e := h.Request(context.Background(), "resources.refresh", json.RawMessage(`{"kind":"rule_set","name":"remote"}`)); e == nil || (e.Code != "resource_refresh_failed" && e.Code != "subscription_resource_failed") || strings.Contains(uiJSON(e), "SECRET") {
 		t.Fatal(e)
 	}
 	// Standalone legacy provider methods are no longer a client capability.

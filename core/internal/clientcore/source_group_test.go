@@ -141,7 +141,7 @@ func TestSourceGroupInvalidApplyRetainsDiskAndRuntime(t *testing.T) {
 			}
 			var gen uint64
 			if running {
-				gen = h.server.StatsView().Reload.Generation
+				gen = h.server.GenerationID()
 			}
 			if _, e := h.Apply(string(rawJSON(root))); e == nil || e.Code != "invalid_kernel" {
 				t.Fatal(bad, "invalid config accepted", e)
@@ -150,7 +150,7 @@ func TestSourceGroupInvalidApplyRetainsDiskAndRuntime(t *testing.T) {
 			if e != nil || string(disk) != text || h.doc.text != text {
 				t.Fatal(bad, "failed apply modified source", e)
 			}
-			if running && h.server.StatsView().Reload.Generation != gen {
+			if running && h.server.GenerationID() != gen {
 				t.Fatal(bad, "failed apply changed generation")
 			}
 		}
@@ -234,14 +234,14 @@ func TestSourceGroupSubscriptionOverlayRefreshAndMissingSource(t *testing.T) {
 		t.Fatal("source nodes stored as explicit members", got)
 	}
 	before := h.doc.text
-	gen := h.server.StatsView().Reload.Generation
+	gen := h.server.GenerationID()
 	// Existing ownership policy refuses dangling external/overlay references;
 	// remote deletion/rename must not silently clear include_group or drop it.
 	renamed := strings.ReplaceAll(next, "pick", "renamed")
 	if _, e := h.previewSubscription(context.Background(), rawJSON(map[string]any{"text": renamed, "id": p.ID})); e == nil || e.Code != "subscription_conflict" {
 		t.Fatal("dangling source rename accepted", e)
 	}
-	if h.doc.text != before || h.server.StatsView().Reload.Generation != gen {
+	if h.doc.text != before || h.server.GenerationID() != gen {
 		t.Fatal("failed refresh changed accepted state")
 	}
 	disk, err := os.ReadFile(h.path)

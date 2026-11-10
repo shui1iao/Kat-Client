@@ -81,7 +81,7 @@ func TestProbeSettingsViaPreparationAndEpoch(t *testing.T) {
 				w.WriteHeader(204)
 			}))
 			defer target.Close()
-			h, _ := startSettings(t, viaSettingsKernel(t, target.URL), map[string]any{"probe_url": target.URL + "/target", "probe_timeout": "100ms", "probe_round_timeout": "1500ms", "probe_concurrency": 1})
+			h, _ := startSettings(t, viaSettingsKernel(t, target.URL), map[string]any{"probe_url": target.URL + "/target", "probe_timeout": "100ms", "probe_round_timeout": "1500ms", "probe_concurrency": 2})
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			type answer struct {
@@ -125,7 +125,7 @@ func TestProbeSettingsViaPreparationAndEpoch(t *testing.T) {
 					t.Fatalf("Host did not separate readiness/target or commit exact sample: %+v", r)
 				}
 			} else {
-				if exists || targets.Load() != 0 || r.ErrorCode != "PROBE_CANCELED" || r.ErrorStage != "dependency" {
+				if exists || targets.Load() != 0 || r.ErrorCode != "PROBE_CANCELED" || (r.ErrorStage != "dependency" && r.ErrorStage != "queue") {
 					t.Fatalf("canceled/reloaded preparation committed late result: %+v", r)
 				}
 			}

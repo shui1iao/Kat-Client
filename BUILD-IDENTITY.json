@@ -1,39 +1,38 @@
 {
-  "candidate": "v0.2.2-release-20261110",
+  "candidate": "v0.2.3-release-20261110",
   "not_published": false,
-  "app_version": "0.2.2",
-  "windows_clientcore_version": "0.8.1",
-  "sequence": 1794300002,
-  "core_source_fingerprint": "f9f9d354ed3e551138964fde957cb0e2371e761cce5776d098bae80a2b33c560",
-  "core_build_commit": "f9f9d354ed3e551138964fde957cb0e2371e761c",
-  "source_manifest_sha256": "6422a27e7a9e2966a1fdf6aa685e88e4436344f469c49e3b13cfba434c43d2a7",
+  "app_version": "0.2.3",
+  "windows_clientcore_version": "0.8.2",
+  "sequence": 1794300003,
+  "core_source_fingerprint": "2e2891c68be5fd22aeafe444aa14433968b33ee196187e0255db08fcba19a910",
+  "core_build_commit": "2e2891c68be5fd22aeafe444aa14433968b33ee1",
+  "source_manifest_sha256": "4749d2356fa6b9e24ed555d230cd69de0f2858398572efa0dab41a6ab36edc96",
   "executables": {
     "kat-client-core.exe": {
-      "bytes": 16657408,
-      "sha256": "8beb464141230cca3ee361bd586fbccdf2f77de1f9474d5d7e1dafa87fe0a1b4"
+      "bytes": 16694272,
+      "sha256": "b35f5fd15771a35e45c38e6d9a944c9e9b231c457dab3706028da1926e963974"
     },
     "kat-desktop.exe": {
       "bytes": 11852800,
-      "sha256": "796d42d159ccff895ab77cc2ce4da14ea891df7539f7ea605f0026f1e459d2c9"
+      "sha256": "86c7a251239698e27e0e2027d6d2340ab7e952f6f5f4c793fc04ed8571697b47"
     },
     "kat-elevate-helper.exe": {
       "bytes": 585728,
-      "sha256": "bf494dc31bfc7e9cb1c7faf13cc056f190ff8a0ee093e0242b93279ad9ca2829"
+      "sha256": "a0ebe3a3a18c37101d68415542db0245708280cb6e144682db052f2745e3c248"
     },
     "kat-install-helper.exe": {
       "bytes": 1291264,
-      "sha256": "75dd0ffbb1ea3154414c2a1bec234c19823b234b1bd7772f31f135f303fcc9b0"
+      "sha256": "6954f6f10a3457bec16a5747f6b825d919fb917b54706cd3480ff50b20a48c6d"
     },
     "kat-network-service.exe": {
       "bytes": 1827328,
-      "sha256": "b2779da39bec61eb7cdf02d43f7da11c32bb75f7010dddacd341cc4305a9976c"
+      "sha256": "ce11c327306917cf7905597901b01d36cee2609959dc8c110ff0286e5375ae3d"
     },
     "kat-proxy-watchdog.exe": {
       "bytes": 481280,
-      "sha256": "550acab5f56b88e6b947046a7662af62496655c3f01e5ee9fa24fe37d7315427"
+      "sha256": "938fa39466cd5ab5d0bb76520de10f0da18409a7e03f711cf6e3b2a383a2c501"
     }
   },
   "signature_key_id": "0afa646ee76f17d8",
-  "diagnostic_build": false,
-  "tun_reason_diagnostic_only": false
+  "validation": "targeted release regression, delivery build and package safety authentication; no Windows runtime installation"
 }

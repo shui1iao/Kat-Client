@@ -19,13 +19,13 @@ ManifestSupportedOS all
 !define MUI_UNICON "${ICON}"
 !define MUI_ABORTWARNING
 !define MUI_CUSTOMFUNCTION_GUIINIT SetupGUIInit
-!define MUI_WELCOMEPAGE_TEXT "此向导安装 Kat 及其专用网络服务。$\r$\n$\r$\n首次安装可以选择安全的专用目录；更新沿用原目录，不支持更新搬家。安装阶段将单独请求 Windows 授权。$\r$\n$\r$\nKat 正在运行时，将请求在 Kat 内确认并正常保存退出；更新会短暂中断代理连接，完成后恢复原运行状态。旧 c22/c24 首次升级仍需手动正常退出。配置、偏好和历史将保留。"
+!define MUI_WELCOMEPAGE_TEXT "此向导将安装或更新 Kat 及其网络服务。$\r$\n$\r$\n安装与更新期间会短暂中断代理连接，配置和历史将保留。"
 !insertmacro MUI_PAGE_WELCOME
 !define MUI_PAGE_CUSTOMFUNCTION_PRE DirectoryPre
-!define MUI_DIRECTORYPAGE_TEXT_TOP "请选择专用本机安装目录。例如 D:\tool\Kat；父目录权限无需手动修改。系统服务固定安装在 ProgramData\Kat Client\Runtime 受保护目录；桌面、下载、用户目录、网络盘和 Windows 目录不受支持，不会静默忽略选择。"
+!define MUI_DIRECTORYPAGE_TEXT_TOP "请选择专用本机安装目录（不支持桌面、下载、用户目录、网络盘或系统目录）。"
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
-!define MUI_FINISHPAGE_TEXT "Kat 程序和网络服务已安装，开始菜单入口已创建。组件健康状态将在首次打开后确认；若本次从运行中安全交接，原运行状态将自动恢复。您可以选择是否立即运行和是否创建桌面快捷方式。"
+!define MUI_FINISHPAGE_TEXT "Kat 已完成安装。您可以选择是否立即运行 Kat 或创建桌面快捷方式。"
 !define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_TEXT "立即运行 Kat"
 !define MUI_FINISHPAGE_RUN_NOTCHECKED
@@ -143,7 +143,6 @@ Function SetupGUIInit
 FunctionEnd
 Function DirectoryPre
  StrCmp $Existing "update" 0 new_install
- MessageBox MB_OK|MB_ICONINFORMATION "检测到现有 Kat 安装。本次更新将沿用：$\r$\n$INSTDIR$\r$\n$\r$\n更新不允许更换目录。正在运行的新版 Kat 将显示确认；请先保存或取消草稿。旧版本若不支持安全交接，需手动正常退出。"
  Abort
  new_install:
 FunctionEnd
@@ -153,8 +152,7 @@ Section "安装 Kat"
  DetailPrint "请完成随后独立弹出的 Windows 授权。"
  Delete "$PLUGINSDIR\payload\kat-setup-result.txt"
  ClearErrors
- ; First installs keep the existing unchecked Run choice. A safely closed
- ; running instance is restored by its ordinary-token bridge after update.
+ ; Both first installs and updates defer GUI launch until explicit FinishRun.
  ExecWait '"$PLUGINSDIR\payload\kat-desktop.exe" --setup-install "$INSTDIR" --defer-launch' $Result
  IfErrors install_bridge_error
  StrCmp $Result 0 install_ok

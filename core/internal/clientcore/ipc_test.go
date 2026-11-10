@@ -26,7 +26,18 @@ func TestIPCBoundedInflightProbeConcurrencyAndEOF(t *testing.T) {
 	}))
 	defer target.Close()
 	h := newHost(t)
-	text := settingsText(t, fixture(t, map[string]any{"dns": map[string]any{"server": "system"}, "security": map[string]any{"allow_loopback": true}}), map[string]any{"probe_concurrency": 4})
+	k := settingsKernel(t)
+	base := k["outbounds"].([]any)[0].(map[string]any)
+	outs := make([]any, 16)
+	for i := range outs {
+		node := map[string]any{}
+		for k, v := range base {
+			node[k] = v
+		}
+		node["name"] = fmt.Sprintf("n-%d", i)
+		outs[i] = node
+	}
+	text := settingsText(t, fixture(t, map[string]any{"dns": map[string]any{"server": "system"}, "security": map[string]any{"allow_loopback": true}, "outbounds": outs}), map[string]any{"probe_concurrency": 4})
 	if _, e := h.Apply(text); e != nil {
 		t.Fatal(e)
 	}
@@ -52,7 +63,7 @@ func TestIPCBoundedInflightProbeConcurrencyAndEOF(t *testing.T) {
 		close(responses)
 	}()
 	for i := 0; i < 16; i++ {
-		b, _ := json.Marshal(map[string]any{"id": fmt.Sprint(i), "method": "probe.node", "params": map[string]any{"name": "direct", "url": target.URL}})
+		b, _ := json.Marshal(map[string]any{"id": fmt.Sprint(i), "method": "probe.node", "params": map[string]any{"name": fmt.Sprintf("n-%d", i), "url": target.URL}})
 		if _, e := inW.Write(append(b, '\n')); e != nil {
 			t.Fatal(e)
 		}

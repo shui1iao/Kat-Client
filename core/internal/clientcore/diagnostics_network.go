@@ -389,11 +389,11 @@ func visibleDiagnosticCache(kind string, r *diagnosticReply) *diagnosticReply {
 		return r
 	}
 	for _, row := range r.Items {
-		if row.Name == "Claude" || row.Name == "TikTok" || row.Name == "YouTube Premium" {
+		if row.Name == "TikTok" || row.Name == "YouTube Premium" {
 			out := *r
 			out.Items = make([]diagnosticRow, 0, len(r.Items))
 			for _, item := range r.Items {
-				if item.Name != "Claude" && item.Name != "TikTok" && item.Name != "YouTube Premium" {
+				if item.Name != "TikTok" && item.Name != "YouTube Premium" {
 					out.Items = append(out.Items, item)
 				}
 			}

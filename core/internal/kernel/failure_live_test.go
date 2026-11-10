@@ -11,8 +11,7 @@ import (
 
 func TestFailureRealDNSRouteDialAndBudget(t *testing.T) {
 	f := newDNSFixture(t, func(w []byte) []byte { return dnsReply(w, nil, 1) })
-	in := ssIn()
-	in.Listen = "127.0.0.1:0"
+	in := Inbound{Protocol: "socks5", Listen: "127.0.0.1:0"}
 	cfg := Config{Inbounds: []Inbound{in}, DNS: &DNSOptions{Server: "udp://" + f.udp.LocalAddr().String()}}
 	if e := cfg.Validate(); e != nil {
 		t.Fatal(e)

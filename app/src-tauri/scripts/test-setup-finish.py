@@ -34,7 +34,7 @@ class Finish(unittest.TestCase):
   self.assertIn('--defer-launch',install);self.assertEqual(install.count('--setup-install'),1)
   self.assertNotIn('IfSilent',install)
  def test_service_visible_name_rollback(self):
-  i=(S/'src/windows/installer.rs').read_text();self.assertIn('wide("Kat").as_ptr(),SERVICE_ALL_ACCESS',i);self.assertIn('scm::set_display_name(&self.service,"Kat")?',i);self.assertIn('scm::display_name(&old)?',i);self.assertIn('scm::set_display_name(&self.service,name)?',i)
+  i=(S/'src/windows/installer.rs').read_text();u=(S/'src/windows/update_install.rs').read_text();self.assertIn('wide("Kat").as_ptr(),SERVICE_ALL_ACCESS',i);self.assertIn('scm::set_display_name(&self.service,"Kat")?',i);self.assertIn('scm::display_name(&old)?',i);self.assertIn('if let Some(n)=&self.old_display_name{scm::set_display_name(&service,n)?;}',u)
  def test_mui_leave_applies_both_states_before_run(self):
   mui=(R/'integration-evidence/comprehensive-20261029/native/setup-installer/toolchain/nsis/root/usr/share/nsis/Contrib/Modern UI 2/Pages/Finish.nsh').read_text()
   leave=mui.split('Function "${LEAVE}"',1)[1];self.assertLess(leave.index('MUI_PAGE_FUNCTION_CUSTOM LEAVE'),leave.index('MUI_FINISHPAGE_RUN'))

@@ -540,7 +540,6 @@ func (a *udpAssociation) output(client netip.AddrPort, source Address, payload [
 	a.outputMu.Lock()
 	defer a.outputMu.Unlock()
 	if a.native != nil {
-	} else if a.native != nil {
 		if client.Port() == 0 {
 			return nil
 		}

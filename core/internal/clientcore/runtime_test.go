@@ -58,7 +58,7 @@ func TestDocumentPreservationAndFailedApply(t *testing.T) {
 	if _, e := h.Start(); e != nil {
 		t.Fatal(e)
 	}
-	before := h.server.StatsView().Reload.Generation
+	before := h.server.GenerationID()
 	for _, bad := range []string{`{`, strings.Replace(text, `"connections":33`, `"unrecognized":33`, 1), strings.Replace(text, `"schema_version":1`, `"schema_version":1,"schema_version":1`, 1)} {
 		if _, e := h.Apply(bad); e == nil {
 			t.Fatal("bad document accepted")
@@ -80,7 +80,7 @@ func TestDocumentPreservationAndFailedApply(t *testing.T) {
 	if e != nil || string(saved) != text || h.doc.text != text {
 		t.Fatal("raw changed on failed apply")
 	}
-	if h.server.StatsView().Reload.Generation != before {
+	if h.server.GenerationID() != before {
 		t.Fatal("failed apply changed generation")
 	}
 	if st, e := os.Stat(h.path); e != nil || st.Mode().Perm()&0077 != 0 {

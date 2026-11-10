@@ -56,11 +56,17 @@
 .kstate.ok { color:var(--ok); } .kstate.warn { color:var(--warn); } .kstate.bad { color:var(--bad); }
 :is(.content,.modal) .pick { height:28px; padding:0 10px; border-radius:var(--r-sm); font:400 12px/20px var(--font); color:var(--text-2); background:var(--inset-bg); border:1px solid var(--line); }
 :is(.content,.modal) .pick.on { font-weight:500; background:var(--solid-accent); border-color:transparent; color:white; }
-/* Section bars. Their own 16px gap is the page's one block interval. */
-.nodes-page .nodes-toolbar,.pg-page .pg-toolbar { height:32px; min-height:32px; gap:8px; margin:0; flex-wrap:nowrap; }
-.nodes-toolbar h2,.pg-page .pg-sum { font:600 15px/22px var(--font); color:var(--text); display:flex; align-items:center; }
-.nodes-toolbar h2 .num,.pg-sum .ui-count { margin-left:8px; font:400 13px/20px var(--font-num); color:var(--text-3); }
+/* Section tools: the window title owns the heading; counts stay secondary. */
+#root .nodes-page .nodes-toolbar, #root .pg-page .pg-toolbar { display:flex; align-items:center; height:auto; min-height:32px; gap:8px 16px; margin:0; flex-wrap:wrap; }
+#root :is(.nodes-page,.pg-page) .toolbar-count { flex:0 1 auto; margin:0; color:var(--text-3); font:400 12px/20px var(--font); overflow-wrap:anywhere; }
+#root .pg-toolbar-actions, #root .nodes-toolbar>.row-actions { display:flex; align-items:center; justify-content:flex-end; flex:1 1 auto; flex-wrap:wrap; gap:8px; min-width:0; margin-left:auto; }
+#root .pg-toolbar-actions>:is(.btn,.inp), #root .nodes-toolbar>.row-actions>.btn { flex:none; }
 .pg-toolbar .member-sort { width:120px; height:32px; }
+#root .content :is(.pg-page,.nodes-page) { gap:12px; }
+#root .nodes-page .live-subs.sub-row { gap:12px; }
+#root .nodes-page .node-table>.card-h { min-height:48px; padding:8px 20px; }
+#root .nodes-page .node-table>.card-h>.card-x { display:flex; align-items:center; flex:1 1 100%; flex-wrap:wrap; gap:8px 16px; min-width:0; margin-left:0; }
+#root .nodes-page .node-table>.card-h .display-sort { flex:0 1 auto; flex-wrap:wrap; justify-content:flex-end; min-width:0; margin-left:auto; gap:8px; }
 .pg-page,.nodes-page,.rules-page,.config-page,.conn-page,.logs-page { gap:16px; }
 .live-subs.sub-row { gap:16px; }
 .content .live-subs .sub-card { padding:16px; }

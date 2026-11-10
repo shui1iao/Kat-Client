@@ -16,7 +16,7 @@ func TestSelectionOnlyRetainsRuntimeAndMixedFallsBack(t *testing.T) {
 	if _, e := h.Start(); e != nil {
 		t.Fatal(e)
 	}
-	gen := h.server.StatsView().Reload.Generation
+	gen := h.server.GenerationID()
 	bridge := h.bridge
 	manual := h.manualCtx
 	h.probes["direct"] = kernel.ProbeResult{Name: "direct"}
@@ -45,7 +45,7 @@ func TestSelectionOnlyRetainsRuntimeAndMixedFallsBack(t *testing.T) {
 		if r.(map[string]any)["selection_only"] != true {
 			t.Fatal("full apply", r)
 		}
-		if h.server.StatsView().Reload.Generation != gen || h.bridge != bridge || h.manualCtx != manual {
+		if h.server.GenerationID() != gen || h.bridge != bridge || h.manualCtx != manual {
 			t.Fatal("runtime/listener/probe lifetime replaced")
 		}
 		if _, ok := h.probes["direct"]; !ok {
@@ -61,7 +61,7 @@ func TestSelectionOnlyRetainsRuntimeAndMixedFallsBack(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if r.(map[string]any)["selection_only"] == true || h.server.StatsView().Reload.Generation == gen {
+	if r.(map[string]any)["selection_only"] == true || h.server.GenerationID() == gen {
 		t.Fatal("mixed edit did not rebuild")
 	}
 }
@@ -74,7 +74,7 @@ func TestSelectionOnlyConcurrentWritesNoGenerationChange(t *testing.T) {
 	if _, e := h.Start(); e != nil {
 		t.Fatal(e)
 	}
-	gen := h.server.StatsView().Reload.Generation
+	gen := h.server.GenerationID()
 	root, _ := sourceJSON(h.doc)
 	var k map[string]any
 	json.Unmarshal(root["kernel"], &k)
@@ -96,7 +96,7 @@ func TestSelectionOnlyConcurrentWritesNoGenerationChange(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	if h.server.StatsView().Reload.Generation != gen {
+	if h.server.GenerationID() != gen {
 		t.Fatal("concurrent switch rebuilt")
 	}
 }
@@ -109,7 +109,7 @@ func TestSelectionOnlySubscriptionWritesOverlay(t *testing.T) {
 	if _, e := h.Start(); e != nil {
 		t.Fatal(e)
 	}
-	gen := h.server.StatsView().Reload.Generation
+	gen := h.server.GenerationID()
 	root, _ := sourceJSON(h.doc)
 	var k map[string]any
 	json.Unmarshal(root["kernel"], &k)
@@ -120,7 +120,7 @@ func TestSelectionOnlySubscriptionWritesOverlay(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if r.(map[string]any)["selection_only"] != true || h.server.StatsView().Reload.Generation != gen {
+	if r.(map[string]any)["selection_only"] != true || h.server.GenerationID() != gen {
 		t.Fatal("subscription selection rebuilt")
 	}
 	accepted, _ := sourceJSON(h.doc)

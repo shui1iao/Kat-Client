@@ -68,7 +68,10 @@ func TestOfflineHTTPFixtures(t *testing.T) {
 				return Page{Status: resp.StatusCode, Body: string(b), URL: u, Location: resp.Header.Get("Location")}, e
 			}
 			v := Detect(context.Background(), c.Service, fetch)
-			if v.HTTPStatus != c.Pages[len(c.Pages)-1].Status {
+			if v.HTTPStatus != c.Pages[0].Status && c.Service != "ChatGPT" {
+				t.Fatalf("lost primary HTTP: %+v", v)
+			}
+			if c.Service == "ChatGPT" && v.HTTPStatus != c.Pages[len(c.Pages)-1].Status {
 				t.Fatalf("lost terminal HTTP: %+v", v)
 			}
 			if v.Result != c.Want {
@@ -258,14 +261,8 @@ func TestAnonymousSupportedPositivesAndGeminiEvidenceBoundary(t *testing.T) {
 		})
 	}
 	for _, name := range Services {
-		if name == "Gemini" {
-			if positive[name] {
-				t.Fatal("Gemini has no verified anonymous positive schema")
-			}
-			continue
-		}
 		if !positive[name] {
-			t.Fatal("existing service lost its reachable positive", name)
+			t.Fatal("service lost its reachable positive", name)
 		}
 	}
 }
@@ -302,14 +299,13 @@ func TestAnonymousPositiveChallengeAndRejectionStillWin(t *testing.T) {
 	}
 }
 
-// These fragments test classification and safe reasons only. They are not
-// evidence that a public exit currently receives an accepted positive schema.
+// These fragments test classification and safe reasons only.
 func TestAnonymousPreciseUnknownReasons(t *testing.T) {
 	for _, c := range []struct{ name, body, code, detail string }{
 		{"ChatGPT", `{}`, "[policy]", "缺少"},
 		{"ChatGPT", `{"error":{"code":"PRIVATE_SENTINEL"},"requires_cookie_consent":false}`, "[policy_error]", "错误结构"},
 		{"ChatGPT", `{"requires_cookie_consent":"PRIVATE_SENTINEL"}`, "[policy]", "布尔值"},
-		{"Gemini", `<h1>About</h1>PRIVATE_SENTINEL`, "[anonymous_evidence]", "证据"},
+		{"Gemini", `<h1>About</h1>PRIVATE_SENTINEL`, "[schema]", "未包含"},
 	} {
 		t.Run(c.name+"/"+c.code+"/"+c.detail, func(t *testing.T) {
 			calls := 0

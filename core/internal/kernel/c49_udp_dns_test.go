@@ -5,6 +5,7 @@ import (
 
 	"errors"
 	"net"
+	"net/netip"
 
 	"sync"
 
@@ -105,17 +106,11 @@ func TestC49ControlledDNSFailureRecords(t *testing.T) {
 				return r.Pack()
 			}, time.Second)
 			f, ctx := s.newFlow(withInbound(context.Background(), 0), "udp", Address{})
-			var reply []byte
-			a := &udpAssociation{server: s, ctx: ctx, flow: f, writeBack: func(source Address, b []byte) error {
-				if source != c49DNSTarget {
-					t.Fatal("reply source changed")
-				}
-				if tt.writeError {
-					return errors.New("fixture writeback failed")
-				}
-				reply = append([]byte(nil), b...)
-				return nil
-			}}
+			nativeSock, clientSock := localUDP(t), localUDP(t)
+			if tt.writeError {
+				_ = nativeSock.Close()
+			}
+			a := &udpAssociation{server: s, ctx: ctx, flow: f, native: nativeSock, client: addrPort(clientSock.LocalAddr())}
 			q := c49DNSQuery(t, 10)
 			if tt.invalid {
 				q = []byte{1}
@@ -136,6 +131,12 @@ func TestC49ControlledDNSFailureRecords(t *testing.T) {
 			a.send(ctx, packet{target: c49DNSTarget, payload: q}, time.Second)
 			close(done)
 			<-stopped
+			var reply []byte
+			_ = clientSock.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+			rbuf := make([]byte, 2048)
+			if rn, _, re := clientSock.ReadFromUDP(rbuf); re == nil && rn > 10 {
+				reply = append([]byte(nil), rbuf[10:rn]...)
+			}
 			f.end("ok") // A graceful control close must preserve the DNS error.
 			last, ok := records.terminal()
 			wantOutcome := "ok"
@@ -176,7 +177,8 @@ func TestC49ControlledDNSActiveReaders(t *testing.T) {
 	}, idle)
 	f, ctx := s.newFlow(context.Background(), "udp", Address{})
 	defer f.end("ok")
-	a := &udpAssociation{server: s, ctx: ctx, flow: f, writeBack: func(Address, []byte) error { return nil }}
+	nativeSock, clientSock := localUDP(t), localUDP(t)
+	a := &udpAssociation{server: s, ctx: ctx, flow: f, native: nativeSock, client: addrPort(clientSock.LocalAddr())}
 	var readers []<-chan struct{}
 	for _, network := range []string{"udp4", "udp6"} {
 		ip := net.IPv4(127, 0, 0, 1)
@@ -222,5 +224,45 @@ func TestC49ControlledDNSActiveReaders(t *testing.T) {
 	}
 	if f.up.Load() == 0 || f.down.Load() == 0 {
 		t.Fatal("active DNS test did not execute payload accounting")
+	}
+}
+
+func TestNativeUDPOutputWritebackClosedSocketAndOversizedBoundary(t *testing.T) {
+	var records c49DNSRecords
+	s := c49DNSServer(t, &records, func(context.Context, []byte) ([]byte, error) {
+		return nil, errors.New("unused")
+	}, time.Second)
+	f, ctx := s.newFlow(context.Background(), "udp", Address{})
+	defer f.end("ok")
+	nativeSock, clientSock := localUDP(t), localUDP(t)
+	clientAddr := addrPort(clientSock.LocalAddr())
+	a := &udpAssociation{server: s, ctx: ctx, flow: f, native: nativeSock, client: clientAddr}
+
+	if err := a.output(netip.AddrPortFrom(clientAddr.Addr(), 0), c49DNSTarget, []byte("noop"), time.Second); err != nil {
+		t.Fatalf("port 0 output returned error: %v", err)
+	}
+
+	if err := a.output(clientAddr, c49DNSTarget, []byte("pong"), time.Second); err != nil {
+		t.Fatalf("normal output failed: %v", err)
+	}
+	_ = clientSock.SetReadDeadline(time.Now().Add(time.Second))
+	buf := make([]byte, 128)
+	n, _, err := clientSock.ReadFromUDP(buf)
+	if err != nil || n != 14 || string(buf[10:14]) != "pong" {
+		t.Fatalf("unexpected SOCKS5 UDP datagram: n=%d err=%v data=%x", n, err, buf[:n])
+	}
+
+	beforeDropped := s.counters.Dropped.Load()
+	oversized := make([]byte, maxDatagram)
+	if err := a.output(clientAddr, c49DNSTarget, oversized, time.Second); err != nil {
+		t.Fatalf("oversized output returned error: %v", err)
+	}
+	if got := s.counters.Dropped.Load(); got != beforeDropped+1 {
+		t.Fatalf("oversized datagram did not increment Dropped: got %d want %d", got, beforeDropped+1)
+	}
+
+	_ = nativeSock.Close()
+	if err := a.output(clientAddr, c49DNSTarget, []byte("after-close"), time.Second); err == nil {
+		t.Fatal("expected non-nil error writing to closed native UDP socket, got nil")
 	}
 }

@@ -35,7 +35,7 @@ pub fn dispatch()->Option<i32>{
  }
  links.commit();
  if foreign{warning=Some(crate::setup_feedback::FOREIGN_SHORTCUT.to_string());}
- if uninstall||deferred&&!session.as_ref().is_some_and(|s|s.was_running){return Ok(());}
+ if uninstall||deferred{return Ok(());}
  let mut pending=installed_handoff::prepare().map_err(|_|Error::new("INSTALL_HANDOFF_FAILED","Application installed; cannot launch installed GUI"))?;pending.commit()?;
  Ok(())
  })();

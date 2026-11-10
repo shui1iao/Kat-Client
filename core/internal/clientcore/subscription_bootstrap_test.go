@@ -790,8 +790,10 @@ rules:
 				h.mu.Lock()
 				switch mutation {
 				case "stop":
+					h.bootstrapRequests = nil
 					h.stopLocked()
 				case "egress":
+					h.bootstrapRequests = nil
 					h.transitionEgressLocked(nil, clientegress.Options{})
 				case "generation":
 					h.egressGeneration++

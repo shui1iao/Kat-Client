@@ -76,13 +76,13 @@ func TestYAMLRunningConversionsKeepExistingFlowAndLifecycle(t *testing.T) {
 			}
 			text = string(b) + "\n"
 		}
-		generation := h.server.StatsView().Reload.Generation
+		generation := h.server.GenerationID()
 		result, e := h.Apply(text, f)
 		if e != nil {
 			t.Fatal(e)
 		}
 		assertNoDocumentTemps(t, h.workspace)
-		if result.(map[string]any)["applied"] != true || h.server != originalServer || h.bridge != originalBridge || (result.(map[string]any)["selection_only"]!=true && h.server.StatsView().Reload.Generation <= generation) || !h.localReady {
+		if result.(map[string]any)["applied"] != true || h.server != originalServer || h.bridge != originalBridge || (result.(map[string]any)["selection_only"]!=true && h.server.GenerationID() <= generation) || !h.localReady {
 			t.Fatal("normal apply rebuilt lifecycle")
 		}
 		if h.egress != originalPolicy || h.egressOptions.Enabled != originalOptions.Enabled || h.egressGeneration != originalEgressGeneration {
@@ -114,7 +114,7 @@ func TestYAMLFailedRuntimeApplyRestoresFileAndGeneration(t *testing.T) {
 				}
 			}
 			oldPath, oldText, oldFormat, oldServer, oldBridge := h.path, h.doc.text, h.doc.format, h.server, h.bridge
-			oldGeneration := h.server.StatsView().Reload.Generation
+			oldGeneration := h.server.GenerationID()
 			busy, e := net.Listen("tcp4", "127.0.0.1:0")
 			if e != nil {
 				t.Fatal(e)
@@ -137,7 +137,7 @@ func TestYAMLFailedRuntimeApplyRestoresFileAndGeneration(t *testing.T) {
 				if e != nil || string(saved) != oldText || h.path != oldPath || h.doc.text != oldText || h.doc.format != oldFormat {
 					t.Fatal("failed apply lost accepted source", e)
 				}
-				if h.server != oldServer || h.bridge != oldBridge || h.server.StatsView().Reload.Generation != oldGeneration || !h.checkLocal() {
+				if h.server != oldServer || h.bridge != oldBridge || h.server.GenerationID() != oldGeneration || !h.checkLocal() {
 					t.Fatal("failed apply changed old runtime")
 				}
 				found, e := documentCandidates(h.workspace)
@@ -171,7 +171,7 @@ func TestYAMLReloadDoesNotActivateExternalBytesOrCandidate(t *testing.T) {
 	if _, e := h.Apply(text, FormatYAML); e != nil {
 		t.Fatal(e)
 	}
-	generation := h.server.StatsView().Reload.Generation
+	generation := h.server.GenerationID()
 	external := text + "# externally edited\n"
 	if e := os.WriteFile(h.path, []byte(external), 0600); e != nil {
 		t.Fatal(e)
@@ -182,7 +182,7 @@ func TestYAMLReloadDoesNotActivateExternalBytesOrCandidate(t *testing.T) {
 	if _, e := h.Apply(text, FormatYML); e == nil || e.Code != "document_changed" {
 		t.Fatal(e)
 	}
-	if h.doc.text != text || h.server.StatsView().Reload.Generation != generation {
+	if h.doc.text != text || h.server.GenerationID() != generation {
 		t.Fatal("external bytes activated")
 	}
 	if e := os.Remove(h.path); e != nil {
@@ -221,7 +221,7 @@ func TestYAMLRejectedDraftsKeepAcceptedRuntime(t *testing.T) {
 	if _, e := h.Apply(text, FormatYAML); e != nil {
 		t.Fatal(e)
 	}
-	generation := h.server.StatsView().Reload.Generation
+	generation := h.server.GenerationID()
 	for _, bad := range []string{
 		text + "  anchored: &unused 1\n", text + "  unsafe: .nan\n", text + "---\n{}\n",
 		strings.Replace(text, "mode: rule", "mode: nonsense", 1),
@@ -234,7 +234,7 @@ func TestYAMLRejectedDraftsKeepAcceptedRuntime(t *testing.T) {
 		if b, _ := os.ReadFile(h.path); string(b) != text {
 			t.Fatal("invalid draft changed raw source")
 		}
-		if h.doc.text != text || h.doc.format != FormatYAML || h.server.StatsView().Reload.Generation != generation {
+		if h.doc.text != text || h.doc.format != FormatYAML || h.server.GenerationID() != generation {
 			t.Fatal("invalid draft changed accepted state")
 		}
 		found, _ := documentCandidates(h.workspace)

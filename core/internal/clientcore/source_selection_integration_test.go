@@ -17,7 +17,7 @@ func TestSourceGroupHotSelectionIntegration(t *testing.T) {
 	if _, e := h.Start(); e != nil {
 		t.Fatal(e)
 	}
-	gen, bridge, manual := h.server.StatsView().Reload.Generation, h.bridge, h.manualCtx
+	gen, bridge, manual := h.server.GenerationID(), h.bridge, h.manualCtx
 	change := func(name, key, value string) any {
 		var root map[string]any
 		if e := json.Unmarshal([]byte(h.doc.text), &root); e != nil {
@@ -37,7 +37,7 @@ func TestSourceGroupHotSelectionIntegration(t *testing.T) {
 	}
 	for _, edit := range [][3]string{{"target", "selected", "c"}, {"source", "selected", "b"}, {"target", "selected", "a"}} {
 		reply := change(edit[0], edit[1], edit[2]).(map[string]any)
-		if reply["selection_only"] != true || h.server.StatsView().Reload.Generation != gen || h.bridge != bridge || h.manualCtx != manual {
+		if reply["selection_only"] != true || h.server.GenerationID() != gen || h.bridge != bridge || h.manualCtx != manual {
 			t.Fatal("source leaf selection rebuilt runtime", reply)
 		}
 		if got := sourceClientMembers(h.server.CurrentConfig(), "target"); !reflect.DeepEqual(got, []string{"outside", "b", "c", "a"}) {
@@ -55,7 +55,7 @@ func TestSourceGroupHotSelectionIntegration(t *testing.T) {
 	// actual reference edit; this must stay on the complete document apply path.
 	change("target", "selected", "c")
 	reply := change("target", "include_group", "nested").(map[string]any)
-	if reply["selection_only"] == true || h.server.StatsView().Reload.Generation == gen {
+	if reply["selection_only"] == true || h.server.GenerationID() == gen {
 		t.Fatal("reference edit incorrectly treated as a hot preference", reply)
 	}
 	if got := sourceClientMembers(h.server.CurrentConfig(), "target"); !reflect.DeepEqual(got, []string{"outside", "c", "b"}) {

@@ -46,12 +46,10 @@
 .content:is(.page-overview,.page-kernel) { min-width:0; container:round4-content / inline-size; }
 .overview-v4 { gap:16px; align-items:start; }
 .overview-v4>.card { padding:20px; }
-.overview-v4>.chart-card { grid-column:span 8; height:320px; }
-.overview-v4>.span-4.usage-card { grid-column:span 4; height:268px; }
-.overview-v4>.active-connections-card { grid-column:span 4; height:auto; min-height:0; padding:16px; }
-.overview-v4>.span-4.distribution-card { grid-column:span 4; height:268px; padding:16px; }
-.overview-v4>.diagnostic-card { grid-column:span 8; }
-.overview-v4>.exit-card { grid-column:span 4; }
+.overview-v4>.chart-card { height:320px; }
+.overview-v4>.usage-card { height:268px; }
+.overview-v4>.active-connections-card { height:auto; min-height:0; padding:16px; }
+.overview-v4>.distribution-card { height:268px; padding:16px; }
 .overview-v4 .ac-table { flex:none; min-height:0; }
 .overview-v4 :is(.ac-head,.ac-row) { grid-template-columns:40px minmax(0,1fr) minmax(76px,.75fr); column-gap:8px; }
 .overview-v4 .ac-head { height:24px; }
@@ -124,12 +122,10 @@
 .kernel-solo .daily-network>.ge-row { grid-template-columns:repeat(2,minmax(0,1fr)); }
 @container round4-content (width < 900px) {
  .settings-page.kernel-solo { grid-template-columns:minmax(0,1fr); }
- .overview-v4>.span-4:is(.usage-card,.distribution-card) { grid-column:span 12; }
 }
 @container round4-content (width < 760px) {
  .overview-v4 { gap:12px; }
- .overview-v4>.card { grid-column:span 12; padding:16px; }
- .overview-v4>.span-4.usage-card { grid-column:span 12; }
+ .overview-v4>.card { padding:16px; }
  .kernel-solo .card { padding:16px; }
 }
 @container round4-content (width < 640px) {

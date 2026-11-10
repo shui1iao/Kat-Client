@@ -23,6 +23,8 @@ func TestHTTPProcessPoolsArePerAcceptedConnection(t *testing.T) {
 	ctxC := b.server.ConnContext(context.Background(), c)
 	one := ctxA.Value(httpOriginKey{}).(*httpOrigin)
 	two := ctxC.Value(httpOriginKey{}).(*httpOrigin)
+	_ = one.transportFor(b)
+	_ = two.transportFor(b)
 	if one == two || one.origin == two.origin || one.transport == two.transport || one.transport == b.transport {
 		t.Fatal("cross-client transport/identity reuse")
 	}

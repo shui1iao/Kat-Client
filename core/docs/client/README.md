@@ -342,10 +342,10 @@ IPC `status.groups[]` 新增 `selection_mode / algorithm_version=2 / default_mem
 - `connections.list` / `logs.connections` 的连接详情新增 `process_name`、`process_path`、`domain_suffix`（PSL eTLD+1）。进程信息仅来自 procattr 已验证的本地套接字/原始流服务；unknown/ambiguous/denied 为空，UI 显示“未知”。不信任代理头。完整路径只在连接详情悬停，不进入安全诊断导出。
 - 连接行展开复用日志 FlowDetail，含关闭、生成规则；进程筛选带数量降序。生成规则进入既有 560 编辑器，由用户确认类型/值/策略/位置，默认域名后缀或 IP-CIDR、策略链首个组、列表最前。IPv6 使用 /128，IPv4 /32；缺进程归属不提供进程预填。无订阅时保存仍为既有 document.apply；有活动订阅时显式走 `subscription.select {id,edit_only:true,add_rule,rule_position:"top"|"end"}` 预览，再由既有 document.apply 接纳。本地覆盖保留全局插入位置，不改远端快照；普通规则页“新增规则”仍保持手动归属。
 - 新公共 `diagnostics.network`：`{kind:"unlock"|"connectivity"|"exit",run?:boolean,urls?:string[]}`。默认 `run:false` 只读内存缓存，无记录返回 null，绝不联网。显式 `run:true` 才检测。连通性含 Google/YouTube/Telegram/GitHub/Cloudflare，最多 16 个自定义 HTTPS URL；不接受账号、片段或强制组参数。网址存桌面偏好 `diagnostic_urls`，不是客户端核心文档。
-- 每主机仅一轮，最多四个并发项，每项总计八秒（含该服务多个端点/重定向/响应体）；最多 2 MiB 响应体、64 KiB 响应头。不登录、不使用 Cookie/用户凭据，不跟随跨主机或降级 HTTP 的跳转。公开地址仅在主动点击后访问。8 秒不是整个批次预算：最多 21 个连通性目标约 48 秒；IPC 上限 Go 70 秒、Rust 75 秒。
+- 每主机仅一轮，最多四个并发项，每项总计八秒（含该服务多个端点/重定向/响应体）；最多 2 MiB 响应体（Netflix 为 4 MiB）、64 KiB 响应头。不登录、不使用 Cookie/用户凭据，不跟随跨主机或降级 HTTP 的跳转。公开地址仅在主动点击后访问。8 秒不是整个批次预算：最多 21 个连通性目标约 48 秒；IPC 上限 Go 70 秒、Rust 75 秒。
 - 所有检测从 Kat 本地 SOCKS 入口进入真实路由。私有注册使用已打开套接字源二元组，不允许 IPC 或 HTTP/SOCKS 头伪造。返回实际连接 `rule`、`chain`、最终 `node`；服务子请求出口不一致则失败。出口 IP 固定使用 Cloudflare trace，规则顺序前五个不同组（最后补 final），私有强制组只作用于这条自有套接字，不改变用户 selected/fixed、模式、测速历史。
-- 返回 `{at,items:[{name,result,region?,reason?,rule?,chain,node?,http_status?,duration_ms,ip?}]}`。解锁 result=`unlocked|blocked|originals|failed`；连通性/出口成功为 `ok`。未解锁地区显示“—”；失败悬停原因。结果以私有、最多 1 MiB/类别的原子文件缓存到下一轮成功检测，跨应用重启保留；不随配置改变自动重测；时间明确标注“上次检测”。检测只代表匿名公开页面的地区信号，不代表账号、付款或实际播放权。
-- Clean-room：只按官方公开页面/API 行为独立实现，没有读取/复制任何第三方解锁项目。每个判据见 `internal/clientdiag/unlock.go` 注释与 `internal/clientdiag/TESTS.md`；证据不足为检测失败，不以 WAF/登录失败猜地区，更不以 Netflix 单片缺失猜“仅自制剧”。
+- 返回 `{at,items:[{name,result,region?,reason?,rule?,chain,node?,http_status?,duration_ms,ip?}]}`。解锁 result=`unlocked|blocked|originals|unknown|challenge|failed`；连通性/出口成功为 `ok`。地区未知显示“—”；可悬停查看判定原因。结果以私有、最多 1 MiB/类别的原子文件缓存到下一轮成功检测，跨应用重启保留；不随配置改变自动重测；时间明确标注“上次检测”。检测只代表匿名公开页面的地区信号，不代表账号、付款或实际播放权。
+- 解锁项目为 ChatGPT、Gemini、Claude、Google、YouTube Premium、Netflix、Disney+（YouTube Premium 的 IPC 键为 `YouTube`）。Gemini、Claude、Google 搜索验证码及 YouTube Premium 判据参考用户的 `service-unlock` v0.5.8；具体端点与边界见 `internal/clientdiag/TESTS.md`。地区等辅助信息缺失不改变已取得的主页面结论；Gemini 页面地区配置本身为主判据，缺失时仍为未知。不以 WAF/登录失败猜地区，也不以 Netflix 单片缺失猜“仅自制剧”。
 - 托盘 `tray_sync` 是只读状态投影；模式/网络依据已确认状态；节点选择使用与主窗口相同的乐观投影并在失败时回退，菜单按配置顺序前八个 select 组及已固定自动组（含“自动”取消固定）构建。`tray-action` 回到主窗口共享选择函数，修改 selected/fixed 后走 **document.apply**，K1 合并后自然获得 close_on_switch 逻辑。网络开关仍调用既有 system_proxy_set/tun_set；没有第二份配置或直接运行态选择 IPC。成功不提示，失败显示主窗口居中弹窗；原文/实体编辑、忙碌、安装或结果未确认时禁用写操作。即使隐藏窗口也由既有状态轮询同步已确认运行态。重启/退出仍复用既有恢复事务。
 
 
@@ -397,9 +397,10 @@ VLESS、Snell、REALITY 和其专用传输已移除。旧 provider 仅保兼容�
 ## 规则测试（目标匹配）
 
 `rules.test` 接受域名、IP或HTTP(S) URL；只用当前已生效的规则与已加载资源，
-不采纳未保存草稿。按原规则顺序判断，遇到仍缺进程、来源、网络或端口等
-连接条件的整条规则时跳过并返回 `skipped`（最多32条，其余计数）。逻辑
-条件若已能确定真/假，不因无关未知项阻塞；不把未知当作真或伪造进程。
+不采纳未保存草稿。按原规则顺序首匹配判断，遇到仍缺进程、来源、网络或端口等
+连接条件且无法由已知部分短路真/假的早期规则时，立即停止于该规则并返回
+`status=unknown` 与 `missing`，不跳过该规则冒充后续确定路线。逻辑条件若已能
+确定真/假，不因无关未知项阻塞；不把未知当作真或伪造进程。
 
 域名只有在目的IP规则实际需要时才调用当前内核规则DNS解析器；IP输入、
 已由域名规则决定或no-resolve可决定时不查询。DNS不会连接目标端口或请求
@@ -407,8 +408,10 @@ VLESS、Snell、REALITY 和其专用传输已移除。旧 provider 仅保兼容�
 `dns.selected_ip` 与必要的多IP差异；DNS失败不猜后续IP规则结果。
 未加载规则集沿用运行时空资源不匹配行为，并保留未加载提示。
 
-结果 `simulation=target` 是按所填条件的规则匹配，不宣称未知进程的完整
-连接路线；global/direct模式仍明确提示实际连接模式不受本测试改变。
+顶层返回 `effective={mode,source,policy}` 说明当前实际模式的生效策略：
+`rule` 模式下 `source="rules"`，`policy` 取规则匹配策略（`result.status=unknown`
+时为空串 `""`）；`global`/`direct` 模式下 `source="mode"`，`policy` 分别为当前
+生效 `global_group` 与 `"direct"`，而 `result` 仍保留规则模式投影供对照。
 解析在宿主锁外进行，受原超时/停止取消约束；规则/模式/资源代际变化后
 返回 `rule_test_stale`，不会把旧快照结果冒充新运行态。只允许DNS网络路径，
 不做连接、测速、策略选择、进程探测或流量/规则命中计数。

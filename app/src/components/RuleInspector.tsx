@@ -1,6 +1,6 @@
-import { Fragment, useEffect, useId, useRef, useState, type ReactNode, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { core } from '../client/ipc';
-import { policyColor, ruleKindLabel } from '../client/presentation';
+import { policyColor } from '../client/presentation';
 import type { Client } from '../client/useClient';
 import { errorText } from '../lib/errors';
 import { Modal, LocalError } from './Editors';
@@ -15,59 +15,31 @@ type FieldName = keyof typeof labels;
 type Values = Record<FieldName, string>;
 const empty: Values = { target: '', network: '', target_port: '', process_name: '', source_ip: '', source_port: '', inbound_name: '', inbound_type: '', inbound_port: '', protocol: '' };
 const portFields: FieldName[] = ['target_port', 'source_port', 'inbound_port'];
-const missingLabels: Record<string, string> = { ...labels, destination_ip: '目的 IP（需 DNS 解析）', rule_set_data: '已加载的规则集资源' };
-const portSources: Record<string, string> = { url_explicit: 'URL 显式', url_default: 'URL 默认', manual: '手填', unspecified: '未指定' };
+const missingLabels: Record<string, string> = { ...labels, destination_ip: '目的 IP（需 DNS 解析）', rule_set_data: '规则集数据' };
 const modeNames: Record<string, string> = { rule: '规则', global: '全局', direct: '直连' };
-interface KnownInput {
-  host?: string; ip?: string; port?: number; port_source: string; network?: string; process_name?: string;
-  source_ip?: string; source_port?: number; inbound_name?: string; inbound_type?: string; inbound_port?: number; protocol?: string;
-}
-interface RelatedResource {
-  kind: string; name: string; data_available: boolean | null; state: string; code?: string; entries?: number; warning?: string;
-}
-interface RuleDecision {
-  status: 'matched' | 'final' | 'unknown'; rule: number; display_row: number;
+interface Resource { kind: string; name: string; data_available: boolean | null; warning?: string; entries?: number }
+interface RuleResult {
+  status: 'matched' | 'final' | 'unknown'; rule: number; display_row: number; target: string;
   condition: string; policy: string; reason?: string; rule_set?: string; missing: string[];
-  blocked_rule?: number; candidate_policy?: string; resources: RelatedResource[]; resources_more?: number;
-  resource_warnings: RelatedResource[]; resource_warnings_more?: number;
+  blocked_rule?: number; candidate_policy?: string; resources: Resource[]; resource_warnings: Resource[];
+  resources_more?: number; resource_warnings_more?: number;
+  known: { host?: string; ip?: string; port?: number; port_source?: string } & Partial<Record<Exclude<FieldName, 'target' | 'target_port'>, string | number>>;
+  dns?: { status: 'not_needed' | 'resolved' | 'failed'; addresses: string[]; selected_ip?: string; message?: string; different_rules?: boolean };
+  ip_results?: { ip: string; status: string; rule: number; policy: string }[];
 }
-interface ConditionalAfter extends RuleDecision {
-  assumption: { rule: number; rule_set?: string; condition: string; matches: false };
+interface InspectorReply {
+  mode: string; simulation: string; ipv6_enabled: boolean; result: RuleResult;
+  effective?: { mode: string; source: 'rules' | 'mode'; policy: string };
 }
-interface SkippedRule { rule: number; condition: string; policy: string; missing: string[] }
-interface RuleDNS { status: 'not_needed' | 'resolved' | 'failed'; addresses: string[]; selected_ip?: string; message?: string; different_rules?: boolean }
-interface RuleIPResult { ip: string; status: string; rule: number; policy: string }
-interface RuleResult extends RuleDecision {
-  skipped?: SkippedRule[]; skipped_more?: number; dns?: RuleDNS; ip_results?: RuleIPResult[];
-  target: string; known: KnownInput; admission_warnings?: string[]; conditional_after?: ConditionalAfter | null;
-}
-// Older/empty peers may encode lists as null. Preserve absence of a branch,
-// while normalizing both result scopes before rendering or copying text.
-function normalizeDecision<T extends RuleDecision>(r: T): T {
-  return { ...r, missing: r.missing ?? [], resources: r.resources ?? [], resource_warnings: r.resource_warnings ?? [] };
-}
-function normalizeReply(reply: InspectorReply): InspectorReply {
-  const result = normalizeDecision(reply.result);
-  return { ...reply, result: { ...result, conditional_after: result.conditional_after ? normalizeDecision(result.conditional_after) : null } };
-}
-const assumptionText = (after: ConditionalAfter) => `若第 ${after.assumption.rule} 条${after.assumption.rule_set ? ' ' + after.assumption.rule_set : ''}整条规则不匹配：`;
-const conditionalNote = '这是假设结果，不代表本次连接已确认走该策略。';
-function conditionalText(after: ConditionalAfter, label: (name: string) => string): string {
-  if (after.status === 'final') return '后续落最终路由 · ' + label(after.policy);
-  if (after.status === 'matched') return `后续命中第 ${after.rule} 条 · ` + label(after.policy);
-  return '后续仍需' + after.missing.map(name => missingLabels[name] ?? name).join('、') + `（第 ${after.blocked_rule ?? after.rule} 条）`;
-}
-interface InspectorReply { mode: string; simulation: 'rule' | 'target'; ipv6_enabled: boolean; result: RuleResult }
-const resourceName = (r: RelatedResource) => r.name || ({ geoip: 'GeoIP', asn: 'ASN', geosite: 'Geosite' } as Record<string, string>)[r.kind] || r.kind;
-const resourceWarning = (r: RelatedResource) => r.warning === 'not_loaded' ? '尚未加载；当前按空资源快照判定'
-  : r.warning === 'refresh_failed_using_loaded' ? '最近刷新失败；继续使用已加载数据'
-  : '资源状态暂不可核对；仅依据本次数据快照';
+const resourceName = (r: Resource) => r.name || ({ geoip: 'GeoIP', asn: 'ASN', geosite: 'Geosite' } as Record<string, string>)[r.kind] || r.kind;
+const resourceWarning = (r: Resource) => r.warning === 'not_loaded' ? '尚未加载，按当前空资源判定'
+  : r.warning === 'refresh_failed_using_loaded' ? '刷新失败，使用已加载数据' : '使用本次已加载数据';
 function generalError(e: unknown): string {
   const code = e && typeof e === 'object' ? (e as { code?: string }).code : '';
-  if (code === 'core_not_running' || code === 'not_running') return '请先启动内核，判定使用当前已生效规则';
-  if (code === 'rule_test_stale') return '规则、资源或模式已变化，请重新判定';
-  if (code === 'rule_test_unavailable') return '当前规则或资源无法安全判定，请检查已生效配置与资源状态';
-  if (code === 'invalid_params') return '判定参数无效，请检查补充条件';
+  if (code === 'core_not_running' || code === 'not_running') return '请先启动内核';
+  if (code === 'rule_test_stale') return '生效规则或模式已变化，请重新判定';
+  if (code === 'rule_test_unavailable') return '无法读取当前规则或规则集，请检查资源状态';
+  if (code === 'invalid_params') return '请检查输入条件';
   return errorText(e);
 }
 
@@ -78,7 +50,7 @@ export function RuleInspector({ c, close }: { c: Client; close: () => void }) {
   const [reply, setReply] = useState<InspectorReply | null>(null), [copied, setCopied] = useState('');
   const live = useRef(true), pending = useRef(false), revision = useRef(0);
   const refs = useRef<Partial<Record<FieldName, HTMLInputElement | HTMLSelectElement | null>>>({});
-  const id = useId(), supplementalId = id + '-conditions';
+  const id = useId(), conditionsId = id + '-conditions';
   useEffect(() => { live.current = true; return () => { live.current = false; revision.current++; }; }, []);
   const dismiss = () => { live.current = false; revision.current++; close(); };
   function change(name: FieldName, value: string) {
@@ -95,11 +67,11 @@ export function RuleInspector({ c, close }: { c: Client; close: () => void }) {
     if (pending.current) return;
     const invalid: Partial<Record<FieldName, string>> = {};
     const params: Record<string, unknown> = { target: values.target };
-    if (!values.target.trim()) invalid.target = '请填写目标地址';
+    if (!values.target.trim()) invalid.target = '请输入域名、IP 或 URL';
     for (const name of Object.keys(values) as FieldName[]) {
       if (name === 'target' || !values[name].trim()) continue;
       if (portFields.includes(name)) {
-        if (!/^[0-9]{1,5}$/.test(values[name]) || Number(values[name]) < 1 || Number(values[name]) > 65535) invalid[name] = '端口应为 1–65535 的整数';
+        if (!/^[0-9]{1,5}$/.test(values[name]) || Number(values[name]) < 1 || Number(values[name]) > 65535) invalid[name] = '端口应为 1–65535';
         else params[name] = Number(values[name]);
       } else params[name] = values[name];
     }
@@ -110,15 +82,13 @@ export function RuleInspector({ c, close }: { c: Client; close: () => void }) {
     pending.current = true; setBusy(true);
     try {
       const next = await core<InspectorReply>('rules.test', params);
-      if (live.current && revision.current === epoch) setReply(normalizeReply(next));
+      if (live.current && revision.current === epoch) setReply({ ...next, result: { ...next.result, missing: next.result.missing ?? [], resources: next.result.resources ?? [], resource_warnings: next.result.resource_warnings ?? [] } });
     } catch (e) {
       if (!live.current || revision.current !== epoch) return;
       const failure = e as { code?: string; path?: string; message?: string };
       if (failure?.code === 'invalid_params' && failure.path && Object.hasOwn(labels, failure.path)) {
         const name = failure.path as FieldName;
-        // This method's field errors are fixed, non-echoing validation messages.
-        setFields({ [name]: typeof failure.message === 'string' ? failure.message.slice(0, 200) : '请检查此条件' });
-        focusField(name);
+        setFields({ [name]: typeof failure.message === 'string' ? failure.message.slice(0, 200) : '请检查此条件' }); focusField(name);
       } else setError(generalError(e));
     } finally {
       pending.current = false;
@@ -126,152 +96,89 @@ export function RuleInspector({ c, close }: { c: Client; close: () => void }) {
     }
   }
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
-    if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.target instanceof HTMLInputElement) {
-      e.preventDefault(); void run();
-    }
+    if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.target instanceof HTMLInputElement) { e.preventDefault(); void run(); }
   }
-  const mode = reply?.mode ?? c.status?.mode ?? 'unknown';
-  const r = reply?.result;
-  const known = r?.known;
-  const after = r?.status === 'unknown' ? r.conditional_after : null;
-  const status = r?.status === 'unknown' ? (r.dns?.status === 'failed' ? 'DNS 未成功，无法确定 IP 规则' : '条件不足，无法唯一确定')
-    : r?.status === 'final' ? '未命中前序规则' : r ? `命中第${r.rule}条规则` : '';
-  const conditionType = r ? (r.condition.startsWith('and(') ? 'AND' : r.condition.startsWith('or(') ? 'OR'
-    : r.condition.startsWith('not(') ? 'NOT' : r.status === 'final' ? 'MATCH'
-    : ruleKindLabel(r.condition.split(':', 1)[0], r.condition.slice(r.condition.indexOf(':') + 1))) : '';
+  const mode = reply?.mode ?? c.status?.mode ?? 'unknown', r = reply?.result;
+  const status = r?.status === 'matched' ? `命中第 ${r.rule} 条规则` : r?.status === 'final' ? '未命中规则，使用 FINAL' : '需要补充条件';
+  const effective = reply?.effective;
   const field = (name: FieldName, control: ReactNode) => <div className="rule-inspector-field" key={name}>
     <label htmlFor={id + '-' + name}>{labels[name]}</label>{control}
     {fields[name] && <small id={id + '-' + name + '-error'} className="field-error" role="alert">{fields[name]}</small>}
   </div>;
   function input(name: FieldName, maxLength: number, placeholder = '') {
-    return <input ref={el => { refs.current[name] = el; }} id={id + '-' + name} className="inp"
-      value={values[name]} onChange={e => change(name, e.target.value)} maxLength={maxLength}
-      inputMode={portFields.includes(name) ? 'numeric' : undefined} placeholder={placeholder} autoComplete="off" spellCheck={false}
-      aria-invalid={!!fields[name]} aria-describedby={fields[name] ? id + '-' + name + '-error' : undefined} />;
+    return <input ref={el => { refs.current[name] = el; }} id={id + '-' + name} className="inp" value={values[name]}
+      onChange={e => change(name, e.target.value)} maxLength={maxLength} inputMode={portFields.includes(name) ? 'numeric' : undefined}
+      placeholder={placeholder} autoComplete="off" spellCheck={false} aria-invalid={!!fields[name]} aria-describedby={fields[name] ? id + '-' + name + '-error' : undefined} />;
   }
   function select(name: FieldName, options: [string, string][]) {
-    return <select ref={el => { refs.current[name] = el; }} id={id + '-' + name} className="inp"
-      value={values[name]} onChange={e => change(name, e.target.value)} aria-invalid={!!fields[name]}
-      aria-describedby={fields[name] ? id + '-' + name + '-error' : undefined}>
+    return <select ref={el => { refs.current[name] = el; }} id={id + '-' + name} className="inp" value={values[name]} onChange={e => change(name, e.target.value)}
+      aria-invalid={!!fields[name]} aria-describedby={fields[name] ? id + '-' + name + '-error' : undefined}>
       <option value="">未指定</option>{options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
     </select>;
   }
   async function copyResult() {
     if (!r) return;
     const epoch = revision.current;
-    const lines = ['规则判定 · 目标匹配（必要时仅 DNS）', `当前模式：${modeNames[mode] ?? '未知'}`, `目标：${r.target}`, status,
-      r.status === 'unknown' ? '策略：未确定' : `策略：${c.label(r.policy)}`,
-      `规则：${r.status === 'final' ? 'MATCH · 第' + r.display_row + '行（runtime rule=0）' : '#' + r.rule + ' · ' + r.condition}`,
-      `规范化目标：${r.known.host || r.known.ip || '—'}`, `目标端口：${r.known.port ?? '未指定'} · ${portSources[r.known.port_source] ?? '未指定'}`];
-    for (const name of Object.keys(labels) as FieldName[]) {
-      if (name !== 'target' && name !== 'target_port') {
-        const value = r.known[name as keyof KnownInput];
-        if (value) lines.push(labels[name] + '：' + value);
-      }
-    }
-    if (r.dns) {
-      lines.push('DNS：' + (r.dns.status === 'resolved' ? r.dns.addresses.join('、') : r.dns.status === 'failed' ? (r.dns.message ?? '解析失败') : '无需解析'));
-      if (r.dns.selected_ip) lines.push('判定 IP：' + r.dns.selected_ip);
-    }
-    for (const item of r.skipped ?? []) lines.push(`跳过第 ${item.rule} 条：${item.condition} · 缺少 ${item.missing.map(n => missingLabels[n] ?? n).join('、')}`);
-    if (r.skipped_more) lines.push(`另有 ${r.skipped_more} 条缺条件规则被跳过`);
+    const lines = ['规则判定', `目标：${r.target}`, `模式：${modeNames[mode] ?? mode}`];
+    if (effective?.source === 'mode') lines.push(`当前实际策略：${c.label(effective.policy)}`, '以下为规则模式下的匹配结果');
+    lines.push(status, `策略：${r.status === 'unknown' ? '未确定' : c.label(r.policy)}`, `规则：${r.status === 'final' ? 'FINAL' : '#' + r.rule + ' · ' + r.condition}`);
+    if (r.rule_set) lines.push('规则集：' + r.rule_set);
     if (r.missing.length) lines.push('缺少：' + r.missing.map(n => missingLabels[n] ?? n).join('、'));
-    if (r.candidate_policy) lines.push('可能策略：' + c.label(r.candidate_policy));
-    for (const item of r.resource_warnings) lines.push('正式判定资源 · ' + resourceName(item) + '：' + resourceWarning(item));
-    if (after) {
-      lines.push('条件性后续', assumptionText(after), '该假设下：' + conditionalText(after, c.label));
-      lines.push(`后续规则：${after.status === 'final' ? 'MATCH · 第' + after.display_row + '行（runtime rule=0）' : '#' + after.rule + ' · ' + after.condition}`);
-      if (after.candidate_policy) lines.push('该假设下仍未确定；可能策略：' + c.label(after.candidate_policy));
-      for (const item of after.resource_warnings) lines.push('假设后续资源 · ' + resourceName(item) + '：' + resourceWarning(item));
-      if (after.resource_warnings_more) lines.push(`另有 ${after.resource_warnings_more} 项假设后续资源提示`);
-      lines.push(conditionalNote);
-    }
-    if (reply?.ipv6_enabled === false) lines.push('当前 IPv6 已关闭；规则模拟不等于实际准入或连接成功');
+    if (r.dns?.status === 'resolved') lines.push('DNS：' + r.dns.addresses.join('、'));
+    if (r.dns?.status === 'failed') lines.push(r.dns.message ?? 'DNS 解析失败');
+    lines.push('不连接目标；仅依据当前生效规则和已提供条件。');
     try { await navigator.clipboard.writeText(lines.join('\n')); if (live.current && revision.current === epoch) setCopied('已复制'); }
     catch { if (live.current && revision.current === epoch) setCopied('复制失败'); }
   }
   return <Modal readOnly title="规则判定" className="rule-inspector" closeLabel="关闭" close={dismiss}>
     <div className="rule-inspector-body" onKeyDown={onKeyDown}>
-      <div className="rule-inspector-scope">
-        <div className="rule-inspector-meta"><span>目标匹配 · 必要时仅查 DNS</span><span>当前模式：{modeNames[mode] ?? '未知'}</span></div>
-        {(mode === 'global' || mode === 'direct') && <p className="rule-inspector-mode-note">当前为{modeNames[mode]}；下方测试规则匹配；实际连接仍遵循当前模式，不会切换模式</p>}
-      </div>
+      <div className="rule-inspector-meta"><span>当前模式：{modeNames[mode] ?? '未知'}</span><span>不连接目标 · 必要时仅查询 DNS</span></div>
       <div className="rule-inspector-target">
         <label htmlFor={id + '-target'}>目标地址</label>
-        <div className="rule-inspector-input-row">{input('target', 2048, '域名、URL 或 IP')}<button type="button" className="btn primary" disabled={busy || !c.connected} onClick={() => void run()}>{busy ? '判定中…' : '判定'}</button></div>
+        <div className="rule-inspector-input-row">{input('target', 2048, '域名、IP 或 URL')}<button type="button" className="btn primary" disabled={busy || !c.connected} onClick={() => void run()}>{busy ? '判定中…' : '判定'}</button></div>
         {fields.target && <small id={id + '-target-error'} className="field-error" role="alert">{fields.target}</small>}
-        <p className="rule-inspector-help">按已生效规则顺序匹配；必要时仅查 DNS，不连接目标地址</p>
-        {(c.doc.dirty || !!c.doc.draftFilename) && <p className="rule-inspector-draft">未保存修改不参与判定</p>}
+        {(c.doc.dirty || !!c.doc.draftFilename) && <p className="rule-inspector-help">未保存的规则修改不参与判定</p>}
       </div>
       <div className="rule-inspector-supplement">
-        <button type="button" className="link-btn rule-inspector-disclosure" aria-expanded={expanded} aria-controls={supplementalId} onClick={() => setExpanded(!expanded)}>
-          <Icon name={expanded ? 'chevDown' : 'chevRight'} size={14} />补充条件<span>已填 {count} 项</span>
+        <button type="button" className="link-btn rule-inspector-disclosure" aria-expanded={expanded} aria-controls={conditionsId} onClick={() => setExpanded(!expanded)}>
+          <Icon name={expanded ? 'chevDown' : 'chevRight'} size={14}/>补充条件{count > 0 && <span>{count} 项</span>}
         </button>
-        {expanded && <div id={supplementalId} className="rule-inspector-conditions">
-          <p className="rule-inspector-help">仅使用手动模拟值。缺少进程、来源或端口等条件的规则会跳过并列出；不会伪造这些条件。</p>
-          <div className="rule-inspector-grid">
-            {field('network', select('network', [['tcp', 'TCP'], ['udp', 'UDP']]))}
-            {field('target_port', input('target_port', 5, '1–65535'))}
-            {field('process_name', input('process_name', 255, '进程文件名，不含路径'))}
-            {field('source_ip', input('source_ip', 64, 'IP 字面量，不含区域标识'))}
-            {field('source_port', input('source_port', 5, '1–65535'))}
-            {field('inbound_name', input('inbound_name', 64))}
-            {field('inbound_type', select('inbound_type', [['shadowsocks', 'Shadowsocks'], ['anytls', 'AnyTLS'], ['trojan', 'Trojan'], ['socks5', 'SOCKS5']]))}
-            {field('inbound_port', input('inbound_port', 5, '1–65535'))}
-            {field('protocol', select('protocol', [['http', 'HTTP'], ['tls', 'TLS'], ['quic', 'QUIC']]))}
-          </div>
-        </div>}
+        {expanded && <div id={conditionsId} className="rule-inspector-conditions"><div className="rule-inspector-grid">
+          {field('network', select('network', [['tcp', 'TCP'], ['udp', 'UDP']]))}
+          {field('target_port', input('target_port', 5, '1–65535'))}
+          {field('process_name', input('process_name', 255, '进程文件名'))}
+          {field('source_ip', input('source_ip', 64, 'IP 地址'))}
+          {field('source_port', input('source_port', 5, '1–65535'))}
+          {field('inbound_name', input('inbound_name', 64))}
+          {field('inbound_type', select('inbound_type', [['shadowsocks', 'Shadowsocks'], ['anytls', 'AnyTLS'], ['trojan', 'Trojan'], ['socks5', 'SOCKS5']]))}
+          {field('inbound_port', input('inbound_port', 5, '1–65535'))}
+          {field('protocol', select('protocol', [['http', 'HTTP'], ['tls', 'TLS'], ['quic', 'QUIC']]))}
+        </div></div>}
       </div>
-      <LocalError text={error} />
+      <LocalError text={error}/>
       <section className="rule-inspector-result" aria-label="规则判定结果" aria-busy={busy}>
-        <div className={'rule-inspector-conclusion' + (r?.status === 'unknown' ? ' is-unknown' : '') + (!r ? ' is-empty' : '')} aria-live="polite" aria-atomic="true">
-          {!r ? <p className="rule-inspector-empty">{busy ? '正在读取已生效规则…' : '输入目标后查看匹配规则与策略'}</p> : <>
-            <div className="rule-inspector-result-title"><Icon name={r.status === 'unknown' ? 'alert' : r.status === 'final' ? 'route' : 'check'} size={16} /><span>{status}</span></div>
-            <div className="rule-inspector-policy">{r.status === 'unknown' ? '未确定' : <>{r.status === 'final' && <span>最终路由 · </span>}<i style={{ background: policyColor(r.policy, c.status, c.label) }} />{c.label(r.policy)}</>}</div>
-          </>}
-        </div>
-        {r && <>
-          {r.status === 'unknown' && <div className="rule-inspector-missing"><span>尚需条件</span><ul>{r.missing.map(name => <li key={name}><span>{missingLabels[name] ?? name}</span>{Object.hasOwn(labels, name) && <button type="button" className="link-btn" onClick={() => focusField(name)}>填写</button>}</li>)}</ul></div>}
+        {!r ? <p className="rule-inspector-empty">{busy ? '正在匹配生效规则…' : '输入目标，查看将命中的规则与策略'}</p> : <>
+          {effective?.source === 'mode' && <div className="rule-inspector-effective"><span>当前实际策略</span><b>{c.label(effective.policy)}</b><small>{modeNames[mode]}模式不使用下方规则结果</small></div>}
+          <div className={'rule-inspector-conclusion' + (r.status === 'unknown' ? ' is-unknown' : '')} aria-live="polite" aria-atomic="true">
+            <div className="rule-inspector-result-title"><Icon name={r.status === 'unknown' ? 'info' : 'rules'} size={16}/><span>{effective?.source === 'mode' ? '规则模式下：' : ''}{status}</span></div>
+            <div className="rule-inspector-policy">{r.status === 'unknown' ? '暂不能确定策略' : <><i style={{background:policyColor(r.policy,c.status,c.label)}}/>{c.label(r.policy)}</>}</div>
+          </div>
+          {r.status === 'unknown' && <div className="rule-inspector-missing"><p>{r.dns?.status === 'failed' ? 'DNS 解析失败，无法继续判断 IP 规则。' : `第 ${r.blocked_rule ?? r.rule} 条规则尚不能排除，不跳过它推断后续结果。`}</p><ul>{r.missing.map(name=><li key={name}><span>{missingLabels[name]??name}</span>{Object.hasOwn(labels,name)&&<button type="button" className="link-btn" onClick={()=>focusField(name)}>填写</button>}</li>)}</ul></div>}
           <dl className="rule-inspector-details">
-            <dt>{r.status === 'unknown' ? '最早不确定规则' : '匹配规则'}</dt><dd>{r.status === 'final' ? `MATCH · 第${r.display_row}行` : `#${r.blocked_rule ?? r.rule}`}</dd>
-            <dt>判定依据</dt><dd><span>{conditionType}</span><code>{r.condition}</code></dd>
-            {r.candidate_policy && <><dt>可能策略</dt><dd>{c.label(r.candidate_policy)}（不代表已命中）</dd></>}
-            {r.rule_set && <><dt>规则集</dt><dd>{r.rule_set}（不推断子项行号）</dd></>}
+            <dt>{r.status === 'unknown' ? '待判定规则' : '匹配规则'}</dt><dd>{r.status === 'final' ? 'FINAL' : <><span>第 {r.blocked_rule ?? r.rule} 条</span><code>{r.condition}</code></>}</dd>
+            {r.rule_set && <><dt>规则集</dt><dd>{r.rule_set}</dd></>}
           </dl>
-          {after && <section className="rule-inspector-conditional" aria-label="条件性后续">
-            <h4>条件性后续</h4>
-            <p>{assumptionText(after)}</p>
-            <p className="rule-inspector-conditional-result"><span>该假设下：</span>{conditionalText(after, c.label)}</p>
-            <p className="rule-inspector-conditional-rule">{after.status === 'final' ? `MATCH · 第${after.display_row}行` : `#${after.rule} · ${after.condition}`}</p>
-            {after.candidate_policy && <p>该假设下仍未确定；可能策略：{c.label(after.candidate_policy)}</p>}
-            {after.resources.length > 0 && <p className="rule-inspector-conditional-rule">假设后续相关资源：{after.resources.map(resourceName).join('、')}{after.resources_more ? `（另有 ${after.resources_more} 项）` : ''}</p>}
-            {(after.resource_warnings.length > 0 || !!after.resource_warnings_more) && <div className="rule-inspector-warnings">
-              {after.resource_warnings.map(item => <p key={item.kind + ':' + item.name}><Icon name="info" size={14} /><span>假设后续资源 · {resourceName(item)}：{resourceWarning(item)}</span></p>)}
-              {!!after.resource_warnings_more && <p>另有 {after.resource_warnings_more} 项假设后续资源提示</p>}
-            </div>}
-            <p className="rule-inspector-conditional-note">{conditionalNote}</p>
-          </section>}
-          {((r.skipped?.length ?? 0) > 0 || !!r.skipped_more) && <section className="rule-inspector-conditional" aria-label="跳过的条件规则">
-            <h4>已跳过缺少条件的规则</h4>
-            <p>这是仅按所填条件的目标匹配；补齐进程、来源或端口后，结果可能改变。</p>
-            <ul>{r.skipped?.map(item => <li key={item.rule}>第 {item.rule} 条 · <code>{item.condition}</code> · 缺少 {item.missing.map(n => missingLabels[n] ?? n).join('、')}</li>)}</ul>
-            {!!r.skipped_more && <p>另有 {r.skipped_more} 条缺条件规则被跳过</p>}
-          </section>}
-          <dl className="rule-inspector-details rule-inspector-input-details">
-            <dt>输入原文</dt><dd className="rule-inspector-mono">{r.target}</dd>
-            <dt>规范化目标</dt><dd className="rule-inspector-mono">{known?.host || known?.ip || '—'}</dd>
-            <dt>目标端口</dt><dd>{known?.port ?? '未指定'} · {portSources[known?.port_source ?? ''] ?? '未指定'}</dd>
-            {r.dns && <><dt>DNS 判定</dt><dd>{r.dns.status === 'not_needed' ? '无需解析，未查询 DNS' : r.dns.status === 'failed' ? r.dns.message : <>已解析：{r.dns.addresses.join('、')}{r.dns.selected_ip && <><br/>判定 IP：{r.dns.selected_ip}</>}</>}</dd></>}
-            {r.dns?.different_rules && <><dt>多 IP 结果</dt><dd><p>不同地址命中不同规则；与内核一致，采用首个非拒绝地址。</p><ul>{r.ip_results?.map(item => <li key={item.ip}>{item.ip} · {item.rule ? `第 ${item.rule} 条` : 'MATCH'} · {c.label(item.policy)}</li>)}</ul></dd></>}
-            {(Object.keys(labels) as FieldName[]).filter(name => name !== 'target' && name !== 'target_port').map(name => {
-              const value = known?.[name as keyof KnownInput];
-              return value ? <Fragment key={name}><dt>{labels[name]}</dt><dd className="rule-inspector-mono">{value}</dd></Fragment> : null;
-            })}
-            {r.resources.length > 0 && <><dt>相关资源</dt><dd><ul className="rule-inspector-resources">{r.resources.map(item => <li key={item.kind + ':' + item.name}>{resourceName(item)} · {item.data_available === true ? '已加载' : item.data_available === false ? '未加载' : '状态不可核对'}{item.entries != null && item.data_available === true ? ` · ${item.entries} 项` : ''}</li>)}</ul>{!!r.resources_more && <span>另有 {r.resources_more} 项相关资源</span>}</dd></>}
-          </dl>
-          {(r.resource_warnings.length > 0 || !!r.resource_warnings_more) && <div className="rule-inspector-warnings">{r.resource_warnings.map(item => <p key={item.kind + ':' + item.name}><Icon name="info" size={14} /><span>正式判定资源 · {resourceName(item)}：{resourceWarning(item)}</span></p>)}{!!r.resource_warnings_more && <p>正式判定另有 {r.resource_warnings_more} 项相关资源提示</p>}</div>}
-          {reply?.ipv6_enabled === false && <p className="rule-inspector-admission"><Icon name="info" size={14} /><span>{r.admission_warnings?.includes('ipv6_disabled') ? '该 IPv6 输入的实际准入受当前 IPv6 关闭设置限制；规则策略保持模拟结果。' : '当前 IPv6 已关闭；规则模拟不会更改此设置。'}</span></p>}
-          <div className="rule-inspector-result-end"><p>按本次已加载资源与所填条件判定；不连接目标，不代表出口节点或连接成功</p><button type="button" className="link-btn" onClick={() => void copyResult()}><Icon name="copy" size={12} />{copied || '复制结果'}</button></div>
+          <details className="rule-inspector-extra"><summary>判定详情</summary><dl className="rule-inspector-details">
+            <dt>目标</dt><dd className="rule-inspector-mono">{r.known.host||r.known.ip||r.target}</dd>
+            {r.known.port != null && <><dt>目标端口</dt><dd className="num">{r.known.port}</dd></>}
+            <dt>DNS</dt><dd>{!r.dns||r.dns.status==='not_needed'?'无需查询':r.dns.status==='failed'?'解析失败':r.dns.addresses.join('、')}</dd>
+            {r.dns?.different_rules && <><dt>多 IP 结果</dt><dd><ul>{r.ip_results?.map(x=><li key={x.ip}>{x.ip} · {x.status==='unknown'?'未确定':`${x.rule?'第 '+x.rule+' 条':'FINAL'} → ${c.label(x.policy)}`}</li>)}</ul></dd></>}
+            {r.resources.length>0&&<><dt>规则资源</dt><dd>{r.resources.map(x=><div key={x.kind+':'+x.name}>{resourceName(x)} · {x.data_available===true?'已加载':x.data_available===false?'未加载':'未知'}</div>)}{r.resources_more?`另有 ${r.resources_more} 项`:null}</dd></>}
+            {(Object.keys(labels) as FieldName[]).filter(n=>n!=='target'&&n!=='target_port').flatMap(n=>{const value=r.known[n as keyof RuleResult['known']];return value?[<dt key={n+'-label'}>{labels[n]}</dt>,<dd key={n}>{value}</dd>]:[];})}
+          </dl></details>
+          {r.resource_warnings.map(x=><p className="rule-inspector-help" key={x.kind+':'+x.name}>{resourceName(x)}：{resourceWarning(x)}</p>)}
+          {reply?.ipv6_enabled===false&&r.known.ip?.includes(':')&&<p className="rule-inspector-help">当前 IPv6 已关闭，此目标的实际访问会受限</p>}
+          <div className="rule-inspector-result-end"><span>按生效顺序首匹配，均不匹配则使用 FINAL</span><button type="button" className="link-btn" onClick={()=>void copyResult()}><Icon name="copy" size={12}/>{copied||'复制结果'}</button></div>
         </>}
       </section>
     </div>

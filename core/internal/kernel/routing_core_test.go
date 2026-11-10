@@ -195,6 +195,15 @@ func rcEchoTCP(t *testing.T) uint16 {
 	}()
 	return uint16(ln.Addr().(*net.TCPAddr).Port)
 }
+func localUDP(t *testing.T) *net.UDPConn {
+	t.Helper()
+	u, e := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Cleanup(func() { u.Close() })
+	return u
+}
 func rcEchoUDP(t *testing.T) uint16 {
 	t.Helper()
 	c := localUDP(t)

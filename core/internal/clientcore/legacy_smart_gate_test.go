@@ -144,7 +144,7 @@ func TestRestoredSmartGateValidateApplyAndNativeImportKeepAcceptedRuntime(t *tes
 			accepted := h.doc.text
 			acceptedFormat := h.doc.format
 			running := h.server
-			generation := running.StatsView().Reload.Generation
+			generation := running.GenerationID()
 			history, _ := json.Marshal(h.history)
 			// Native import is otherwise draft-only; this unsafe combination must not
 			// even return an apparently usable native candidate.
@@ -164,7 +164,7 @@ func TestRestoredSmartGateValidateApplyAndNativeImportKeepAcceptedRuntime(t *tes
 				assertLegacyGateError(t, e)
 			}
 			afterHistory, _ := json.Marshal(h.history)
-			if h.doc.text != accepted || h.doc.format != acceptedFormat || h.server != running || h.server.StatsView().Reload.Generation != generation || string(history) != string(afterHistory) || !reflect.DeepEqual(before, legacyGateFiles(t, h.workspace)) {
+			if h.doc.text != accepted || h.doc.format != acceptedFormat || h.server != running || h.server.GenerationID() != generation || string(history) != string(afterHistory) || !reflect.DeepEqual(before, legacyGateFiles(t, h.workspace)) {
 				t.Fatal("rejection changed accepted source, runtime, backups or history")
 			}
 		})

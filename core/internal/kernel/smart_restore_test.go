@@ -51,6 +51,11 @@ func TestSmartRestoreAdaptiveWinnerTraceAndLoserRelease(t *testing.T) {
 				t.Fatal(e)
 			}
 			defer g.Close()
+			now := time.Now()
+			g.(interface{ RecordProbeRound([]group.ProbeSample) }).RecordProbeRound([]group.ProbeSample{
+				{Name: "slow", Latency: 100 * time.Millisecond, ColdLatency: 100 * time.Millisecond, At: now},
+				{Name: "winner", Latency: 200 * time.Millisecond, ColdLatency: 200 * time.Millisecond, At: now},
+			})
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			h := &hops{}
@@ -123,6 +128,11 @@ func TestSmartRestoreLateLoserSocketClosed(t *testing.T) {
 		t.Fatal(e)
 	}
 	defer g.Close()
+	now := time.Now()
+	g.(interface{ RecordProbeRound([]group.ProbeSample) }).RecordProbeRound([]group.ProbeSample{
+		{Name: "late", Latency: 100 * time.Millisecond, ColdLatency: 100 * time.Millisecond, At: now},
+		{Name: "winner", Latency: 200 * time.Millisecond, ColdLatency: 200 * time.Millisecond, At: now},
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	h := &hops{}

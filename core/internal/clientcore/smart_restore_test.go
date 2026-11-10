@@ -299,7 +299,7 @@ func TestSmartRestoreRealStatusHotPinAndRAMOnly(t *testing.T) {
 	if !found {
 		t.Fatal("no p")
 	}
-	gen, epoch := h.server.StatsView().Reload.Generation, h.manualCtx
+	gen, epoch := h.server.GenerationID(), h.manualCtx
 	root, _ = sourceJSON(h.doc)
 	k = rawObject(root["kernel"])
 	gs = rawArray(k, "groups")
@@ -309,7 +309,7 @@ func TestSmartRestoreRealStatusHotPinAndRAMOnly(t *testing.T) {
 	k["groups"] = rawJSON(gs)
 	root["kernel"] = rawJSON(k)
 	result, de := h.Apply(string(rawJSON(root)))
-	if de != nil || result.(map[string]any)["selection_only"] != true || h.server.StatsView().Reload.Generation != gen || h.manualCtx != epoch {
+	if de != nil || result.(map[string]any)["selection_only"] != true || h.server.GenerationID() != gen || h.manualCtx != epoch {
 		t.Fatal("Smart fixed was not hot", de)
 	}
 	if !reflect.DeepEqual(h.probes["p"], measured) {

@@ -10,6 +10,11 @@ import (
 // Parse the real accepted-source projection without Host.Start or kernel.Start.
 // The unaccepted alternate text is never supplied to rules.test.
 func TestRuleInspectorAcceptedSourceModeProjection(t *testing.T) {
+	wantEffective := map[string]map[string]any{
+		"rule":   {"mode": "rule", "source": "rules", "policy": "Proxy"},
+		"global": {"mode": "global", "source": "mode", "policy": "Proxy"},
+		"direct": {"mode": "direct", "source": "mode", "policy": "direct"},
+	}
 	for _, mode := range []string{"rule", "global", "direct"} {
 		t.Run(mode, func(t *testing.T) {
 			text := `{"schema_version":1,"client":{"mode":"` + mode + `","global_group":"Proxy","ipv6":false,"http_port":18080,"socks_port":11080,"probe_url":"http://127.0.0.1:1/probe"},"kernel":{"dns":{"server":"system"},"groups":[{"name":"Proxy","type":"select","members":["direct"]}],"routing":{"rules":[{"domain_suffix":"example.com","outbound":"Proxy"}],"final":"reject"}}}`
@@ -34,7 +39,7 @@ func TestRuleInspectorAcceptedSourceModeProjection(t *testing.T) {
 			reply := value.(map[string]any)
 			got := reply["result"].(route.TargetResult)
 			t.Logf("real parse accepted mode=%s runtime_final=%s simulated=%+v", mode, doc.config.Routing.Final, got)
-			if got.Policy != "Proxy" || got.Rule != 1 || reply["mode"] != mode || reply["simulation"] != "target" {
+			if got.Policy != "Proxy" || got.Rule != 1 || reply["mode"] != mode || reply["simulation"] != "target" || !reflect.DeepEqual(reply["effective"], wantEffective[mode]) {
 				t.Fatal(reply)
 			}
 			_, requestErr = riRequest(h, `{"target":"https://a.example.com/","draft":{"routing":{"final":"direct"}}}`)

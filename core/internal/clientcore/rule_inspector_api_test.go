@@ -37,7 +37,7 @@ func riHost(t *testing.T, mode string) *Host {
 	cfg.SetClientIPv6(false)
 	riWritable(v.FieldByName("cfg")).Set(reflect.ValueOf(cfg))
 	riWritable(v.FieldByName("refs")).Addr().Interface().(*atomic.Int64).Store(1)
-	return &Host{server: s, doc: document{client: Client{Mode: mode, IPv6: false}, ruleRouting: &kernel.RoutingOptions{Rules: []kernel.RouteRule{{DomainSuffix: "example.com", Outbound: "Proxy"}, {IPCIDR: "2001:db8::/32", Outbound: "Proxy"}}, Final: "Tail"}, config: kernel.Config{Routing: &kernel.RoutingOptions{Final: "DraftMustNotParticipate"}}, text: `{"kernel":{"routing":{"final":"DraftMustNotParticipate"}}}`}}
+	return &Host{server: s, doc: document{client: Client{Mode: mode, GlobalGroup: "GlobalProxy", IPv6: false}, ruleRouting: &kernel.RoutingOptions{Rules: []kernel.RouteRule{{DomainSuffix: "example.com", Outbound: "Proxy"}, {IPCIDR: "2001:db8::/32", Outbound: "Proxy"}}, Final: "Tail"}, config: kernel.Config{Routing: &kernel.RoutingOptions{Final: "DraftMustNotParticipate"}}, text: `{"kernel":{"routing":{"final":"DraftMustNotParticipate"}}}`}}
 }
 func riRequest(h *Host, raw string) (any, *Error) {
 	return h.Request(context.Background(), "rules.test", json.RawMessage(raw))
@@ -95,9 +95,12 @@ func TestRuleInspectorAPIStrictFields(t *testing.T) {
 	if err == nil || err.Code != "core_not_running" || err.Path != "runtime" {
 		t.Fatal(err)
 	}
-	stopped.server = &kernel.Server{}
+	stoppedSrv := &kernel.Server{}
+	sv := reflect.ValueOf(stoppedSrv).Elem()
+	riWritable(sv.FieldByName("core")).Set(reflect.New(sv.FieldByName("core").Type().Elem()))
+	stopped.server = stoppedSrv
 	_, err = riRequest(stopped, `{"target":"example.com"}`)
-	if err == nil || err.Code != "rule_test_unavailable" || err.Path != "runtime" {
+	if err == nil || err.Code != "core_not_running" || err.Path != "runtime" {
 		t.Fatal(err)
 	}
 	h.doc.ruleRouting = &kernel.RoutingOptions{Rules: []kernel.RouteRule{{Domain: "bad..domain", Action: "reject"}}}
@@ -107,6 +110,11 @@ func TestRuleInspectorAPIStrictFields(t *testing.T) {
 	}
 }
 func TestRuleInspectorAPIModeProjectionNoDraftAndIPv6(t *testing.T) {
+	wantEffective := map[string]map[string]any{
+		"rule":   {"mode": "rule", "source": "rules", "policy": "Proxy"},
+		"global": {"mode": "global", "source": "mode", "policy": "GlobalProxy"},
+		"direct": {"mode": "direct", "source": "mode", "policy": "direct"},
+	}
 	for _, mode := range []string{"rule", "global", "direct"} {
 		t.Run(mode, func(t *testing.T) {
 			h := riHost(t, mode)
@@ -122,6 +130,9 @@ func TestRuleInspectorAPIModeProjectionNoDraftAndIPv6(t *testing.T) {
 				if m["mode"] != mode || m["simulation"] != "target" || m["ipv6_enabled"] != false || g.Policy != "Proxy" || g.Status != "matched" {
 					t.Fatal(m, g)
 				}
+				if !reflect.DeepEqual(m["effective"], wantEffective[mode]) {
+					t.Fatalf("effective=%+v want=%+v", m["effective"], wantEffective[mode])
+				}
 				if (target == "2001:db8::1") != (len(g.AdmissionWarnings) == 1) {
 					t.Fatal(g)
 				}
@@ -132,6 +143,22 @@ func TestRuleInspectorAPIModeProjectionNoDraftAndIPv6(t *testing.T) {
 			}
 			// Metadata travels through real Request -> clientcore -> kernel -> route.
 			h.doc.ruleRouting = &kernel.RoutingOptions{Rules: []kernel.RouteRule{{Network: "udp", RouteRuleExt: kernel.RouteRuleExt{}, Action: "reject"}}, Final: "Tail"}
+			unknownReply, err := riRequest(h, `{"target":"https://example.com/"}`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			um := unknownReply.(map[string]any)
+			ug := um["result"].(route.TargetResult)
+			if ug.Status != "unknown" || ug.Policy != "" || !reflect.DeepEqual(ug.Missing, []string{"network"}) {
+				t.Fatal(ug)
+			}
+			wantUnknownEffective := map[string]any{"mode": mode, "source": wantEffective[mode]["source"], "policy": wantEffective[mode]["policy"]}
+			if mode == "rule" {
+				wantUnknownEffective["policy"] = ""
+			}
+			if !reflect.DeepEqual(um["effective"], wantUnknownEffective) {
+				t.Fatalf("unknown effective=%+v want=%+v", um["effective"], wantUnknownEffective)
+			}
 			v, err := riRequest(h, `{"target":"https://example.com/","network":"UDP","protocol":"QUIC","process_name":"APP.EXE","source_ip":"::ffff:198.51.100.2","source_port":65535,"inbound_name":"local","inbound_type":"socks","inbound_port":1080}`)
 			if err != nil {
 				t.Fatal(err)

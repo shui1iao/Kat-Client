@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
-	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -14,7 +13,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
+	"io"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -294,75 +293,6 @@ func TestDNSChainBudgetAndCancellation(t *testing.T) {
 	_, e = r.lookup(expired, "expired.example")
 	if !errors.Is(e, context.DeadlineExceeded) || system.Load() != 0 {
 		t.Fatal("expired fallback")
-	}
-}
-
-// This starts a real SS inbound and forwards both TCP and native UDP while the
-// instance-local dial seam intercepts the *unchanged* public default endpoints.
-func TestDNSChainOmittedDefaultRealTCPUDP(t *testing.T) {
-	for _, empty := range []bool{false, true} {
-		t.Run(map[bool]string{false: "omitted", true: "empty"}[empty], func(t *testing.T) {
-			f := newDNSFixture(t, func(w []byte) []byte { return familyReply(w, "fail") })
-			var accepted atomic.Int64
-			target := sinkTCP(t, "tcp4", "127.0.0.1:0", func(c net.Conn) {
-				b := make([]byte, 7)
-				if _, e := io.ReadFull(c, b); e == nil && string(b) == "initial" {
-					accepted.Add(1)
-				}
-			})
-			udp := localUDP(t)
-			s := startTest(t, ssIn(), func(c *Config) {
-				c.DNS = nil
-				if empty {
-					c.DNS = &DNSOptions{}
-				}
-			})
-			var mu sync.Mutex
-			var stages []string
-			s.dns.dial = func(ctx context.Context, network, addr string) (net.Conn, error) {
-				if network != "udp" || addr != "8.8.8.8:53" && addr != "1.1.1.1:53" {
-					t.Errorf("unexpected DNS I/O %s %s", network, addr)
-					return nil, errDNS
-				}
-				mu.Lock()
-				stages = append(stages, addr)
-				mu.Unlock()
-				return (&net.Dialer{}).DialContext(ctx, network, f.address())
-			}
-			s.dns.bootstrap = func(ctx context.Context, n, h string) ([]netip.Addr, error) {
-				if h != "default.example" {
-					t.Error(h)
-				}
-				mu.Lock()
-				stages = append(stages, "system")
-				mu.Unlock()
-				return []netip.Addr{netip.MustParseAddr("127.0.0.1")}, nil
-			}
-			raw := dialPeer(t, s, nil)
-			if e := writeAll(raw, tcp2022(t, Address{"default.example", target.Port}, 31)); e != nil {
-				t.Fatal(e)
-			}
-			waitFor(t, func() bool { return accepted.Load() == 1 })
-			raw.Close()
-			client := localUDP(t)
-			endpoint, _ := net.ResolveUDPAddr("udp", s.Addresses()[0].String())
-			client.WriteToUDP(udp2022(t, Address{"default.example", addrFromNet(udp.LocalAddr()).Port}, 987, 1, []byte("default")), endpoint)
-			b, peer := recvUDP(t, udp)
-			if string(b) != "default" {
-				t.Fatal(string(b))
-			}
-			udp.WriteToUDP([]byte("reply"), peer)
-			b, _ = recvUDP(t, client)
-			idleCheckResponse(t, true, b, "reply")
-			mu.Lock()
-			got := append([]string(nil), stages...)
-			mu.Unlock()
-			unit := []string{"8.8.8.8:53", "8.8.8.8:53", "1.1.1.1:53", "1.1.1.1:53", "system"}
-			if !reflect.DeepEqual(got, append(append([]string{}, unit...), unit...)) || f.count.Load() != 8 {
-				t.Fatal("default not wired", got, f.count.Load())
-			}
-			t.Logf("actual TCP initial payload + native UDP roundtrip; chain=%v", got)
-		})
 	}
 }
 

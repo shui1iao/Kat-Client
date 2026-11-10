@@ -152,6 +152,9 @@ func TestSubscriptionCachePendingAndInUseArePreserved(t *testing.T) {
 			h.resourceUsing = map[string]int{oldest: 1}
 		}
 	}
+	if _, e := h.Apply(h.doc.text, h.doc.format); e != nil {
+		t.Fatal(e)
+	}
 	if _, e := os.Stat(oldest); e != nil {
 		t.Fatal("in-use version removed", e)
 	}

@@ -114,7 +114,7 @@ func TestDocumentFormatIPCAndSafeValidation(t *testing.T) {
 		b, _ := json.Marshal(result)
 		var got map[string]json.RawMessage
 		_ = json.Unmarshal(b, &got)
-		if len(got) != 4 || string(got["valid"]) != "true" || string(got["format"]) != fmt.Sprintf("%q", f) {
+		if len(got) != 5 || string(got["advanced_dns"]) != "false" || string(got["valid"]) != "true" || string(got["format"]) != fmt.Sprintf("%q", f) {
 			t.Fatal(string(b))
 		}
 		var ports map[string]int

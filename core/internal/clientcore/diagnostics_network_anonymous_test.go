@@ -213,6 +213,16 @@ func TestAnonymousBatchRealRulesMultiExitAndSafeCache(t *testing.T) {
 		case strings.Contains(r.Host, "gemini.google.com"):
 			w.WriteHeader(403)
 			io.WriteString(w, "<title>Just a moment</title>cf-chl-check")
+		case strings.Contains(r.Host, "claude.ai"):
+			if r.URL.Path == "/cdn-cgi/trace" {
+				io.WriteString(w, "ip=203.0.113.9\nloc=HK\n")
+			} else {
+				io.WriteString(w, `<!DOCTYPE html><html><body><div id="root"></div></body></html>`)
+			}
+		case strings.Contains(r.Host, "www.google.com"):
+			io.WriteString(w, `<!DOCTYPE html><html><body><script>const _bar_=[null,2,1,200,"HKG"]</script></body></html>`)
+		case strings.Contains(r.Host, "www.youtube.com"):
+			io.WriteString(w, `<!DOCTYPE html><html><body>YouTube Premium ad-free <script>{"countryCode":"HK"}</script></body></html>`)
 		case strings.Contains(r.Host, "netflix.com"):
 			writeDiagnosticGzip(t, w, raw)
 		case strings.Contains(r.Host, "disneyplus.com"):
@@ -253,6 +263,15 @@ func TestAnonymousBatchRealRulesMultiExitAndSafeCache(t *testing.T) {
 	}
 	if x := rows["Gemini"]; x.Result != "challenge" || x.HTTP != 403 || !strings.Contains(x.Reason, "[challenge]") {
 		t.Fatal("lost HTTP/cause", x)
+	}
+	if x := rows["Claude"]; x.Result != "unlocked" || x.Region != "HK" {
+		t.Fatal(x)
+	}
+	if x := rows["Google"]; x.Result != "unlocked" || x.Region != "HK" {
+		t.Fatal(x)
+	}
+	if x := rows["YouTube"]; x.Result != "unlocked" || x.Region != "HK" {
+		t.Fatal(x)
 	}
 	if x := rows["Netflix"]; x.Result != "unlocked" || x.Region != "HK" || x.Node != "NodeA" || !strings.Contains(x.Reason, "[anonymous]") {
 		t.Fatal("real large sample not consumed through actual SOCKS", x)
@@ -403,8 +422,7 @@ func TestAnonymousCanceledBatchKeepsPreviousCache(t *testing.T) {
 }
 
 func TestAnonymousFourServiceEvidenceViaRealSOCKS(t *testing.T) {
-	// Existing services retain their semantic positive. Gemini's observed shell
-	// stays unknown through SOCKS/TLS/rules; it is NOT a fabricated green fixture.
+	// All 7 services retain their semantic positive through SOCKS/TLS/rules.
 	// None of these fixtures constitutes a public-egress live pass.
 	b, e := os.ReadFile("../clientdiag/testdata/unlock.json")
 	if e != nil {
@@ -427,7 +445,7 @@ func TestAnonymousFourServiceEvidenceViaRealSOCKS(t *testing.T) {
 	pages := map[string]reply{}
 	seen := map[string]bool{}
 	for _, c := range cases {
-		if seen[c.Service] || (c.Want != "unlocked" && !(c.Service == "Gemini" && c.Want == "unknown")) {
+		if seen[c.Service] || c.Want != "unlocked" {
 			continue
 		}
 		seen[c.Service] = true
@@ -476,12 +494,6 @@ func TestAnonymousFourServiceEvidenceViaRealSOCKS(t *testing.T) {
 		t.Fatal("lost positive jobs")
 	}
 	for _, r := range rows {
-		if r.Name == "Gemini" {
-			if r.Result != "unknown" || r.HTTP != 200 || r.Region != "" || r.Node != "FixtureNode" || !strings.Contains(r.Reason, "[anonymous_evidence]") {
-				t.Fatal("Gemini shell became a false positive or lost routing", r)
-			}
-			continue
-		}
 		if r.Result != "unlocked" || r.HTTP != 200 || r.Region == "" || r.Node != "FixtureNode" || !strings.Contains(r.Reason, "[anonymous]") {
 			t.Fatal("positive failed through actual SOCKS", r)
 		}

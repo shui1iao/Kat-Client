@@ -6,10 +6,11 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"reflect"
 	"testing"
 )
 
-func TestTargetSkipsOnlyMissingContextAndKeepsOrder(t *testing.T) {
+func TestTargetMissingContextBlocksWithoutSkippingAndKeepsOrder(t *testing.T) {
 	e := &Engine{}
 	options := Options{Rules: []Rule{{ProcessName: "browser.exe", Outbound: "process"}, {DomainSuffix: "example.com", Outbound: "domain"}}, Final: "direct"}
 	calls := 0
@@ -17,14 +18,33 @@ func TestTargetSkipsOnlyMissingContextAndKeepsOrder(t *testing.T) {
 		calls++
 		return nil, errors.New("unexpected lookup")
 	})
-	if err != nil || out.Status != "matched" || out.Rule != 2 || out.Policy != "domain" || calls != 0 {
+	if err != nil || out.Status != "unknown" || out.Rule != 1 || out.BlockedRule != 1 || out.Policy != "" || out.CandidatePolicy != "process" || calls != 0 {
 		t.Fatal(out, err, calls)
 	}
-	if len(out.Skipped) != 1 || out.Skipped[0].Rule != 1 || !hasTargetMissing(out.Skipped[0].Missing, "process_name") {
-		t.Fatal(out.Skipped)
+	if !reflect.DeepEqual(out.Missing, []string{"process_name"}) || len(out.Skipped) != 0 {
+		t.Fatal(out.Missing, out.Skipped)
 	}
 	if out.Known.ProcessName != "" || out.Known.Network != "" || out.DNS.Status != "not_needed" {
 		t.Fatal("invented context", out)
+	}
+
+	// Supplying a non-matching process resolves the unknown and proceeds to rule #2.
+	out, err = e.TestTarget(context.Background(), options, OfflineInput{Target: "https://a.example.com/path", ProcessName: "other.exe"}, nil)
+	if err != nil || out.Status != "matched" || out.Rule != 2 || out.Policy != "domain" || len(out.Missing) != 0 {
+		t.Fatal(out, err)
+	}
+
+	// Supplying the matching process matches rule #1.
+	out, err = e.TestTarget(context.Background(), options, OfflineInput{Target: "https://a.example.com/path", ProcessName: "browser.exe"}, nil)
+	if err != nil || out.Status != "matched" || out.Rule != 1 || out.Policy != "process" || len(out.Missing) != 0 {
+		t.Fatal(out, err)
+	}
+
+	// Earlier deterministic domain rule still matches before a later context rule.
+	reordered := Options{Rules: []Rule{{DomainSuffix: "example.com", Outbound: "domain"}, {ProcessName: "browser.exe", Outbound: "process"}}, Final: "direct"}
+	out, err = e.TestTarget(context.Background(), reordered, OfflineInput{Target: "https://a.example.com/path"}, nil)
+	if err != nil || out.Status != "matched" || out.Rule != 1 || out.Policy != "domain" {
+		t.Fatal(out, err)
 	}
 }
 

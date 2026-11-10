@@ -1,13 +1,13 @@
-# Kat-Client v0.2.2
+# Kat-Client v0.2.3
 
-Windows x64 客户端正式版 `v0.2.2`（内置 Windows Core `v0.8.1`，`sequence: 1794300002`）。下载 Release 中的 `Kat-Setup-x64.exe` 安装或通过客户端内置在线更新升级。
+Windows x64 客户端正式版 `v0.2.3`（内置 Windows Core `v0.8.2`，在线更新 sequence `1794300003`）。下载 Release 中的 `Kat-Setup-x64.exe` 安装，或通过客户端内置在线更新升级。
 
-内置客户端内核为 Windows Core `0.8.1`（源码指纹 `f9f9d354ed3e551138964fde957cb0e2371e761cce5776d098bae80a2b33c560`，`BuildCommit` 为该源码指纹前 40 位，不是 Git 提交）。客户端支持经 Ed25519 签名校验（公钥 `key_id: 0afa646ee76f17d8`）的客户端与 Windows Core 在线检查更新。
+本版调整更新通知、安装完成启动时机、首页卡片响应布局、七项匿名服务检测及不连接目标的内核规则预判。具体变化与限制见 [RELEASE_NOTES.md](RELEASE_NOTES.md)。Windows Core 单独发布在 Kat-Server 的 `windows-core-v0.8.2`，不改变 Linux 服务端 v0.8.1，也不自动部署任何节点。
 
 ## 权利
 Source-available，不是 MIT 开源。Kat 自研代码保留所有权利，不授予通用使用、修改或再分发许可。第三方/上游原许可及其源码义务不变，见 [RIGHTS.md](RIGHTS.md)、`core/THIRD_PARTY_NOTICES.md` 及 `app` 中的许可材料。
 
 ## 源码和构建对应
-本公共树同步自 `v0.2.2` 正式构建源码归档，生产 Go/Rust/前端源码和对应第三方材料完整保留；编译源码与发行二进制对应关系由 `SOURCE-MANIFEST.json` 及 `BUILD-IDENTITY.json` 记录。
+本公共树与本版源码归档对应，`SOURCE-MANIFEST.json` 与 `BUILD-IDENTITY.json` 记录准确源码指纹、二进制摘要和验证范围。内核 BuildCommit 是 core 源码指纹前 40 位，不冒充 Git 提交。包与在线更新清单采用既有 Ed25519 公钥 `key_id: 0afa646ee76f17d8` 校验。
 
-构建需 Go 1.26.9、Node 依赖按 `package-lock.json`、Rust/`cargo-xwin` 和 Windows SDK、NSIS 3.11。前端在 `app` 运行 `npm ci` 和 `npm run build`；Windows 内核入口为 `core/cmd/kat-client-core`（`-tags desktop`），宿主在 `app/src-tauri` 使用 `desktop` feature 和 `x86_64-pc-windows-msvc` 目标构建六个可执行角色（`kat-desktop`、`kat-network-service`、`kat-proxy-watchdog`、`kat-elevate-helper`、`kat-client-core` 及绑定对等映像摘要的 `kat-install-helper`），并经 `scripts/build-setup.py` 完成离线校验与 NSIS 组包。
+构建需 Go 1.26.9、Node 依赖按 `app/package-lock.json`、Rust/cargo-xwin 与 Windows SDK、NSIS 3.11。前端在 app 运行 npm ci / npm run build；Windows core 入口是 core/cmd/kat-client-core（-tags desktop）。宿主在 app/src-tauri 构建 kat-desktop、kat-network-service、kat-proxy-watchdog、kat-elevate-helper，最后将这些角色与 core 的实际 SHA256 绑定进 kat-install-helper。完整构建和签包说明随 Release 的 BUILDING.md 与 Kat-Build-Support.tar.gz 提供；正式签名私钥不在公开源码中。

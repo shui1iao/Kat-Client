@@ -9,6 +9,21 @@ import (
 	"github.com/shui1iao/Kat/internal/route"
 )
 
+func effectiveRuleTest(mode, globalGroup string, result route.TargetResult) map[string]any {
+	switch mode {
+	case "global":
+		return map[string]any{"mode": mode, "source": "mode", "policy": globalGroup}
+	case "direct":
+		return map[string]any{"mode": mode, "source": "mode", "policy": "direct"}
+	default:
+		policy := result.Policy
+		if result.Status == "unknown" {
+			policy = ""
+		}
+		return map[string]any{"mode": mode, "source": "rules", "policy": policy}
+	}
+}
+
 func (h *Host) testRules(ctx context.Context, raw json.RawMessage) (any, *Error) {
 	if len(raw) > 32<<10 {
 		return nil, fail("invalid_params", "params", "判定参数超过长度限制")
@@ -85,7 +100,7 @@ func (h *Host) testRules(ctx context.Context, raw json.RawMessage) (any, *Error)
 		h.mu.Unlock()
 		return nil, fail("core_not_running", "runtime", "请先启动内核，判定使用当前已生效规则")
 	}
-	routing, mode, ipv6 := h.doc.ruleRouting, h.doc.client.Mode, h.doc.client.IPv6
+	routing, mode, globalGroup, ipv6 := h.doc.ruleRouting, h.doc.client.Mode, h.doc.client.GlobalGroup, h.doc.client.IPv6
 	generation := s.GenerationID()
 	qctx, cancel := context.WithCancel(ctx)
 	var stop func() bool
@@ -115,10 +130,10 @@ func (h *Host) testRules(ctx context.Context, raw json.RawMessage) (any, *Error)
 		return nil, fail("rule_test_unavailable", "runtime", "当前规则或资源无法安全判定，请检查已生效配置与资源状态")
 	}
 	h.mu.Lock()
-	stale := h.server != s || h.doc.ruleRouting != routing || h.doc.client.Mode != mode || h.doc.client.IPv6 != ipv6 || s.GenerationID() != generation
+	stale := h.server != s || h.doc.ruleRouting != routing || h.doc.client.Mode != mode || h.doc.client.GlobalGroup != globalGroup || h.doc.client.IPv6 != ipv6 || s.GenerationID() != generation
 	h.mu.Unlock()
 	if stale {
 		return nil, fail("rule_test_stale", "runtime", "规则、资源或模式已变化，请重新判定")
 	}
-	return map[string]any{"result": result, "mode": mode, "simulation": "target", "ipv6_enabled": ipv6}, nil
+	return map[string]any{"result": result, "mode": mode, "effective": effectiveRuleTest(mode, globalGroup, result), "simulation": "target", "ipv6_enabled": ipv6}, nil
 }

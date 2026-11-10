@@ -114,7 +114,7 @@ func TestApplyCancellationCommitBoundaries(t *testing.T) {
 					beforePath, beforeText := h.path, h.doc.text
 					gen := uint64(0)
 					if running {
-						gen = h.server.StatsView().Reload.Generation
+						gen = h.server.GenerationID()
 					}
 					sp := freePort(t)
 					for sp == h.doc.client.HTTPPort || sp == h.doc.client.SOCKSPort {
@@ -149,7 +149,7 @@ func TestApplyCancellationCommitBoundaries(t *testing.T) {
 						if err != nil || string(b) != beforeText || h.path != beforePath || h.doc.text != beforeText {
 							t.Fatal("cancellation changed accepted source")
 						}
-						if running && h.server.StatsView().Reload.Generation != gen {
+						if running && h.server.GenerationID() != gen {
 							t.Fatal("cancellation changed running generation")
 						}
 						// Any newly prepared SOCKS listener was released.
@@ -166,7 +166,7 @@ func TestApplyCancellationCommitBoundaries(t *testing.T) {
 						if err != nil || string(b) != draft {
 							t.Fatal("committed source not accepted")
 						}
-						if running && h.server.StatsView().Reload.Generation != gen+1 {
+						if running && h.server.GenerationID() != gen+1 {
 							t.Fatal("committed generation not acknowledged")
 						}
 					}

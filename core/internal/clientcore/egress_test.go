@@ -47,22 +47,17 @@ func TestEgressTransitionClosesOnlyOwnFlowsAndPreservesDocument(t *testing.T) {
 	br.ReadString('\n')
 	peer := <-accepted
 	defer peer.Close()
-	// Test-injected loopback-only policy exercises lifecycle, not Windows APIs.
-	p := &clientegress.Policy{Options: clientegress.Options{Enabled: true, DNS: []clientegress.DNSEndpoint{}}}
+	// Test-injected policy exercises non-disruptive egressSwitch transition, not Windows APIs.
+	pol := clientegress.Blocked()
 	h.mu.Lock()
 	old := h.server
-	_, de := h.transitionEgressLocked(p, p.Options)
+	_, de := h.transitionEgressLocked(pol, pol.Options)
 	h.mu.Unlock()
 	if de != nil {
 		t.Fatal(de)
 	}
-	if h.server == old || h.egressGeneration != 1 || !h.localReady {
-		t.Fatal("instance not rebuilt")
-	}
-	peer.SetReadDeadline(time.Now().Add(time.Second))
-	var b [1]byte
-	if _, e = peer.Read(b[:]); e == nil {
-		t.Fatal("old flow survived egress switch")
+	if h.server != old || h.egressGeneration != 1 || !h.localReady {
+		t.Fatal("egress switch did not preserve server/listeners or update generation")
 	}
 	saved, e := os.ReadFile(h.path)
 	if e != nil || string(saved) != text {
@@ -80,8 +75,8 @@ func TestPublicNonWindowsEgressCannotMutate(t *testing.T) {
 		t.Skip("non-Windows")
 	}
 	h := newHost(t)
-	if _, e := h.EgressSet(clientegress.Options{Enabled: true}); e == nil || e.Code != "unsupported_platform" {
-		t.Fatal("non-Windows mutation")
+	if _, e := h.EgressSet(clientegress.Options{Schema: clientegress.Schema, Enabled: true}); e == nil || e.Code != "unsupported_platform" {
+		t.Fatal("non-Windows mutation", e)
 	}
 	v := h.EgressGet().(clientegress.View)
 	if v.Enabled || v.Ready || v.Generation != 0 {

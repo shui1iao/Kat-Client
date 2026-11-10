@@ -55,7 +55,7 @@ fn install_common(uninstall:bool,gui_pid:u32,gui_stamp:u64,requested:Option<&str
  let read_token=super::service_acl::ordinary_token(caller.0,&user.sid)?;
  let mut update=WindowsUpdate{journal:None,old_display_name,read_token,acl_update:None,source:source.into(),root,runtime,old_service_root,scm_changed:false,approved:None,runtime_files:None,runtime_work:None,dir,manager,service:old,old_running,new_service:false,start_attempted:false,binding_changed:false,old_binding:None,files:None,work:None,old_registration:None,registration_changed:false,directory_acl:Vec::new(),old_apps:super::installed_app::Snapshot(None),apps_changed:false,created_dirs:Vec::new(),prepare_pins:Vec::new(),_pins:pins};
  match crate::installer_update::run(&mut update){
-  Ok(())=>{update.disarm_memory_rollback();Ok(())}, // awaiting_health, NOT finalized
+  Ok(())=>{update.disarm_memory_rollback();Ok(())}, // Setup committed in elevated session
   Err(crate::installer_update::UpdateFailure::Operation(e))=>{
    update.disarm_memory_rollback();update.prepare_pins.clear();
    if let Some(j)=update.journal.as_mut(){if j.phase!=super::update_install::Phase::RolledBack{

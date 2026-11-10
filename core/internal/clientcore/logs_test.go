@@ -43,7 +43,7 @@ func TestLogsRingBoundaries(t *testing.T) {
 	if count != logCapacity || after != logCapacity+17 || s.NextSeq != after {
 		t.Fatal("pagination failed")
 	}
-	if s = r.read(maxLogSeq, 1); len(s.Entries) != 0 || s.NextSeq != maxLogSeq || s.Dropped != 17 {
+	if s = r.read(maxLogSeq, 1); len(s.Entries) != 1 || s.Entries[0].Seq != 18 || s.NextSeq != 18 || s.Dropped != 17 {
 		t.Fatal("future cursor changed")
 	}
 	for _, e := range []kernel.ClientLogEvent{{Level: "trace", Event: "reload_ok"}, {Level: "info", Event: strings.Repeat("x", 65)}, {Level: "error", Event: "failure", Code: strings.Repeat("x", 65)}} {
@@ -150,7 +150,7 @@ func TestLogsRealRuntimePrivacyAndRaw(t *testing.T) {
 		var m map[string]any
 		json.Unmarshal(b, &m)
 		for k := range m {
-			if k != "seq" && k != "time" && k != "level" && k != "event" && k != "code" {
+			if k != "seq" && k != "time" && k != "level" && k != "event" && k != "code" && k != "meta" {
 				t.Fatal("extra unsafe entry field")
 			}
 		}
