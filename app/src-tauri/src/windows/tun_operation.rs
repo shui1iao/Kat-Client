@@ -8,6 +8,7 @@ impl NetworkController {
   self.tun_fallback_ready.store(false,Ordering::SeqCst);
   self.desired_tun.store(enabled,Ordering::SeqCst);self.tun_safety_stop.store(false,Ordering::SeqCst);
   let result=if enabled{self.tun_enable_unlocked().await}else{self.tun_disable_unlocked().await};
+  if enabled&&result.as_ref().is_err_and(|e|e.code=="WAITING_NETWORK"){self.tun_engaged.store(false,Ordering::SeqCst);*self.tun_error.lock().unwrap()=None;return self.status_unlocked().await;}
   if result.as_ref().is_err_and(|e|e.code=="RECOVERY_PENDING"){self.desired_tun.store(false,Ordering::SeqCst);*self.tun_error.lock().unwrap()=None;if !enabled{return self.status_unlocked().await;}return Err(result.unwrap_err());}
   if let Err(e)=&result{
    self.tun_failure(if enabled{Phase::ExplicitEnable}else{Phase::ExplicitDisable},e,Stage::EnablePrepare);
@@ -90,7 +91,23 @@ impl NetworkController {
   let Some(core)=&self.core else{return None};if !core.elevated(){return None}
   // Read only: no GUI physical refresh/Pause/Replace, no second active writer.
   match core.request("network.tun.status",json!({}),Duration::from_secs(5)).await{
-   Ok(s)=>{self.tun_engaged.store(s["cleanup_complete"]!=true,Ordering::SeqCst);if s["state"]=="error"{self.tun_safety_stop.store(true,Ordering::SeqCst);*self.tun_error.lock().unwrap()=Some("TUN_OPERATION_FAILED".into());let mut failure=Error::new("TUN_OPERATION_FAILED","Owned TUN failed");if let Some(d)=s.get("failure").and_then(|d|serde_json::from_value::<Detail>(d.clone()).ok()){failure=failure.tun(d);}self.tun_failure(Phase::Observation,&failure,Stage::ActiveFailure);if let Err(e)=self.tun_failed_base_unlocked().await{self.tun_failure(Phase::Cleanup,&e,Stage::BaseRecovery);return Some(e);}return Some(failure);}},
+   Ok(s)=>{
+    self.tun_engaged.store(s["cleanup_complete"]!=true,Ordering::SeqCst);
+    if s["state"]=="waiting_network"&&s["cleanup_complete"]==true&&s["enabled"]!=true{
+     match self.tun_enable_unlocked().await{
+      Ok(())=>{*self.tun_error.lock().unwrap()=None;return None;},
+      Err(e)if e.code=="WAITING_NETWORK"=>{self.tun_engaged.store(false,Ordering::SeqCst);*self.tun_error.lock().unwrap()=None;return None;},
+      Err(e)if e.code=="RECOVERY_PENDING"=>{self.desired_tun.store(false,Ordering::SeqCst);*self.tun_error.lock().unwrap()=None;return Some(e);},
+      Err(e)=>{
+       self.tun_safety_stop.store(true,Ordering::SeqCst);*self.tun_error.lock().unwrap()=Some(e.code.clone());
+       self.tun_failure(Phase::Observation,&e,Stage::EnablePrepare);
+       if let Err(recovery)=self.tun_failed_base_unlocked().await.map_err(|r|crate::tun_diagnostics::failure(r,Stage::BaseRecovery)){self.tun_failure(Phase::Cleanup,&recovery,Stage::BaseRecovery);return Some(recovery);}
+       return Some(e);
+      }
+     }
+    }
+    if s["state"]=="error"{self.tun_safety_stop.store(true,Ordering::SeqCst);*self.tun_error.lock().unwrap()=Some("TUN_OPERATION_FAILED".into());let mut failure=Error::new("TUN_OPERATION_FAILED","Owned TUN failed");if let Some(d)=s.get("failure").and_then(|d|serde_json::from_value::<Detail>(d.clone()).ok()){failure=failure.tun(d);}self.tun_failure(Phase::Observation,&failure,Stage::ActiveFailure);if let Err(e)=self.tun_failed_base_unlocked().await{self.tun_failure(Phase::Cleanup,&e,Stage::BaseRecovery);return Some(e);}return Some(failure);}
+   },
    Err(e)=>{if matches!(*core.life().borrow(),crate::supervisor::Life::Exited(_)){self.tun_safety_stop.store(true,Ordering::SeqCst);*self.tun_error.lock().unwrap()=Some(e.code);}}
   }
   None

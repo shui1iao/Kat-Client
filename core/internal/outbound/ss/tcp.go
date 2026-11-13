@@ -22,10 +22,16 @@ import (
 )
 
 const (
-	maxChunk2017 = 0x3fff
-	maxChunk2022 = 0xffff
-	tagSize      = 16
-	maxPadding   = 900
+	maxChunk2017    = 0x3fff
+	maxChunk2022    = 0xffff
+	tagSize         = 16
+	maxPadding      = 900
+	readBufSize2017 = 32 << 10
+	// Holds one max SS2022 ciphertext record (maxChunk2022 + tagSize) plus
+	// response salt/fixed header or length header and lookahead headroom.
+	readBufSize2022 = 68 << 10
+	writeBatch2017  = 4 * maxChunk2017
+	writeBatch2022  = 64 << 10
 )
 
 var (
@@ -188,6 +194,9 @@ func (c *tcpConn) maxChunk() int {
 func (c *tcpConn) appendChunks(w, p []byte) ([]byte, error) {
 	for len(p) > 0 {
 		n := min(len(p), c.maxChunk())
+		if c.s.m.v2022 && len(p) > maxChunk2022 && len(p) <= 2*maxChunk2022 {
+			n = len(p) / 2
+		}
 		var e error
 		if w, e = c.seal(w, []byte{byte(n >> 8), byte(n)}); e != nil {
 			return nil, e
@@ -289,6 +298,12 @@ func (c *tcpConn) Write(p []byte) (int, error) {
 	total := 0
 	if !c.sent {
 		w, n, e := c.header(p)
+		if e == nil && c.s.m.v2022 && len(p) > n && len(p) <= writeBatch2022 {
+			w, e = c.appendChunks(w, p[n:])
+			if e == nil {
+				n = len(p)
+			}
+		}
 		if e == nil {
 			e = writeFull(c.Conn, w)
 		}
@@ -300,7 +315,10 @@ func (c *tcpConn) Write(p []byte) (int, error) {
 		close(c.sentCh)
 		total, p = n, p[n:]
 	}
-	const batch = 4 * maxChunk2017
+	batch := writeBatch2017
+	if c.s.m.v2022 {
+		batch = writeBatch2022
+	}
 	for len(p) > 0 {
 		n := min(len(p), batch)
 		need := n + (n/maxChunk2017+1)*(2+2*tagSize)
@@ -366,7 +384,11 @@ func (c *tcpConn) Read(p []byte) (int, error) {
 	c.rmu.Lock()
 	defer c.rmu.Unlock()
 	if c.br == nil {
-		c.br = bufio.NewReaderSize(c.Conn, 32<<10)
+		n := readBufSize2017
+		if c.s.m.v2022 {
+			n = readBufSize2022
+		}
+		c.br = bufio.NewReaderSize(c.Conn, n)
 	}
 	for len(c.pending) == 0 {
 		if c.rerr != nil {

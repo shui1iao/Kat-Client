@@ -34,12 +34,20 @@ type tunUDPState struct {
 	pcWG     sync.WaitGroup
 }
 type tunNATSession struct {
-	u         *tunUDPState
-	key       tunNATKey
-	pc        outbound.PacketConn
-	chain     []string
-	f         *flow
-	last      atomic.Int64
+	u           *tunUDPState
+	key         tunNATKey
+	pc          outbound.PacketConn
+	chain       []string
+	f           *flow
+	defaultRt   *udpRoute
+	assocID     string
+	policyStr   string
+	lastDecided Address
+	metaDone    bool
+	metaShared  bool
+	metaPeer    netip.AddrPort
+	metaUnvis   bool
+	last        atomic.Int64
 	closed    atomic.Bool
 	closeOnce sync.Once
 	sendMu    sync.Mutex // terminal record waits for the one sender's accounting
@@ -282,15 +290,22 @@ func (u *tunUDPState) send(ctx context.Context, p packet, idle time.Duration) {
 	}
 	v.f.tunProcess(ctx, p.target)
 	v.f.sniffHost(ctx)
-	rt := v.f.udpRouteFor(rule, v.chain)
+	rt := v.defaultRt
+	if rt == nil {
+		rt = v.f.udpRouteFor(rule, v.chain)
+		v.defaultRt = rt
+	}
+	firstWrite := v.f.up.Load() == 0
 	// Install reply accounting BEFORE write: even an immediate peer cannot race it.
 	if ip, pe := netip.ParseAddr(dst.Host); pe == nil {
-		v.routeMu.Lock()
-		if len(v.routes) >= 4096 {
-			clear(v.routes)
-		}
 		peer := netip.AddrPortFrom(ip.Unmap(), dst.Port)
-		v.routes[peer] = rt
+		v.routeMu.Lock()
+		if v.routes[peer] != rt {
+			if len(v.routes) >= 4096 {
+				clear(v.routes)
+			}
+			v.routes[peer] = rt
+		}
 		if !v.firstPeer.IsValid() {
 			v.firstPeer = peer
 		} else if peer != v.firstPeer {
@@ -317,21 +332,27 @@ func (u *tunUDPState) send(ctx context.Context, p packet, idle time.Duration) {
 	v.f.udpUp(rt, n)
 	// ListenPacket can create its physical socket lazily on the first write.
 	// A reconcile during creation may never leave a new socket under an old key.
-	if e = u.bindingCurrent(key); e != nil {
-		v.failure(p.target, "udp_setup_failed", e)
-		v.close()
-		return
+	if firstWrite {
+		if e = u.bindingCurrent(key); e != nil {
+			v.failure(p.target, "udp_setup_failed", e)
+			v.close()
+			return
+		}
 	}
 	v.touch()
-	v.metadata()
 	maxActivity(a)
-	v.f.mu.Lock()
-	v.f.details.DestIP = p.target.Host
-	v.f.mu.Unlock()
-	v.f.udpDecided(p.target, rule, v.chain)
-	// Process evidence is per datagram. Never keep a UDP positive across queries.
-	v.f.tunProcess(ctx, p.target)
-	v.metadata()
+	if v.lastDecided != p.target {
+		v.lastDecided = p.target
+		v.f.mu.Lock()
+		v.f.details.DestIP = p.target.Host
+		v.f.mu.Unlock()
+		v.f.udpDecided(p.target, rule, v.chain)
+	}
+	if firstWrite {
+		v.metadataForce(true)
+	} else {
+		v.metadata()
+	}
 }
 func (u *tunUDPState) binding(name string) (uint64, string, error) {
 	e := u.a.server.cfg.clientEgress
@@ -387,9 +408,13 @@ func (u *tunUDPState) session(ctx context.Context, key tunNATKey, target Address
 		return nil, e
 	}
 	f, fctx := s.newFlow(ctx, "udp", target)
-	v := &tunNATSession{u: u, key: key, pc: pc, chain: h.chain(key.name), f: f, routes: map[netip.AddrPort]*udpRoute{}}
+	assocID := ""
+	if f != nil {
+		assocID = fmt.Sprintf("%d:%d", s.started.UnixNano(), f.id)
+	}
+	v := &tunNATSession{u: u, key: key, pc: pc, chain: h.chain(key.name), f: f, assocID: assocID, policyStr: fmt.Sprintf("rule:%d", key.rule), routes: map[netip.AddrPort]*udpRoute{}}
 	v.touch()
-	v.metadata()
+	v.metadataForce(true)
 	u.mu.Lock()
 	if u.a.ctx.Err() != nil {
 		u.mu.Unlock()
@@ -438,15 +463,35 @@ func (v *tunNATSession) touch() {
 		}
 	}
 }
-func (v *tunNATSession) metadata() {
+func (v *tunNATSession) metadata() { v.metadataForce(false) }
+
+func (v *tunNATSession) metadataForce(force bool) {
+	if v.f == nil {
+		return
+	}
+	v.routeMu.Lock()
+	shared, peer, unvisited := v.shared, v.replyPeer, v.unvisited
+	changed := force || !v.metaDone || v.metaShared != shared || v.metaPeer != peer || v.metaUnvis != unvisited
+	if changed {
+		v.metaDone, v.metaShared, v.metaPeer, v.metaUnvis = true, shared, peer, unvisited
+	}
+	v.routeMu.Unlock()
+	if !changed {
+		return
+	}
 	var locals []string
 	if m, ok := v.pc.(interface{ LocalEndpoints() []string }); ok {
 		locals = m.LocalEndpoints()
 	}
-	v.routeMu.Lock()
-	shared, peer, unvisited := v.shared, v.replyPeer, v.unvisited
-	v.routeMu.Unlock()
-	info := &UDPAssociationInfo{ID: fmt.Sprintf("%d:%d", v.f.s.started.UnixNano(), v.f.id), Policy: fmt.Sprintf("rule:%d", v.key.rule), Outbound: v.key.name, Epoch: v.key.epoch, Binding: v.key.binding, LocalEndpoints: locals, Shared: shared, UnmatchedPeer: unvisited}
+	id := v.assocID
+	if id == "" {
+		id = fmt.Sprintf("%d:%d", v.f.s.started.UnixNano(), v.f.id)
+	}
+	policy := v.policyStr
+	if policy == "" {
+		policy = fmt.Sprintf("rule:%d", v.key.rule)
+	}
+	info := &UDPAssociationInfo{ID: id, Policy: policy, Outbound: v.key.name, Epoch: v.key.epoch, Binding: v.key.binding, LocalEndpoints: locals, Shared: shared, UnmatchedPeer: unvisited}
 	if peer.IsValid() {
 		info.ReplyPeer = peer.String()
 	}
@@ -464,8 +509,13 @@ func (v *tunNATSession) read() string {
 	s := a.server
 	idle := s.cfg.Limits.UDPIdle.value()
 	b := make([]byte, 65535)
+	var armedDeadline time.Time
 	for {
-		_ = v.pc.SetReadDeadline(time.Unix(0, v.last.Load()).Add(idle))
+		targetDeadline := time.Unix(0, v.last.Load()).Add(idle)
+		if armedDeadline.IsZero() || targetDeadline.Sub(armedDeadline) > idle/4 || time.Until(armedDeadline) < idle/4 {
+			armedDeadline = targetDeadline
+			_ = v.pc.SetReadDeadline(armedDeadline)
+		}
 		n, src, e := v.pc.ReadFrom(b)
 		if e != nil {
 			if timeoutError(e) {

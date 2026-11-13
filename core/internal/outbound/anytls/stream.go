@@ -16,8 +16,112 @@ const (
 	// reader stops reading the TLS connection until the application reads:
 	// plain TCP backpressure on the stream's own (exclusive) session.
 	maxStreamBuffer = 1024 << 10
-	writeChunk      = maxFrame
+	// Align per-request write chunk with the 64 KiB relay buffer so a 65536-byte
+	// write is framed in a single writeData request instead of splitting into
+	// 65535 + 1 lockstep requests; each PSH frame remains bounded by maxFrame (65535).
+	writeChunk = 64 << 10
+
+	// Minimum PSH payload size eligible for the bounded receive buffer pool.
+	// Smaller frames use exact-size allocations so tiny frames never pin larger
+	// backing arrays while queued under maxStreamBuffer.
+	minPooledFrame = 128
+	// Hard upper bounds on pooled receive buffers across the process.
+	maxRecvPoolBytes = 2 << 20
+	maxRecvClassSlot = 32
 )
+
+var recvClassCaps = [...]int{
+	512,
+	2048,
+	8192,
+	16384,
+	32768,
+	maxFrame,
+}
+
+var recvPool struct {
+	mu       sync.Mutex
+	classes  [len(recvClassCaps)][][]byte
+	lastUsed [len(recvClassCaps)]uint64
+	seq      uint64
+	bytes    int
+}
+
+func recvClassIndex(n int) int {
+	if n < minPooledFrame || n > maxFrame {
+		return -1
+	}
+	for i, c := range recvClassCaps {
+		if n <= c {
+			return i
+		}
+	}
+	return -1
+}
+
+func acquireRecvBuf(n int) []byte {
+	idx := recvClassIndex(n)
+	if idx < 0 {
+		return make([]byte, n)
+	}
+	c := recvClassCaps[idx]
+	recvPool.mu.Lock()
+	recvPool.seq++
+	recvPool.lastUsed[idx] = recvPool.seq
+	slots := recvPool.classes[idx]
+	if last := len(slots) - 1; last >= 0 {
+		b := slots[last]
+		slots[last] = nil
+		recvPool.classes[idx] = slots[:last]
+		recvPool.bytes -= c
+		recvPool.mu.Unlock()
+		return b[:n]
+	}
+	recvPool.mu.Unlock()
+	return make([]byte, n, c)
+}
+
+func releaseRecvBuf(b []byte) {
+	idx := recvClassIndex(len(b))
+	if idx < 0 || cap(b) != recvClassCaps[idx] {
+		return
+	}
+	c := recvClassCaps[idx]
+	b = b[:c]
+	recvPool.mu.Lock()
+	recvPool.seq++
+	recvPool.lastUsed[idx] = recvPool.seq
+	if len(recvPool.classes[idx]) < maxRecvClassSlot {
+		for recvPool.bytes+c > maxRecvPoolBytes {
+			victim := -1
+			for i := range recvPool.classes {
+				if i == idx || len(recvPool.classes[i]) == 0 {
+					continue
+				}
+				if victim < 0 || recvPool.lastUsed[i] < recvPool.lastUsed[victim] {
+					victim = i
+				}
+			}
+			if victim < 0 {
+				break
+			}
+			vslots := recvPool.classes[victim]
+			vcap := recvClassCaps[victim]
+			for len(vslots) > 0 && recvPool.bytes+c > maxRecvPoolBytes {
+				last := len(vslots) - 1
+				vslots[last] = nil
+				vslots = vslots[:last]
+				recvPool.bytes -= vcap
+			}
+			recvPool.classes[victim] = vslots
+		}
+		if recvPool.bytes+c <= maxRecvPoolBytes {
+			recvPool.classes[idx] = append(recvPool.classes[idx], b)
+			recvPool.bytes += c
+		}
+	}
+	recvPool.mu.Unlock()
+}
 
 var errClosedByPeer = errors.New("anytls: stream closed by server")
 
@@ -37,6 +141,7 @@ type stream struct {
 	inHead   int
 	off      int
 	inBytes  int
+	pooled   bool
 	rerr     error // terminal read state (io.EOF after FIN, or failure)
 	werr     error // terminal write state
 	acked    bool
@@ -161,13 +266,55 @@ func (st *stream) acknowledge(msg []byte) {
 // session is exclusive to this stream, so no other stream is held up and
 // memory stays bounded by maxStreamBuffer plus one frame.
 func (st *stream) push(b []byte) {
+	st.enqueueIn(b, false)
+}
+
+func (st *stream) pushPooled(b []byte) {
+	st.enqueueIn(b, true)
+}
+
+// waitSpace blocks until the stream's receive window can accept a frame of n
+// bytes, the stream stops accepting incoming frames, or the session fails.
+func (st *stream) waitSpace(n int) (ok bool, sessionDone bool) {
+	for {
+		st.mu.Lock()
+		closed := st.closed || st.rerr != nil
+		ready := !closed && (st.inBytes == 0 || st.inBytes+n <= maxStreamBuffer)
+		st.mu.Unlock()
+		if closed {
+			select {
+			case <-st.s.done:
+				return false, true
+			default:
+				return false, false
+			}
+		}
+		if ready {
+			return true, false
+		}
+		select {
+		case <-st.space:
+		case <-st.closing:
+		case <-st.s.done:
+			return false, true
+		}
+	}
+}
+
+func (st *stream) enqueueIn(b []byte, pooled bool) {
 	for {
 		st.mu.Lock()
 		if st.closed || st.rerr != nil {
 			st.mu.Unlock()
+			if pooled {
+				releaseRecvBuf(b)
+			}
 			return
 		}
 		if st.inBytes == 0 || st.inBytes+len(b) <= maxStreamBuffer {
+			if pooled {
+				st.pooled = true
+			}
 			if st.inHead > 0 && st.inHead == len(st.in) {
 				st.in = st.in[:0]
 				st.inHead = 0
@@ -186,7 +333,11 @@ func (st *stream) push(b []byte) {
 		st.mu.Unlock()
 		select {
 		case <-st.space:
+		case <-st.closing:
 		case <-st.s.done:
+			if pooled {
+				releaseRecvBuf(b)
+			}
 			return
 		}
 	}
@@ -205,6 +356,7 @@ func (st *stream) remoteClose(err error) {
 		st.in = nil
 		st.inHead = 0
 	}
+	signal(st.space)
 	st.mu.Unlock()
 	signal(st.rch)
 	st.detach(false)
@@ -223,6 +375,7 @@ func (st *stream) abort(err error) {
 		st.in = nil
 		st.inHead = 0
 	}
+	signal(st.space)
 	st.mu.Unlock()
 	signal(st.rch)
 	st.detach(false)
@@ -264,26 +417,41 @@ func (st *stream) Read(p []byte) (int, error) {
 				st.mu.Unlock()
 				return 0, nil
 			}
-			b := st.in[st.inHead]
-			n := copy(p, b[st.off:])
-			st.off += n
-			if st.off == len(b) {
-				st.in[st.inHead] = nil
-				st.inHead++
-				st.off = 0
-				st.inBytes -= len(b)
-				if st.inHead == len(st.in) {
-					if st.rerr != nil {
-						st.in = nil
-					} else {
-						st.in = st.in[:0]
-					}
-					st.inHead = 0
+			total := 0
+			drained := false
+			for len(p) > 0 && st.inHead < len(st.in) {
+				b := st.in[st.inHead]
+				if total > 0 && st.off == 0 && len(p) < len(b) {
+					break
 				}
+				n := copy(p, b[st.off:])
+				total += n
+				p = p[n:]
+				st.off += n
+				if st.off == len(b) {
+					st.in[st.inHead] = nil
+					if st.pooled {
+						releaseRecvBuf(b)
+					}
+					st.inHead++
+					st.off = 0
+					st.inBytes -= len(b)
+					drained = true
+				}
+			}
+			if st.inHead == len(st.in) {
+				if st.rerr != nil {
+					st.in = nil
+				} else {
+					st.in = st.in[:0]
+				}
+				st.inHead = 0
+			}
+			if drained {
 				signal(st.space)
 			}
 			st.mu.Unlock()
-			return n, nil
+			return total, nil
 		}
 		if st.rerr != nil {
 			st.in = nil
@@ -352,10 +520,36 @@ func (st *stream) writeData(data []byte) error {
 		st.wbuf = make([]byte, 0, need)
 	}
 	wire := st.wbuf[:0]
-	for len(data) > 0 {
-		n := min(len(data), maxFrame)
-		wire = appendFrame(wire, cmdPSH, st.id, data[:n])
-		data = data[n:]
+	if len(data) == 64<<10 {
+		// Split an exact 64 KiB relay write into two 32 KiB PSH frames rather
+		// than 65535 + 1 so neither frame is a 1-byte micro-frame while total
+		// wire overhead (2 * 7B headers) is identical.
+		const half = 32 << 10
+		wire = appendFrame(wire, cmdPSH, st.id, data[:half])
+		wire = appendFrame(wire, cmdPSH, st.id, data[half:])
+	} else {
+		for len(data) > 0 {
+			n := min(len(data), maxFrame)
+			wire = appendFrame(wire, cmdPSH, st.id, data[:n])
+			data = data[n:]
+		}
+	}
+	if !st.wd.active() {
+		ok, err := s.tryAcquireInlineWrite()
+		if err != nil {
+			return err
+		}
+		if ok {
+			if e := st.writeState(); e != nil {
+				s.releaseInlineWrite()
+				return e
+			}
+			if st.wd.active() {
+				s.releaseInlineWrite()
+			} else {
+				return s.writeInline(wire)
+			}
+		}
 	}
 	req := &writeReq{wire: wire, done: make(chan error, 1)}
 	if e := s.enqueue(req); e != nil {
@@ -392,12 +586,23 @@ func (st *stream) Close() error {
 		return nil
 	}
 	st.closed = true
+	in := st.in
+	head := st.inHead
+	pooled := st.pooled
 	st.in = nil
 	st.inHead = 0
 	st.off = 0
 	st.inBytes = 0
 	close(st.closing)
 	st.mu.Unlock()
+	if pooled {
+		for i := head; i < len(in); i++ {
+			if in[i] != nil {
+				releaseRecvBuf(in[i])
+				in[i] = nil
+			}
+		}
+	}
 	signal(st.space)
 	st.rd.stop()
 	st.wd.stop()
@@ -423,6 +628,7 @@ type deadline struct {
 	ch      chan struct{}
 	timer   *time.Timer
 	gen     uint64
+	hasSet  bool
 	isEnded bool
 }
 
@@ -441,8 +647,10 @@ func (d *deadline) set(t time.Time) {
 		d.isEnded = false
 	}
 	if t.IsZero() {
+		d.hasSet = false
 		return
 	}
+	d.hasSet = true
 	wait := time.Until(t)
 	if wait <= 0 {
 		close(d.ch)
@@ -480,4 +688,10 @@ func (d *deadline) expired() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.isEnded
+}
+
+func (d *deadline) active() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.hasSet
 }

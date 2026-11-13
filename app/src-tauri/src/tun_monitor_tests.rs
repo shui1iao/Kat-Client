@@ -147,7 +147,14 @@ mod inner {
   async fn tun_enable_unlocked(&self)->Result<()>{
    self.enables.fetch_add(1,Ordering::SeqCst);self.event("enable_before_commit");
    let gate=self.commit_gate.lock().unwrap().take();if let Some(g)=gate{g.await.unwrap();}
-   if let Some(code)=*self.enable_error.lock().unwrap(){return Err(Error::new(code,"test I/O result"));}
+   if let Some(code)=*self.enable_error.lock().unwrap(){
+    if code=="WAITING_NETWORK"{
+     self.core_state.elevated.store(true,Ordering::SeqCst);
+     *self.core_state.tun_state.lock().unwrap()="waiting_network";
+     self.core_state.cleanup_complete.store(true,Ordering::SeqCst);
+    }
+    return Err(Error::new(code,"test I/O result"));
+   }
    self.active.store(true,Ordering::SeqCst);self.owned.store(true,Ordering::SeqCst);
    self.tun_engaged.store(true,Ordering::SeqCst);
    self.core_state.elevated.store(true,Ordering::SeqCst);
@@ -250,4 +257,34 @@ fn production_uses_the_exact_shared_impl_and_keeps_io_security_budgets(){
  for required in ["Duration::from_secs(15)","Duration::from_secs(5)","Duration::from_secs(50)","Duration::from_secs(55)","Duration::from_secs(70)","require_installed()?","ensure_core_mutation_settled().await?","network.tun.prepare","network.tun.commit","network.tun.disable","network.tun.status"]{
   assert!(client.contains(required)||ops.contains(required),"preserve production I/O/security condition: {required}");
  }
+}
+
+#[tokio::test]
+async fn waiting_network_keeps_desired_intent_recovers_on_monitor_and_allows_cancel(){
+ let c=NetworkController::fixture(false,false);
+ *c.enable_error.lock().unwrap()=Some("WAITING_NETWORK");
+ let status=finishes(c.tun_set(true)).await.expect("pure WAITING_NETWORK must be accepted as waiting intent");
+ assert!(!status.enabled);
+ assert!(c.desired_tun.load(Ordering::SeqCst));
+ assert!(!c.tun_safety_stop.load(Ordering::SeqCst));
+ assert!(c.tun_error.lock().unwrap().is_none());
+ assert!(!c.tun_engaged.load(Ordering::SeqCst));
+ // Still offline on next monitor tick -> stays waiting without error or safety stop.
+ assert!(finishes(c.run_monitor_once()).await.is_none());
+ assert!(c.desired_tun.load(Ordering::SeqCst));
+ assert!(!c.tun_safety_stop.load(Ordering::SeqCst));
+ // Network returns -> monitor_once completes prepare/commit on the existing elevated core.
+ *c.enable_error.lock().unwrap()=None;
+ assert!(finishes(c.run_monitor_once()).await.is_none());
+ assert!(c.desired_tun.load(Ordering::SeqCst)&&c.active.load(Ordering::SeqCst)&&c.tun_engaged.load(Ordering::SeqCst));
+ // User disable while waiting_network cancels intent and prevents later monitor re-enable.
+ let c2=NetworkController::fixture(false,false);
+ *c2.enable_error.lock().unwrap()=Some("WAITING_NETWORK");
+ finishes(c2.tun_set(true)).await.unwrap();
+ assert!(c2.desired_tun.load(Ordering::SeqCst));
+ *c2.enable_error.lock().unwrap()=None;
+ finishes(c2.tun_set(false)).await.unwrap();
+ assert!(!c2.desired_tun.load(Ordering::SeqCst));
+ assert!(finishes(c2.run_monitor_once()).await.is_none());
+ assert!(!c2.active.load(Ordering::SeqCst));
 }

@@ -11,6 +11,16 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )
 
+type wintunRingFullError interface {
+	error
+	WintunRingFull() bool
+}
+
+func isWintunRingFull(err error) bool {
+	var target wintunRingFullError
+	return errors.As(err, &target) && target.WintunRingFull()
+}
+
 func (r *Runtime) readPackets() {
 	scratch := make([]byte, 65535)
 	for {
@@ -26,10 +36,9 @@ func (r *Runtime) readPackets() {
 			r.dropped.Add(1)
 			continue
 		}
-		b := make([]byte, n)
-		copy(b, scratch[:n])
-		p := stack.NewPacketBuffer(stack.PacketBufferOptions{Payload: buffer.MakeWithData(b)})
-		switch header.IPVersion(b) {
+		pkt := scratch[:n]
+		p := stack.NewPacketBuffer(stack.PacketBufferOptions{Payload: buffer.MakeWithData(pkt)})
+		switch header.IPVersion(pkt) {
 		case header.IPv4Version:
 			r.link.InjectInbound(header.IPv4ProtocolNumber, p)
 		case header.IPv6Version:
@@ -50,17 +59,40 @@ func (r *Runtime) writePackets() {
 			}
 			return
 		}
-		n := 0
-		for _, s := range p.AsSlices() {
-			n += copy(wbuf[n:], s)
-		}
+		n := copyPacket(wbuf, p)
 		r.writeMu.Lock()
 		e := r.cfg.Device.WritePacket(wbuf[:n])
 		r.writeMu.Unlock()
 		p.DecRef()
 		if e != nil {
+			if isWintunRingFull(e) {
+				r.dropped.Add(1)
+				continue
+			}
 			r.fatal("TUN_DEVICE_WRITE_FAILED", e)
 			return
 		}
 	}
+}
+func copyPacket(dst []byte, p *stack.PacketBuffer) int {
+	vl, off := p.AsViewList()
+	rem := p.Size()
+	n := 0
+	for v := vl.Front(); v != nil && rem > 0 && n < len(dst); v = v.Next() {
+		s := v.AsSlice()
+		if off >= len(s) {
+			off -= len(s)
+			continue
+		}
+		if off > 0 {
+			s = s[off:]
+			off = 0
+		}
+		if len(s) > rem {
+			s = s[:rem]
+		}
+		n += copy(dst[n:], s)
+		rem -= len(s)
+	}
+	return n
 }

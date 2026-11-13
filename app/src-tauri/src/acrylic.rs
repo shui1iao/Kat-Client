@@ -3,13 +3,70 @@
 //! Tauri 2.12.5 discards window-vibrancy's native result, so set_effects() alone
 //! must never be treated as evidence that Acrylic was enabled.
 
+pub(crate) const MAIN_WINDOW_HIDDEN_EVENT: &str = "main-window-hidden";
+
 fn allowed(transparency: Option<u32>, high_contrast: Option<bool>, composition: Option<bool>, supported: bool) -> bool {
     transparency == Some(1) && high_contrast == Some(false) && composition == Some(true) && supported
 }
 
+/// Conservative main-window hidden projection: `!(visible && !minimized)`.
+/// If reading `is_visible` or `is_minimized` fails (`None`), conservatively treat
+/// the window as visible (`false`) so rendering and backdrop refresh remain active.
+/// Focus state is never consulted.
+pub(crate) fn main_window_hidden(visible: Option<bool>, minimized: Option<bool>) -> bool {
+    match (visible, minimized) {
+        (Some(visible), Some(minimized)) => !visible || minimized,
+        _ => false,
+    }
+}
+
+pub(crate) fn take_hidden_change(last_hidden: &mut Option<bool>, hidden: bool) -> Option<bool> {
+    if *last_hidden == Some(hidden) {
+        None
+    } else {
+        *last_hidden = Some(hidden);
+        Some(hidden)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+struct Snapshot { enabled: bool, focused: bool, theme: &'static str, reason: &'static str }
+
+#[derive(Default)]
+struct State { dark: bool, ready: bool, hidden: bool, pending_force: bool, applied_dark: Option<bool>, last: Option<Snapshot> }
+
+impl State {
+    fn request_theme(&mut self, dark: bool) {
+        self.dark = dark;
+        self.ready = true;
+        self.pending_force = true;
+    }
+
+    fn begin_refresh(&mut self, hidden: bool, force: bool) -> Option<bool> {
+        if hidden {
+            self.hidden = true;
+            self.pending_force |= force;
+            None
+        } else {
+            let resumed = std::mem::take(&mut self.hidden);
+            let pending = std::mem::take(&mut self.pending_force);
+            Some(force || resumed || pending)
+        }
+    }
+
+    fn should_emit(&mut self, force: bool, snapshot: Snapshot) -> bool {
+        if force || self.last != Some(snapshot) {
+            self.last = Some(snapshot);
+            true
+        } else {
+            false
+        }
+    }
+}
+
 #[cfg(all(windows, feature = "desktop"))]
 mod native {
-    use super::allowed;
+    use super::{allowed, main_window_hidden, Snapshot, State};
     use std::{ffi::c_void, mem::size_of, sync::Mutex, time::Duration};
     use tauri::{Emitter, Manager, WebviewWindow, window::{Color, Effect}, utils::config::WindowEffectsConfig};
     use windows_sys::Win32::{Foundation::HWND, System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD}, UI::WindowsAndMessaging::{SystemParametersInfoW, SPI_GETHIGHCONTRAST}};
@@ -31,10 +88,6 @@ mod native {
     #[repr(C)]
     struct HighContrast { size: u32, flags: u32, scheme: *mut u16 }
 
-    #[derive(Clone, Copy, PartialEq, Eq, serde::Serialize)]
-    struct Snapshot { enabled: bool, focused: bool, theme: &'static str, reason: &'static str }
-    #[derive(Default)]
-    struct State { dark: bool, ready: bool, applied_dark: Option<bool>, last: Option<Snapshot> }
     #[derive(Default)]
     struct Controller(Mutex<State>);
 
@@ -66,8 +119,10 @@ mod native {
     fn opaque(dark: bool) -> Color { if dark { Color(22,31,48,255) } else { Color(245,246,248,255) } }
 
     fn refresh(window: &WebviewWindow, force: bool) {
+        let hidden = main_window_hidden(window.is_visible().ok(), window.is_minimized().ok());
         let controller = window.state::<Controller>();
         let mut state = controller.0.lock().unwrap();
+        let Some(force) = state.begin_refresh(hidden, force) else { return; };
         let theme = if state.dark { "dark" } else { "light" };
         let hwnd = window.hwnd().ok().map(|h| h.0);
         let current = hwnd.and_then(backdrop);
@@ -97,7 +152,7 @@ mod native {
         } else {
             // An opaque WebView is also the native safety net: no transparent
             // holes even while the DOM receives the disabled event.
-            if attempted || state.last.is_none_or(|s| s.enabled || s.theme != theme) {
+            if force || attempted || state.last.is_none_or(|s| s.enabled || s.theme != theme) {
                 let _ = window.set_background_color(Some(opaque(state.dark)));
             }
             if attempted || state.applied_dark.is_some() {
@@ -107,29 +162,37 @@ mod native {
             state.applied_dark = None;
         }
         let snapshot = Snapshot { enabled, focused: window.is_focused().unwrap_or(false), theme, reason };
-        if force || state.last != Some(snapshot) {
+        if state.should_emit(force, snapshot) {
             // Only fixed, typed state goes to the existing local main WebView;
             // no eval, user scripts, paths, window labels, or additional IPC ACL.
             let _ = window.emit_to("main", "native-backdrop", snapshot);
-            state.last = Some(snapshot);
         }
     }
 
     pub fn request(window: &WebviewWindow, dark: bool) -> tauri::Result<()> {
         let w = window.clone();
         window.run_on_main_thread(move || {
-            { let c = w.state::<Controller>(); let mut s = c.0.lock().unwrap(); s.dark = dark; s.ready = true; }
+            { let c = w.state::<Controller>(); let mut s = c.0.lock().unwrap(); s.request_theme(dark); }
             refresh(&w, true);
         })
     }
+    pub fn sync_visibility(window: &WebviewWindow, hidden: bool) {
+        if hidden {
+            window.state::<Controller>().0.lock().unwrap().hidden = true;
+            return;
+        }
+        let w = window.clone();
+        let _ = window.run_on_main_thread(move || refresh(&w, true));
+    }
     pub fn install(window: &WebviewWindow) {
         let app = window.app_handle();
-        app.manage(Controller::default());
+        let initial_hidden = main_window_hidden(window.is_visible().ok(), window.is_minimized().ok());
+        app.manage(Controller(Mutex::new(State { hidden: initial_hidden, ..Default::default() })));
         // Stay opaque until the page has registered its listener and supplied
         // its *actual* theme (kat.theme itself remains frontend-owned).
         let _ = window.set_background_color(Some(opaque(true)));
         window.on_window_event({ let a = app.clone(); move |event| {
-            if matches!(event, tauri::WindowEvent::Focused(_) | tauri::WindowEvent::ThemeChanged(_)) {
+            if matches!(event, tauri::WindowEvent::Focused(_) | tauri::WindowEvent::ThemeChanged(_) | tauri::WindowEvent::Resized(_)) {
                 if let Some(w) = a.get_webview_window("main") { refresh(&w, false); }
             }
         }});
@@ -148,11 +211,11 @@ mod native {
     }
 }
 #[cfg(all(windows, feature = "desktop"))]
-pub use native::{install, request};
+pub use native::{install, request, sync_visibility};
 
 #[cfg(test)]
 mod tests {
-    use super::allowed;
+    use super::{allowed, main_window_hidden, take_hidden_change, Snapshot, State};
     #[test]
     fn acrylic_needs_every_positive_system_gate() {
         assert!(allowed(Some(1), Some(false), Some(true), true));
@@ -160,5 +223,52 @@ mod tests {
         for contrast in [None, Some(true)] { assert!(!allowed(Some(1), contrast, Some(true), true)); }
         for composition in [None, Some(false)] { assert!(!allowed(Some(1), Some(false), composition, true)); }
         assert!(!allowed(Some(1), Some(false), Some(true), false));
+    }
+
+    #[test]
+    fn visibility_projection_is_conservative_on_errors_and_never_uses_focus() {
+        assert!(!main_window_hidden(Some(true), Some(false)));
+        assert!(main_window_hidden(Some(false), Some(false)));
+        assert!(main_window_hidden(Some(true), Some(true)));
+        assert!(main_window_hidden(Some(false), Some(true)));
+        for (vis, min) in [(None, Some(false)), (None, Some(true)), (Some(false), None), (Some(true), None), (None, None)] {
+            assert!(!main_window_hidden(vis, min), "read failure ({vis:?}, {min:?}) must stay conservative/drawable");
+        }
+        let mut last = None;
+        assert_eq!(take_hidden_change(&mut last, false), Some(false));
+        assert_eq!(take_hidden_change(&mut last, false), None);
+        assert_eq!(take_hidden_change(&mut last, true), Some(true));
+        assert_eq!(take_hidden_change(&mut last, true), None);
+        assert_eq!(take_hidden_change(&mut last, false), Some(false));
+    }
+
+    #[test]
+    fn acrylic_hidden_skips_refresh_preserves_requested_theme_and_forces_show_emit() {
+        let mut state = State::default();
+        state.request_theme(true);
+        assert!(state.ready && state.dark);
+        let snap_dark = Snapshot { enabled: true, focused: true, theme: "dark", reason: "enabled" };
+        let force = state.begin_refresh(false, false).expect("visible should refresh");
+        assert!(force, "initial theme request must force refresh");
+        assert!(state.should_emit(force, snap_dark));
+        assert!(!state.should_emit(false, snap_dark));
+
+        // Hidden/minimized skips refresh completely.
+        assert_eq!(state.begin_refresh(true, false), None);
+        assert!(state.hidden);
+
+        // Theme request while hidden is retained and forces the next visible refresh.
+        state.request_theme(false);
+        assert!(state.ready && !state.dark);
+        assert_eq!(state.begin_refresh(true, true), None);
+
+        // Restoring visibility forces refresh even when entered via a non-force tick/event,
+        // and does not drop native-backdrop even if the snapshot matches `last`.
+        state.request_theme(true);
+        assert_eq!(state.begin_refresh(true, true), None);
+        let resume_force = state.begin_refresh(false, false).expect("restored window must refresh");
+        assert!(resume_force, "restoring from hidden must force re-verification");
+        assert!(state.should_emit(resume_force, snap_dark), "forced resume must emit native-backdrop");
+        assert_eq!(state.begin_refresh(false, false), Some(false));
     }
 }

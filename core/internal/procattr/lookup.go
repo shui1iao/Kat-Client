@@ -78,6 +78,12 @@ func (o *Origin) lookup(ctx context.Context) Identity {
 	o.once.Do(func() { o.identity = lookupLocal(ctx, o.query) })
 	return o.identity
 }
+func (o *Origin) Lookup(ctx context.Context) Identity {
+	if o == nil {
+		return unavailableIdentity("unknown")
+	}
+	return o.lookup(ctx)
+}
 
 type key struct{ source, destination netip.AddrPort }
 

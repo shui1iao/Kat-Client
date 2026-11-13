@@ -121,6 +121,7 @@ impl NetworkController {
    let status=core.request("network.tun.commit",json!({"token":token}),Duration::from_secs(70)).await.map_err(|e|crate::tun_diagnostics::failure(e,Stage::CoreCommit))?;
    if status["enabled"]!=true{return Err(Error::new("TUN_NOT_READY","Core TUN route commit was not confirmed"))};Ok(())
   }.await;
+  if result.as_ref().is_err_and(|e|e.code=="WAITING_NETWORK"){self.tun_engaged.store(false,Ordering::SeqCst);*self.tun_error.lock().unwrap()=None;return self.status_unlocked().await;}
   if result.as_ref().is_err_and(|e|e.code=="RECOVERY_PENDING"){self.desired_tun.store(false,Ordering::SeqCst);*self.tun_error.lock().unwrap()=None;return Err(result.unwrap_err());}
   if let Err(e)=&result{
    self.tun_failure(Phase::ExplicitEnable,e,Stage::EnablePrepare);

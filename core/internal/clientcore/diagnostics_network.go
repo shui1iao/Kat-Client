@@ -382,6 +382,15 @@ func (h *Host) readDiagnosticCache(kind string) *diagnosticReply {
 	return &r
 }
 
+func removedUnlockService(name string) bool {
+	switch name {
+	case "TikTok", "YouTube", "YouTube Premium", "Claude", "Disney+":
+		return true
+	default:
+		return false
+	}
+}
+
 // Read-only compatibility: omit removed services without rewriting a cache
 // file, reclassifying other rows, changing timestamps or starting any request.
 func visibleDiagnosticCache(kind string, r *diagnosticReply) *diagnosticReply {
@@ -389,11 +398,11 @@ func visibleDiagnosticCache(kind string, r *diagnosticReply) *diagnosticReply {
 		return r
 	}
 	for _, row := range r.Items {
-		if row.Name == "TikTok" || row.Name == "YouTube Premium" {
+		if removedUnlockService(row.Name) {
 			out := *r
 			out.Items = make([]diagnosticRow, 0, len(r.Items))
 			for _, item := range r.Items {
-				if item.Name != "TikTok" && item.Name != "YouTube Premium" {
+				if !removedUnlockService(item.Name) {
 					out.Items = append(out.Items, item)
 				}
 			}

@@ -4,7 +4,7 @@ use serde_json::Value;
 pub const MAX_FRAME: usize = 2 * 1024 * 1024;
 pub const MAX_INFLIGHT: usize = 16;
 pub const PUBLIC_METHODS: &[&str] = &[
-    "rules.test", "hello", "document.get", "document.validate", "document.apply",
+    "routing.previewTarget", "hello", "document.get", "document.validate", "document.apply",
     "core.start", "core.stop", "core.reload", "status", "probe.node", "probe.group",
     "import.parse", "subscription.preview", "subscription.cancel", "subscription.select", "subscription.status", "subscription.migrate", "logs.get",
     "diagnostics.network", "icon.cached", "icon.get", "group.filter_preview", "probe.all", "connections.close", "connections.list", "logs.connections", "logs.kernel", "dns.query", "dns.cache.clear", "resources.list", "resources.refresh",

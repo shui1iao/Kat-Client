@@ -44,7 +44,7 @@ export function SideControls({ c }: { c: Client }) {
         <button className={'tgl net-row' + (sysShown ? ' on' : '')} disabled={!sys || busy || !!netPending || (!sys.error && !sys.enabled && !sysReady)} onClick={() => toggle('sysproxy', !sys?.enabled)} aria-pressed={sysShown} data-toggle="sysproxy" {...tip(sysError||'系统代理',!sysError)}>
           <Icon name="monitor" size={17} /><span className="tg-txt"><b>系统代理</b>{sysError&&<span className="net-warning"><Icon name="alert" size={14}/></span>}</span><Switch on={sysShown} />
         </button>
-        <button className={'tgl net-row' + (tunShown ? ' on' : '')} disabled={!tun || busy || !!netPending || (!tun.error && !tun.enabled && (!tunReady || !service?.installed))} onClick={() => toggle('tun', !(tun?.intent??tun?.enabled))} aria-pressed={tunShown} data-toggle="tun" {...tip(tunError||stateLabel(tunState),!tunError)}>
+        <button className={'tgl net-row' + (tunShown ? ' on' : '')} disabled={!tun || busy || !!netPending || (!tun.error && !tun.intent && !tun.enabled && (!tunReady || !service?.installed))} onClick={() => toggle('tun', !(tun?.intent??tun?.enabled))} aria-pressed={tunShown} data-toggle="tun" {...tip(tunError||stateLabel(tunState),!tunError)}>
           <Icon name="shield" size={17} /><span className="tg-txt"><b>TUN</b>{['cleanup_pending','waiting_network','recovering','starting','stopping'].includes(tunState??'')&&<span>{stateLabel(tunState)}</span>}{tunError&&<span className="net-warning"><Icon name="alert" size={14}/></span>}</span><Switch on={tunShown} />
         </button>
       </div>

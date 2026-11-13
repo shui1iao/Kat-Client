@@ -11,8 +11,18 @@ var tupleSlots = make(chan struct{}, 4)
 
 // LookupTuple accepts only the trusted in-core original tuple. Native table
 // APIs cannot be canceled mid-syscall: the slot stays owned until they return,
-// while forwarding receives unknown within budget. No queued query or cache.
-func LookupTuple(ctx context.Context, q Query) Identity { return budgetTuple(ctx, q, lookupLocal) }
+// while forwarding receives unknown within budget.
+func LookupTuple(ctx context.Context, q Query) Identity {
+	if ctx.Err() != nil {
+		return unavailableIdentity("unknown")
+	}
+	if id, ok := cachedUDPTuple(q); ok {
+		return id
+	}
+	id := budgetTuple(ctx, q, lookupLocal)
+	storeUDPTuple(q, id)
+	return id
+}
 func budgetTuple(ctx context.Context, q Query, lookup func(context.Context, Query) Identity) Identity {
 	if ctx.Err() != nil {
 		return unavailableIdentity("unknown")

@@ -765,11 +765,9 @@ button.ov-k:hover { color: var(--accent); }
   .tb-ctrl { margin-left: 0; }
   .ov-head { grid-template-columns: minmax(0,1fr) auto; }
   .ov-stats { grid-column: 1 / -1; grid-row: 2; }
-  .dash > .chart-card, .dash > .active-connections-card { grid-column: span 12; }
 }
 @media (max-width: 900px) {
   .tb-ctrl { flex-wrap: wrap; }
-  .dash > .span-6 { grid-column: span 12; }
   .pc-head { grid-template-columns: minmax(0,1fr) auto auto; }
   .pc-now { grid-row: 2; grid-column: 1 / -1; }
   .pc-count { display: none; }

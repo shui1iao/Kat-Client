@@ -18,12 +18,23 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 	"gvisor.dev/gvisor/pkg/waiter"
 	"net/netip"
+	"runtime"
 )
 
 func (r *Runtime) initStack() error {
 	r.link = channel.New(4096, MTU, "")
 	s := stack.New(stack.Options{NetworkProtocols: []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol}, TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol, icmp.NewProtocol4, icmp.NewProtocol6}})
 	r.stack = s
+	// On Windows local Wintun rings, ACK/SACK timing under RACK triggers
+	// measured recovery storms that collapse download cwnd; use classic
+	// SACK + 3-DupACK + RTO recovery on Windows without claiming every
+	// retransmission is spurious.
+	if runtime.GOOS == "windows" {
+		opt := tcpip.TCPRecovery(0)
+		if e := s.SetTransportProtocolOption(tcp.ProtocolNumber, &opt); e != nil {
+			return fmt.Errorf("tunstack TCP recovery: %s", e)
+		}
+	}
 	tf := tcp.NewForwarder(s, 0, 256, func(req *tcp.ForwarderRequest) {
 		if !r.reserve() {
 			req.Complete(true)

@@ -33,6 +33,7 @@ pub enum Phase{Preparing,Prepared,Stopping,Replacing,Configuring,Starting,Awaiti
 #[derive(Clone,serde::Serialize,serde::Deserialize)]#[serde(deny_unknown_fields)]pub(super) struct Journal{
  schema:u32,pub(super) tx:String,kind:Kind,pub(super) phase:Phase,health_epoch:u64,live_started:bool,root:String,runtime:String,sid:String,
  old_record:Option<Record>,new_record:Option<Record>,files:Vec<FileState>,directories:Vec<DirectoryState>,old_binding:Option<Binding>,old_apps:Option<Vec<(String,u32,Vec<u8>)>>,
+ #[serde(default,skip_serializing_if="Option::is_none")]old_failure_actions:Option<scm::FailureActions>,
  old_service:bool,old_running:bool,old_service_root:String,old_display_name:Option<String>,old_service_security:Option<crate::service_read_acl::Descriptor>,old_metadata:Option<Metadata>,new_metadata:Option<Metadata>,
 }
 fn read_protected<T:serde::de::DeserializeOwned>(p:&Path,limit:u64)->Result<Option<T>>{if !p.try_exists().map_err(io)?{return Ok(None);}security::verify_protected(p)?;serde_json::from_slice(&read_regular(p,limit)?).map(Some).map_err(|_|bad())}
@@ -63,6 +64,11 @@ fn restore_security(p:&Path,sd:&[u64])->Result<()>{unsafe{
 fn setup_targets()->Vec<(Area,&'static str)>{crate::installer_files::FILES.iter().chain(crate::installer_files::RETIRED_TUN.iter()).map(|n|(Area::App,*n)).chain(crate::installer_files::RUNTIME_FILES.iter().chain(crate::installer_files::RETIRED_TUN.iter()).map(|n|(Area::Runtime,*n))).collect()}
 fn legacy_targets()->Vec<(Area,&'static str)>{crate::installer_files::LEGACY_FILES.iter().map(|n|(Area::App,*n)).chain(crate::installer_files::LEGACY_RUNTIME_FILES.iter().map(|n|(Area::Runtime,*n))).collect()}
 impl Journal{
+ pub(super) fn snapshot_failure_actions(&mut self,dir:&Path,service:&ScHandle)->Result<()>{
+  self.old_failure_actions=Some(scm::failure_actions(service)?);self.save(dir)
+ }
+ pub(super) fn suppress_failure_actions(&self,service:&ScHandle)->Result<()>{if let Some(v)=&self.old_failure_actions{scm::suppress_failure_actions(service,v)?;}Ok(())}
+ pub(super) fn restore_failure_actions(&self,service:&ScHandle)->Result<()>{if let Some(v)=&self.old_failure_actions{scm::restore_failure_actions(service,v)?;}Ok(())}
  fn base(&self,area:Area)->PathBuf{PathBuf::from(if area==Area::App{&self.root}else{&self.runtime})}
  pub(super) fn work(&self,runtime:bool)->PathBuf{self.base(if runtime{Area::Runtime}else{Area::App}).join(format!(".kat-update-{}",self.tx))}
  fn file(&self,f:&FileState)->PathBuf{self.base(f.area).join(&f.name)}
@@ -86,6 +92,7 @@ impl Journal{
  pub(super) fn awaiting_health(&mut self,dir:&Path)->Result<()>{let mut t=FILETIME::default();unsafe{windows_sys::Win32::System::SystemInformation::GetSystemTimeAsFileTime(&mut t)};self.health_epoch=((t.dwHighDateTime as u64)<<32)|t.dwLowDateTime as u64;self.mark(dir,Phase::AwaitingHealth)}
  pub(super) fn commit_setup(&mut self,dir:&Path)->Result<()>{self.mark(dir,Phase::Finalizing)?;self.mark(dir,Phase::Committed)?;self.cleanup(dir,true)}
  fn validate(&self,dir:&Path)->Result<()>{
+  if let Some(v)=&self.old_failure_actions{v.validate()?;if self.kind!=Kind::Setup||!self.old_service{return Err(bad())}}
   if self.schema!=1||!lower_hex(&self.tx,32)||self.sid!=identity::current()?.sid{return Err(bad());}crate::install_location::validate(&self.root)?;
   if !security::same_path(Path::new(&self.runtime),&super::install_location::runtime_root()?)||!security::same_path(dir,Path::new(&self.runtime).parent().ok_or_else(bad)?){return Err(bad());}
   for r in [&self.old_record,&self.new_record].into_iter().flatten(){crate::install_location::validate_record(r)?;if r.sid!=self.sid||!security::same_path(Path::new(&r.root),Path::new(&self.root)){return Err(bad());}}
@@ -101,9 +108,20 @@ impl Journal{
  fn restore_files(&self)->Result<()>{self.verify_live_pair()?;for(index,f)in self.files.iter().enumerate().rev(){let p=self.file(f);if let Some(h)=&f.old{if p.exists()&&digest(&read_regular(&p,MAX_ASSET)?)==*h{continue;}let b=read_regular(&self.backup(f),MAX_ASSET)?;let restore=self.work(f.area==Area::Runtime).join(format!("restore-{index}"));remove_regular(&restore)?;private_write(&restore,&b,false)?;restore_security(&restore,f.sd.as_ref().ok_or_else(bad)?)?;move_replace(&restore,&p)?;}else{remove_regular(&p)?;}}Ok(())}
  fn restore_metadata(&self)->Result<()>{let p=Path::new(&self.root).join(METADATA);if let Some(m)=&self.old_metadata{atomic_json(&p,m,true)}else{remove_regular(&p)}}
  pub(super) fn rollback(&mut self,dir:&Path,token:&Handle)->Result<()>{
-  self.validate(dir)?;if matches!(self.phase,Phase::Committed|Phase::Finalizing){return Err(Error::new("UPDATE_COMMITTED","Finalized update cannot be rolled back"));}self.mark(dir,Phase::RollingBack)?;
+  self.validate(dir)?;
+  // A failing durable phase write must still attempt the original policy restore.
+  // Keep the transaction until both recovery and policy readback succeed.
+  if matches!(self.phase,Phase::Committed|Phase::Finalizing){return Err(Error::new("UPDATE_COMMITTED","Finalized update cannot be rolled back"));}
+  let operation=self.rollback_operation(dir,token);
+  let restored=(||->Result<()>{if self.old_failure_actions.is_some(){let manager=scm::manager(SC_MANAGER_CONNECT)?;let service=ScHandle(unsafe{OpenServiceW(manager.0,wide(scm::NAME).as_ptr(),SERVICE_ALL_ACCESS)});if service.0.is_null(){return Err(bad())}scm::verify_protection(&service)?;self.restore_failure_actions(&service)?;}Ok(())})();
+  match (operation,restored){(Err(e),Err(r))=>return Err(crate::installer_update::rollback_errors(&e,&r)),(Err(e),_)=>return Err(e),(_,Err(e))=>return Err(e),_=>{}}
+  self.mark(dir,Phase::RolledBack)?;self.cleanup(dir,false)
+ }
+ fn rollback_operation(&mut self,dir:&Path,token:&Handle)->Result<()>{
+  self.mark(dir,Phase::RollingBack)?;
   if self.live_started{let manager=scm::manager(SC_MANAGER_CONNECT)?;let service=ScHandle(unsafe{OpenServiceW(manager.0,wide(scm::NAME).as_ptr(),SERVICE_ALL_ACCESS)});
-   if service.0.is_null()&&unsafe{GetLastError()}!=ERROR_SERVICE_DOES_NOT_EXIST{return Err(bad());}if !service.0.is_null(){scm::verify_protection(&service)?;stop_release(&service)?;}
+   if service.0.is_null()&&unsafe{GetLastError()}!=ERROR_SERVICE_DOES_NOT_EXIST{return Err(bad());}
+   let operation=(||->Result<()>{if !service.0.is_null(){scm::verify_protection(&service)?;self.suppress_failure_actions(&service)?;stop_release(&service)?;}
    super::elevated::require_recovered()?;ensure_legacy_recovered(dir,&self.sid)?;self.restore_files()?;
    if self.kind==Kind::Setup{let p=dir.join("binding.json");if let Some(b)=&self.old_binding{atomic_json(&p,b,false)?;}else{remove_regular(&p)?;}super::installed_app::restore(&super::installed_app::Snapshot(self.old_apps.clone()))?;
     if self.old_service{if service.0.is_null(){return Err(bad());}scm::set_image(&service,Path::new(&self.old_service_root))?;if let Some(n)=&self.old_display_name{scm::set_display_name(&service,n)?;}if let Some(sd)=&self.old_service_security{use crate::service_read_acl::Store;let mut store=super::service_acl::ServiceStore{service:&service,token};store.write_dacl(sd)?;if store.read()?!=*sd{return Err(bad());}}}
@@ -111,9 +129,11 @@ impl Journal{
    }
    super::install_location::write(self.old_record.as_ref())?;self.restore_metadata()?;
    if let Some(old)=&self.old_record{let _=super::firewall::ensure_core_udp_inbound(Path::new(&old.root));}else if !self.old_service{let _=super::firewall::remove_core_udp_inbound();}
-   if self.old_running{if service.0.is_null(){return Err(bad());}scm::start(&service)?;}
+   if self.old_running{if service.0.is_null(){return Err(bad());}scm::start(&service)?;}Ok(())})();
+   let restored=if !service.0.is_null(){self.restore_failure_actions(&service)}else if self.old_failure_actions.is_some(){Err(bad())}else{Ok(())};
+   match (operation,restored){(Err(e),Err(r))=>return Err(crate::installer_update::rollback_errors(&e,&r)),(Err(e),_)=>return Err(e),(_,Err(e))=>return Err(e),_=>{}}
   }
-  self.mark(dir,Phase::RolledBack)?;self.cleanup(dir,false)
+  Ok(())
  }
  fn cleanup(&self,dir:&Path,committed:bool)->Result<()>{
   for rt in [false,true]{if rt&&self.kind==Kind::Core{continue;}let w=self.work(rt);if w.exists(){security::verify_protected(&w)?;security::no_reparse(&w)?;std::fs::remove_dir_all(&w).map_err(io)?;}}
@@ -128,7 +148,7 @@ fn check_forward(old:&Metadata,new:&Metadata,strict:bool)->Result<()>{crate::upd
 pub(super) fn begin_setup(root:&Path,runtime:&Path,dir:&Path,old_record:Option<Record>,old_binding:Option<Binding>,old_apps:Option<Vec<(String,u32,Vec<u8>)>>,old_service:bool,old_running:bool,old_service_root:&Path,old_display_name:Option<String>,old_service_security:Option<crate::service_read_acl::Descriptor>)->Result<Journal>{
  let old_metadata:Option<Metadata>=read_protected(&root.join(METADATA),256*1024)?;
  let mut j=Journal{schema:1,tx:nonce()?,kind:Kind::Setup,phase:Phase::Preparing,health_epoch:0,live_started:false,root:root.to_string_lossy().into_owned(),runtime:runtime.to_string_lossy().into_owned(),sid:identity::current()?.sid,
-  old_record,new_record:None,files:setup_targets().into_iter().map(|(area,name)|FileState{area,name:name.into(),old:None,new:None,sd:None}).collect(),directories:vec![],old_binding,old_apps,old_service,old_running,old_service_root:old_service_root.to_string_lossy().into_owned(),old_display_name,old_service_security,old_metadata,new_metadata:None};
+  old_failure_actions:None,old_record,new_record:None,files:setup_targets().into_iter().map(|(area,name)|FileState{area,name:name.into(),old:None,new:None,sd:None}).collect(),directories:vec![],old_binding,old_apps,old_service,old_running,old_service_root:old_service_root.to_string_lossy().into_owned(),old_display_name,old_service_security,old_metadata,new_metadata:None};
  j.snapshot_files()?;j.snapshot_directories()?;if !dir.exists(){secure_create(dir,true,false)?;}security::verify_protected(dir)?;j.save(dir)?;Ok(j)
 }
 fn load(dir:&Path)->Result<Option<Journal>>{
@@ -224,7 +244,7 @@ pub(super) fn run_core(caller:&ApprovedCaller,offer:&str,dir:&Path)->Result<()>{
  let running=match scm::state(&service)?.dwCurrentState{SERVICE_RUNNING=>true,SERVICE_STOPPED=>false,_=>return Err(Error::new("SERVICE_NOT_READY","Wait for the current service operation"))};
  use crate::service_read_acl::Store;
  let descriptor=super::service_acl::ServiceStore{service:&service,token:&caller.token}.read()?;
- let mut j=Journal{schema:1,tx:nonce()?,kind:Kind::Core,phase:Phase::Preparing,health_epoch:0,live_started:false,root:old.root.clone(),runtime:runtime.to_string_lossy().into_owned(),sid:old.sid.clone(),old_record:Some(old.clone()),new_record:Some(old.clone()),files:vec![FileState{area:Area::App,name:CORE.into(),old:None,new:None,sd:None}],directories:vec![],old_binding:Some(binding),old_apps:None,old_service:true,old_running:running,old_service_root:runtime.to_string_lossy().into_owned(),old_display_name:Some(scm::display_name(&service)?),old_service_security:Some(descriptor),old_metadata:Some(m.clone()),new_metadata:None};
+ let mut j=Journal{schema:1,tx:nonce()?,kind:Kind::Core,phase:Phase::Preparing,health_epoch:0,live_started:false,root:old.root.clone(),runtime:runtime.to_string_lossy().into_owned(),sid:old.sid.clone(),old_failure_actions:None,old_record:Some(old.clone()),new_record:Some(old.clone()),files:vec![FileState{area:Area::App,name:CORE.into(),old:None,new:None,sd:None}],directories:vec![],old_binding:Some(binding),old_apps:None,old_service:true,old_running:running,old_service_root:runtime.to_string_lossy().into_owned(),old_display_name:Some(scm::display_name(&service)?),old_service_security:Some(descriptor),old_metadata:Some(m.clone()),new_metadata:None};
  j.snapshot_files()?;j.save(dir)?;
  let operation=(||{
   let work=j.work(false);secure_create(&work,true,false)?;secure_create(&work.join("stage"),true,false)?;

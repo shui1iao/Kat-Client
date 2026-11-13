@@ -37,10 +37,12 @@ type sourceConn struct {
 	closed   chan struct{}
 	changed  chan struct{}
 	deadline time.Time
+	waiters  int
 	once     sync.Once
 }
 
 const udpQueuedByteLimit = 8 << 20
+const udpSourceQueueSize = 512
 
 func (r *Runtime) udpPacket(id stack.TransportEndpointID, pkt *stack.PacketBuffer) bool {
 	f := flowID(id, UDP)
@@ -86,7 +88,7 @@ func (r *Runtime) udpPacket(id stack.TransportEndpointID, pkt *stack.PacketBuffe
 			r.mu.Unlock()
 			return true
 		}
-		c = &sourceConn{r: r, key: k, first: f.Destination, queue: make(chan udpMessage, 32), closed: make(chan struct{}), changed: make(chan struct{})}
+		c = &sourceConn{r: r, key: k, first: f.Destination, queue: make(chan udpMessage, udpSourceQueueSize), closed: make(chan struct{}), changed: make(chan struct{})}
 		r.udpSources[k] = c
 		r.active[c] = struct{}{}
 		r.pending++
@@ -106,42 +108,85 @@ func (r *Runtime) udpPacket(id stack.TransportEndpointID, pkt *stack.PacketBuffe
 	return true
 }
 func (c *sourceConn) ReadDatagram(b []byte) (int, netip.AddrPort, error) {
+	// Fast path: check closed/canceled/expired first, then pop any queued packet without allocating a timer.
+	select {
+	case <-c.closed:
+		return 0, netip.AddrPort{}, net.ErrClosed
+	case <-c.r.ctx.Done():
+		return 0, netip.AddrPort{}, context.Canceled
+	default:
+	}
+	c.mu.Lock()
+	deadline := c.deadline
+	c.mu.Unlock()
+	if !deadline.IsZero() && !time.Now().Before(deadline) {
+		return 0, netip.AddrPort{}, os.ErrDeadlineExceeded
+	}
+	select {
+	case p := <-c.queue:
+		c.r.mu.Lock()
+		c.r.udpQueuedBytes -= int64(len(p.data))
+		c.r.mu.Unlock()
+		return copy(b, p.data), p.target, nil
+	default:
+	}
+
+	var timer *time.Timer
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
 	for {
 		c.mu.Lock()
 		deadline, changed := c.deadline, c.changed
+		c.waiters++
 		c.mu.Unlock()
-		var timer *time.Timer
+
 		var tc <-chan time.Time
 		if !deadline.IsZero() {
 			d := time.Until(deadline)
 			if d <= 0 {
+				c.mu.Lock()
+				c.waiters--
+				c.mu.Unlock()
 				return 0, netip.AddrPort{}, os.ErrDeadlineExceeded
 			}
-			timer = time.NewTimer(d)
+			if timer == nil {
+				timer = time.NewTimer(d)
+			} else {
+				timer.Reset(d)
+			}
 			tc = timer.C
 		}
 		select {
 		case <-c.closed:
-			if timer != nil {
-				timer.Stop()
-			}
+			c.mu.Lock()
+			c.waiters--
+			c.mu.Unlock()
 			return 0, netip.AddrPort{}, net.ErrClosed
 		case <-c.r.ctx.Done():
-			if timer != nil {
-				timer.Stop()
-			}
+			c.mu.Lock()
+			c.waiters--
+			c.mu.Unlock()
 			return 0, netip.AddrPort{}, context.Canceled
 		case <-changed:
+			c.mu.Lock()
+			c.waiters--
+			c.mu.Unlock()
 			if timer != nil {
 				timer.Stop()
 			}
 			continue
 		case <-tc:
+			c.mu.Lock()
+			c.waiters--
+			c.mu.Unlock()
 			return 0, netip.AddrPort{}, os.ErrDeadlineExceeded
 		case p := <-c.queue:
-			if timer != nil {
-				timer.Stop()
-			}
+			c.mu.Lock()
+			c.waiters--
+			c.mu.Unlock()
 			c.r.mu.Lock()
 			c.r.udpQueuedBytes -= int64(len(p.data))
 			c.r.mu.Unlock()
@@ -173,6 +218,10 @@ func (c *sourceConn) WriteFrom(b []byte, peer netip.AddrPort) (int, error) {
 	}
 	for _, p := range packets {
 		if e = c.r.cfg.Device.WritePacket(p); e != nil {
+			if isWintunRingFull(e) {
+				c.r.dropped.Add(1)
+				return 0, e
+			}
 			c.r.fatal("TUN_DEVICE_WRITE_FAILED", e)
 			return 0, e
 		}
@@ -203,8 +252,10 @@ func (c *sourceConn) RemoteAddr() net.Addr { return net.UDPAddrFromAddrPort(c.ke
 func (c *sourceConn) SetReadDeadline(t time.Time) error {
 	c.mu.Lock()
 	c.deadline = t
-	close(c.changed)
-	c.changed = make(chan struct{})
+	if c.waiters > 0 {
+		close(c.changed)
+		c.changed = make(chan struct{})
+	}
 	c.mu.Unlock()
 	return nil
 }

@@ -141,6 +141,7 @@ impl Broker {
  let adapter=j.adapter.clone();
  let down_owned=native::alias_row(&j.adapter.alias)?.is_some_and(|row|recovering_stale_adapter_decision(&j,Ok(true),&row.adapter.clone(),row.oper,row.index).is_ok()||({let mut probe=j.clone();for c in &mut probe.changes{if !is_kat_adapter_owned_change(&probe.adapter,c,row.adapter.luid){c.state="restored".into();}}recovering_stale_adapter_decision(&probe,Ok(true),&row.adapter,row.oper,row.index).is_ok()}));
  if down_owned {
+  if let Some(row)=native::alias_row(&j.adapter.alias)?{if row.oper==6&&!native::stack_missing(&j.adapter)?{return Err(bad("RECOVERY_CONFLICT"))}}
   j=pure(recover_filtered_set(&j,false,
   |c|!is_kat_adapter_owned_change(&adapter,c,adapter.luid),
   |c|native::read(&adapter,c).map_err(|e|if e.code=="RECOVERY_CONFLICT"{"RECOVERY_CONFLICT"}else{"RECOVERY_OS"}),
@@ -170,10 +171,11 @@ impl Broker {
    let dead=if let Some(core)=&self.core{if core.launch!=j.launch{return Err(bad("CORE_IDENTITY"))}pure(retained_core_exited(core))?}else{process_dead(&j.launch)?};
    let Some(row)=native::alias_row(&j.adapter.alias)?else{return Err(bad("LEGACY_ADAPTER_PRESENT"))};
    pure(recovering_stale_adapter_decision(j,Ok(dead),&row.adapter,row.oper,row.index))?;
+   if row.oper==6{native::notpresent_removal_safe(j)?;}
    stale::no_live_high_core(&j.launch)
   };
   guard().map_err(|e|crate::tun_diagnostics::failure(e,crate::tun_diagnostics::Stage::AliasGuard))?;
-  stale::remove(&j.adapter.alias,guard)
+  stale::remove_recovering(&j.adapter,guard)
  }
  pub fn recover_and_clear_for_handoff(&mut self)->Result<RecoveryReport>{
  let report=self.recover_after_exit()?;

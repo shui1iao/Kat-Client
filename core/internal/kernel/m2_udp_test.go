@@ -15,6 +15,7 @@ import (
 
 	"github.com/shui1iao/Kat/internal/outbound"
 	"github.com/shui1iao/Kat/internal/procattr"
+	"github.com/shui1iao/Kat/internal/tunplatform"
 	"github.com/shui1iao/Kat/internal/tunstack"
 	"golang.org/x/net/dns/dnsmessage"
 )
@@ -366,5 +367,139 @@ func TestM2SlowDNSQueryDoesNotIdleSource(t *testing.T) {
 	end, _ := r.terminal()
 	if end.Outcome != "ok" || end.DNSRCode == nil || *end.DNSRCode != 0 {
 		t.Fatal("active DNS result", end)
+	}
+}
+
+type ringFullOnceDevice struct {
+	*c50Device
+	failNext atomic.Bool
+}
+
+func (d *ringFullOnceDevice) WritePacket(b []byte) error {
+	if d.failNext.CompareAndSwap(true, false) {
+		return &tunplatform.WintunRingFullError{Cause: 111}
+	}
+	return d.c50Device.WritePacket(b)
+}
+
+func TestM2UDPRingFullResponsePreservesRealDownBytesAndFailureRecords(t *testing.T) {
+	var r c49DNSRecords
+	s := c50Server(t, &r, func(c *Config) {
+		c.Security = &SecurityOptions{AllowLoopback: true}
+		c.Routing = &RoutingOptions{Final: "direct"}
+		c.SetClientEgress(&ClientEgress{SystemQuery: func(_ context.Context, b []byte) ([]byte, error) {
+			return dnsReply(b, []string{"203.0.113.52"}, 0), nil
+		}})
+	})
+	p := c50Link(t, c50Ingress(t, s), func() bool { return true }, func() uint64 { return 44 })
+	rfDev := &ringFullOnceDevice{c50Device: p.dev}
+	// Replace runtime device with ringFullOnceDevice wrapper over the same c50Device.
+	_ = p.plane.Close(context.Background())
+	// Reset c50Device closes counter and context for the wrapped runtime.
+	p.dev.closes.Store(0)
+	p.dev.ctx, p.dev.cancel = context.WithCancel(context.Background())
+	var err error
+	p.plane, err = tunstack.StartReady(context.Background(), tunstack.Config{
+		Device:    rfDev,
+		Ingress:   c50Ingress(t, s),
+		Admitting: func() bool { return true },
+		Epoch:     func() uint64 { return 44 },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = p.plane.Close(context.Background()) }()
+
+	inner := p.udp(t, 41449, netip.MustParseAddrPort("198.18.0.2:53"))
+	defer inner.Close()
+
+	// 1st DNS query: outbound reply hits WintunRingFullError -> dropped, 0 Down bytes, runtime stays alive.
+	rfDev.failNext.Store(true)
+	q1 := c49DNSQuery(t, 501)
+	if _, e := inner.Write(q1); e != nil {
+		t.Fatal(e)
+	}
+	waitFor(t, func() bool { return s.counters.Dropped.Load() >= 1 })
+	if p.plane.Err() != nil || p.dev.closes.Load() != 0 {
+		t.Fatalf("runtime closed/failed on transient ring full: err=%v closes=%d", p.plane.Err(), p.dev.closes.Load())
+	}
+	if gotDown := s.reg.Snapshot().Total.Down; gotDown != 0 {
+		t.Fatalf("dropped UDP/DNS response falsely counted in Total.Down: got %d, want 0", gotDown)
+	}
+
+	// 2nd DNS query on the same UDP socket: succeeds and counts only the delivered reply bytes.
+	q2 := c49DNSQuery(t, 502)
+	if _, e := inner.Write(q2); e != nil {
+		t.Fatal(e)
+	}
+	buf := make([]byte, 4096)
+	_ = inner.SetReadDeadline(time.Now().Add(2 * time.Second))
+	n, e := inner.Read(buf)
+	if e != nil || n == 0 {
+		t.Fatalf("second DNS query after ring full failed: n=%d err=%v", n, e)
+	}
+	waitFor(t, func() bool { return s.reg.Snapshot().Total.Down == uint64(n) })
+	if gotDown := s.reg.Snapshot().Total.Down; gotDown != uint64(n) {
+		t.Fatalf("Total.Down=%d, want %d (only delivered second reply)", gotDown, n)
+	}
+
+	r.mu.Lock()
+	sawDNSRespFailed := false
+	for _, ev := range r.events {
+		if ev.Code == "dns_response_failed" {
+			sawDNSRespFailed = true
+		}
+	}
+	r.mu.Unlock()
+	if !sawDNSRespFailed {
+		t.Fatal("expected dns_response_failed diagnostic record for dropped first reply")
+	}
+
+	// 3rd check: regular UDP NAT reply (tun_udp.go): 1st reply hits ring-full -> records udp_response_failed,
+	// increments Dropped, does NOT add to Total.Down; 2nd reply succeeds and adds exact bytes to Total.Down.
+	echoSock := stage4Socket(t, "udp4", c50LocalIP(t, false))
+	udpInner := stage4UDP(t, p, false)
+	if _, e := udpInner.WriteTo([]byte("ping"), echoSock.LocalAddr()); e != nil {
+		t.Fatal(e)
+	}
+	_ = echoSock.SetReadDeadline(time.Now().Add(time.Second))
+	_, natPeer, e := echoSock.ReadFromUDPAddrPort(make([]byte, 16))
+	if e != nil {
+		t.Fatal(e)
+	}
+	beforeDown := s.reg.Snapshot().Total.Down
+	beforeDrops := s.counters.Dropped.Load()
+
+	rfDev.failNext.Store(true)
+	droppedPayload := []byte("dropped-udp-nat-reply-payload")
+	if _, e := echoSock.WriteToUDPAddrPort(droppedPayload, natPeer); e != nil {
+		t.Fatal(e)
+	}
+	waitFor(t, func() bool { return s.counters.Dropped.Load() > beforeDrops })
+	if gotDown := s.reg.Snapshot().Total.Down; gotDown != beforeDown {
+		t.Fatalf("dropped UDP NAT reply falsely counted in Total.Down: got %d, want %d", gotDown, beforeDown)
+	}
+
+	okPayload := []byte("delivered-udp-nat-reply")
+	if _, e := echoSock.WriteToUDPAddrPort(okPayload, natPeer); e != nil {
+		t.Fatal(e)
+	}
+	_ = udpInner.SetReadDeadline(time.Now().Add(2 * time.Second))
+	rn, _, e := udpInner.ReadFrom(buf)
+	if e != nil || rn != len(okPayload) {
+		t.Fatalf("recovered UDP NAT reply failed: rn=%d err=%v", rn, e)
+	}
+	waitFor(t, func() bool { return s.reg.Snapshot().Total.Down == beforeDown+uint64(len(okPayload)) })
+
+	r.mu.Lock()
+	sawUDPRespFailed := false
+	for _, ev := range r.events {
+		if ev.Code == "udp_response_failed" {
+			sawUDPRespFailed = true
+		}
+	}
+	r.mu.Unlock()
+	if !sawUDPRespFailed {
+		t.Fatal("expected udp_response_failed diagnostic record for dropped UDP NAT reply")
 	}
 }

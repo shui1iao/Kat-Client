@@ -100,66 +100,50 @@ func TestGeminiChallengeAndErrorPrecedence(t *testing.T) {
 	}
 }
 
-func TestClaudeGoogleYouTubePrimaryVerdictIndependentOfAuxiliaryRegion(t *testing.T) {
-	// Claude challenge echoing /app-unavailable-in-region must stay challenge, not blocked.
-	v := Detect(context.Background(), "Claude", func(context.Context, string, string) (Page, error) {
-		return Page{Status: 403, Body: `<html><head><title>Just a moment...</title></head><body><form action="/app-unavailable-in-region?__cf_chl_tk=1"></form><script>window._cf_chl_opt={};</script></body></html>`}, nil
-	})
-	if v.Result != "challenge" {
-		t.Fatal("Claude challenge misclassified as blocked", v)
-	}
-	// Claude, Google, YouTube primary unlocked verdict, HTTPStatus and stage must stay intact
+func TestGooglePrimaryVerdictIndependentOfAuxiliaryRegion(t *testing.T) {
+	// Google primary unlocked verdict, HTTPStatus and stage must stay intact
 	// even when auxiliary region request fails, 403s, challenges, times out or conflicts.
-	for _, tc := range []struct {
-		service, primaryBody, stage string
-	}{
-		{"Claude", `<!DOCTYPE html><html><body><div id="root"></div></body></html>`, "Claude 匿名入口"},
-		{"Google", `<!DOCTYPE html><html><body>normal search results</body></html>`, "Google Search 匿名验证码检测"},
-		{"YouTube", `<!DOCTYPE html><html><body>YouTube Premium ad-free</body></html>`, "YouTube Premium 匿名报价页"},
-	} {
-		for _, mode := range []string{"error", "http403", "challenge", "conflict", "short_budget"} {
-			ctx := context.Background()
-			var cancel context.CancelFunc = func() {}
-			if mode == "short_budget" {
-				ctx, cancel = context.WithTimeout(ctx, 500*time.Millisecond)
+	const (
+		service     = "Google"
+		primaryBody = `<!DOCTYPE html><html><body>normal search results</body></html>`
+		stage       = "Google Search 匿名验证码检测"
+	)
+	for _, mode := range []string{"error", "http403", "challenge", "conflict", "short_budget"} {
+		ctx := context.Background()
+		var cancel context.CancelFunc = func() {}
+		if mode == "short_budget" {
+			ctx, cancel = context.WithTimeout(ctx, 500*time.Millisecond)
+		}
+		calls := 0
+		v := Detect(ctx, service, func(reqCtx context.Context, _, u string) (Page, error) {
+			calls++
+			if calls == 1 {
+				return Page{Status: 200, Body: primaryBody, URL: u}, nil
 			}
-			calls := 0
-			v := Detect(ctx, tc.service, func(reqCtx context.Context, _, u string) (Page, error) {
-				calls++
-				if calls == 1 {
-					return Page{Status: 200, Body: tc.primaryBody, URL: u}, nil
-				}
-				switch mode {
-				case "error":
-					return Page{Status: 502}, errors.New("auxiliary error")
-				case "http403":
-					return Page{Status: 403, Body: "Forbidden"}, nil
-				case "challenge":
-					return Page{Status: 403, Body: "<title>Just a moment</title>cf_chl_opt"}, nil
-				default:
-					return Page{Status: 200, Body: `loc=US` + "\n" + `loc=JP` + ` "ja_JP" "en_SG" "countryCode":"JP","countryCode":"SG"`}, nil
-				}
-			})
-			cancel()
-			if v.Result != "unlocked" || v.Region != "" || v.HTTPStatus != 200 || !strings.HasPrefix(v.Reason, tc.stage+"：") {
-				t.Fatalf("%s/%s downgraded primary verdict or overwrote HTTP/stage: %+v", tc.service, mode, v)
+			switch mode {
+			case "error":
+				return Page{Status: 502}, errors.New("auxiliary error")
+			case "http403":
+				return Page{Status: 403, Body: "Forbidden"}, nil
+			case "challenge":
+				return Page{Status: 403, Body: "<title>Just a moment</title>cf_chl_opt"}, nil
+			default:
+				return Page{Status: 200, Body: `"ja_JP" "en_SG"`}, nil
 			}
-			if mode == "short_budget" && calls != 1 {
-				t.Fatalf("%s short budget did not skip auxiliary request: calls=%d", tc.service, calls)
-			}
+		})
+		cancel()
+		if v.Result != "unlocked" || v.Region != "" || v.HTTPStatus != 200 || !strings.HasPrefix(v.Reason, stage+"：") {
+			t.Fatalf("%s/%s downgraded primary verdict or overwrote HTTP/stage: %+v", service, mode, v)
+		}
+		if mode == "short_budget" && calls != 1 {
+			t.Fatalf("%s short budget did not skip auxiliary request: calls=%d", service, calls)
 		}
 	}
-	// Conflicting inline region on primary Google / YouTube page clears region without downgrading unlocked.
-	v = Detect(context.Background(), "Google", func(_ context.Context, _, u string) (Page, error) {
+	// Conflicting inline region on primary Google page clears region without downgrading unlocked.
+	v := Detect(context.Background(), "Google", func(_ context.Context, _, u string) (Page, error) {
 		return Page{Status: 200, Body: `<!DOCTYPE html><html><body>"ja_JP" "en_SG"</body></html>`, URL: u}, nil
 	})
 	if v.Result != "unlocked" || v.Region != "" || v.HTTPStatus != 200 {
 		t.Fatal("Google conflicting inline region downgraded primary verdict", v)
-	}
-	v = Detect(context.Background(), "YouTube", func(_ context.Context, _, u string) (Page, error) {
-		return Page{Status: 200, Body: `<!DOCTYPE html><html><body>YouTube Premium ad-free "countryCode":"JP","countryCode":"SG"</body></html>`, URL: u}, nil
-	})
-	if v.Result != "unlocked" || v.Region != "" || v.HTTPStatus != 200 || !strings.Contains(v.Reason, "YouTube Premium") {
-		t.Fatal("YouTube conflicting inline region downgraded primary verdict", v)
 	}
 }

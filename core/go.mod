@@ -25,3 +25,5 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	gvisor.dev/gvisor v0.0.0-20260701204157-69c2d17aea96
 )
+
+replace gvisor.dev/gvisor => ./third_party/gvisor

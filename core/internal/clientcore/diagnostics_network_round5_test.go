@@ -16,7 +16,7 @@ func TestRound5LegacyCacheFiltersRemovedServicesReadOnly(t *testing.T) {
 		t.Run(map[bool]string{false: "disk", true: "memory"}[memory], func(t *testing.T) {
 			h := newHost(t)
 			r := &diagnosticReply{At: time.Now().UTC().Truncate(time.Second), Items: []diagnosticRow{}}
-			for _, name := range append(append([]string{}, clientdiag.Services...), "TikTok", "YouTube Premium") {
+			for _, name := range append(append([]string{}, clientdiag.Services...), "TikTok", "YouTube", "YouTube Premium", "Claude", "Disney+") {
 				r.Items = append(r.Items, diagnosticRow{Name: name, Verdict: clientdiag.Verdict{Result: "failed", Reason: "previous-reason"}, Chain: []string{"Final", "Node"}})
 			}
 			beforeRows := append([]diagnosticRow{}, r.Items...)

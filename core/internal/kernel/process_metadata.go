@@ -65,7 +65,9 @@ func processIdentity(ctx context.Context, network string, target Address) func()
 			return procattr.Identity{Status: "unknown", Cause: "process:unknown"}
 		}
 		var id procattr.Identity
-		if network == "tcp" && im != nil && im.process != nil {
+		if ho, ok := ctx.Value(httpDirectOriginKey{}).(*httpDirectOrigin); network == "tcp" && ok && ho != nil && ho.origin != nil {
+			id = ho.origin.Lookup(ctx)
+		} else if network == "tcp" && im != nil && im.process != nil {
 			// Only the accepted connection owns a TCP lifetime cache.
 			im.process.once.Do(func() { im.process.identity = lookup(ctx, q) })
 			id = im.process.identity

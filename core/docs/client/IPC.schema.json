@@ -1005,46 +1005,15 @@
               "type": "string"
             },
             "method": {
-              "const": "rules.test"
+              "const": "routing.previewTarget"
             },
             "params": {
               "type": "object",
               "properties": {
                 "target": {
-                  "type": "string"
-                },
-                "network": {
-                  "type": "string"
-                },
-                "process_name": {
-                  "type": "string"
-                },
-                "source_ip": {
-                  "type": "string"
-                },
-                "inbound_name": {
-                  "type": "string"
-                },
-                "inbound_type": {
-                  "type": "string"
-                },
-                "protocol": {
-                  "type": "string"
-                },
-                "target_port": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 65535
-                },
-                "source_port": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 65535
-                },
-                "inbound_port": {
-                  "type": "integer",
-                  "minimum": 1,
-                  "maximum": 65535
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2048
                 }
               },
               "required": [
@@ -4707,45 +4676,14 @@
       },
       "description": "Existing local subscription edit/select preview, then same document.apply acceptance. add_rule explicitly owns a generated connection rule in the active local overlay; ordinary new-rule behavior remains manual."
     },
-    "rules.test": {
+    "routing.previewTarget": {
       "params": {
         "type": "object",
         "properties": {
           "target": {
-            "type": "string"
-          },
-          "network": {
-            "type": "string"
-          },
-          "process_name": {
-            "type": "string"
-          },
-          "source_ip": {
-            "type": "string"
-          },
-          "inbound_name": {
-            "type": "string"
-          },
-          "inbound_type": {
-            "type": "string"
-          },
-          "protocol": {
-            "type": "string"
-          },
-          "target_port": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 65535
-          },
-          "source_port": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 65535
-          },
-          "inbound_port": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 65535
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
           }
         },
         "required": [
@@ -4753,37 +4691,75 @@
         ],
         "additionalProperties": false
       },
-      "description": "Target-only first-match lookup against accepted rules and loaded resources. Missing connection metadata stops at the earliest undecidable rule and is reported in missing. DNS only when destination IP is required; never connects to target, probes, selects an outbound, attributes a process or increments traffic/rule hits. Top-level effective separates actual mode routing from the rule-mode projection in result.",
+      "description": "Target-only routing preview against ordered business rules and loaded resource snapshots. Evaluates only domain and destination IP conditions; non-target conditions (process, source IP/port, target port, network, inbound, protocol) do not participate and rules without target conditions are skipped. Queries kernel DNS only when a domain reaches an IP condition without no_resolve; never dials targets or probes nodes.",
       "result": {
         "type": "object",
+        "required": [
+          "target",
+          "matched",
+          "chain",
+          "resolved",
+          "scope"
+        ],
         "properties": {
-          "mode": {
-            "enum": [
-              "rule",
-              "global",
-              "direct"
-            ]
-          },
-          "effective": {
+          "target": {
             "type": "object",
             "required": [
-              "mode",
+              "input",
+              "host",
+              "kind",
+              "addresses"
+            ],
+            "properties": {
+              "input": {
+                "type": "string"
+              },
+              "host": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "domain",
+                  "ip"
+                ]
+              },
+              "addresses": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "matched": {
+            "type": "object",
+            "required": [
               "source",
+              "index",
+              "type",
+              "payload",
               "policy"
             ],
             "properties": {
-              "mode": {
-                "enum": [
-                  "rule",
-                  "global",
-                  "direct"
-                ]
-              },
               "source": {
                 "enum": [
-                  "rules",
-                  "mode"
+                  "rule",
+                  "final"
                 ]
+              },
+              "index": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 1
+              },
+              "type": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "string"
               },
               "policy": {
                 "type": "string"
@@ -4791,82 +4767,20 @@
             },
             "additionalProperties": false
           },
-          "simulation": {
-            "const": "target"
+          "chain": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
-          "ipv6_enabled": {
+          "resolved": {
             "type": "boolean"
           },
-          "result": {
-            "type": "object",
-            "required": [
-              "status",
-              "target",
-              "known",
-              "rule",
-              "display_row",
-              "condition",
-              "policy",
-              "missing",
-              "resources",
-              "resource_warnings",
-              "skipped",
-              "dns"
-            ],
-            "properties": {
-              "status": {
-                "enum": [
-                  "matched",
-                  "final",
-                  "unknown"
-                ]
-              },
-              "skipped": {
-                "type": "array",
-                "maxItems": 32,
-                "items": {
-                  "type": "object",
-                  "required": [
-                    "rule",
-                    "condition",
-                    "policy",
-                    "missing"
-                  ]
-                }
-              },
-              "dns": {
-                "type": "object",
-                "required": [
-                  "status",
-                  "addresses"
-                ],
-                "properties": {
-                  "status": {
-                    "enum": [
-                      "not_needed",
-                      "resolved",
-                      "failed"
-                    ]
-                  },
-                  "addresses": {
-                    "type": "array",
-                    "maxItems": 16
-                  },
-                  "selected_ip": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
+          "scope": {
+            "const": "target-only"
           }
         },
-        "required": [
-          "mode",
-          "effective",
-          "simulation",
-          "ipv6_enabled",
-          "result"
-        ]
+        "additionalProperties": false
       }
     }
   },

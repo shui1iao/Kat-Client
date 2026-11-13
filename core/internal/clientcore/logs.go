@@ -192,7 +192,16 @@ func (r *logRing) read(after uint64, limit int) LogsReply {
 }
 func (h *Host) runtimeConfig(c kernel.Config) kernel.Config {
 	if c.Limits.BufferSize == 16384 {
-		c.Limits.BufferSize = 32768
+		if c.Limits.PoolBuffers == 128 {
+			c.Limits.BufferSize = 65536
+			c.Limits.PoolBuffers = 64
+		} else {
+			c.Limits.BufferSize = 32768
+		}
+	}
+	if (c.Limits.UDPQueue == 0 || c.Limits.UDPQueue == 16) && (c.Limits.UDPQueueBytes == 0 || c.Limits.UDPQueueBytes == 16*65507) {
+		c.Limits.UDPQueue = 256
+		c.Limits.UDPQueueBytes = 4 << 20
 	}
 	c = h.withEgress(c)
 	c.SetClientLogSink(h.logs.record)

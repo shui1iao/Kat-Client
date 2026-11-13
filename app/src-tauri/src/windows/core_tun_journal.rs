@@ -365,7 +365,8 @@ pub fn handoff_v2_journal_decision(
 /// to be pre-restored before removing the `oper == 2` adapter, because Windows tears down
 /// `MIB_IPINTERFACE_ROW` (`ERROR_NOT_FOUND` 1168) when a Disconnected Wintun adapter loses
 /// its unicast addresses. All other gates remain strict: confirmed core exit, `recovering`
-/// phase, all non-adapter-owned changes restored, exact Kat alias/GUID/LUID match, and `oper == 2`.
+/// phase and exact Kat identity. oper6 additionally requires the native broker
+/// to prove both families missing, all values safe and the exact phantom present.
 pub fn recovering_stale_adapter_decision(
     j: &Journal,
     core_dead: Result<bool>,
@@ -397,8 +398,91 @@ pub fn recovering_stale_adapter_decision(
     {
         return Err("LEGACY_ADAPTER_PRESENT");
     }
-    if !stale_down(oper, row_adapter.luid, index) {
+    if !(stale_down(oper, row_adapter.luid, index) || (oper==6 && row_adapter.luid!=0 && index!=0 && j.adapter.luid==row_adapter.luid)) {
         return Err("LEGACY_ADAPTER_PRESENT");
     }
     Ok(())
+}
+
+/// Missing local stack targets may be settled only after independent owner absence.
+/// Before removal, this merely validates values; it never checkpoints restored.
+pub fn removal_value_safe(c:&Change,current:&Option<Value>)->Result<()> {
+ if c.desired{return Err("RECOVERY_PENDING")}
+ if c.installed.route.is_some(){if current!=&c.before{return Err("RECOVERY_CONFLICT")}}
+ else if current.is_some() && cas(c,current)==Cas::Foreign{return Err("RECOVERY_CONFLICT")}
+ Ok(())
+}
+/// Native adapter_present uses this final decision after its exact MIB checks.
+/// Some preserves matching-row/tombstone evidence; no match must query PnP
+/// without negating presence or swallowing errors. Query only on no match.
+pub fn adapter_presence<E>(mib:std::result::Result<Option<bool>,E>,pnp:impl FnOnce()->std::result::Result<bool,E>)->std::result::Result<bool,E>{
+ match mib?{Some(present)=>Ok(present),None=>pnp()}
+}
+pub fn tombstone_status(oper:i32)->bool{matches!(oper,2|6)}
+
+/// Each bool means present, never "query failed". Used by native MIB tombstones.
+pub fn tombstone_evidence(oper:i32,luid:u64,index:u32,pnp:Result<bool>,families:[Result<bool>;2])->bool{
+ tombstone_status(oper)&&luid!=0&&index!=0&&pnp==Ok(false)&&families==[Ok(false),Ok(false)]
+}
+
+#[cfg(test)]mod notpresent_safety_tests{
+ use super::*;
+ #[test]fn adapter_presence_production_no_match_pnp_truth_table_and_existing_mib_results(){
+  // Groups 1..3: the very same production fallback, not a copy of its bool logic.
+  for (pnp,want) in [(Ok(false),Ok(false)),(Ok(true),Ok(true)),(Err("PNP_QUERY"),Err("PNP_QUERY"))]{
+   let mut calls=0;let actual=adapter_presence(Ok(None),||{calls+=1;pnp});
+   assert_eq!(actual,want);assert_eq!(calls,1);
+  }
+  // Group 4: existing exact-match / verified tombstone / MIB conflict decisions
+  // remain authoritative and must never be overridden by a second PnP query.
+  for (mib,want) in [(Ok(Some(true)),Ok(true)),(Ok(Some(false)),Ok(false)),(Err("RECOVERY_CONFLICT"),Err("RECOVERY_CONFLICT"))]{
+   assert_eq!(adapter_presence(mib,||panic!("MIB decision must not query fallback PnP")),want);
+  }
+  // Native delegates the entire decision, with no negation between it and caller.
+  let native=include_str!("core_tun_os.rs");let body=native.split("pub fn adapter_present(").nth(1).unwrap().split("/// Read-only retirement").next().unwrap();
+  assert!(body.contains("return Ok(Some(false))"));assert!(body.contains("return Ok(Some(true))"));
+  assert!(body.contains("})();FreeMibTable(t.cast());adapter_presence(mib,||pnp_present(&a.guid))"));
+ }
+
+ fn fixture()->Journal{
+  let launch=LaunchIdentity{schema:2,engine:ENGINE.into(),epoch:"a".repeat(32),core_pid:42,core_created:99,owner_sid:"S-1-5-21-1000".into(),session:1,package_sha256:"b".repeat(64),core_sha256:"c".repeat(64)};
+  let mut changes=Vec::new();
+  for destination in ["0.0.0.0","128.0.0.0","::","8000::"]{let v4=destination.contains('.');let installed=Value{route:Some(RouteValue{destination:destination.into(),prefix:1,next_hop:if v4{"0.0.0.0"}else{"::"}.into(),scope:0,metric:5,protocol:3,site_prefix:0,valid_lifetime:u32::MAX,preferred_lifetime:u32::MAX,loopback:false,autoconfigure:false,publish:false,immortal:false,origin:0}),address:None,interface:None,dns:None};changes.push(Change{id:installed.key().unwrap(),before:None,installed,desired:false,state:"restored".into()});}
+  for (address,prefix) in [("198.18.0.1",30),("fd4b:6174::1",126)]{let installed=Value{route:None,address:Some(AddressValue{address:address.into(),prefix,prefix_origin:1,suffix_origin:1,skip_as_source:false}),interface:None,dns:None};changes.push(Change{id:installed.key().unwrap(),before:None,installed,desired:false,state:"restored".into()});}
+  for family in [2,23]{let installed=Value{route:None,address:None,interface:Some(InterfaceValue{family,mtu:1420,metric:5,automatic_metric:false,dad_transmits:0}),dns:None};let mut before=installed.clone();before.interface.as_mut().unwrap().mtu=1500;changes.push(Change{id:installed.key().unwrap(),before:Some(before),installed,desired:false,state:"conflict".into()});}
+  let installed=Value{route:None,address:None,interface:None,dns:Some(DnsValue{servers:"198.18.0.2".into()})};let before=Value{dns:Some(DnsValue{servers:"".into()}),..installed.clone()};changes.push(Change{id:"dns".into(),before:Some(before),installed,desired:false,state:"restored".into()});
+  Journal{schema:2,engine:ENGINE.into(),adapter:Adapter{alias:alias(&launch.owner_sid),guid:"11111111-2222-3333-4444-555555555555".into(),luid:99,compartment:1},launch,seq:3,phase:"recovering".into(),changes,last_request:"d".repeat(32),last_digest:"e".repeat(64)}
+ }
+ #[test]fn tombstone_requires_exact_supported_status_pnp_absent_and_both_families_absent(){
+  for oper in 0..10{for pnp in [Ok(true),Ok(false),Err("QUERY")]{for f4 in [Ok(true),Ok(false),Err("QUERY")]{for f6 in [Ok(true),Ok(false),Err("QUERY")]{assert_eq!(tombstone_evidence(oper,99,10,pnp,[f4,f6]),[2,6].contains(&oper)&&pnp==Ok(false)&&f4==Ok(false)&&f6==Ok(false));}}}}
+  assert!(!tombstone_evidence(6,0,10,Ok(false),[Ok(false);2]));assert!(!tombstone_evidence(6,99,0,Ok(false),[Ok(false);2]));
+ }
+ #[test]fn dirty_recovery_death_identity_status_gates(){let j=fixture();j.validate().unwrap();
+  for oper in 0..10{assert_eq!(recovering_stale_adapter_decision(&j,Ok(true),&j.adapter,oper,10).is_ok(),[2,6].contains(&oper));}
+  for dead in [Ok(false),Err("PROCESS_IDENTITY")]{assert!(recovering_stale_adapter_decision(&j,dead,&j.adapter,6,10).is_err());}
+  for field in 0..4{let mut a=j.adapter.clone();match field{0=>a.luid+=1,1=>a.guid="aaaaaaaa-2222-3333-4444-555555555555".into(),2=>a.alias.push('x'),_=>a.compartment=2};assert!(recovering_stale_adapter_decision(&j,Ok(true),&a,6,10).is_err());}
+  let mut changed=j.clone();changed.changes[0].desired=true;assert!(recovering_stale_adapter_decision(&changed,Ok(true),&j.adapter,6,10).is_err());
+  changed=j.clone();changed.phase="active".into();assert!(recovering_stale_adapter_decision(&changed,Ok(true),&j.adapter,6,10).is_err());
+  changed=j.clone();changed.adapter.luid=0;assert!(recovering_stale_adapter_decision(&changed,Ok(true),&j.adapter,6,10).is_err());
+  assert!(!stale_down(6,99,10));assert!(stale_down(2,99,10));
+ }
+ #[test]fn phantom_checks_values_even_if_restored_and_never_checkpoints(){let j=fixture();let original=j.clone();
+  for c in &j.changes{assert!(removal_value_safe(c,&None).is_ok());if c.installed.route.is_some(){assert!(removal_value_safe(c,&Some(c.installed.clone())).is_err());}else{assert!(removal_value_safe(c,&Some(c.installed.clone())).is_ok());if let Some(before)=&c.before{assert!(removal_value_safe(c,&Some(before.clone())).is_ok());}}}
+  let dns=j.changes.last().unwrap();let mut foreign=dns.installed.clone();foreign.dns.as_mut().unwrap().servers="external".into();assert!(removal_value_safe(dns,&Some(foreign)).is_err());assert_eq!(j,original);
+ }
+ #[test]fn all_nine_tombstone_items_settled_without_os_writes_with_atomic_retry(){let j=fixture();let mut durable=j.clone();let mut checkpoints=0;
+  let result=recover_set(&j,true,|_|Ok(None),|_|panic!("tombstone must not write OS"),|next|{checkpoints+=1;if checkpoints==4{return Err("JOURNAL_WRITE")}durable=next.clone();Ok(())});assert_eq!(result.unwrap_err(),"JOURNAL_WRITE");assert_ne!(durable.changes[6].state,"restored");
+  let restart=durable.clone();let retried=recover_set(&restart,true,|_|Ok(None),|_|panic!("retry must not write OS"),|next|{durable=next.clone();Ok(())}).unwrap();assert_eq!(retried.changes.len(),9);assert!(retried.changes.iter().all(|c|c.state=="restored"&&!c.desired));assert_eq!(retried.phase,"recovering");
+  // The loop itself cannot fabricate complete; native final OS proof still gates it.
+  assert!(handoff_v2_journal_decision(&serde_json::to_vec(&retried).unwrap(),Ok(true),Ok(())).is_err());
+ }
+ #[test]fn phantom_not_absent_or_failed_read_cannot_settle_interfaces(){let j=fixture();
+  let r=recover_set(&j,false,|_|Ok(None),|_|panic!("no CAS match"),|_|Ok(()));assert_eq!(r.unwrap_err(),"RECOVERY_CONFLICT");
+  let r=recover_set(&j,true,|_|Err("RECOVERY_OS"),|_|panic!("query error"),|_|Ok(()));assert_eq!(r.unwrap_err(),"RECOVERY_OS");
+ }
+ #[test]fn route_restore_is_cas_checkpointed_before_local_remove(){let j=fixture();let mut current=j.changes.iter().map(|c|(c.id.clone(),if c.installed.route.is_some(){Some(c.installed.clone())}else{None})).collect::<std::collections::BTreeMap<_,_>>();let cells=std::cell::RefCell::new(&mut current);let mut durable=j.clone();
+  let routes=recover_filtered_set(&j,false,|c|c.installed.route.is_some(),|c|Ok(cells.borrow()[&c.id].clone()),|c|{assert_eq!(cells.borrow()[&c.id],Some(c.installed.clone()));cells.borrow_mut().insert(c.id.clone(),None);Ok(())},|next|{durable=next.clone();Ok(())}).unwrap();assert_eq!(routes.changes.len(),9);for c in &routes.changes{removal_value_safe(c,&cells.borrow()[&c.id]).unwrap();}assert_eq!(durable.changes[6].state,"conflict");
+  let mut foreign=j.changes[0].installed.clone();foreign.route.as_mut().unwrap().metric=6;let mut wrote=false;let r=recover_filtered_set(&j,false,|c|c.installed.route.is_some(),|_|Ok(Some(foreign.clone())),|_|{wrote=true;Ok(())},|_|Ok(()));assert!(r.is_err());assert!(!wrote);
+ }
+ #[test]fn native_wiring_does_not_bypass_phantom_or_extra_rows(){let native=include_str!("core_tun_os.rs");let broker=include_str!("core_tun_recovery.rs");let remover=include_str!("stale_tun.rs");assert!(native.contains("!pnp_present(&j.adapter.guid)?"));assert!(native.contains("GetIpForwardTable2(AF_UNSPEC"));assert!(native.contains("GetUnicastIpAddressTable(AF_UNSPEC"));assert!(native.contains("for c in &j.changes{removal_value_safe(c,&read(&j.adapter,c)?"));assert!(broker.contains("if row.oper==6{native::notpresent_removal_safe(j)?;}"));assert!(remover.contains("guard()?;match native::alias_row(alias)?"));assert!(remover.contains("pnp_devnode_absent(&row.adapter.guid)&&!native::adapter_present(&row.adapter)?"));}
 }

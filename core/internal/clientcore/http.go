@@ -18,12 +18,46 @@ import (
 
 func portAddress(n int) string { return net.JoinHostPort("127.0.0.1", strconv.Itoa(n)) }
 
+var httpBridgeBufPool = sync.Pool{New: func() any { b := make([]byte, 65536); return &b }}
+
+type httpReadOnly struct{ io.Reader }
+type httpWriteOnly struct{ io.Writer }
+
+func copyHTTPBridge(dst io.Writer, src io.Reader) error {
+	bp := httpBridgeBufPool.Get().(*[]byte)
+	defer httpBridgeBufPool.Put(bp)
+	_, err := io.CopyBuffer(httpWriteOnly{dst}, httpReadOnly{src}, *bp)
+	return err
+}
+
+type httpBufferedConn struct {
+	net.Conn
+	pre []byte
+}
+
+func (c *httpBufferedConn) Read(p []byte) (int, error) {
+	if len(c.pre) > 0 {
+		n := copy(p, c.pre)
+		c.pre = c.pre[n:]
+		return n, nil
+	}
+	return c.Conn.Read(p)
+}
+
+func (c *httpBufferedConn) CloseWrite() error {
+	if cw, ok := c.Conn.(interface{ CloseWrite() error }); ok {
+		return cw.CloseWrite()
+	}
+	return c.Conn.Close()
+}
+
 type httpBridge struct {
-	listener   net.Listener
-	server     *http.Server
-	transport  *http.Transport
-	transports map[net.Conn]*http.Transport
-	socks      atomic.Value
+	listener     net.Listener
+	server       *http.Server
+	transport    *http.Transport
+	transports   map[net.Conn]*http.Transport
+	socks        atomic.Value
+	directServer atomic.Pointer[kernel.Server]
 	ctx        context.Context
 	cancel     context.CancelFunc
 	mu         sync.Mutex
@@ -50,6 +84,9 @@ func newHTTPBridge(hp, sp int, sinks ...func(kernel.ClientLogEvent)) (*httpBridg
 	b.transport = &http.Transport{Proxy: nil, DialContext: b.dial, DisableCompression: true, MaxResponseHeaderBytes: 64 << 10, ResponseHeaderTimeout: 30 * time.Second}
 	b.server = &http.Server{Handler: b, DisableGeneralOptionsHandler: true, ReadHeaderTimeout: 10 * time.Second, MaxHeaderBytes: 64 << 10, ErrorLog: log.New(io.Discard, "", 0)}
 	b.server.ConnContext = func(ctx context.Context, c net.Conn) context.Context {
+		if tc, ok := c.(*net.TCPConn); ok {
+			_ = tc.SetNoDelay(true)
+		}
 		origin := procattr.NewOrigin(c.RemoteAddr(), c.LocalAddr())
 		b.mu.Lock()
 		b.conns++
@@ -74,6 +111,10 @@ func newHTTPBridge(hp, sp int, sinks ...func(kernel.ClientLogEvent)) (*httpBridg
 
 	return b, nil
 }
+func (b *httpBridge) setServer(s *kernel.Server) {
+	b.directServer.Store(s)
+}
+
 func (b *httpBridge) setSOCKSPort(p int) {
 	b.socks.Store(portAddress(p))
 	b.mu.Lock()
@@ -113,10 +154,23 @@ func (b *httpBridge) dial(ctx context.Context, network, address string) (net.Con
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	var origin *procattr.Origin
+	var localAddr, remoteAddr net.Addr
 	if v, _ := ctx.Value(httpOriginKey{}).(*httpOrigin); v != nil {
 		origin = v.origin
+		if v.conn != nil {
+			localAddr, remoteAddr = v.conn.LocalAddr(), v.conn.RemoteAddr()
+		}
 	}
-	forward := &httpForward{origin: origin, trace: httpTraceOf(ctx)}
+	trace := httpTraceOf(ctx)
+	if srv := b.directServer.Load(); srv != nil && network == "tcp" {
+		return srv.DialHTTPDirect(ctx, address, kernel.HTTPDirectParams{
+			Local:       localAddr,
+			Remote:      remoteAddr,
+			Origin:      origin,
+			Observation: trace.registration(),
+		})
+	}
+	forward := &httpForward{origin: origin, trace: trace}
 	d, e := proxy.SOCKS5("tcp", b.socks.Load().(string), nil, forward)
 	if e != nil {
 		return nil, e
@@ -201,7 +255,7 @@ func (b *httpBridge) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(resp.StatusCode)
-	_, copyErr := io.Copy(w, resp.Body)
+	copyErr := copyHTTPBridge(w, resp.Body)
 	trace.record("copy_end", "socks_to_client", "", copyErr, 0)
 }
 func (b *httpBridge) connect(ctx context.Context, w http.ResponseWriter, r *http.Request) {
@@ -211,6 +265,70 @@ func (b *httpBridge) connect(ctx context.Context, w http.ResponseWriter, r *http
 		return
 	}
 	trace := httpTraceOf(ctx)
+	if srv := b.directServer.Load(); srv != nil {
+		hij, ok := w.(http.Hijacker)
+		if !ok {
+			http.Error(w, "CONNECT unavailable", 500)
+			return
+		}
+		client, rw, err := hij.Hijack()
+		if err != nil {
+			return
+		}
+		b.mu.Lock()
+		if b.conns > 0 {
+			b.conns--
+		}
+		b.mu.Unlock()
+		defer trace.close("client", "handler_return", 0, client.Close)
+
+		tunnelCtx, cancelTunnel := context.WithCancel(context.WithoutCancel(ctx))
+		defer cancelTunnel()
+		stopBridge := context.AfterFunc(b.ctx, cancelTunnel)
+		defer stopBridge()
+
+		var pre []byte
+		if buffered := rw.Reader.Buffered(); buffered > 0 {
+			pre = make([]byte, buffered)
+			_, _ = io.ReadFull(rw.Reader, pre)
+		}
+		var stream net.Conn = client
+		if len(pre) > 0 {
+			stream = &httpBufferedConn{Conn: client, pre: pre}
+		}
+		var origin *procattr.Origin
+		if v, _ := ctx.Value(httpOriginKey{}).(*httpOrigin); v != nil {
+			origin = v.origin
+		}
+		responded := false
+		send200 := func() error {
+			if responded {
+				return nil
+			}
+			responded = true
+			if _, werr := rw.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n"); werr != nil {
+				trace.record("response_header", "socks_to_client", "", werr, 0)
+				return werr
+			}
+			if ferr := rw.Flush(); ferr != nil {
+				trace.record("response_header", "socks_to_client", "", ferr, 0)
+				return ferr
+			}
+			return nil
+		}
+		serveErr := srv.ServeHTTPConnect(tunnelCtx, stream, r.Host, kernel.HTTPDirectParams{
+			Local:       client.LocalAddr(),
+			Remote:      client.RemoteAddr(),
+			Origin:      origin,
+			Observation: trace.registration(),
+		}, send200)
+		trace.record("dial_end", "none", "", serveErr, 0)
+		if serveErr != nil && !responded {
+			_, _ = rw.WriteString("HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: 25\r\nConnection: close\r\n\r\nKat outbound unavailable\n")
+			_ = rw.Flush()
+		}
+		return
+	}
 	up, e := b.dial(ctx, "tcp", r.Host)
 	trace.record("dial_end", "none", "", e, 0)
 	if e != nil {
@@ -255,7 +373,13 @@ func (b *httpBridge) connect(ctx context.Context, w http.ResponseWriter, r *http
 	}
 	done := make(chan struct{})
 	go func() {
-		_, copyErr := io.Copy(up, rw)
+		var copyErr error
+		if buffered := rw.Reader.Buffered(); buffered > 0 {
+			_, copyErr = io.CopyN(httpWriteOnly{up}, rw.Reader, int64(buffered))
+		}
+		if copyErr == nil {
+			copyErr = copyHTTPBridge(up, client)
+		}
 		observed := trace.record("copy_end", "client_to_socks", "", copyErr, 0)
 		if copyErr != nil {
 			trace.close("client", "upload_return", observed, client.Close)
@@ -270,7 +394,7 @@ func (b *httpBridge) connect(ctx context.Context, w http.ResponseWriter, r *http
 		}
 		close(done)
 	}()
-	_, copyErr := io.Copy(client, up)
+	copyErr := copyHTTPBridge(client, up)
 	observed := trace.record("copy_end", "socks_to_client", "", copyErr, 0)
 	trace.close("client", "download_return", observed, client.Close)
 	trace.close("socks", "download_return", observed, up.Close)
@@ -357,6 +481,9 @@ func (f *httpForward) DialContext(ctx context.Context, network, address string) 
 	c, err := (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, address)
 	if err != nil {
 		return nil, err
+	}
+	if tc, ok := c.(*net.TCPConn); ok {
+		_ = tc.SetNoDelay(true)
 	}
 	f.conn = procattr.RegisterHTTP(c, f.origin, f.trace.registration())
 	return f.conn, nil

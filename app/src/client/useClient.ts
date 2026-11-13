@@ -27,7 +27,29 @@ export function appendSample(old: readonly Sample[], sample: Sample, now = sampl
   if (keepLast) out[w] = sample;
   return out;
 }
+export const MAIN_WINDOW_HIDDEN_EVENT = 'main-window-hidden';
+export function applyMainWindowHidden(hidden: unknown, root: { dataset?: DOMStringMap | Record<string, string | undefined> } | null = typeof document !== 'undefined' ? document.documentElement : null) {
+  if (typeof hidden !== 'boolean' || !root?.dataset) return;
+  if (hidden && root.dataset.view !== 'tray-menu') root.dataset.katWindowHidden = 'true';
+  else delete root.dataset.katWindowHidden;
+}
+export function watchMainWindowHidden(subscribe: typeof listen = listen, root?: { dataset?: DOMStringMap | Record<string, string | undefined> } | null) {
+  applyMainWindowHidden(false, root);
+  let live = true, stop: (() => void) | undefined;
+  void subscribe<boolean>(MAIN_WINDOW_HIDDEN_EVENT, e => { if (live) applyMainWindowHidden(e.payload, root); })
+    .then(unlisten => { if (live) stop = unlisten; else unlisten(); })
+    .catch(() => applyMainWindowHidden(false, root));
+  return () => { live = false; stop?.(); applyMainWindowHidden(false, root); };
+}
+export function useMainWindowHidden() {
+  useEffect(() => {
+    applyMainWindowHidden(false);
+    if (!hasHost()) return;
+    return watchMainWindowHidden(listen);
+  }, []);
+}
 export function useClient() {
+  useMainWindowHidden();
   const [, redraw] = useState(0);
   const [status, setStatus] = useState<CoreStatus | null>(null);
   // Process reachability is separate from a healthy core's stopped engine.

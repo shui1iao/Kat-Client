@@ -145,9 +145,10 @@ impl crate::installer_update::UpdateSteps for WindowsUpdate{
   if hashes.get("kat-install-helper.exe")!=Some(&sha256_file(&helper,"INSTALL_PACKAGE")?){return Err(Error::new("INSTALL_PACKAGE","Staged helper differs from executing trusted installer"));}
   self.journal.as_mut().unwrap().prepared_setup(&self.dir,&hashes)?;
   self.approved=Some(hashes);self.runtime_files=Some(rf);
+  if !self.service.0.is_null(){self.journal.as_mut().unwrap().snapshot_failure_actions(&self.dir,&self.service)?;}
   if self.old_binding.is_some(){let mut input=std::fs::File::open(&binding).map_err(|e|Error::io("INSTALL_BINDING",&e))?;let mut output=private_file(&work.join("binding.json"))?;std::io::copy(&mut input,&mut output).map_err(|e|Error::io("INSTALL_BINDING",&e))?;output.sync_all().map_err(|e|Error::io("INSTALL_BINDING",&e))?;}Ok(())
  }
- fn stop(&mut self)->Result<()>{self.journal.as_mut().unwrap().mark(&self.dir,super::update_install::Phase::Stopping)?;if !self.service.0.is_null(){super::update_install::stop_release(&self.service)?;}super::update_install::terminate_installed_processes(&self.root,&self.runtime,0);super::elevated::require_recovered()?;super::update_install::ensure_legacy_recovered(&self.dir,&identity::current()?.sid)?;Ok(())}
+ fn stop(&mut self)->Result<()>{self.journal.as_mut().unwrap().mark(&self.dir,super::update_install::Phase::Stopping)?;if !self.service.0.is_null(){self.journal.as_ref().unwrap().suppress_failure_actions(&self.service)?;super::update_install::stop_release(&self.service)?;}super::update_install::terminate_installed_processes(&self.root,&self.runtime,0);super::elevated::require_recovered()?;super::update_install::ensure_legacy_recovered(&self.dir,&identity::current()?.sid)?;Ok(())}
  fn replace(&mut self)->Result<()>{
   self.journal.as_mut().unwrap().mark(&self.dir,super::update_install::Phase::Replacing)?;
   self.runtime_files.as_mut().unwrap().activate(|p|security::protect(p,true))?;self.runtime_files.as_mut().unwrap().retire(crate::installer_files::RETIRED_TUN)?;security::verify_vendor(&self.runtime)?;
@@ -167,7 +168,7 @@ impl crate::installer_update::UpdateSteps for WindowsUpdate{
   if let Err(fw)=super::firewall::ensure_core_udp_inbound(&self.root){crate::installer_result::fw_error_record(fw);}
   Ok(())
  }
- fn start(&mut self)->Result<()>{self.journal.as_mut().unwrap().mark(&self.dir,super::update_install::Phase::Starting)?;self.start_attempted=true;scm::start(&self.service)?;self.journal.as_mut().unwrap().commit_setup(&self.dir)}
+ fn start(&mut self)->Result<()>{self.journal.as_mut().unwrap().mark(&self.dir,super::update_install::Phase::Starting)?;self.start_attempted=true;scm::start(&self.service)?;self.journal.as_ref().unwrap().restore_failure_actions(&self.service)?;self.journal.as_mut().unwrap().commit_setup(&self.dir)}
  fn recover(&mut self)->Result<()>{
   self.disarm_memory_rollback();self.prepare_pins.clear();
   let r=self.journal.as_mut().ok_or_else(||Error::new("INSTALL_JOURNAL","Protected recovery journal missing"))?.rollback(&self.dir,&self.read_token);

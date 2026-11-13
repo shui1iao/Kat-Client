@@ -36,32 +36,49 @@ func UDPReply(src, dst netip.AddrPort, payload []byte, id uint32) ([][]byte, err
 	if len(payload) > max {
 		return nil, errors.New("TUN_UDP_MESSAGE_TOO_LARGE")
 	}
-	udp := make([]byte, 8+len(payload))
-	binary.BigEndian.PutUint16(udp, src.Port())
-	binary.BigEndian.PutUint16(udp[2:], dst.Port())
-	binary.BigEndian.PutUint16(udp[4:], uint16(len(udp)))
-	copy(udp[8:], payload)
-	var pseudo []byte
+	udpLen := 8 + len(payload)
 	if src.Addr().Is4() {
 		a, b := src.Addr().As4(), dst.Addr().As4()
-		pseudo = append(pseudo, a[:]...)
-		pseudo = append(pseudo, b[:]...)
-		pseudo = append(pseudo, 0, 17, byte(len(udp)>>8), byte(len(udp)))
-	} else {
-		a, b := src.Addr().As16(), dst.Addr().As16()
-		pseudo = append(pseudo, a[:]...)
-		pseudo = append(pseudo, b[:]...)
-		pseudo = binary.BigEndian.AppendUint32(pseudo, uint32(len(udp)))
-		pseudo = append(pseudo, 0, 0, 0, 17)
-	}
-	csum := folded(sum16(pseudo) + sum16(udp))
-	if csum == 0 {
-		csum = 65535
-	}
-	binary.BigEndian.PutUint16(udp[6:], csum)
-	var out [][]byte
-	if src.Addr().Is4() {
-		a, b := src.Addr().As4(), dst.Addr().As4()
+		pseudoSum := uint32(binary.BigEndian.Uint16(a[0:2])) +
+			uint32(binary.BigEndian.Uint16(a[2:4])) +
+			uint32(binary.BigEndian.Uint16(b[0:2])) +
+			uint32(binary.BigEndian.Uint16(b[2:4])) +
+			17 + uint32(udpLen)
+		// Fast path: unfragmented IPv4 UDP packet built in a single allocation.
+		if udpLen <= MTU-20 {
+			p := make([]byte, 20+udpLen)
+			p[0] = 0x45
+			p[8] = 64
+			p[9] = 17
+			binary.BigEndian.PutUint16(p[2:4], uint16(len(p)))
+			binary.BigEndian.PutUint16(p[4:6], uint16(id))
+			copy(p[12:16], a[:])
+			copy(p[16:20], b[:])
+			binary.BigEndian.PutUint16(p[10:12], folded(sum16(p[:20])))
+
+			u := p[20:]
+			binary.BigEndian.PutUint16(u[0:2], src.Port())
+			binary.BigEndian.PutUint16(u[2:4], dst.Port())
+			binary.BigEndian.PutUint16(u[4:6], uint16(udpLen))
+			copy(u[8:], payload)
+			csum := folded(pseudoSum + sum16(u))
+			if csum == 0 {
+				csum = 65535
+			}
+			binary.BigEndian.PutUint16(u[6:8], csum)
+			return [][]byte{p}, nil
+		}
+		udp := make([]byte, udpLen)
+		binary.BigEndian.PutUint16(udp[0:2], src.Port())
+		binary.BigEndian.PutUint16(udp[2:4], dst.Port())
+		binary.BigEndian.PutUint16(udp[4:6], uint16(udpLen))
+		copy(udp[8:], payload)
+		csum := folded(pseudoSum + sum16(udp))
+		if csum == 0 {
+			csum = 65535
+		}
+		binary.BigEndian.PutUint16(udp[6:8], csum)
+		out := make([][]byte, 0, (udpLen+(MTU-20)-1)/(MTU-20))
 		for off := 0; off < len(udp); {
 			n := len(udp) - off
 			if n > MTU-20 {
@@ -71,53 +88,80 @@ func UDPReply(src, dst netip.AddrPort, payload []byte, id uint32) ([][]byte, err
 			p[0] = 0x45
 			p[8] = 64
 			p[9] = 17
-			binary.BigEndian.PutUint16(p[2:], uint16(len(p)))
-			binary.BigEndian.PutUint16(p[4:], uint16(id))
+			binary.BigEndian.PutUint16(p[2:4], uint16(len(p)))
+			binary.BigEndian.PutUint16(p[4:6], uint16(id))
 			frag := uint16(off / 8)
 			if off+n < len(udp) {
 				frag |= 0x2000
 			}
-			binary.BigEndian.PutUint16(p[6:], frag)
-			copy(p[12:], a[:])
-			copy(p[16:], b[:])
-			binary.BigEndian.PutUint16(p[10:], folded(sum16(p[:20])))
+			binary.BigEndian.PutUint16(p[6:8], frag)
+			copy(p[12:16], a[:])
+			copy(p[16:20], b[:])
+			binary.BigEndian.PutUint16(p[10:12], folded(sum16(p[:20])))
 			copy(p[20:], udp[off:off+n])
 			out = append(out, p)
 			off += n
 		}
-	} else {
-		a, b := src.Addr().As16(), dst.Addr().As16()
-		fragment := len(udp)+40 > MTU
-		for off := 0; off < len(udp); {
-			hdr := 40
-			if fragment {
-				hdr = 48
-			}
-			n := len(udp) - off
-			if n > MTU-hdr {
-				n = (MTU - hdr) &^ 7
-			}
-			p := make([]byte, hdr+n)
-			p[0] = 0x60
-			p[6] = 17
-			p[7] = 64
-			binary.BigEndian.PutUint16(p[4:], uint16(len(p)-40))
-			copy(p[8:], a[:])
-			copy(p[24:], b[:])
-			if fragment {
-				p[6] = 44
-				p[40] = 17
-				bits := uint16(off) & 0xfff8
-				if off+n < len(udp) {
-					bits |= 1
-				}
-				binary.BigEndian.PutUint16(p[42:], bits)
-				binary.BigEndian.PutUint32(p[44:], id)
-			}
-			copy(p[hdr:], udp[off:off+n])
-			out = append(out, p)
-			off += n
+		return out, nil
+	}
+
+	a, b := src.Addr().As16(), dst.Addr().As16()
+	pseudoSum := sum16(a[:]) + sum16(b[:]) + uint32(udpLen>>16) + uint32(udpLen&0xffff) + 17
+	if udpLen+40 <= MTU {
+		p := make([]byte, 40+udpLen)
+		p[0] = 0x60
+		p[6] = 17
+		p[7] = 64
+		binary.BigEndian.PutUint16(p[4:6], uint16(udpLen))
+		copy(p[8:24], a[:])
+		copy(p[24:40], b[:])
+
+		u := p[40:]
+		binary.BigEndian.PutUint16(u[0:2], src.Port())
+		binary.BigEndian.PutUint16(u[2:4], dst.Port())
+		binary.BigEndian.PutUint16(u[4:6], uint16(udpLen))
+		copy(u[8:], payload)
+		csum := folded(pseudoSum + sum16(u))
+		if csum == 0 {
+			csum = 65535
 		}
+		binary.BigEndian.PutUint16(u[6:8], csum)
+		return [][]byte{p}, nil
+	}
+	udp := make([]byte, udpLen)
+	binary.BigEndian.PutUint16(udp[0:2], src.Port())
+	binary.BigEndian.PutUint16(udp[2:4], dst.Port())
+	binary.BigEndian.PutUint16(udp[4:6], uint16(udpLen))
+	copy(udp[8:], payload)
+	csum := folded(pseudoSum + sum16(udp))
+	if csum == 0 {
+		csum = 65535
+	}
+	binary.BigEndian.PutUint16(udp[6:8], csum)
+	var out [][]byte
+	for off := 0; off < len(udp); {
+		hdr := 48
+		n := len(udp) - off
+		if n > MTU-hdr {
+			n = (MTU - hdr) &^ 7
+		}
+		p := make([]byte, hdr+n)
+		p[0] = 0x60
+		p[6] = 44
+		p[7] = 64
+		binary.BigEndian.PutUint16(p[4:6], uint16(len(p)-40))
+		copy(p[8:24], a[:])
+		copy(p[24:40], b[:])
+		p[40] = 17
+		bits := uint16(off) & 0xfff8
+		if off+n < len(udp) {
+			bits |= 1
+		}
+		binary.BigEndian.PutUint16(p[42:44], bits)
+		binary.BigEndian.PutUint32(p[44:48], id)
+		copy(p[hdr:], udp[off:off+n])
+		out = append(out, p)
+		off += n
 	}
 	return out, nil
 }

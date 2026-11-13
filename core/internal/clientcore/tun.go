@@ -55,6 +55,14 @@ func (h *Host) tunFailure(e error) *Error {
 		return nil
 	}
 	d := tunplatform.Describe("active_failure", e)
+	if d.Code == "WAITING_NETWORK" && h.tun != nil {
+		st := h.tun.Status()
+		if st.State == "waiting_network" && st.CleanupComplete && !st.CleanupPending && st.Failure == nil {
+			out := fail("WAITING_NETWORK", "network.tun", "Waiting for a usable physical network")
+			out.Tun = &d
+			return out
+		}
+	}
 	if h.tunSession != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		recorded := h.tunSession.ReportTUN(ctx, d)

@@ -9,13 +9,72 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
 var iphlp = windows.NewLazySystemDLL("iphlpapi.dll")
 var tcpTable = iphlp.NewProc("GetExtendedTcpTable")
 var udpTable = iphlp.NewProc("GetExtendedUdpTable")
+
+var tableBufPool = sync.Pool{New: func() any { b := make([]byte, 65536); return &b }}
+var imageBufPool = sync.Pool{New: func() any { b := make([]uint16, 32768); return &b }}
+
+const udpTupleCacheTTL = 150 * time.Millisecond
+
+type udpTupleEntry struct {
+	id      Identity
+	expires int64
+}
+
+var udpTupleCache struct {
+	sync.RWMutex
+	m  map[netip.AddrPort]udpTupleEntry
+}
+
+func cachedUDPTuple(q Query) (Identity, bool) {
+	if q.Network != "udp" || !q.Source.IsValid() || q.Source.Port() == 0 || q.Source.Addr().IsUnspecified() {
+		return Identity{}, false
+	}
+	now := time.Now().UnixNano()
+	udpTupleCache.RLock()
+	e, ok := udpTupleCache.m[q.Source]
+	udpTupleCache.RUnlock()
+	if ok && now < e.expires {
+		return e.id, true
+	}
+	return Identity{}, false
+}
+
+func storeUDPTuple(q Query, id Identity) {
+	if q.Network != "udp" || !q.Source.IsValid() || q.Source.Port() == 0 || q.Source.Addr().IsUnspecified() {
+		return
+	}
+	udpTupleCache.Lock()
+	defer udpTupleCache.Unlock()
+	if id.Status != "known" {
+		if udpTupleCache.m != nil {
+			delete(udpTupleCache.m, q.Source)
+		}
+		return
+	}
+	now := time.Now().UnixNano()
+	if udpTupleCache.m == nil {
+		udpTupleCache.m = make(map[netip.AddrPort]udpTupleEntry, 64)
+	} else if len(udpTupleCache.m) >= 1024 {
+		for k, v := range udpTupleCache.m {
+			if now >= v.expires {
+				delete(udpTupleCache.m, k)
+			}
+		}
+		if len(udpTupleCache.m) >= 1024 {
+			clear(udpTupleCache.m)
+		}
+	}
+	udpTupleCache.m[q.Source] = udpTupleEntry{id: id, expires: now + int64(udpTupleCacheTTL)}
+}
 
 // OWNER_PID ABI: TCP4 row=24, TCP6 row=56; UDP4 row=12, UDP6
 // row=28; each table starts with a DWORD count. Ports are network order.
@@ -36,6 +95,7 @@ func ownerRows(ctx context.Context, q Query) ([]Row, string, uint32) {
 	if fam == 23 {
 		size = 56
 	}
+	isTCP := q.Network == "tcp"
 	if q.Network == "udp" {
 		proc = udpTable
 		class = 1
@@ -43,52 +103,56 @@ func ownerRows(ctx context.Context, q Query) ([]Row, string, uint32) {
 		if fam == 23 {
 			size = 28
 		}
-	} else if q.Network != "tcp" {
+	} else if !isTCP {
 		return nil, "unsupported", 0
 	}
-	if q.Network == "tcp" && (!q.Destination.IsValid() || q.Destination.Port() == 0 || q.Destination.Addr().IsUnspecified() || q.Destination.Addr().Zone() != "" || q.Source.Addr().Is4() != q.Destination.Addr().Is4()) {
+	if isTCP && (!q.Destination.IsValid() || q.Destination.Port() == 0 || q.Destination.Addr().IsUnspecified() || q.Destination.Addr().Zone() != "" || q.Source.Addr().Is4() != q.Destination.Addr().Is4()) {
 		return nil, "unsupported", 0
 	}
-	var n uint32
-	r, _, _ := proc.Call(0, uintptr(unsafe.Pointer(&n)), 0, fam, class, 0)
-	if r != 122 {
-		return nil, "denied", uint32(r)
-	}
+	wantSP := q.Source.Port()
+	wantDP := q.Destination.Port()
+
+	bp := tableBufPool.Get().(*[]byte)
+	defer tableBufPool.Put(bp)
+	buf := *bp
+
+	n := uint32(len(buf))
+	r, _, _ := proc.Call(uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&n)), 0, fam, class, 0)
 	for tries := 0; tries < 3; tries++ {
 		if ctx.Err() != nil {
 			return nil, "unknown", 0
 		}
-		if n < 4 {
-			return nil, "changed", 0
-		}
-		if n > 16<<20 {
-			return nil, "unsupported", 0
-		}
-		alloc := n + uint32(16*size)
-		if alloc < n || alloc > 16<<20 {
-			alloc = 16 << 20
-		}
-		n = alloc
-		b := make([]byte, n)
-		r, _, _ = proc.Call(uintptr(unsafe.Pointer(&b[0])), uintptr(unsafe.Pointer(&n)), 0, fam, class, 0)
-		if ctx.Err() != nil {
-			return nil, "unknown", 0
-		}
 		if r == 122 {
+			if n < 4 {
+				return nil, "changed", 0
+			}
+			if n > 16<<20 {
+				return nil, "unsupported", 0
+			}
+			alloc := n + uint32(32*size)
+			if alloc < n || alloc > 16<<20 {
+				alloc = 16 << 20
+			}
+			buf = make([]byte, alloc)
+			if alloc <= 512<<10 {
+				*bp = buf
+			}
+			n = alloc
+			r, _, _ = proc.Call(uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&n)), 0, fam, class, 0)
 			continue
 		}
 		if r != 0 {
 			return nil, "denied", uint32(r)
 		}
-		if n < 4 || int(n) > len(b) {
+		if n < 4 || int(n) > len(buf) {
 			return nil, "changed", 0
 		}
-		b = b[:n]
+		b := buf[:n]
 		count := int(binary.LittleEndian.Uint32(b))
 		if count > (len(b)-4)/size {
 			return nil, "changed", 0
 		}
-		rows := make([]Row, 0, count)
+		var rows []Row
 		for i := 0; i < count; i++ {
 			if i&255 == 0 && ctx.Err() != nil {
 				return nil, "unknown", 0
@@ -98,34 +162,47 @@ func ownerRows(ctx context.Context, q Query) ([]Row, string, uint32) {
 			var sp, dp uint16
 			var pid uint32
 			if fam == 2 {
-				off := 0
-				if q.Network == "tcp" {
+				if isTCP {
 					if binary.LittleEndian.Uint32(v) != 5 {
 						continue
 					}
-					off = 4
-				}
-				src = netip.AddrFrom4([4]byte(v[off : off+4]))
-				sp = binary.BigEndian.Uint16(v[off+4 : off+6])
-				if q.Network == "tcp" {
-					dst = netip.AddrFrom4([4]byte(v[12:16]))
+					sp = binary.BigEndian.Uint16(v[8:10])
+					if sp != wantSP {
+						continue
+					}
 					dp = binary.BigEndian.Uint16(v[16:18])
+					if dp != wantDP {
+						continue
+					}
+					src = netip.AddrFrom4([4]byte(v[4:8]))
+					dst = netip.AddrFrom4([4]byte(v[12:16]))
 					pid = binary.LittleEndian.Uint32(v[20:24])
 				} else {
+					sp = binary.BigEndian.Uint16(v[4:6])
+					if sp != wantSP {
+						continue
+					}
+					src = netip.AddrFrom4([4]byte(v[0:4]))
 					pid = binary.LittleEndian.Uint32(v[8:12])
 				}
 			} else {
+				sp = binary.BigEndian.Uint16(v[20:22])
+				if sp != wantSP {
+					continue
+				}
 				if binary.LittleEndian.Uint32(v[16:20]) != 0 {
 					continue
 				}
 				src = netip.AddrFrom16([16]byte(v[:16]))
-				sp = binary.BigEndian.Uint16(v[20:22])
-				if q.Network == "tcp" {
+				if isTCP {
 					if binary.LittleEndian.Uint32(v[48:52]) != 5 || binary.LittleEndian.Uint32(v[40:44]) != 0 {
 						continue
 					}
-					dst = netip.AddrFrom16([16]byte(v[24:40]))
 					dp = binary.BigEndian.Uint16(v[44:46])
+					if dp != wantDP {
+						continue
+					}
+					dst = netip.AddrFrom16([16]byte(v[24:40]))
 					pid = binary.LittleEndian.Uint32(v[52:56])
 				} else {
 					pid = binary.LittleEndian.Uint32(v[24:28])
@@ -202,17 +279,22 @@ func lookupLocal(ctx context.Context, q Query) Identity {
 		if !processRunning(h) {
 			return unavailableIdentity("changed"), nil, close
 		}
-		b := make([]uint16, 32768)
+		ibp := imageBufPool.Get().(*[]uint16)
+		b := *ibp
 		n := uint32(len(b))
-		if err := windows.QueryFullProcessImageName(h, 0, &b[0], &n); err != nil {
+		err = windows.QueryFullProcessImageName(h, 0, &b[0], &n)
+		if err != nil {
+			imageBufPool.Put(ibp)
 			return nativeDenied(err), nil, close
 		}
 		if n == 0 || n > uint32(len(b)) {
+			imageBufPool.Put(ibp)
 			return unavailableIdentity("unknown"), nil, close
 		}
 		path := windows.UTF16ToString(b[:n])
+		imageBufPool.Put(ibp)
 		name := filepath.Base(path)
-		if !filepath.IsAbs(path) || name == "" || name == "." || strings.ContainsAny(name, "/\\") {
+		if !filepath.IsAbs(path) || name == "" || name == "." || strings.ContainsAny(name, `/\`) {
 			return unavailableIdentity("unknown"), nil, close
 		}
 		var session uint32

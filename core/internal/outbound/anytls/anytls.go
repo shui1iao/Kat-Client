@@ -455,10 +455,11 @@ func (o *Outbound) dialSession(ctx context.Context) (*session, error) {
 		outbound.ReportError(ctx, "anytls", "connect", e, diagnosticStarted)
 		return nil, fmt.Errorf("anytls: dial server: %w", e)
 	}
-	tc, e := tlsclient.Handshake(ctx, raw, o.tls, o.fp)
+	rawConn := wrapBufferedWriteConn(raw)
+	tc, e := tlsclient.Handshake(ctx, rawConn.asNetConn(), o.tls, o.fp)
 	if e != nil {
 		outbound.ReportError(ctx, "anytls", "tls", e, diagnosticStarted)
-		_ = raw.Close()
+		_ = rawConn.Close()
 		return nil, fmt.Errorf("anytls: tls handshake: %w", e)
 	}
 	scheme := o.scheme.Load()
@@ -470,7 +471,11 @@ func (o *Outbound) dialSession(ctx context.Context) (*session, error) {
 	if dl, ok := ctx.Deadline(); ok {
 		_ = tc.SetWriteDeadline(dl)
 	}
+	rawConn.beginBatchWrite()
 	e = writeAll(tc, auth)
+	if fe := rawConn.endBatchWrite(); e == nil {
+		e = fe
+	}
 	_ = tc.SetWriteDeadline(time.Time{})
 	if e != nil {
 		_ = tc.Close()
@@ -478,7 +483,7 @@ func (o *Outbound) dialSession(ctx context.Context) (*session, error) {
 		return nil, fmt.Errorf("anytls: send authentication: %w", e)
 	}
 	settings := "v=2\nclient=kat\npadding-md5=" + scheme.md5
-	s := newSession(o, tc, scheme, appendFrame(nil, cmdSettings, 0, []byte(settings)))
+	s := newSession(o, tc, rawConn, scheme, appendFrame(nil, cmdSettings, 0, []byte(settings)))
 	route.mu.Lock()
 	s.route = append(s.route, route.checks...)
 	route.mu.Unlock()

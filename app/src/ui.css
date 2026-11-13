@@ -288,6 +288,7 @@
 .kernel-card[data-state="error"] .ss-dot { background:#EF4444; box-shadow:0 0 0 3px rgba(239,68,68,.18); }
 @keyframes kernel-breathe { 50% { opacity:.6; } }
 @media(prefers-reduced-motion:reduce) { .kernel-card:is([data-state="running"],[data-state="starting"]) .ss-dot { animation:none; } }
+html[data-kat-window-hidden="true"]:not([data-view="tray-menu"]) .kernel-card:is([data-state="running"],[data-state="starting"]) .ss-dot { animation-play-state:paused; }
 .ss-rates,.ss-stats { display:grid; grid-template-columns:1fr 1fr; gap:8px; min-width:0; }
 .ss-rates>span { font:500 13px/20px var(--font-num); white-space:nowrap; font-variant-numeric:tabular-nums; }
 .ss-rates .down { color:var(--down); } .ss-rates .up { color:var(--up); }

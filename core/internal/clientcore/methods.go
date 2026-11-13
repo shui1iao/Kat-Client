@@ -46,8 +46,8 @@ func (h *Host) Request(ctx context.Context, method string, params json.RawMessag
 		return h.prepareHandover(ctx, params)
 	case "host.resume-update":
 		return h.resumeUpdate(params)
-	case "rules.test":
-		return h.testRules(ctx, params)
+	case "routing.previewTarget":
+		return h.previewTarget(ctx, params)
 	case "diagnostics.network":
 		return h.diagnosticsNetwork(ctx, params)
 	case "icon.cached":

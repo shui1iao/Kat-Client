@@ -25,7 +25,7 @@ const BodyLimit = 2 << 20
 const NetflixBodyLimit = 4 << 20
 
 var ErrBodyLimit = errors.New("diagnostic response body limit")
-var Services = []string{"ChatGPT", "Gemini", "Claude", "Google", "YouTube", "Netflix", "Disney+"}
+var Services = []string{"ChatGPT", "Gemini", "Google", "Netflix"}
 
 // ResponseLimit applies only to a named unlock job, not to arbitrary user URLs.
 func ResponseLimit(service string) int {
@@ -169,24 +169,10 @@ var geminiUnsupported = map[string]bool{
 	"SYR": true,
 }
 
-var claudeUnavailableMarkers = []string{
-	"app unavailable in region",
-	"/app-unavailable-in-region",
-	"unfortunately, claude isn't available here.",
-	"unfortunately, claude isn’t available here.",
-	"unfortunately, claude isn&apos;t available here.",
-	"unfortunately, claude isn&#39;t available here.",
-}
-
 var (
 	reGoogleBlocked    = regexp.MustCompile(`(?i)unusual traffic from|is blocked|unaddressed abuse`)
 	reGoogleUnderscore = regexp.MustCompile(`"[a-z]{2}_([A-Z]{2})"`)
 	reGoogleDash       = regexp.MustCompile(`"[a-z]{2}-([A-Z]{2})"`)
-
-	reYouTubeCountryKey   = regexp.MustCompile(`"countryCode"\s*:`)
-	reYouTubeCountryVal   = regexp.MustCompile(`"countryCode"\s*:\s*"([^"]*)"`)
-	reYouTubeContextGLKey = regexp.MustCompile(`"INNERTUBE_CONTEXT_GL"\s*:`)
-	reYouTubeContextGLVal = regexp.MustCompile(`"INNERTUBE_CONTEXT_GL"\s*:\s*"([^"]*)"`)
 
 	reHTMLTag = regexp.MustCompile(`(?is)<\s*(?:!doctype\s+html|html|head|body|title|div|h1|h2|p|main|script)\b`)
 )
@@ -197,16 +183,6 @@ func htmlDocument(body string) bool {
 		return false
 	}
 	return reHTMLTag.MatchString(trimmed)
-}
-
-func claudeUnavailable(body string) bool {
-	lower := strings.ToLower(body)
-	for _, marker := range claudeUnavailableMarkers {
-		if strings.Contains(lower, marker) {
-			return true
-		}
-	}
-	return false
 }
 
 func googleSorryRedirect(p Page) bool {
@@ -295,56 +271,6 @@ func googlePageRegion(body string) (string, bool) {
 	return "", true
 }
 
-func youtubePageRegion(body string) (string, bool) {
-	ccKeys := reYouTubeCountryKey.FindAllStringIndex(body, -1)
-	ccVals := reYouTubeCountryVal.FindAllStringSubmatch(body, -1)
-	if len(ccKeys) != len(ccVals) {
-		return "", false
-	}
-	glKeys := reYouTubeContextGLKey.FindAllStringIndex(body, -1)
-	glVals := reYouTubeContextGLVal.FindAllStringSubmatch(body, -1)
-	if len(glKeys) != len(glVals) {
-		return "", false
-	}
-	all := append(append([][]string{}, ccVals...), glVals...)
-	if len(all) == 0 {
-		return "", true
-	}
-	code := uniqueCountry(all)
-	if code == "" {
-		return "", false
-	}
-	return code, true
-}
-
-func traceCountry(body string) (string, error) {
-	values := map[string]string{}
-	for _, line := range strings.Split(body, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		k, v, ok := strings.Cut(line, "=")
-		if !ok {
-			continue
-		}
-		if _, duplicate := values[k]; duplicate {
-			return "", errors.New("duplicate trace field")
-		}
-		values[k] = v
-	}
-	if ip, hasIP := values["ip"]; hasIP {
-		parsed := net.ParseIP(ip)
-		if parsed == nil || !parsed.IsGlobalUnicast() {
-			return "", errors.New("invalid trace ip")
-		}
-	}
-	region := knownCountry(values["loc"])
-	if region == "" {
-		return "", errors.New("invalid trace loc")
-	}
-	return region, nil
-}
 
 // Explicit visible visitor messages on Gemini can also establish a denial or
 // unusual-traffic verification. Scripts/templates/hidden text are excluded.
@@ -426,8 +352,8 @@ func Detect(ctx context.Context, name string, get Fetch) (v Verdict) {
 		return p, e
 	}
 	// Best-effort auxiliary region lookup for services whose primary verdict is
-	// already decided by the primary response (Claude, Google, YouTube). Never
-	// overwrites primary stage/HTTPStatus or exhausts the outer 8-second budget.
+	// already decided by the primary response (Google). Never overwrites primary
+	// stage/HTTPStatus or exhausts the outer 8-second budget.
 	auxFetch := func(u string) (Page, bool) {
 		if ctx.Err() != nil {
 			return Page{}, false
@@ -558,33 +484,6 @@ func Detect(ctx context.Context, name string, get Fetch) (v Verdict) {
 			return verdict(false, region, "[region_denied] 官方页面服务地区属于不支持国家/地区列表；不代表账户状态")
 		}
 		return verdict(true, region, "[anonymous] 官方入口返回可用服务地区配置；仅代表页面地区准入，未验证登录账户或真实对话能力")
-	case "Claude":
-		p, e := fetch("Claude 匿名入口", "https://claude.ai/")
-		if e != nil {
-			return failed(FailureReason(e))
-		}
-		if challenge(p) {
-			return pageFailure(p)
-		}
-		if regionRedirect(p, "claude.ai") || ((p.Status == http.StatusOK || p.Status == http.StatusForbidden) && claudeUnavailable(p.Body)) {
-			return verdict(false, "", "[region_denied] 官方页面明确表示当前地区不可用")
-		}
-		if p.Status == http.StatusForbidden {
-			return unknown("[http] HTTP 403 未包含明确地区拒绝页面，原因未知")
-		}
-		if why := pageFailure(p); why.Result != "" {
-			return why
-		}
-		if !htmlDocument(p.Body) {
-			return unknown("[schema] 响应不是可识别的 Claude 页面结构")
-		}
-		loc := ""
-		if q, ok := auxFetch("https://claude.ai/cdn-cgi/trace"); ok {
-			if c, err := traceCountry(q.Body); err == nil {
-				loc = c
-			}
-		}
-		return verdict(true, loc, "[anonymous] 官方匿名入口可达且未返回地区拒绝页面；仅代表页面准入，不代表账户或对话状态")
 	case "Google":
 		p, e := fetch("Google Search 匿名验证码检测", "https://www.google.com/search?q=cats")
 		if e != nil {
@@ -616,37 +515,6 @@ func Detect(ctx context.Context, name string, get Fetch) (v Verdict) {
 			}
 		}
 		return verdict(true, region, "[anonymous] Google Search 页面正常返回且未触发异常流量验证码；仅代表搜索未受验证码拦截，不代表账户登录能力")
-	case "YouTube":
-		p, e := fetch("YouTube Premium 匿名报价页", "https://www.youtube.com/premium")
-		if e != nil {
-			return failed(FailureReason(e))
-		}
-		if challenge(p) {
-			return pageFailure(p)
-		}
-		region, ok := youtubePageRegion(p.Body)
-		if !ok {
-			region = ""
-		}
-		lower := strings.ToLower(p.Body)
-		if (p.Status == http.StatusOK || p.Status == http.StatusForbidden) && strings.Contains(lower, "youtube premium is not available in your country") {
-			return verdict(false, region, "[region_denied] 官方页面明确表示当前国家/地区未提供 YouTube Premium；仅代表 Premium 开通能力，不代表普通视频访问不可用")
-		}
-		if why := pageFailure(p); why.Result != "" {
-			return why
-		}
-		hasOffer := strings.Contains(lower, "ad-free") || (strings.Contains(p.Body, "lpOfferCardViewModel") && strings.Contains(p.Body, "SPunlimited") && strings.Contains(p.Body, "/premium"))
-		if !hasOffer {
-			return unknown("[schema] 页面未包含 YouTube Premium 报价或明确地区拒绝标记")
-		}
-		if ok && region == "" {
-			if q, auxOK := auxFetch("https://www.youtube.com/"); auxOK {
-				if r, rOK := youtubePageRegion(q.Body); rOK {
-					region = r
-				}
-			}
-		}
-		return verdict(true, region, "[anonymous] 官方 YouTube Premium 报价页可用；仅代表 Premium 区域开通能力，不混同 YouTube 普通访问或账户状态")
 	case "Netflix":
 		p, e := fetch("Netflix 匿名地区元数据", "https://www.netflix.com/title/80057281")
 		if e != nil {
@@ -665,37 +533,6 @@ func Detect(ctx context.Context, name string, get Fetch) (v Verdict) {
 		// The user chose anonymous regional/service availability, not licensed-title
 		// catalogue or playback. A particular licensed title must not gate ALLOW.
 		return verdict(true, f.Region, "[anonymous] 官方请求地区 ALLOW 且返回对应标题元数据；不保证片库 / 账户 / 播放")
-	case "Disney+":
-		p, e := fetch("Disney+ 匿名地区产品页", "https://www.disneyplus.com/")
-		if e != nil {
-			return failed(FailureReason(e))
-		}
-		if challenge(p) {
-			return pageFailure(p)
-		}
-		if regionRedirect(p, "disneyplus.com") {
-			return verdict(false, "", "[region_denied] 官方页面明确表示当前地区不可用")
-		}
-		if why := pageFailure(p); why.Result != "" {
-			return why
-		}
-		var props struct {
-			Location   string `json:"location"`
-			HasContent bool   `json:"hasContent"`
-			Countries  map[string]struct {
-				Commerce struct {
-					Products map[string]struct {
-						SKUs []string `json:"skuList"`
-					} `json:"defaultProduct"`
-				} `json:"commerce"`
-			} `json:"countriesConfig"`
-		}
-		if decodeAssignment(p.Body, "window.langRegionRedirectProps = ", &props) == nil && iso(props.Location) {
-			if c, ok := props.Countries[props.Location]; ok && props.HasContent && len(c.Commerce.Products["NU"].SKUs) > 0 {
-				return verdict(true, props.Location, "[anonymous] 当前访客地区存在公开产品 SKU；不保证账户 / 播放")
-			}
-		}
-		return unknown("[schema] 当前访客地区没有可确认的公开产品证据")
 	default:
 		return failed("[unsupported] 不支持的服务")
 	}

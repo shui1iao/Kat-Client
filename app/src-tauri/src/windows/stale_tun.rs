@@ -76,11 +76,13 @@ unsafe fn pnp_devnode_absent(guid:&str)->bool{
  let mut dev=0u32;
  CM_Locate_DevNodeW(&mut dev,instance.as_ptr(),CM_LOCATE_DEVNODE_PHANTOM)==CR_NO_SUCH_DEVNODE
 }
-pub(super) fn remove(alias:&str,guard:impl Fn()->Result<()>)->Result<()>{
+pub(super) fn remove(alias:&str,guard:impl Fn()->Result<()>)->Result<()>{remove_inner(alias,None,guard)}
+pub(super) fn remove_recovering(a:&super::journal::Adapter,guard:impl Fn()->Result<()>)->Result<()>{remove_inner(&a.alias,Some(a),guard)}
+fn remove_inner(alias:&str,owned:Option<&super::journal::Adapter>,guard:impl Fn()->Result<()>)->Result<()>{
  let mut stage=Stage::AliasGuard;
  let result=(||{unsafe{
   let Some(row)=native::alias_row(alias)?else{return Ok(())};
-  if !super::journal::stale_down(row.oper,row.adapter.luid,row.index){return Err(refuse())}
+  if !super::journal::stale_down(row.oper,row.adapter.luid,row.index) && !(row.oper==6&&row.index!=0&&owned==Some(&row.adapter)&&native::stack_missing(&row.adapter)?){return Err(refuse())}
   guard()?;
   // Resolve the exact GUID's Connection mapping; do not infer from a WMI row or name prefix.
   let keypath=format!(r"SYSTEM\CurrentControlSet\Control\Network\{{4D36E972-E325-11CE-BFC1-08002BE10318}}\{{{}}}\Connection",row.adapter.guid);
@@ -105,8 +107,8 @@ pub(super) fn remove(alias:&str,guard:impl Fn()->Result<()>)->Result<()>{
   let deadline=Instant::now()+Duration::from_secs(3);
   loop{
    match native::alias_row(alias)?{
-    None=>{if !native::adapter_present(&row.adapter)?{return Ok(())}},
-    Some(now)=>if now.adapter!=row.adapter||now.index!=row.index{return Err(refuse())}
+    None=>{if pnp_devnode_absent(&row.adapter.guid)&&!native::adapter_present(&row.adapter)?{return Ok(())}},
+    Some(now)=>{if now.adapter!=row.adapter||now.index!=row.index{return Err(refuse())}if pnp_devnode_absent(&row.adapter.guid)&&!native::adapter_present(&row.adapter)?{return Ok(())}}
    }
    if Instant::now()>=deadline{return Err(Error::new("TUN_TIMEOUT","Exact adapter removal is not yet confirmed"))}
    std::thread::sleep(Duration::from_millis(50));

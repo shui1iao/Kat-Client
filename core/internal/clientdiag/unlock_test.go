@@ -182,7 +182,7 @@ func TestAnonymousNoCountryOnlyPositiveOrUnsafeRedirect(t *testing.T) {
 			t.Fatal("unsafe negative", target)
 		}
 	}
-	if !regionRedirect(Page{Status: 200, URL: "https://www.disneyplus.com/welcome/unavailable"}, "disneyplus.com") {
+	if !regionRedirect(Page{Status: 200, URL: "https://gemini.google.com/app-unavailable-in-region"}, "gemini.google.com") {
 		t.Fatal("lost same-host final unavailable page")
 	}
 }

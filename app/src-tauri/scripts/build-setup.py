@@ -26,7 +26,7 @@ for name in names:
  parent=Path(name).parent
  out='$PLUGINSDIR\\payload'+(''if str(parent)=='.'else'\\'+str(parent).replace('/','\\'))
  lines+=['SetOutPath "'+out+'"','File /oname='+Path(name).name+' "'+str(source)+'"']
-assert next(r for r in rows if r['path']=='kat-client-core.exe')['sha256']=='b35f5fd15771a35e45c38e6d9a944c9e9b231c457dab3706028da1926e963974'
+assert next(r for r in rows if r['path']=='kat-client-core.exe')['sha256']=='7f5630833b2bc2084f36063ab86b35caffe78243c4fdc48c63588ca1b80808eb'
 E.mkdir(exist_ok=True);a.output.parent.mkdir(exist_ok=True,parents=True);a.uninstaller.parent.mkdir(exist_ok=True,parents=True)
 inc=E/'payload.nsh';inc.write_text('\n'.join(lines)+'\n')
 cmd=[str(T/'root/usr/bin/makensis'),'-V3','-DOUTPUT='+str(a.output),'-DICON='+str(S/'icons/icon.ico'),'-DPAYLOAD_INCLUDE='+str(inc),'-DCAPTURE_SCRIPT='+str(S/'scripts/capture-uninstaller.py'),'-DUNINSTALLER_TEMPLATE='+str(a.uninstaller),str(S/'scripts/Kat-Setup.nsi')]

@@ -4,7 +4,7 @@ use crate::{error::{Error, Result}, protocol::validate_public, core_process::Cor
 use serde_json::Value;
 use std::{sync::{Arc, atomic::{AtomicBool, Ordering}}, time::Duration};
 use tauri::{Manager, Emitter, tray::TrayIconBuilder};
-pub(super) struct Host { pub(super) tray_state:std::sync::Mutex<crate::tray_controls::MenuState>, tray:std::sync::Mutex<Option<tauri::tray::TrayIcon>>, core: Option<Supervisor>, core_error: Error, network: Arc<NetworkController>, quitting: AtomicBool, restarting:AtomicBool, app_restarting:AtomicBool, installing:AtomicBool, events:Arc<std::sync::Mutex<crate::safe_log::Ring>>, settings:std::sync::Mutex<crate::preferences::DesktopPreferences>, settings_lock:std::sync::Mutex<()>, window_memory:std::sync::Mutex<crate::window_geometry::Persistence>, pending_maximize:AtomicBool, control:tokio::sync::Mutex<()>, store:crate::user_store::Store, _instance:std::sync::Mutex<Option<crate::windows::identity::Handle>> }
+pub(super) struct Host { pub(super) tray_state:std::sync::Mutex<crate::tray_controls::MenuState>, tray:std::sync::Mutex<Option<tauri::tray::TrayIcon>>, core: Option<Supervisor>, core_error: Error, network: Arc<NetworkController>, quitting: AtomicBool, restarting:AtomicBool, app_restarting:AtomicBool, installing:AtomicBool, events:Arc<std::sync::Mutex<crate::safe_log::Ring>>, settings:std::sync::Mutex<crate::preferences::DesktopPreferences>, settings_lock:std::sync::Mutex<()>, window_memory:std::sync::Mutex<crate::window_geometry::Persistence>, pending_maximize:AtomicBool, control:tokio::sync::Mutex<()>, store:crate::user_store::Store, main_hidden:std::sync::Mutex<Option<bool>>,_instance:std::sync::Mutex<Option<crate::windows::identity::Handle>> }
 impl Host{
  fn record<T>(&self,event:crate::safe_log::HostEvent,result:&Result<T>){self.events.lock().unwrap().record(event,result.as_ref().err().map(|e|e.code.as_str()));}
  fn tray_native_busy(&self)->bool{self.installing.load(Ordering::SeqCst)||self.quitting.load(Ordering::SeqCst)||self.restarting.load(Ordering::SeqCst)||self.app_restarting.load(Ordering::SeqCst)}
@@ -81,7 +81,7 @@ async fn restart_kernel(app:&tauri::AppHandle,state:&Host)->Result<()>{
 #[tauri::command]
 async fn core_restart(app:tauri::AppHandle,state:tauri::State<'_,Host>)->Result<()>{restart_kernel(&app,&state).await}
 #[tauri::command]
-async fn network_status(state: tauri::State<'_, Host>) -> Result<NetworkStatus> { state.network.status().await }
+async fn network_status(app: tauri::AppHandle, state: tauri::State<'_, Host>) -> Result<NetworkStatus> { sync_main_window_visibility(&app, false); state.network.status().await }
 #[tauri::command]
 async fn system_proxy_set(state: tauri::State<'_, Host>, enabled: bool) -> Result<NetworkStatus> { let _control=state.control.lock().await;state.ensure_not_app_restarting()?;
  let id=state.events.lock().unwrap().begin("proxy.set");let started=std::time::Instant::now();let result:Result<NetworkStatus>=async{let status=state.network.proxy_set(enabled).await?;{let _intent=state.settings_lock.lock().unwrap();crate::preferences::set_intent(&state.store,Some(enabled),None).map_err(|_|Error::new("NETWORK_INTENT_PENDING","网络状态已提交，但开启意图未能保存；请重试保存，当前网络未被撤销"))?;}Ok(status)}.await;state.events.lock().unwrap().operation(crate::safe_log::HostEvent::Proxy,"proxy.set",id,crate::log_context::Phase::Complete,result.as_ref().err().map(|e|e.code.as_str()),started.elapsed().as_millis().min(u64::MAX as u128)as u64,result.as_ref().err().map(|_|id));result }
@@ -117,8 +117,11 @@ fn tray_sync(window:tauri::WebviewWindow,state:tauri::State<'_,Host>,snapshot:Op
  // ACK only proves reception by the existing main guard, never business success.
  // A late token cannot re-enable/replay an expired operation.
  if let Some(ack)=delivery_ack{current.acknowledge(&ack)?;}
+ let resend=!current.listener_ready&&listener_ready==Some(true);
  if let Some(ready)=listener_ready{current.listener_ready=ready;}
  if let Some(snapshot)=snapshot{current.sync(snapshot);}
+ drop(current);
+ sync_main_window_visibility(window.app_handle(),resend);
  Ok(())
 }
 #[tauri::command]
@@ -260,7 +263,13 @@ fn save_window_now(app:&tauri::AppHandle){
   }Ok(())})();
  if result.is_err(){state.record(crate::safe_log::HostEvent::Settings,&result);}
 }
-fn queue_window_save(app:&tauri::AppHandle){let state=app.state::<Host>();if !state.settings.lock().unwrap().remember_window{return;}
+fn sync_main_window_visibility(app:&tauri::AppHandle,force:bool){
+ let Some(w)=app.get_webview_window("main")else{return;};
+ let hidden=crate::acrylic::main_window_hidden(w.is_visible().ok(),w.is_minimized().ok());
+ let changed={let state=app.state::<Host>();let mut last=state.main_hidden.lock().unwrap();if force{*last=None;}crate::acrylic::take_hidden_change(&mut last,hidden)};
+ if let Some(hidden)=changed{crate::acrylic::sync_visibility(&w,hidden);let _=app.emit_to("main",crate::acrylic::MAIN_WINDOW_HIDDEN_EVENT,hidden);}
+}
+fn queue_window_save(app:&tauri::AppHandle){sync_main_window_visibility(app,false);let state=app.state::<Host>();if !state.settings.lock().unwrap().remember_window{return;}
  if !state.window_memory.lock().unwrap().debounce.changed(std::time::Instant::now()){return;}
  let a=app.clone();tauri::async_runtime::spawn(async move{let mut delay=Duration::from_millis(500);loop{
   tokio::time::sleep(delay).await;
@@ -272,7 +281,7 @@ fn queue_window_save(app:&tauri::AppHandle){let state=app.state::<Host>();if !st
 }
 fn show_main(app:&tauri::AppHandle){if let Some(w)=app.get_webview_window("main"){
  if w.is_minimized().unwrap_or(false){let _=w.unminimize();}if app.state::<Host>().pending_maximize.swap(false,Ordering::SeqCst){let _=w.maximize();}let _=w.show();let _=w.set_focus();
-}}
+}sync_main_window_visibility(app,false);}
 
 fn tray_image()->tauri::image::Image<'static>{tauri::image::Image::new(include_bytes!("../icons/icon-32.rgba"),32,32)}
 // Called from Ready and window actions. Tauri owns a resource-table clone, and
@@ -292,7 +301,7 @@ fn ensure_tray(app:&tauri::AppHandle)->bool{
             }
             if let tauri::tray::TrayIconEvent::Click{button:tauri::tray::MouseButton::Left,button_state:tauri::tray::MouseButtonState::Up,..}=event{
               let app=tray.app_handle();if let Some(w)=app.get_webview_window("main"){let mode=app.state::<Host>().settings.lock().unwrap().tray_click;
-               match crate::preferences::tray_action(mode,true,w.is_visible().unwrap_or(false),w.is_minimized().unwrap_or(false)){crate::preferences::TrayAction::Show=>show_main(app),crate::preferences::TrayAction::Hide=>{let _=w.hide();},crate::preferences::TrayAction::Ignore=>{}}
+               match crate::preferences::tray_action(mode,true,w.is_visible().unwrap_or(false),w.is_minimized().unwrap_or(false)){crate::preferences::TrayAction::Show=>show_main(app),crate::preferences::TrayAction::Hide=>{let _=w.hide();sync_main_window_visibility(app,false);},crate::preferences::TrayAction::Ignore=>{}}
               }
             }
           })
@@ -303,7 +312,7 @@ fn ensure_tray(app:&tauri::AppHandle)->bool{
  state.record(crate::safe_log::HostEvent::Tray,&result);
  match result{Ok(tray)=>{*held=Some(tray);true},Err(_)=>{app.remove_tray_by_id("kat-main");false}}
 }
-fn minimize_reachable(app:&tauri::AppHandle){if let Some(w)=app.get_webview_window("main"){let _=w.show().and_then(|_|w.minimize());}}
+fn minimize_reachable(app:&tauri::AppHandle){if let Some(w)=app.get_webview_window("main"){let _=w.show().and_then(|_|w.minimize());sync_main_window_visibility(app,false);}}
 fn close_to_tray(app:&tauri::AppHandle)->tauri::Result<()>{
  let w=app.get_webview_window("main").ok_or(tauri::Error::WindowNotFound)?;
  crate::tray_lifecycle::hide_or_minimize(ensure_tray(app),||w.hide(),||w.show().and_then(|_|w.minimize()))
@@ -399,6 +408,7 @@ fn window_action(app: tauri::AppHandle, action: String) -> Result<()> {
         "restart-app"=>return restart_app(app),
         _=>return Err(Error::new("ACTION_DENIED", "Unsupported window action")),
     };
+    sync_main_window_visibility(&app,false);
     result.map_err(|_| Error::new("WINDOW_FAILED", "Window operation failed"))
 }
 pub fn run() {
@@ -453,7 +463,7 @@ pub fn run() {
             }
         });}
         let retention_network=network.clone();let retention_days=settings.log_retention_days;tauri::async_runtime::spawn(async move{if crate::windows::scm::query().is_ok_and(|(_,running,_)|running){let _=crate::windows::service_client::call(crate::service_protocol::ServiceRequest::LogRetention{days:retention_days}).await;}let _=retention_network;});
-        app.manage(Host {tray_state:std::sync::Mutex::new(crate::tray_controls::MenuState::default()),tray:std::sync::Mutex::new(None),core,core_error,network,quitting:AtomicBool::new(false),restarting:AtomicBool::new(false),app_restarting:AtomicBool::new(false),installing:AtomicBool::new(false),events,settings:std::sync::Mutex::new(settings.clone()),settings_lock:std::sync::Mutex::new(()),window_memory:std::sync::Mutex::new(crate::window_geometry::Persistence::default()),pending_maximize:AtomicBool::new(false),control:tokio::sync::Mutex::new(()),store,_instance:std::sync::Mutex::new(Some(instance))});
+        app.manage(Host {tray_state:std::sync::Mutex::new(crate::tray_controls::MenuState::default()),tray:std::sync::Mutex::new(None),core,core_error,network,quitting:AtomicBool::new(false),restarting:AtomicBool::new(false),app_restarting:AtomicBool::new(false),installing:AtomicBool::new(false),events,settings:std::sync::Mutex::new(settings.clone()),settings_lock:std::sync::Mutex::new(()),window_memory:std::sync::Mutex::new(crate::window_geometry::Persistence::default()),pending_maximize:AtomicBool::new(false),control:tokio::sync::Mutex::new(()),store,main_hidden:std::sync::Mutex::new(None),_instance:std::sync::Mutex::new(Some(instance))});
         // Stable generation watcher. A delayed old-generation exit may never
         // tear down networking after a newer explicit restart has restored it.
         // App restart owns its cleanup through relaunch; do not queue another
@@ -477,7 +487,7 @@ pub fn run() {
         app.state::<Host>().events.lock().unwrap().record(crate::safe_log::HostEvent::Started,None);crate::safe_log::component("component.started",crate::log_context::Component::Gui,"startup",crate::log_context::Phase::Commit,None,None);crate::safe_log::component("component.ready",crate::log_context::Component::Gui,"startup",crate::log_context::Phase::Complete,None,None);
         let config=app.config().app.windows.first().ok_or("Missing main window configuration")?;
         let window=tauri::WebviewWindowBuilder::from_config(app,config)?
-          .on_page_load(|w,payload|{if matches!(payload.event(),tauri::webview::PageLoadEvent::Started){w.state::<Host>().tray_state.lock().unwrap().listener_ready=false;}})
+          .on_page_load(|w,payload|{if matches!(payload.event(),tauri::webview::PageLoadEvent::Started){let s=w.state::<Host>();s.tray_state.lock().unwrap().listener_ready=false;*s.main_hidden.lock().unwrap()=None;}})
           .transparent(true)
           .on_navigation(|url| url.scheme()=="tauri" || (url.scheme()=="http" && url.host_str()==Some("tauri.localhost")))
           .icon(tray_image())?
@@ -490,8 +500,8 @@ pub fn run() {
           if installed_handoff||crate::preferences::initially_visible(&settings,settings_error.is_some()||intent_error.is_some()||app.state::<Host>().core.is_none())||last.tun{show_main(app.handle());}
         }
         window.on_window_event({let a=app.handle().clone();move |e| match e{
-          tauri::WindowEvent::CloseRequested{api,..}=>{api.prevent_close();if a.state::<Host>().installing.load(Ordering::SeqCst){show_main(&a);return;}save_window_now(&a);if a.state::<Host>().settings.lock().unwrap().close_action==crate::preferences::CloseAction::Quit{quit(a.clone());}else{let _=close_to_tray(&a);}},
-          tauri::WindowEvent::Moved(_)|tauri::WindowEvent::Resized(_)|tauri::WindowEvent::ScaleFactorChanged{..}=>queue_window_save(&a),_=>{}
+          tauri::WindowEvent::CloseRequested{api,..}=>{api.prevent_close();if a.state::<Host>().installing.load(Ordering::SeqCst){show_main(&a);return;}save_window_now(&a);if a.state::<Host>().settings.lock().unwrap().close_action==crate::preferences::CloseAction::Quit{quit(a.clone());}else{let _=close_to_tray(&a);}sync_main_window_visibility(&a,false);},
+          tauri::WindowEvent::Moved(_)|tauri::WindowEvent::Resized(_)|tauri::WindowEvent::ScaleFactorChanged{..}=>queue_window_save(&a),tauri::WindowEvent::Focused(_)=>sync_main_window_visibility(&a,false),_=>{}
         }});
         let a=app.handle().clone();tauri::async_runtime::spawn(async move{
           let state=a.state::<Host>();let _control=state.control.lock().await;

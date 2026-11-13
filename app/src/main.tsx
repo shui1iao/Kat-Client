@@ -10,6 +10,7 @@ import './ui.css';
 import './k3.css';
 import './acrylic.css';
 import './hig.css';
+import './dashboard.css';
 
 // Local brand icon: no browser fallback request or external resource.
 const icon=document.createElement('link');

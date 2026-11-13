@@ -114,7 +114,7 @@ pub async fn complete_pending(app:&tauri::AppHandle)->Result<()>{let pending=cra
  let h=app.state::<Host>();let _health_control=tokio::time::timeout(Duration::from_secs(5),h.control.lock()).await.map_err(|_|Error::new("UPDATE_BUSY","网络操作进行中，请稍后重试确认"))?;let health=async{let h=app.state::<Host>();let core=h.core.as_ref().ok_or_else(||h.core_error.clone())?;if matches!(*core.life().borrow(),crate::supervisor::Life::Exited(_)){return Err(Error::new("UPDATE_HEALTH","更新后内核连接已断开（EOF），不能视为健康"));}let hello=crate::lifecycle::trace("finalize.hello",core.hello()).await?;let current=crate::lifecycle::trace("finalize.identity",async{crate::windows::update_install::current_versions()}).await?;if hello["core_version"].as_str()!=Some(p.core_version.as_str())||current.core_sha256!=p.core_sha256||hello["protocol"]!=serde_json::json!(1)||!hello["capabilities"].as_array().is_some_and(|a|a.iter().any(|c|c=="host.prepare-update.v1")){return Err(Error::new("UPDATE_HEALTH","更新后组件版本或接口能力不符"));}let doc=crate::lifecycle::trace("finalize.document",core.request("document.get",serde_json::Value::Null,Duration::from_secs(10))).await?;crate::document::AcceptedDocument::from_reply(&doc)?;let status=crate::lifecycle::trace("finalize.status",core.request("status",serde_json::Value::Null,Duration::from_secs(10))).await?;if status["runtime"]["state"]=="error"||matches!(*core.life().borrow(),crate::supervisor::Life::Exited(_)){return Err(Error::new("UPDATE_HEALTH","更新后内核启动失败或连接异常"));}Ok(())}.await;
  if let Err(e)=health{let _=crate::lifecycle::trace("startup.cleanup",app.state::<Host>().network.cleanup()).await;let _=crate::windows::update_bridge::request_rollback(&p.tx);return Err(e);}
  drop(_health_control);
- confirmation(app,true,true,"需要管理员确认才能完成更新");
+ // Automatic successful finalization must not publish a transient user-action notice.
  super::prepare_uac_window(app);
  let tx=p.tx;let result=tauri::async_runtime::spawn_blocking(move||crate::windows::update_bridge::elevate("--update-finalize",&tx)).await.map_err(|_|Error::new("UPDATE_HEALTH","更新确认尚未完成，恢复材料已保留"))?;result?;let s=app.state::<State>();*s.error.lock().unwrap()=String::new();emit(app);Ok(())}
 fn confirmation(app:&tauri::AppHandle,pending:bool,running:bool,message:&str){*app.state::<State>().confirmation.lock().unwrap()=Confirmation{pending,running,message:message.into()};emit(app);}
@@ -128,7 +128,7 @@ async fn restore_startup_tun(app:&tauri::AppHandle)->Result<()>{
  let s=app.state::<State>();if !s.startup_tun_pending.load(Ordering::SeqCst){return Ok(());}
  let h=app.state::<Host>();
  if h.quitting.load(Ordering::SeqCst)||h.app_restarting.load(Ordering::SeqCst){return Err(Error::new("CORE_BUSY","正在退出或重启"));}
- if h.network.status().await.is_ok_and(|n|n.tun.enabled){s.startup_tun_pending.store(false,Ordering::SeqCst);return Ok(());}
+ if h.network.status().await.is_ok_and(|n|n.tun.enabled||(n.tun.intent&&n.tun.state=="waiting_network")){s.startup_tun_pending.store(false,Ordering::SeqCst);return Ok(());}
  let result=crate::lifecycle::trace("startup.tun",h.network.startup_tun(&h.control,&h.quitting,&h.app_restarting)).await;
  h.record(crate::safe_log::HostEvent::Startup,&result);
  let _=app.emit("network-changed",());
@@ -147,6 +147,8 @@ pub fn confirm_install(app:tauri::AppHandle)->Result<()>{
  let s=app.state::<State>();let h=app.state::<Host>();
  if h.quitting.load(Ordering::SeqCst)||h.app_restarting.load(Ordering::SeqCst){return Err(Error::new("UPDATE_BUSY","正在退出或重启"));}
  if s.confirming.swap(true,Ordering::SeqCst){return Err(Error::new("UPDATE_BUSY","原管理员确认仍在进行；请先处理 Windows 授权窗口"));}
+ // Retry an already visible failure without manufacturing a notice on normal startup.
+ let visible_retry={let mut c=s.confirmation.lock().unwrap();if c.pending{c.running=true;true}else{false}};if visible_retry{emit(&app);}
  let worker=app.clone();tauri::async_runtime::spawn(async move{
   let mut task=tauri::async_runtime::spawn(async move{
    complete_pending(&worker).await?;

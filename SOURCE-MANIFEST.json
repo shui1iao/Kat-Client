@@ -1,8 +1,8 @@
 {
-  "format": "exact v0.2.3-release-20261110 candidate source/assets/locks/docs/third-party-notices; self-referential metadata excluded",
-  "candidate": "v0.2.3-release-20261110",
+  "format": "exact v0.2.4-release-20261113 candidate source/assets/locks/docs/third-party-notices; self-referential metadata excluded",
+  "candidate": "v0.2.4-release-20261113",
   "not_published": false,
-  "core_source_fingerprint": "2e2891c68be5fd22aeafe444aa14433968b33ee196187e0255db08fcba19a910",
+  "core_source_fingerprint": "58f7520a9fb6e28d27ccf28450ee33e2958d3c7ba0bc8671ff003f1b42244a01",
   "metadata_exclusions": [
     "BUILD-IDENTITY.json",
     "SOURCE-MANIFEST.json"
@@ -11,17 +11,17 @@
     {
       "path": "BUILDING.md",
       "bytes": 2817,
-      "sha256": "a2e1a342beba7eb1d8ecd0950fa7d3755e3e3ef182a31846e8eca8dfa018dd01"
+      "sha256": "538eedebc881f5905ff77d5bb33285557627d16e9fe15981daf3546352180782"
     },
     {
       "path": "README.md",
-      "bytes": 1751,
-      "sha256": "7f386e80a3e29b2d481f778a731caaf61121cc5afe3f2ae74a0f4bcad1f2d7dd"
+      "bytes": 1898,
+      "sha256": "eba3a21149f9398cbdc8f8e6b0b70399e7acde747acfe4fde61bc144a2160ba8"
     },
     {
       "path": "RELEASE_NOTES.md",
-      "bytes": 2462,
-      "sha256": "16ca7590e4725cfc2e2baf0c147035cae767be207299d44b4a00c3d578bbe3af"
+      "bytes": 2041,
+      "sha256": "deb1c63823a5b65467151b9582f299e5751a68d4adbe7e13eb56f2f240bf9216"
     },
     {
       "path": "RIGHTS.md",
@@ -30,8 +30,8 @@
     },
     {
       "path": "VALIDATION.md",
-      "bytes": 2568,
-      "sha256": "fe276e0ae86eeec7e2e2ea401f93455a04cabdb72a8b422ec559d6b5fc3915cf"
+      "bytes": 1783,
+      "sha256": "686f65b3bb94a68ad05d926ef96872b705c9e5ea90375d214c676db76c3302e4"
     },
     {
       "path": "app/build.mjs",
@@ -39,34 +39,39 @@
       "sha256": "e2144e0f71b5f6858949b3df27b7663ae0afa79bd6fb5a44c4644e5720d59c42"
     },
     {
-      "path": "app/dist/assets/App-fWKrTlDd.js",
-      "bytes": 382884,
-      "sha256": "fe13f998039cf5236993d6c4bdc7cea05248aa71b0898a40e1526084c5f3df15"
+      "path": "app/dist/assets/App-CuSFWoWk.js",
+      "bytes": 370667,
+      "sha256": "75c2572248dc7377518d59507c164f33c1874877fc3446a0144bf9aac7c511e1"
     },
     {
-      "path": "app/dist/assets/Tooltip-Bo8m7I0N.js",
+      "path": "app/dist/assets/Tooltip-BgWRXLEG.js",
       "bytes": 11859,
-      "sha256": "b50de2caf666a985ffef59be37e5c1c8f033072c9c3691fe9a0aa0c3083c1a62"
+      "sha256": "f48c57e09d8aaffbd175ae7a4aaa6647c09c7fc42b1b778ed761c1abaafd6c5d"
     },
     {
-      "path": "app/dist/assets/TrayMenu-41fhPOUe.js",
+      "path": "app/dist/assets/TrayMenu-BiLzBuas.js",
       "bytes": 9420,
-      "sha256": "fb439cc047b9c3fd6a3012f9fa5f9059e64b294033200e2d84cd74ecb8114b79"
+      "sha256": "013b56fa5e78cb9cdb9d332042b92b56d82daf18c83600c9154a17f5476daa38"
     },
     {
-      "path": "app/dist/assets/index-BiB3JZe5.js",
+      "path": "app/dist/assets/google-g-gradient-BqSrTii1.png",
+      "bytes": 12435,
+      "sha256": "7b6054b2e8919bf44722eec59413da74a8fc7d16fcb827da165d0b8c8217f8e9"
+    },
+    {
+      "path": "app/dist/assets/index-DoAH0N--.js",
       "bytes": 221816,
-      "sha256": "5e9709c66c56064c433afa92acec5d1ecd1c615124c3844e7f94bb0b9956a48a"
+      "sha256": "97d6f2fe46968b7039b6913335019e17dfccb457c2986d2a3eb1ba5b4b3dfb45"
     },
     {
-      "path": "app/dist/assets/ipc-C1lVHRFn.js",
+      "path": "app/dist/assets/ipc-DgipYCDb.js",
       "bytes": 41,
-      "sha256": "02dcbbc92cd8daee062a166f8f30fa4b6e2e196a802cfda0835e0eecb7f817e8"
+      "sha256": "db0c56cbdd315ca59e98cc2edc2e3dcc492fd0082d71fdab2dae3f5d96a6db46"
     },
     {
-      "path": "app/dist/assets/style-DT5Km5Up.css",
-      "bytes": 201472,
-      "sha256": "199fb6c1063329d3aabb1ead1669d23cee9dc6671b243704ff01fc11f8187489"
+      "path": "app/dist/assets/style-C69e6095.css",
+      "bytes": 211928,
+      "sha256": "e9704ce97dc04c72a87fdf074b4507f6d1278c572fcf4d2a2d87ca32045dc3e5"
     },
     {
       "path": "app/dist/fonts/NOTICE.txt",
@@ -86,7 +91,7 @@
     {
       "path": "app/dist/index.html",
       "bytes": 420,
-      "sha256": "b325dd7b38e259a9f11944ecfc671954d39b3881dfbbf2d682df0a6bb4bb05ed"
+      "sha256": "c727084ffbbdb5dd5dabe988a2cebe68fd7be74325d9c88ffe2b3738e9c9f26d"
     },
     {
       "path": "app/dist/kat-icon.svg",
@@ -131,12 +136,12 @@
     {
       "path": "app/src-tauri/Cargo.lock",
       "bytes": 116751,
-      "sha256": "e79b1cb722971c3fec5c39e67230dd31cc17d0d69a1557a5b163a754276c3751"
+      "sha256": "e3a34d7911e51c4111946be7d7931fefdcb548cd8281ff65cf2c803a244df66e"
     },
     {
       "path": "app/src-tauri/Cargo.toml",
       "bytes": 2420,
-      "sha256": "5b8cddaddd8ef64257b748faac150141c38f1207f9e6bf8c7de4265cbdb1ff20"
+      "sha256": "2c499e5066b41d30430ba22917487611e0ecd6ae11a926e9f01b9f50f55b9670"
     },
     {
       "path": "app/src-tauri/build.rs",
@@ -160,8 +165,8 @@
     },
     {
       "path": "app/src-tauri/distribution/GO-THIRD-PARTY-NOTICES.txt",
-      "bytes": 242500,
-      "sha256": "3299bf37f7239e7cb561ce6fa6719bf8e0404282fe6ac1e45d983e3c63174986"
+      "bytes": 243089,
+      "sha256": "7155780236c390c0cfef3fd5e3d1c33b54a4acb6da31ef2f9ee5fa64fe560af0"
     },
     {
       "path": "app/src-tauri/distribution/README-WINDOWS.txt",
@@ -3976,7 +3981,7 @@
     {
       "path": "app/src-tauri/scripts/build-setup.py",
       "bytes": 5088,
-      "sha256": "2814daebb4132dc68ce947b781fd774ce6804eb2af8877bb71ff9e57b5857dd4"
+      "sha256": "b1b740718a77a1d3bbd0b5450ff4627740606b845f76ed8a6ee659a222f32296"
     },
     {
       "path": "app/src-tauri/scripts/build-windows.sh",
@@ -4025,8 +4030,8 @@
     },
     {
       "path": "app/src-tauri/src/acrylic.rs",
-      "bytes": 8983,
-      "sha256": "acc835af7f1df83342449bf78eafc32cb72c3371dc0ed37896345b08c970f8fa"
+      "bytes": 13894,
+      "sha256": "f4dc24056f8076f79ebfd065f0802c2fc77862e3ced437fe21850db8e85b481a"
     },
     {
       "path": "app/src-tauri/src/apply_policy.rs",
@@ -4090,13 +4095,13 @@
     },
     {
       "path": "app/src-tauri/src/desktop.rs",
-      "bytes": 46331,
-      "sha256": "04469b73a888558a4c890802e13afbfbd1fd932169d53ca306ab9d500fe8f9b7"
+      "bytes": 47503,
+      "sha256": "f4edf2dd219592e6b80e91b290d850da11889e305a5888998bea6a5051fa7fa6"
     },
     {
       "path": "app/src-tauri/src/desktop_update.rs",
-      "bytes": 27371,
-      "sha256": "0844ea89e7aca99dc428f10ce56e9e3b7e2e53fd419a7995c05c396f6bcb6e6f"
+      "bytes": 27658,
+      "sha256": "df3326b301c5f85f835e5e2f56b2615d8c45abfa09b03b15b60c56168fcf361c"
     },
     {
       "path": "app/src-tauri/src/diagnostics.rs",
@@ -4150,8 +4155,8 @@
     },
     {
       "path": "app/src-tauri/src/installer_update.rs",
-      "bytes": 7837,
-      "sha256": "fd956cf7e50cf09de9cf7be5a5f774177bb802cf347c8c921dd42caddda8e414"
+      "bytes": 13418,
+      "sha256": "6dc75140e91856c6961be89d1ed9163b7d3abfdd333a7d23387ba3d9d4eae075"
     },
     {
       "path": "app/src-tauri/src/lib.rs",
@@ -4185,8 +4190,8 @@
     },
     {
       "path": "app/src-tauri/src/protocol.rs",
-      "bytes": 17284,
-      "sha256": "e2f08f09f800b2a5121839b71862e7eb78ac499cd16d36b768f2f5a9803587bb"
+      "bytes": 17295,
+      "sha256": "2dcccac14d6225daff666185fa09fcef5bcc6c8b8988a92dfeed9c609bd20ba2"
     },
     {
       "path": "app/src-tauri/src/safe_archive.rs",
@@ -4260,8 +4265,8 @@
     },
     {
       "path": "app/src-tauri/src/tun_monitor_tests.rs",
-      "bytes": 12439,
-      "sha256": "85ee537d843322e3d72af6526218b47c5b45c53784608fe374d320efeb350d44"
+      "bytes": 14314,
+      "sha256": "ae10ec70c9e91e39a97c8e7755524210b3c271c9f58a28e275cbb52202738466"
     },
     {
       "path": "app/src-tauri/src/update_check.rs",
@@ -4300,18 +4305,18 @@
     },
     {
       "path": "app/src-tauri/src/windows/core_tun_journal.rs",
-      "bytes": 28751,
-      "sha256": "f70a8ddd83d71465c3448c2432ddae7171c15f43b4d4c4d890a371edeb7e1c7a"
+      "bytes": 38815,
+      "sha256": "c2dde9b10596c553af987e2b9864a87e9661050bcff28214132e2c3417a19b19"
     },
     {
       "path": "app/src-tauri/src/windows/core_tun_os.rs",
-      "bytes": 12149,
-      "sha256": "c6c9e036e1413a45d1aa3830804dbf2e989327180c0d2f21f4fea5b708cc30f6"
+      "bytes": 15197,
+      "sha256": "15afcc0958eb9b2bfeeb2eb94ffc0facdd641556b358e909bd9ae59e2cd43442"
     },
     {
       "path": "app/src-tauri/src/windows/core_tun_recovery.rs",
-      "bytes": 20486,
-      "sha256": "1f4ac9df04457b4157daa13dc6c81348009f621c50310b67367b62a52fe5bfaf"
+      "bytes": 20694,
+      "sha256": "fe43cf4af5ca30ed161657a7127a37ec3421879bb8e880189ff701075947d9c5"
     },
     {
       "path": "app/src-tauri/src/windows/dialogs.rs",
@@ -4355,8 +4360,8 @@
     },
     {
       "path": "app/src-tauri/src/windows/installer.rs",
-      "bytes": 35676,
-      "sha256": "2cc775f497983b7d3acbbd7d43cf967350bf50270f1d20b96aac6df63b006750"
+      "bytes": 35934,
+      "sha256": "29fb8654beabf51f5aa46126e5769b95687d590f71f266a1aa04c993c9667930"
     },
     {
       "path": "app/src-tauri/src/windows/installer_result.rs",
@@ -4400,8 +4405,8 @@
     },
     {
       "path": "app/src-tauri/src/windows/scm.rs",
-      "bytes": 6569,
-      "sha256": "400e03b1cdf3340c63dd268852e62f9b6459211a1b3465b7fcba6c311acb7e0c"
+      "bytes": 10241,
+      "sha256": "a1d8dbe299408a748d4cef3f2e440191544db5c654abe50dacd3eaf9b88cb937"
     },
     {
       "path": "app/src-tauri/src/windows/security.rs",
@@ -4425,8 +4430,8 @@
     },
     {
       "path": "app/src-tauri/src/windows/service_client.rs",
-      "bytes": 17788,
-      "sha256": "27b69bde482da11ad084be1fc903d4e90685b34e4bdfcb531c721eff2bca30f3"
+      "bytes": 17972,
+      "sha256": "16f5444bb35894df39dca19ac30f19de4ff81ea22781d0dffc956f28121f6851"
     },
     {
       "path": "app/src-tauri/src/windows/setup_bridge.rs",
@@ -4440,13 +4445,13 @@
     },
     {
       "path": "app/src-tauri/src/windows/stale_tun.rs",
-      "bytes": 8772,
-      "sha256": "88b09c61c9507b0cf1f989d02ebd1c24f878f09351cfce25f3a25c86c700052f"
+      "bytes": 9283,
+      "sha256": "e28a240b42d6e35022a4561450f66761fa7ace949dfc3d08c83c5536cc3a71a5"
     },
     {
       "path": "app/src-tauri/src/windows/tun_operation.rs",
-      "bytes": 9984,
-      "sha256": "f8f675b8c92b948c1e4d05b5af3e751ea283ec80e9573e0de51979a4ab313fb8"
+      "bytes": 11138,
+      "sha256": "ef9a723344bdb4871872317e54a579c1f794bf49e567eede932e07e12f870038"
     },
     {
       "path": "app/src-tauri/src/windows/update_bridge.rs",
@@ -4460,8 +4465,8 @@
     },
     {
       "path": "app/src-tauri/src/windows/update_install.rs",
-      "bytes": 40280,
-      "sha256": "b981d492d0dff7310cf1a2f6d8034a3e717f53e62f9f258264473a833e0c47c8"
+      "bytes": 42271,
+      "sha256": "7d827bc764c69afb5b3d77a7358c9d1fe6275232ed1f1f911e1e1df7c74efbe7"
     },
     {
       "path": "app/src-tauri/src/windows/watchdog.rs",
@@ -4481,7 +4486,7 @@
     {
       "path": "app/src-tauri/tauri.conf.json",
       "bytes": 837,
-      "sha256": "19cdfe116940542e2a9240e3ccda2a84f4b3c352c2b94a54fea373ce9011e603"
+      "sha256": "f911d30a38658b51e5a605857685314d60dbcca4d9ffd3936ece680f38ed934e"
     },
     {
       "path": "app/src-tauri/tests/control_contract.rs",
@@ -4734,6 +4739,16 @@
       "sha256": "bd4cb7cf32aca5ff8d35dcb28440f7511b917ca11ad0316d3a4c31d417652e28"
     },
     {
+      "path": "app/src/assets/google-g-gradient.SOURCE.md",
+      "bytes": 865,
+      "sha256": "869c9e2eef4583e3d88a8af3567e977ed1696f297a2c7b19f0ec0c61c23a0c60"
+    },
+    {
+      "path": "app/src/assets/google-g-gradient.png",
+      "bytes": 12435,
+      "sha256": "7b6054b2e8919bf44722eec59413da74a8fc7d16fcb827da165d0b8c8217f8e9"
+    },
+    {
       "path": "app/src/charts/ChartTip.tsx",
       "bytes": 1509,
       "sha256": "3d4f5794d9e030879d6451a3aa823c842ee71c02be2ea5bd464b9b2a90e60d64"
@@ -4760,13 +4775,13 @@
     },
     {
       "path": "app/src/charts/TrafficDistribution.tsx",
-      "bytes": 1990,
-      "sha256": "1466177557e6ecee8ff755c0e68fea2d7c9a90cf135dec85a5c31b8eb25b0fb6"
+      "bytes": 2349,
+      "sha256": "b81820e0bae1d769a5dcce1de9d1b86f1db27412fc5dccce8a432bb34ddb7bef"
     },
     {
       "path": "app/src/charts/WeekBars.tsx",
-      "bytes": 3127,
-      "sha256": "85fd8c5383de821f14e8e3f8e82fd40e4c82d82576c3d91bdc7aadc2cf3dee29"
+      "bytes": 3129,
+      "sha256": "243921e9fff46e1078d74592dd6b0efbd40d8290864bf239c320c5085a748ae7"
     },
     {
       "path": "app/src/charts/path.ts",
@@ -4800,8 +4815,8 @@
     },
     {
       "path": "app/src/client/diagnostics.ts",
-      "bytes": 324,
-      "sha256": "8ffe5ea3c054ae65b7c490e2c5585032ff759691ad41172f3ce0447fc24fdfbd"
+      "bytes": 423,
+      "sha256": "bb5943a5ca6542ba03444fe25cdce24c1b4289f96c4c71189ba7a721f5e81957"
     },
     {
       "path": "app/src/client/display.ts",
@@ -4930,13 +4945,13 @@
     },
     {
       "path": "app/src/client/types.ts",
-      "bytes": 17876,
-      "sha256": "737db9327ee80d66169db853362a1721f71e2e57959379cfde40d4af0124eb0d"
+      "bytes": 17887,
+      "sha256": "d1313bc74e76ba03e9e0058b51338a12006e3bc795e0cd450bec0b0824c98e71"
     },
     {
       "path": "app/src/client/useClient.ts",
-      "bytes": 28987,
-      "sha256": "59976075aee5be866bde0402b19860232dc8e3f7bc921d1099e3c2cbe83f4ac9"
+      "bytes": 30212,
+      "sha256": "8464c3672f6d88b85c5ac6a7bdec166c9ed2751f95bc1575aac136b797ccc56b"
     },
     {
       "path": "app/src/client/yaml.ts",
@@ -4990,8 +5005,8 @@
     },
     {
       "path": "app/src/components/NetworkDiagnostics.tsx",
-      "bytes": 7295,
-      "sha256": "7b79b2176e87f503c3e1a8910001e321a7afc2bf872e9bb7ba768035e2993159"
+      "bytes": 7327,
+      "sha256": "d2ecbafbf3a532affd3d1019ee1a9cc947af3728ef0b989d32392e7c373d4fe8"
     },
     {
       "path": "app/src/components/NetworkSettings.tsx",
@@ -5024,24 +5039,19 @@
       "sha256": "e521e0b246ec31289635a9cc13da05af4afa98f120c3a354cb595ea6ff44216a"
     },
     {
-      "path": "app/src/components/RuleInspector.tsx",
-      "bytes": 15420,
-      "sha256": "a2af1259ce0a608343d98b636b90bc7f49b85de4613ff9dab5c3c0c9e9b7e78c"
-    },
-    {
       "path": "app/src/components/SelectPopover.tsx",
       "bytes": 7987,
       "sha256": "48ec12328e58199d862322c144ad681d808817d5a4e0ca6ce5930be5ac4938fe"
     },
     {
       "path": "app/src/components/ServiceIcon.tsx",
-      "bytes": 8785,
-      "sha256": "9aa821a1c2e6808a742ca848ab9be7f4e4952f7f74d8d03d30dcd564786c2dd7"
+      "bytes": 3388,
+      "sha256": "3ae4098bd4e249a5145570f9fdf5793bb19ea3db4ad4c209e3117fb2d8687933"
     },
     {
       "path": "app/src/components/SideControls.tsx",
-      "bytes": 4094,
-      "sha256": "d59c3e1d03df89532395091eaf4307075d5a178dbc916707efcf55718ae70ebd"
+      "bytes": 4109,
+      "sha256": "02af33d8ee70d229d6eb40fe857514bc3a90975cb802e7a6b0e2eec2df68aee9"
     },
     {
       "path": "app/src/components/SideStatus.tsx",
@@ -5067,6 +5077,11 @@
       "path": "app/src/components/SubscriptionImport.tsx",
       "bytes": 7924,
       "sha256": "8972a9863518b88046331e4c812de2052854bc6b1839c45f888545515cd1fead"
+    },
+    {
+      "path": "app/src/components/TargetRulePreview.tsx",
+      "bytes": 3424,
+      "sha256": "f16a080c7f0cf129cf66ec71db2fcb5fe8848894331c05552ebaebf870af58f6"
     },
     {
       "path": "app/src/components/TitleBar.tsx",
@@ -5099,19 +5114,24 @@
       "sha256": "2c0b83ca105c0bd0eb285bd031d4aad1c6723f18cc471203b65ae517145937be"
     },
     {
+      "path": "app/src/dashboard.css",
+      "bytes": 17554,
+      "sha256": "20369cebe57ee0c468d0038a6378ab81e098e7fe512634a0aa5ce650b56c7717"
+    },
+    {
       "path": "app/src/finish.css",
       "bytes": 24673,
       "sha256": "e6c6c0983de3ba87fa0ccafdef409733adbab8bfce7ac55860b765e4b41c43f0"
     },
     {
       "path": "app/src/hig.css",
-      "bytes": 50293,
-      "sha256": "c7494551e5c2fb545a1e59cc0963ec66c1d656203c0041120366930ddf9c3651"
+      "bytes": 48842,
+      "sha256": "4e64dc1e234d32115766ab9775ee24d8933640a76ce5bb3bc38846e0e6d52a54"
     },
     {
       "path": "app/src/k3.css",
-      "bytes": 13175,
-      "sha256": "9c4e824bc2d53a227f8a8b8f9026df18b89abf03ae3037b555041cabec1b3f71"
+      "bytes": 13128,
+      "sha256": "208f38a269636ac76b4970852950b3c6bdf0f0b95962083c8ae2bae659a499f5"
     },
     {
       "path": "app/src/lib/displaySort.ts",
@@ -5155,8 +5175,8 @@
     },
     {
       "path": "app/src/main.tsx",
-      "bytes": 1425,
-      "sha256": "5f5c6799e16dabb9fbeda600f11f0c226b436383ae45f70c4e7c35a4c41d74ea"
+      "bytes": 1451,
+      "sha256": "d1a1ab33430a03d3050a7415b7decbc94a0e2f3296beab0e7b843583de0ebdff"
     },
     {
       "path": "app/src/pages.css",
@@ -5175,8 +5195,8 @@
     },
     {
       "path": "app/src/pages/Dashboard.tsx",
-      "bytes": 6212,
-      "sha256": "fc4eb567d23d7e60bfc5c592e83bf9935250c17608a4a2ce3ccd6d40f975c6c3"
+      "bytes": 6302,
+      "sha256": "2df589ab8d144c5ce5901a07316f7f9ab9a6c9e0166b672c2065232e89a0e5cc"
     },
     {
       "path": "app/src/pages/Logs.tsx",
@@ -5205,8 +5225,8 @@
     },
     {
       "path": "app/src/pages/Rules.tsx",
-      "bytes": 12759,
-      "sha256": "3c078d72006f244bd64a592bc00ef4dcfda903174df5b7eed40690e5565ef359"
+      "bytes": 12771,
+      "sha256": "c74bf16b8076831bfb2678650f14ffea90d25398bb8f654468f1344d121b6837"
     },
     {
       "path": "app/src/pages/resources.css",
@@ -5225,8 +5245,8 @@
     },
     {
       "path": "app/src/styles.css",
-      "bytes": 67632,
-      "sha256": "f9925fe9261da2dd0e324d14a0f4a5c02052d07bce94d1a170e6a680a35af1cb"
+      "bytes": 67506,
+      "sha256": "8ec4b2cc10f958701a8fcd6ccafae79b0a077f466bc50efd102e99a5e82351cc"
     },
     {
       "path": "app/src/theme.css",
@@ -5235,8 +5255,8 @@
     },
     {
       "path": "app/src/ui.css",
-      "bytes": 46019,
-      "sha256": "3fc3a5fdf78bac70c8e6230c0ab2a09acbffe340a76ff1a804e0c6de1c6524cc"
+      "bytes": 46189,
+      "sha256": "281cd78662f9e0306e0eef2146540cc46b82e964189baed78a7ef34c894da9a7"
     },
     {
       "path": "app/tests-ui/acrylic-browser.mjs",
@@ -5800,8 +5820,8 @@
     },
     {
       "path": "core/THIRD_PARTY_NOTICES.md",
-      "bytes": 6334,
-      "sha256": "a4465396b9161370b19338b2a12e81b2b4b505402de57d2c5b499318575a09d9"
+      "bytes": 6923,
+      "sha256": "1d1758cc3cb5d9c6965adb3cb77f7019f2306011b9dd380571c368ba591132cc"
     },
     {
       "path": "core/cmd/kat-client-core/main.go",
@@ -5820,13 +5840,13 @@
     },
     {
       "path": "core/docs/client/IPC.schema.json",
-      "bytes": 125914,
-      "sha256": "274bd02eed84690355359abc3a044c6ea409fa7b234221f4d1e41c8b1cef9622"
+      "bytes": 123607,
+      "sha256": "655b3f02a20ac55530c5351de151e568ba804da5c5f45289c67e8897e781ce81"
     },
     {
       "path": "core/docs/client/README.md",
-      "bytes": 48521,
-      "sha256": "2feaec22826b7393818e991b9c8b2f823775164d3a7872d5d45332502aa87ff5"
+      "bytes": 47693,
+      "sha256": "863011c59ac6e6fe84c4541949fd975112ae9895c407df2d7ba8b9402d8c5622"
     },
     {
       "path": "core/docs/client/YAML.md",
@@ -5850,8 +5870,8 @@
     },
     {
       "path": "core/go.mod",
-      "bytes": 691,
-      "sha256": "fa1fe9b87f786d92cb7ae49042e00eba398d9f3bdc072c4803426de064d802bf"
+      "bytes": 742,
+      "sha256": "06a60aa5009aa002c23486872a3b3b56e3b1f77658f9baab5ecc25c62a3d964c"
     },
     {
       "path": "core/go.sum",
@@ -6050,18 +6070,18 @@
     },
     {
       "path": "core/internal/clientcore/diagnostics_network.go",
-      "bytes": 12787,
-      "sha256": "3ea2de0f08123d41d46736fb4b71c97036d28d8b7c2659435faae82bead4f16e"
+      "bytes": 12914,
+      "sha256": "3000eb968f9ac82318a352587fb5083caa69ea679f1cad1030fcaf87d936e519"
     },
     {
       "path": "core/internal/clientcore/diagnostics_network_anonymous_test.go",
-      "bytes": 18570,
-      "sha256": "a97d8f241609101ce1eb473dae70bdc3bd64e9bb5ac3ba0803f7bd5727cfa146"
+      "bytes": 17650,
+      "sha256": "9a67d8566b18df7f1f9e7d866a83ae7b154d95f754fe9cf642a6e0ee218ebbac"
     },
     {
       "path": "core/internal/clientcore/diagnostics_network_round5_test.go",
-      "bytes": 1852,
-      "sha256": "cd807fdd91c6780be4faa8374952d2767333ffbb6256a45ce967d1fa6c1773a0"
+      "bytes": 1884,
+      "sha256": "aa2045f1f2a686a5b74a8c35bec05a31518759bc4de7c43944ed7e3aa13e4d02"
     },
     {
       "path": "core/internal/clientcore/diagnostics_network_test.go",
@@ -6135,8 +6155,18 @@
     },
     {
       "path": "core/internal/clientcore/http.go",
-      "bytes": 10001,
-      "sha256": "dd60e5c11613940f3c120880410cc94ecc4a264d99ce8eefce54d1696331c26b"
+      "bytes": 13500,
+      "sha256": "1a6f1b5707ceabd70074a471bec05648baca8d7dc5f70f4e8c10feac5d8f771f"
+    },
+    {
+      "path": "core/internal/clientcore/http_bridge_opt_test.go",
+      "bytes": 2124,
+      "sha256": "301f7d313a6db9ad939bb822b13ffd7751ba63028be7be0d004f6a8f04de1123"
+    },
+    {
+      "path": "core/internal/clientcore/http_direct_opt_test.go",
+      "bytes": 2973,
+      "sha256": "9e65352a6f82b480db59f5ec52dc41d53fc2bcf895fd76401cd09a73e9c26163"
     },
     {
       "path": "core/internal/clientcore/http_observation.go",
@@ -6220,13 +6250,13 @@
     },
     {
       "path": "core/internal/clientcore/logs.go",
-      "bytes": 7550,
-      "sha256": "c374a9f0f2d2fcde4aaf3e9e938bb5774bd8c535985adab0f0e62aa7e955ae7e"
+      "bytes": 7854,
+      "sha256": "de36f799afdc2dda8ba07fe591a2b5d63a62f2a131fd4a225d2d29bcc857e530"
     },
     {
       "path": "core/internal/clientcore/logs_test.go",
-      "bytes": 7203,
-      "sha256": "417479fdc2a002b49326e376be04a5dc5e87fc7285678fcfa4a519650489e47d"
+      "bytes": 8426,
+      "sha256": "35ed0f5309fc27f646dca00c1ac1d5b2ec8d64bafb064bd6302d3f83e25fc9ae"
     },
     {
       "path": "core/internal/clientcore/memory_other.go",
@@ -6255,8 +6285,8 @@
     },
     {
       "path": "core/internal/clientcore/methods.go",
-      "bytes": 10988,
-      "sha256": "b6fa1e375cd79fe0c759303d563a782ca2370c22979c6582214d50a68f4157ed"
+      "bytes": 11003,
+      "sha256": "5668fe48d50229eaafb6a17751b3255f67c0f37639537bb52f9b328aa05012f3"
     },
     {
       "path": "core/internal/clientcore/policy_defaults_test.go",
@@ -6414,24 +6444,9 @@
       "sha256": "8d186e15e60be4da775b55bd17f0e8e9ddf671dde3c9354a4e2ef4e7490f2669"
     },
     {
-      "path": "core/internal/clientcore/rule_inspector_accepted_test.go",
-      "bytes": 2697,
-      "sha256": "3146729177650e96f39dc61e10d68a6909c4c6a13c4d3759a06daa59da6a5600"
-    },
-    {
-      "path": "core/internal/clientcore/rule_inspector_api_test.go",
-      "bytes": 9805,
-      "sha256": "d967d82bbbfc13fe833aa7c7a23beccf58796e6835ba47f0fb0e79ec708d9bdd"
-    },
-    {
-      "path": "core/internal/clientcore/rule_test_view.go",
-      "bytes": 5237,
-      "sha256": "87a54d6fa848e9fbc09cae3910a17dec24d4ce761ad58bce9c75f50c8a7a9f21"
-    },
-    {
       "path": "core/internal/clientcore/runtime.go",
-      "bytes": 20872,
-      "sha256": "2a0bf4cde12a35c41c578ae8d6e897a3521c657936c89432af4cb1e889460e78"
+      "bytes": 20916,
+      "sha256": "12fe486582806db6870d67391ec09d50256558795fd4fedb0bf006ebaeb5c574"
     },
     {
       "path": "core/internal/clientcore/runtime_test.go",
@@ -6624,6 +6639,16 @@
       "sha256": "31152aa33d264e2536e75cd2f878ed56c579a60d9577227bf0fd43d61476c8f2"
     },
     {
+      "path": "core/internal/clientcore/target_preview.go",
+      "bytes": 1439,
+      "sha256": "8c4cdfa59f482a731d17b38d9c10c55d62e07697247a2b30781812c15f069325"
+    },
+    {
+      "path": "core/internal/clientcore/target_preview_test.go",
+      "bytes": 2669,
+      "sha256": "f63c82a31741de95c406e71279021791e2fa78affe32529530403ea82d79e932"
+    },
+    {
       "path": "core/internal/clientcore/transport_diagnostic.go",
       "bytes": 1549,
       "sha256": "48153211b068c17ab3cd2366d8e112f0ed45bcbfabf084550eb062aaf83df12c"
@@ -6635,8 +6660,8 @@
     },
     {
       "path": "core/internal/clientcore/tun.go",
-      "bytes": 4076,
-      "sha256": "26dcf805748149eac1ea6e9629d37f7abcb6fd228f3dc250a504c6dbb689f667"
+      "bytes": 4378,
+      "sha256": "f9cded979775e4626304d18abb04b7a94c9a2780d7ad6a3a540c87b7f4e69f20"
     },
     {
       "path": "core/internal/clientcore/tun_dns.go",
@@ -6665,18 +6690,13 @@
     },
     {
       "path": "core/internal/clientdiag/TESTS.md",
-      "bytes": 3951,
-      "sha256": "da285a49bb492bc33e74f4399c744d8b87854fa22cb2d2b826ce332dbe1930f6"
+      "bytes": 2455,
+      "sha256": "4f6a734cac068d4378f0980320bb84ed38bf19b25b3d5653c19e394ca10e436f"
     },
     {
       "path": "core/internal/clientdiag/testdata/NETFLIX-SOURCE.md",
       "bytes": 1192,
       "sha256": "11acf56e624cdec9bb813622688a116d1ff45e98d370f9f39b8bf81a30643467"
-    },
-    {
-      "path": "core/internal/clientdiag/testdata/bero-youtube-offer-20261102.html",
-      "bytes": 655,
-      "sha256": "122f3dbf35a076e568d97edeef16ffcb0d58388f71739c9eda2d0ec7c5457691"
     },
     {
       "path": "core/internal/clientdiag/testdata/netflix-hk-20261102.html.gz",
@@ -6685,18 +6705,18 @@
     },
     {
       "path": "core/internal/clientdiag/testdata/unlock.json",
-      "bytes": 15510,
-      "sha256": "d4dc68e6687ce60df39f1afd771ce61adac9adc69707b857a7b57d0f977bd427"
+      "bytes": 10907,
+      "sha256": "7eef3d97cce10ea520bb57dcb3f4631df09e32b5b52cdd6cb605d542f6fd6b18"
     },
     {
       "path": "core/internal/clientdiag/unlock.go",
-      "bytes": 29842,
-      "sha256": "a066c6ccee66f8394c7b8affe688a3f93d90827865636069543b8bf18c3f6516"
+      "bytes": 24144,
+      "sha256": "6aabb3c7e802f956829e9f23c7f6ca6361d8c25277434637bea4998e552f23fd"
     },
     {
       "path": "core/internal/clientdiag/unlock_gemini_test.go",
-      "bytes": 7285,
-      "sha256": "b53e174ee40bb0fb8ee6d63ec142769acead65eb8ccc81351b59eea132421d45"
+      "bytes": 5932,
+      "sha256": "0b6d8d1379ecfd1f9550b901611a34846b31dbf5ceab0ca25f704d1597700f59"
     },
     {
       "path": "core/internal/clientdiag/unlock_observed_test.go",
@@ -6706,12 +6726,12 @@
     {
       "path": "core/internal/clientdiag/unlock_round5_test.go",
       "bytes": 636,
-      "sha256": "6a144afc4c529715e8f98564400267e722bc1bb87e53300a9b0f368010af2393"
+      "sha256": "d54471d7dcfc660b674afe7aa9c505cb5afe7a1b34b069d6ebfaed60e17775ff"
     },
     {
       "path": "core/internal/clientdiag/unlock_test.go",
-      "bytes": 11621,
-      "sha256": "7a2ba33a9f2a5ec35a52620cc1c6fa86ebec562bc17c61b90a79c8f141e0509b"
+      "bytes": 11629,
+      "sha256": "787cb24bd18a4fa2d6a3c706d8f5b2a1c7c6e82a13249722bc56d0b13e77b46f"
     },
     {
       "path": "core/internal/clientegress/dns_revision.go",
@@ -6949,11 +6969,6 @@
       "sha256": "14f336de53500e4517d1053aefa8bcc43a3cf58a9321c22730cfe4e55c8107a6"
     },
     {
-      "path": "core/internal/kernel/client_rule_test_view.go",
-      "bytes": 2136,
-      "sha256": "50b47950c18874cdf9562ea542272053c100d62481293fc67794679134ccbc4a"
-    },
-    {
       "path": "core/internal/kernel/client_selection.go",
       "bytes": 1944,
       "sha256": "7eeeab51e35d03eb354d48d2eba3119272fab000f79822cc9c8fd8c831b7db83"
@@ -7055,13 +7070,18 @@
     },
     {
       "path": "core/internal/kernel/flow_details.go",
-      "bytes": 6509,
-      "sha256": "85041c37a93e9686ff48312f91e70d93b55854bd36086918f35805f83c603fb8"
+      "bytes": 7096,
+      "sha256": "70ce636f9aa52fb078cfdb118cf648d759233c81539569b2012c0b23e7989571"
     },
     {
       "path": "core/internal/kernel/group_learning.go",
       "bytes": 1251,
       "sha256": "4bd9865fd879502c4695c4a78a6e595b6afd1136cc5f3b6bde98b7ce59388006"
+    },
+    {
+      "path": "core/internal/kernel/http_direct.go",
+      "bytes": 6310,
+      "sha256": "1d2fde2e2f3dfe79eb1d88ac09c207987cc994478c137a1796005a5d56556860"
     },
     {
       "path": "core/internal/kernel/k3_process_test.go",
@@ -7095,8 +7115,8 @@
     },
     {
       "path": "core/internal/kernel/m2_udp_test.go",
-      "bytes": 12346,
-      "sha256": "f4ca31e95ec1bbc63df83d607f23a3c654018d876c4940915e8898d815f43bd9"
+      "bytes": 17220,
+      "sha256": "b8a3a83184a1c8ea508d9e4818e1f72f2f838c775d3738e2a0f71229770bc671"
     },
     {
       "path": "core/internal/kernel/network_config.go",
@@ -7115,8 +7135,8 @@
     },
     {
       "path": "core/internal/kernel/process_metadata.go",
-      "bytes": 3895,
-      "sha256": "c080cb1f68ab42091de83117fc198417f9056d7ec7bec5928b63141343618d01"
+      "bytes": 4059,
+      "sha256": "84dff1e31e73712a06d314271885c1fe6923c0b35e0cec324f81e3ec81418e8b"
     },
     {
       "path": "core/internal/kernel/process_metadata_test.go",
@@ -7157,6 +7177,11 @@
       "path": "core/internal/kernel/relay.go",
       "bytes": 3854,
       "sha256": "1ca6e035cd4626498a4915f06d29c22b57afb23e2d92a27052d8ce9885ed4ae5"
+    },
+    {
+      "path": "core/internal/kernel/relay_test.go",
+      "bytes": 10686,
+      "sha256": "353243fc6d118b535953d064631154ea59e2c7fa4e41e50f34befb176277fba9"
     },
     {
       "path": "core/internal/kernel/reload.go",
@@ -7217,16 +7242,6 @@
       "path": "core/internal/kernel/routing_refused_e2e_test.go",
       "bytes": 12265,
       "sha256": "21f9a319a196155052bb6affd0b67bd4a2a89f460a20eba477d02d3ef2b088c8"
-    },
-    {
-      "path": "core/internal/kernel/rule_inspector_baseline_test.go",
-      "bytes": 1109,
-      "sha256": "45c845bfceb235420766a1ffaa529aa424d59c993aab577f16fc2b3417e1cea1"
-    },
-    {
-      "path": "core/internal/kernel/rule_inspector_context_test.go",
-      "bytes": 4638,
-      "sha256": "f672518a73b903fa2831e96e7caa6d8df0732277c771ffeb14d5c20439603678"
     },
     {
       "path": "core/internal/kernel/runtime.go",
@@ -7364,6 +7379,11 @@
       "sha256": "2550302e516c2d722542b4b31ecfbaaa1ad514ffadfab36d1e98e67ff271056f"
     },
     {
+      "path": "core/internal/kernel/target_preview.go",
+      "bytes": 4218,
+      "sha256": "dcd24e772f0f442cff51b9e71f1db14c486e25fbd3eda414023f64de2db5b020"
+    },
+    {
       "path": "core/internal/kernel/tfo.go",
       "bytes": 3304,
       "sha256": "acdd6c0e879e370ec6e696431d534b8e56e344e16afbd4912aa44b0c6f49afab"
@@ -7395,8 +7415,8 @@
     },
     {
       "path": "core/internal/kernel/tun_udp.go",
-      "bytes": 14928,
-      "sha256": "e50ec7cd8f7661ed8c2019f73f658a14a71301e4bd8f2ddc367d0b245a8a609b"
+      "bytes": 16088,
+      "sha256": "e618af650e68dde9eb201b2bab31b21710f1736d7a8389fb1ef1b5497bbeba04"
     },
     {
       "path": "core/internal/kernel/udp.go",
@@ -7430,8 +7450,8 @@
     },
     {
       "path": "core/internal/outbound/anytls/anytls.go",
-      "bytes": 14022,
-      "sha256": "ffeae6751721c182528dada2a0175e58e3de578c1fa4f538bdf4cd8c6c4ac511"
+      "bytes": 14175,
+      "sha256": "b8402a6ba88c07b2142edbc84615249ab34ab1a0535421b0eb0bb5939a56d23a"
     },
     {
       "path": "core/internal/outbound/anytls/anytls_test.go",
@@ -7470,13 +7490,13 @@
     },
     {
       "path": "core/internal/outbound/anytls/review_shared_test.go",
-      "bytes": 2548,
-      "sha256": "f5e366de4816a34beaeb9377298b7ee9734a1ce4c87da280d4541bd1ebcf4470"
+      "bytes": 96867,
+      "sha256": "888e5078b3d55eb6ebdaef3388106450bd3571191c6a0a33155092af179e53f5"
     },
     {
       "path": "core/internal/outbound/anytls/session.go",
-      "bytes": 10476,
-      "sha256": "884fc2e0c4c9abc5b2731d03ef7c4692e38760474cf2e231f216f3348fee4364"
+      "bytes": 15001,
+      "sha256": "96c4c932ec8615d2cf8c6f24eb1dc422baa626be3a2061e5b62c7ab536f6abf1"
     },
     {
       "path": "core/internal/outbound/anytls/session_route.go",
@@ -7490,8 +7510,8 @@
     },
     {
       "path": "core/internal/outbound/anytls/stream.go",
-      "bytes": 10138,
-      "sha256": "3e95807d80710f80714168b0d13bb76841d09ff29b431a88b6d8908b2b6d649d"
+      "bytes": 14867,
+      "sha256": "7ca4b1759620c339ee14f586e421379c2f350df42dbd289e047f0adc26796546"
     },
     {
       "path": "core/internal/outbound/diagnostic.go",
@@ -7637,6 +7657,11 @@
       "path": "core/internal/outbound/group/policy_defaults_test.go",
       "bytes": 8472,
       "sha256": "65dd5fc786d06b75e846d8cdb265a2b8902120e91843fb21ea6b950b62cf8ff5"
+    },
+    {
+      "path": "core/internal/outbound/group/preview.go",
+      "bytes": 1612,
+      "sha256": "aa32b3e8eef340c7c0439d7aeb485ca9064c27f218b1714f2289194d2bf01d47"
     },
     {
       "path": "core/internal/outbound/group/probe.go",
@@ -7825,8 +7850,8 @@
     },
     {
       "path": "core/internal/outbound/ss/tcp.go",
-      "bytes": 12393,
-      "sha256": "3a1a5dc5041d44d9162be3f05046e44d9880fe95d8a52528d75bc74dff1821d2"
+      "bytes": 13016,
+      "sha256": "130aa789e40fa38e95b5cbc360bf78f3d3cfca4d3b78ac407606cb464f833227"
     },
     {
       "path": "core/internal/outbound/ss/udp.go",
@@ -7835,8 +7860,8 @@
     },
     {
       "path": "core/internal/outbound/ss/verify_test.go",
-      "bytes": 5036,
-      "sha256": "aa8b5e03643a2c5e63a7ca879f11e92f5ecbb47d7cd8438577c40d42288204c3"
+      "bytes": 40731,
+      "sha256": "f6f15483826b854cedaad3ff92ed2949d57dd3096fc7b7382607996d596eb6d0"
     },
     {
       "path": "core/internal/outbound/ss/window_test.go",
@@ -7905,13 +7930,13 @@
     },
     {
       "path": "core/internal/procattr/lookup.go",
-      "bytes": 6466,
-      "sha256": "61e98327d3d73b1e031b0694d0c25859927c8df31f7e61ba00aee38e319b65a2"
+      "bytes": 6604,
+      "sha256": "58daa2aaf844093e75aa32a2e3ab11f2ee448c89710649b113c99d4a7a5900f8"
     },
     {
       "path": "core/internal/procattr/lookup_other.go",
-      "bytes": 402,
-      "sha256": "b94cd4f4fb60c64eec5dcf471a1fbd80b89fc4ce71b1f8752cfe7c49f6adf271"
+      "bytes": 375,
+      "sha256": "f88c401cf6bc4772e484463812d369a9b7cec929d64e2ec43f84492f1699c4bb"
     },
     {
       "path": "core/internal/procattr/lookup_test.go",
@@ -7920,8 +7945,8 @@
     },
     {
       "path": "core/internal/procattr/lookup_windows.go",
-      "bytes": 7571,
-      "sha256": "05150fd5a1fd1daa86a7e671200116321be478948c3ceb4e52ecbe384bd90291"
+      "bytes": 9519,
+      "sha256": "db199102900be931915c6845b89df2a0ca2179d259e782c86d00c419946d8af2"
     },
     {
       "path": "core/internal/procattr/round2_origin_test.go",
@@ -7960,8 +7985,8 @@
     },
     {
       "path": "core/internal/procattr/tuple_budget.go",
-      "bytes": 1145,
-      "sha256": "d9df5f7aea53ef91cae5b6fec9d7a9d65699fcff47e9d31b047b453c302909b3"
+      "bytes": 1271,
+      "sha256": "952e73f01ca4159d6f4098e1c12b031da5f6d3f9d5a70159af5aee0a54e4c63d"
     },
     {
       "path": "core/internal/procattr/unsupported_test.go",
@@ -8104,11 +8129,6 @@
       "sha256": "517177962fda15990a53d0241d9279836b470a9a37c5c0dd3e38e772a9e1806f"
     },
     {
-      "path": "core/internal/route/offline.go",
-      "bytes": 21972,
-      "sha256": "00e73035717e2ffa33325a95293a0200c3df8d9ff5094fefb6846b6ecafe5155"
-    },
-    {
       "path": "core/internal/route/options.go",
       "bytes": 17869,
       "sha256": "0bbc9af677251d08ac918b65912ffc72bcbc490180eb290b4e502fef97e6ee49"
@@ -8164,26 +8184,6 @@
       "sha256": "18da291f8599c1d01709c88df5dd318b224128dffcdd899fd4a1a88f61b13157"
     },
     {
-      "path": "core/internal/route/rule_inspector_baseline_test.go",
-      "bytes": 1368,
-      "sha256": "ee98e1e12dedaf9cdffc3ca2bfc2e821e8b1b9ea5f4010aa51ccf523c50c4d22"
-    },
-    {
-      "path": "core/internal/route/rule_inspector_conditional_test.go",
-      "bytes": 8499,
-      "sha256": "f39672286c4d9cafe5f89eddbfbb2932c2e6a784d85c2bb5421cbdec44170e80"
-    },
-    {
-      "path": "core/internal/route/rule_inspector_context_test.go",
-      "bytes": 17414,
-      "sha256": "3a38516a25a40d297a16d7f80703b05bf937587968ce7d9264d3d3dec5290486"
-    },
-    {
-      "path": "core/internal/route/rule_inspector_resources_test.go",
-      "bytes": 3778,
-      "sha256": "34958823117760614c11ef7c241ef67f2bec9fd25b5c1d5baf5571bde218e43a"
-    },
-    {
       "path": "core/internal/route/rules_ext_test.go",
       "bytes": 18899,
       "sha256": "5af96b4b8e0b7b657f72de70817f5cdff57fa83e06a9a64ac97418933cd17f85"
@@ -8214,14 +8214,14 @@
       "sha256": "1cef5b498c44557132ddef8ea4c730240fec1c5ed27d3312221e0cd9fef62ab6"
     },
     {
-      "path": "core/internal/route/target.go",
-      "bytes": 7207,
-      "sha256": "701f7bf664fb907593f8f812624487fe33ef131d2e8343aa53ccd9b59a914ba5"
+      "path": "core/internal/route/target_preview.go",
+      "bytes": 23198,
+      "sha256": "f772223a28a8b6d943384a70b643c133ddcbdbf10868a85b17509b326deaa98c"
     },
     {
-      "path": "core/internal/route/target_test.go",
-      "bytes": 5993,
-      "sha256": "eaef40661858c50b2d471911b894350b126a167a08208caf9f4e9d59c699fe24"
+      "path": "core/internal/route/target_preview_test.go",
+      "bytes": 4440,
+      "sha256": "d1343f56c76900346988e53eb3eaca613ab8b7a0a53054b1fdafa0567a4936e0"
     },
     {
       "path": "core/internal/route/testdata/mrs-domain.mrs",
@@ -8490,8 +8490,8 @@
     },
     {
       "path": "core/internal/tunplatform/device_windows.go",
-      "bytes": 10730,
-      "sha256": "ebef3d78cd81c77d862734c80a705620486dddc9fb815dcfa4dabee1d5d8cec5"
+      "bytes": 12022,
+      "sha256": "d10289fa610d4927c37404f370b40985e64e14e7ceb1ebbd84aa5517ff04f18f"
     },
     {
       "path": "core/internal/tunplatform/diagnostic.go",
@@ -8515,13 +8515,13 @@
     },
     {
       "path": "core/internal/tunplatform/manager.go",
-      "bytes": 19361,
-      "sha256": "05915b9877224467c59702ec461205d2bc153ea83e6db7b2cb7c41e789ca064a"
+      "bytes": 20294,
+      "sha256": "dd69b8903977f984c31d71f4a9ba2535cdaeb9c456048a24caab75fb93ea3026"
     },
     {
       "path": "core/internal/tunplatform/manager_test.go",
-      "bytes": 10606,
-      "sha256": "5001c72713367109a9470bb9f93cea9adfdae7303f247732c1f5a63c8f260d49"
+      "bytes": 21317,
+      "sha256": "b189876745ad0a9c27b4675d99cb21896308a9124440a64635240b77e7bb3864"
     },
     {
       "path": "core/internal/tunplatform/netapi_windows.go",
@@ -8545,8 +8545,8 @@
     },
     {
       "path": "core/internal/tunplatform/types.go",
-      "bytes": 2380,
-      "sha256": "77bc2a01e1decc039d406438e653bad3010efb7c4835e4527787a6e81da48c2d"
+      "bytes": 4166,
+      "sha256": "e2758d59277f50bfd8638920fe471bc17abda1fbbb9844554d367a802c17f2c5"
     },
     {
       "path": "core/internal/tunstack/LICENSE.tun2socks",
@@ -8555,13 +8555,18 @@
     },
     {
       "path": "core/internal/tunstack/link.go",
-      "bytes": 1594,
-      "sha256": "2365ebbea1c62765066d0fbdf440d0dbf3fb68c2fde3863033ab83514133fca4"
+      "bytes": 2192,
+      "sha256": "90e615740d60a4bb18879e3f8bedab13a86a1a3c1dac1971f6d68a90a82d82d5"
+    },
+    {
+      "path": "core/internal/tunstack/link_test.go",
+      "bytes": 22783,
+      "sha256": "79e1598b6744ca6c49a32b405b9b3dd3e3ba32397ef09bf2d01a7a2a245c4783"
     },
     {
       "path": "core/internal/tunstack/m2_udp_test.go",
-      "bytes": 3464,
-      "sha256": "9e652138136f5a6d0fdb119fb2e605a58373ec848359b14b9338b634ef57239c"
+      "bytes": 8227,
+      "sha256": "f64ed204d17b5b7f4b46ca26253a3a828c7858febad589482338dd10a45870dc"
     },
     {
       "path": "core/internal/tunstack/runtime.go",
@@ -8570,13 +8575,13 @@
     },
     {
       "path": "core/internal/tunstack/runtime_test.go",
-      "bytes": 1610,
-      "sha256": "d37bae8b0a5eedc22da4492f1b50ccfc79767c5d9f7730aa95a8d6c66559221b"
+      "bytes": 3491,
+      "sha256": "3510ce9f7a0af6358ab739c3b1fbb67a590e019216d2c84ef46f67551e01ff32"
     },
     {
       "path": "core/internal/tunstack/stack.go",
-      "bytes": 2603,
-      "sha256": "ab2ce8416810dba39a2bcf5ef789d335a628e16380e687b836467f54c7e52a1b"
+      "bytes": 3055,
+      "sha256": "92f684d44d6e37a8a20829f0f2e3393d5f38822e934ee2021dadd25feaecc163"
     },
     {
       "path": "core/internal/tunstack/stage4_packet_test.go",
@@ -8585,13 +8590,18 @@
     },
     {
       "path": "core/internal/tunstack/udp_endpoint.go",
-      "bytes": 5903,
-      "sha256": "f08e6dad436a303249390e35028659059c76b469b41ed904ceeefd8fe4084235"
+      "bytes": 6941,
+      "sha256": "fd8e20e78793e01c026b2b7ab6d7b26fac344350ff26430aaf274b113b12bca4"
+    },
+    {
+      "path": "core/internal/tunstack/udp_opt_test.go",
+      "bytes": 5941,
+      "sha256": "c67a19f12c6d8361d9edaf19ef3f54f15237cc746daf22344d6f7560c0285e2c"
     },
     {
       "path": "core/internal/tunstack/udp_packet.go",
-      "bytes": 3180,
-      "sha256": "13bdf956c2b20584729ca7a0862e7b4d2326f7378a9f8a276b5c8972bdcc96c6"
+      "bytes": 4593,
+      "sha256": "d8dac7687411e0788cbfd8c3ba134ad7da0443dd1556c0690c1ac601e60a57c4"
     },
     {
       "path": "core/internal/userio/io.go",
@@ -8622,6 +8632,1756 @@
       "path": "core/repo-description.txt",
       "bytes": 131,
       "sha256": "f064540f32391ad17c2d25471b70ef19229e9bcab993f9783d9c8ad683e4186e"
+    },
+    {
+      "path": "core/third_party/gvisor/LICENSE",
+      "bytes": 14110,
+      "sha256": "0fbab5c58efbdf6d31e8085214f2dd821659c03d73cff3ed2b08e98826ea1cd9"
+    },
+    {
+      "path": "core/third_party/gvisor/README.kat.md",
+      "bytes": 12249,
+      "sha256": "9c2a684d7e6bb46f2c620a6f1dc7c9ac0ca0d6d432afa48ba547e6e7702552fe"
+    },
+    {
+      "path": "core/third_party/gvisor/SNAPSHOT-MANIFEST.json",
+      "bytes": 194222,
+      "sha256": "ef32caefbc15932ccc15197a9432249b904d067ae30a552ef8a80636ce95a984"
+    },
+    {
+      "path": "core/third_party/gvisor/go.mod",
+      "bytes": 187,
+      "sha256": "1d2b3688a9bc3b8244e81149718fd9e03bbbb8d1d42d25a80f47340f58a06a65"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/atomicbitops/32b_32bit.go",
+      "bytes": 6351,
+      "sha256": "9384559a22c6cc5c29127f6f6d4e32adca84d1b97df2e73d8e724ae224ae03da"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/atomicbitops/32b_64bit.go",
+      "bytes": 6359,
+      "sha256": "8bee1db6044c8de8c3d5d8f7320d53077733207d03367c1e4ca936b525f4f278"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/atomicbitops/aligned_32bit_unsafe.go",
+      "bytes": 5815,
+      "sha256": "b173b297a4e82859625cb7827cf8dd361b90b4908d770311bdbb39b004d02beb"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/atomicbitops/aligned_64bit.go",
+      "bytes": 4890,
+      "sha256": "63fa1f433eb11cbdb591d796ac372bf6116387369b9f1802383a2dc9a4391253"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/atomicbitops/atomicbitops.go",
+      "bytes": 2630,
+      "sha256": "1e939c178d0dd42c37ac6d52923c44efcab5e5396d68bff1009f74800ca1be5f"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/atomicbitops/atomicbitops_32bit_state_autogen.go",
+      "bytes": 1819,
+      "sha256": "e324edbc8b75fcf780993c8fddcf84f8d8d0d224275d58b33c990ee49b72205b"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/atomicbitops/atomicbitops_32bit_unsafe_state_autogen.go",
+      "bytes": 1465,
+      "sha256": "b7434c3b3be2d3e864d3da8f2e9d1d287584312e7de4c6aabaaa04e16b081515"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/atomicbitops/atomicbitops_64bit_state_autogen.go",
+      "bytes": 2969,
+      "sha256": "2e0d8e43beb6c845f3a8484e62e2576eca018c4966ef2735ab1237c9d77005a9"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/atomicbitops/atomicbitops_amd64.s",
+      "bytes": 1718,
+      "sha256": "41592d7ce28b95b62e1afe42f8157c8212a270f0ede2bcb91bc842631faff219"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/atomicbitops/atomicbitops_arm64.go",
+      "bytes": 1154,
+      "sha256": "319a98827aaa2be9662455c6a0e3f28bfac1998a960ea665310254abe7767ccd"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/atomicbitops/atomicbitops_arm64.s",
+      "bytes": 3226,
+      "sha256": "af335fbf3e05b13071d9ab7a5f5bd6a6aa201cd7942b54fc24cee030df08d443"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/atomicbitops/atomicbitops_arm64_state_autogen.go",
+      "bytes": 96,
+      "sha256": "9142170866502b9bcb911f0c0bdb588d04d67a757b0a9c13ab513e113da479ef"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/atomicbitops/atomicbitops_float64.go",
+      "bytes": 3091,
+      "sha256": "699483d9f838f882ccb7ad23f683bf16bc72c7c51078854740684f9941db56f7"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/atomicbitops/atomicbitops_noasm.go",
+      "bytes": 2229,
+      "sha256": "8146066041fdeaa5d7cedfb490e24523499c98d536a797859d03b35449f909c9"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/atomicbitops/atomicbitops_state_autogen.go",
+      "bytes": 789,
+      "sha256": "f2767c276a6bffc5b8c3441d9436f0cf3ab7c8cf514120acaf342a5b03a5c407"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/bits/bits.go",
+      "bytes": 1010,
+      "sha256": "3f64d63d0a535189a5280afda1f8fb0ef9241aaf2f06f5119cb0a10cdc147fac"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/bits/bits_state_autogen.go",
+      "bytes": 159,
+      "sha256": "0c4b75648b695f7a97c311422cc5303f568e1620c31af1ebb48f153037404776"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/bits/bits_template.go",
+      "bytes": 1476,
+      "sha256": "7a6f1391c2ed049b30913d4edfdf7c4f977e01585bcd599a4447f467ee20f3a7"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/bits/uint64_arch.go",
+      "bytes": 1298,
+      "sha256": "a6cb1afaa2038e06b17722cb2a07f042a2c097774e1547df45bcdf67632a46b1"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/bits/uint64_arch_amd64_asm.s",
+      "bytes": 865,
+      "sha256": "780e0dd7d9719e99561ddf3f6d7f3d73e3f1dc02cea5dbfb5390b415a8f4ad66"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/bits/uint64_arch_arm64_asm.s",
+      "bytes": 1009,
+      "sha256": "7fd7ac7cc1d9df1e8ba86602755c2f0668f45436ccdcd0daa924970ecf369db7"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/bits/uint64_arch_generic.go",
+      "bytes": 1473,
+      "sha256": "d0f7da3f33a9634b4ab37b2b3a750e6de4cbc55405697e5c3689e3251f95aa1b"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/buffer/buffer.go",
+      "bytes": 15624,
+      "sha256": "6f06d1a70d5e510a47879fab13a60b461c6f1cd8356382055cb1c968886a9ee5"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/buffer/buffer_state.go",
+      "bytes": 855,
+      "sha256": "d0b9263522c7e1d574cd2bfd9a18c3b6b8f22ac26b92288e4ea881925411046f"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/buffer/buffer_state_autogen.go",
+      "bytes": 4017,
+      "sha256": "3701d91302b81e8dba034adc7dfd2d917da01a801e57ca5963fa693d14a941c7"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/buffer/buffer_unsafe_state_autogen.go",
+      "bytes": 56,
+      "sha256": "20f49e4476eaf80732e59cfa6bb8adfc6df0376608c34782fae1389463d54a08"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/buffer/chunk.go",
+      "bytes": 4347,
+      "sha256": "83caeeed2c5283c1340103d0d46c73503531b7db34573e4bcefd29082562f0e3"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/buffer/chunk_refs.go",
+      "bytes": 4151,
+      "sha256": "9bcba423886226158eb01c751025d28181260b1c1428b281e066f39afe9bc312"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/buffer/view.go",
+      "bytes": 9950,
+      "sha256": "35f4db039c0633bc8309eac09fea962a1463a860a253ce4f8e64f93da2900f50"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/buffer/view_list.go",
+      "bytes": 5010,
+      "sha256": "f3a238e8afff2ae15218ea21106deff395c0a1181e13ec943d78e626f1e28a15"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/buffer/view_unsafe.go",
+      "bytes": 759,
+      "sha256": "0a8b5693cb0b8454d2a5abde57881933171790fc00c42ee5b3459549cb841524"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/buffer/win_bounded_pool_test.go",
+      "bytes": 8162,
+      "sha256": "f5124f904a2c58601e6281d0000c87758df143c510f4aa63d167334b6b385be8"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/context/context.go",
+      "bytes": 8334,
+      "sha256": "3fd9e3fff3987e36609378362a47f4aa11cf99dae6a63246d235f0c6b8f2039f"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/context/context_state_autogen.go",
+      "bytes": 57,
+      "sha256": "f2fe85684bf316d3cf0ded6b0fc3a762bddd342d5eb5bc402a362f65bb256970"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/cpuid/cpuid.go",
+      "bytes": 7971,
+      "sha256": "7f44df84aefcde3fa40037a1fe372f230c73dda0a1cc435ce0d59df530c1169d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/cpuid/cpuid_amd64.go",
+      "bytes": 15556,
+      "sha256": "dc7a7875a6bef70d08b0752f722a892a56f0adfa40097046cc62d69abfd06e50"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/cpuid/cpuid_amd64_state_autogen.go",
+      "bytes": 2335,
+      "sha256": "e6b596043b94be48a427038c25d2a9e5175bb73609fec3c7a44950b59a2a0497"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/cpuid/cpuid_arm64.go",
+      "bytes": 4719,
+      "sha256": "5734eb08c755637601ea5eec105820f6995fd485b20d9aa757c7ef1438ef767e"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/cpuid/cpuid_arm64_state_autogen.go",
+      "bytes": 1379,
+      "sha256": "acab0a7de32c3d1c1633efaa131e64692e09a7c92480d2999208c66850d28011"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/cpuid/cpuid_state_autogen.go",
+      "bytes": 746,
+      "sha256": "0451168738cac46856da8d7a8cabcc92fec7955fcee635dfcf2f8bbecc21104d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/cpuid/features_amd64.go",
+      "bytes": 19179,
+      "sha256": "9c5870a3555179885ebc8c732decd042ccbbab507de006d5df4224ff879e3297"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/cpuid/features_arm64.go",
+      "bytes": 4434,
+      "sha256": "211311a7490826e2691ab6c8e175e8e61ff3a2a381193960dbdd450a56ff9166"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/cpuid/hwcap_amd64.go",
+      "bytes": 754,
+      "sha256": "14e3fbc8c6e07bc8a4ec2463f89eba4aa6655bf4e9ce7858ba77f62aa7cbab57"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/cpuid/hwcap_arm64.go",
+      "bytes": 2212,
+      "sha256": "02cf2ad12fb6556e35fcc2dc07fd26e585ad1a5fac2791a8646b383ce3a8e4ee"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/cpuid/native_amd64.go",
+      "bytes": 9175,
+      "sha256": "daf25e2123efc5cef217ccaed5d74f8318559afe8d6ca5c2dc4e0fb728b105a4"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/cpuid/native_amd64.s",
+      "bytes": 1057,
+      "sha256": "7e9a33b42b42364d980e1e495cb66c37c070267dc71d4d54ede647070d38e121"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/cpuid/native_arm64.go",
+      "bytes": 5201,
+      "sha256": "c481680af35bbb310d116808b50ef837b3fcc518770bc2b751b7b9fa7401f9e2"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/cpuid/static_amd64.go",
+      "bytes": 3199,
+      "sha256": "6d28152b4de69b4c61208469cfb299cb0f28e9989f63821931e8b2d390e5fef1"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/gohacks/linkname_go113_unsafe.go",
+      "bytes": 1511,
+      "sha256": "5997b1e83bf0fe9a0c9b9ba607309218ebd122d2ce4c0fb22cfce650b517f09e"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/gohacks/noescape_unsafe.go",
+      "bytes": 1220,
+      "sha256": "2d62217b702f389e231a42e0e07c9c57445f09c6e918c2c9f69c7562bca26641"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/gohacks/slice_go113_unsafe.go",
+      "bytes": 1386,
+      "sha256": "0a73d45485aa9f7bbef3b218531d97136095678c4633edbe1f2f34d3195c88c6"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/gohacks/slice_go120_unsafe.go",
+      "bytes": 936,
+      "sha256": "daf7a1073e70bd2ed7ea8d6af6d38beae1d112c28583e11cb223c085adf31a3e"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/gohacks/string_go113_unsafe.go",
+      "bytes": 1895,
+      "sha256": "c4ff02190c2a812ec8191474603015f774f849183ac0138e3c84acfb39f80be2"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/gohacks/string_go120_unsafe.go",
+      "bytes": 1332,
+      "sha256": "719762ea9c95cfb6148e590cf62e1e142bf454c658fbc61cfc64fdbf7a6a50ef"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/linewriter/linewriter.go",
+      "bytes": 1900,
+      "sha256": "eb8dc2586a3ec095487304a345a65dee6e8a9a6dfdfe6716a2c399d5ed9df01b"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/log/bug.go",
+      "bytes": 4366,
+      "sha256": "605933956909a4613c53e2b9624c0ab8283ad6a0cdd049f3264b559aca18dcc5"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/log/file.go",
+      "bytes": 1818,
+      "sha256": "c5343024756c1623cbfbdbd4326f9534abc9f0d2a44c15fbfcde4099e3bc186d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/log/glog.go",
+      "bytes": 2469,
+      "sha256": "ab484afc51494b398ad94c6d109a088a5e14564f54eb2d6fa2669eff6b2d0e01"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/log/json.go",
+      "bytes": 2142,
+      "sha256": "06518c8a3bf589ff37348d7a6dddde3a6a921dbe1321d6d83aeb22982f40fb11"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/log/json_k8s.go",
+      "bytes": 1529,
+      "sha256": "98aa2e2e011762732faf68badc9da8627f18156f4e66ac5ca2a93583affd04ba"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/log/log.go",
+      "bytes": 10965,
+      "sha256": "394ad23a6cd5f48de8adad6086f68852a46b16147fb5ba0878f236faf7434841"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/log/rate_limited.go",
+      "bytes": 1713,
+      "sha256": "a5c18f46096bec012918b7f636abc251eca6873ddf1529d137f9d8b2e2935149"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/rand/rand.go",
+      "bytes": 821,
+      "sha256": "570816447e554ac7bfa021a2a1a980a5952100fd13dc5bfd7e29e10b6f38984d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/rand/rand_linux.go",
+      "bytes": 2084,
+      "sha256": "274b3992da1395554a9a382210f5ef7002baf1dac89d7329e1a4512e7f461fd6"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/rand/rand_linux_state_autogen.go",
+      "bytes": 54,
+      "sha256": "0f8e2b504247cfe4be06514156babb1b120c0c9c25d03894e0a2a6e3ae7e57e3"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/rand/rand_state_autogen.go",
+      "bytes": 90,
+      "sha256": "286aee8a48cc4ed4ba0cb869f6f7dbce72e9cbd20da7be979b17257d7de1f2dd"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/rand/rng.go",
+      "bytes": 4070,
+      "sha256": "889b9717f4f773ef9968c83cf06d8a8c9012f75cb3f1fc8cb90586980f3c4f60"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/refs/refcounter.go",
+      "bytes": 4971,
+      "sha256": "de5ab3accb95e86d36c226f0f8be351da10a078329821dcac49b838ff222cb7c"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/refs/refs_map.go",
+      "bytes": 5095,
+      "sha256": "1057caab16943b779c414a3d9e468bb7522b2dd1e69f8f9582747c3045ee5979"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/refs/refs_state_autogen.go",
+      "bytes": 54,
+      "sha256": "3a72e0bdeee474e10d3cbfeea4f65cff73f441dd4226ce1d7ae887d005430694"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sleep/sleep_unsafe.go",
+      "bytes": 16031,
+      "sha256": "cf479c89355e1da53bd7090f1e688833daca65e6319d5aec024ef755fee6c86a"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sleep/sleep_unsafe_state_autogen.go",
+      "bytes": 2492,
+      "sha256": "30408a442fbfb7c60d35c008a976bf6c0b06f364c44824b60bd1410d472b83c4"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/state/addr_range.go",
+      "bytes": 1772,
+      "sha256": "d66a4addc06bdd09947f81e40ac6870647e284a4eed1583b9163e8e8bae82d68"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/state/addr_set.go",
+      "bytes": 67430,
+      "sha256": "8cbdacf691c912b3f6169a6c553ac097f66cd4a3f8cf181e9e82d689ff584754"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/state/decode.go",
+      "bytes": 23016,
+      "sha256": "90fc8363c5c0e20df3c4053a66be3aae6d8f99599f0eb3a30d90529a5eeefeaf"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/state/decode_unsafe.go",
+      "bytes": 2504,
+      "sha256": "38651cd527a9ec5fb1a1efc4c8e304d5763d95845e97e1f0c8bca5e1d02430bf"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/state/deferred_list.go",
+      "bytes": 5390,
+      "sha256": "87727c93687cc629678512988088c1bbd5f838ff725e13d538c827d887164a14"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/state/encode.go",
+      "bytes": 27293,
+      "sha256": "176f4e687b3fd4549cc9149ebd8cd9ccff3af077fc3cf8ebe303a27012df093e"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/state/encode_unsafe.go",
+      "bytes": 982,
+      "sha256": "4b8afacd8e7148f122d64e7b76d27dee3be1a3b806e5cd433f1362dbb344024e"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/state/ods_list.go",
+      "bytes": 5088,
+      "sha256": "31931cf412a2c009e2b7e8cc456371a7da829eb6a2dcb4243ee3c672d235fd98"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/state/state.go",
+      "bytes": 9404,
+      "sha256": "bc81cfcfe4bc814d879f763ff0bc997623626ed64c4ad9c135997ceb30554aee"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/state/state_norace.go",
+      "bytes": 670,
+      "sha256": "3e763db5e62b68d603b925c73f6082163f4353f98c9d36d0e6ca019f30ba58c9"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/state/state_race.go",
+      "bytes": 667,
+      "sha256": "f6580a6c18a87163370d0b0943c8ea72072ae92395643b74a14487cb23967aff"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/state/stats.go",
+      "bytes": 3811,
+      "sha256": "3d0c8c3ab4aa428070200c9f9b8d1594c6a40df25f7c8a19f7a276fa8d1a6c32"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/state/types.go",
+      "bytes": 11652,
+      "sha256": "45f2052fcab1e12a8c9da06ec35fa8f710c5fd83ffa8e574ec6c86d76a9a6c9a"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/state/wire/wire.go",
+      "bytes": 20566,
+      "sha256": "163dad06c24c507ca51f61842eeaf06dbef36ade87326b68ff011a6126c463df"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/aliases.go",
+      "bytes": 1118,
+      "sha256": "a4ec20cf08f2fb3a5ef5d3e9c95a985ade531b23a9fd4f0450fa90cdbd1bf6c3"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/checklocks_off_unsafe.go",
+      "bytes": 367,
+      "sha256": "590f2b3e4f2d045a1f7af20ba6becb5d9eac2e79e8fa48ef574c43637a0aaac1"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/checklocks_on_unsafe.go",
+      "bytes": 2727,
+      "sha256": "7dd148b0bd9aa5abae75e23212561fdd4964d8d10c30c24a6af2acf32d894d37"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/fence.go",
+      "bytes": 736,
+      "sha256": "0ead0344e97a04eb0403d138dac8f0f29f74514738a9c719a7281e22fdea7e07"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/fence_amd64.s",
+      "bytes": 1006,
+      "sha256": "e92158bd82381dc485991ba6baacad6d03dcdb9b34a8b5f85ecbe6e6682e4fdb"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/fence_arm64.s",
+      "bytes": 754,
+      "sha256": "b2eecf84b2d75012c1527db550e6baf28b029db04bcf0d591b986797f56bef3e"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/gate_unsafe.go",
+      "bytes": 4618,
+      "sha256": "df43dfd717baf6081a9d727c91d31231b5ae9f0db832ef5a88fbdca0eefe831b"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/goyield_go113_unsafe.go",
+      "bytes": 384,
+      "sha256": "fb3a3ff0c4400c9ffcdda1015a62b2d35f60e8af30e19451aa9a3f442e4d7dfe"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/goyield_unsafe.go",
+      "bytes": 563,
+      "sha256": "450a2a2b01709a56a36d8b6a2a16530d3294bf951719034fd6e376ad7e9f56a3"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/locking/atomicptrmap_ancestors_unsafe.go",
+      "bytes": 13276,
+      "sha256": "bf6fc7a17ec76231809908efcfd273ed7c33c8137fe8fa869055495893798cf0"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/locking/atomicptrmap_goroutine_unsafe.go",
+      "bytes": 13831,
+      "sha256": "433f6d9a1d03d29ab0e49855ef44e8f3461d30ce1bc1578421c8adab08d07fd4"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/locking/lockdep.go",
+      "bytes": 6071,
+      "sha256": "7e0b66ecce238eaf20dd6ab9335d775ed3bb1c880b3198380710f308397d2692"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/locking/lockdep_norace.go",
+      "bytes": 1116,
+      "sha256": "083bd2cd937d93b3b588a0abab100ebf8c3efd265e585064ec9a075285052832"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/locking/locking.go",
+      "bytes": 1362,
+      "sha256": "07ae15ee93031d98a2970808a8288a69789548f2d321c7b7293ef4d6e1e937a3"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/mutex_unsafe.go",
+      "bytes": 1927,
+      "sha256": "417c13b0215ad8715a5b2c8ba7b12075306237592d23ba725912fac4e86af2ce"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/nocopy.go",
+      "bytes": 978,
+      "sha256": "e3f1b208bba6fcc498507aa7539f9e63ca7439070a44059580d081272da7da04"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/norace_unsafe.go",
+      "bytes": 1365,
+      "sha256": "1a74095b9e9536ee9bad68035116fc23a12edf659e56f29c3eb7c37bec600219"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/race_amd64.s",
+      "bytes": 954,
+      "sha256": "b7345228c6aa5672b32e81a987068fa4319451ee89d91bc61c58c54805f464e2"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/race_arm64.s",
+      "bytes": 1003,
+      "sha256": "57f050dbe524b2c9bb4f4de2d2d34299dccee5af6655c94afc8e1d821671c396"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/race_unsafe.go",
+      "bytes": 1351,
+      "sha256": "c381c14953e6d425512577e4c3ece5a2a45466b8a00531f5776da7295b44291d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/runtime.go",
+      "bytes": 691,
+      "sha256": "2c996d63adfb521d67c382a78a303a87b3633baed65ae332189de6f2673c3a58"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/runtime_amd64.go",
+      "bytes": 643,
+      "sha256": "9bc300187aec77404b9965e49ac3bf30d8f96a3fe484f947ea6271de558b3093"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/runtime_constants_go_impl.go",
+      "bytes": 803,
+      "sha256": "19131ddf4f42e050ec3b8124bc959b0fff793de149c74583a99635b8bb49e68c"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/runtime_exectracer2_go_impl.go",
+      "bytes": 770,
+      "sha256": "0a6f4bcc95422158ba916e9c324114a89d952f280c47d3bf1fdeda7461a0da40"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/runtime_go121_unsafe.go",
+      "bytes": 482,
+      "sha256": "728024d256853ebdd2101d307cfd45081eb9a3e6ecdd219999c07f29e4389afb"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/runtime_go124_unsafe.go",
+      "bytes": 569,
+      "sha256": "425408ee1b0cb2c82df72d701c219199da8d4cb05ed411dc5791d1d825bbece3"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/runtime_go126_unsafe.go",
+      "bytes": 553,
+      "sha256": "7ceedccd862ace7da64d5b9becbc66258ab2c8fa4ac82e69ba51869a0dc688a9"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/runtime_not_go121_unsafe.go",
+      "bytes": 534,
+      "sha256": "cfa4301981204cb6035f6a23fa4ee847ad0998fd94902089e9df6daba77cfa9f"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/runtime_other.go",
+      "bytes": 407,
+      "sha256": "6ddf1f7e39f53e571f11f8d01e8608d06cf8b2a24d44a9d4e34dac09618a283b"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/runtime_spinning_asm_impl_amd64.s",
+      "bytes": 799,
+      "sha256": "6ef1f0662402ff8825f776279da8f118f5a542300d259bfe2b179f98866a9302"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/runtime_spinning_asm_impl_arm64.s",
+      "bytes": 749,
+      "sha256": "b6d3b6f5049573f81bf08bcb9dc104952ae78c77e99212059aaa818d5ef4f64c"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/runtime_spinning_other.s",
+      "bytes": 1149,
+      "sha256": "a5c2bfa49b89829eb434b0a7462ba107501bd9e4bba35f86e2a96521e84e8829"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/runtime_unsafe.go",
+      "bytes": 3957,
+      "sha256": "f307062f9e39ef844c5f8c17537dccef92f03ad3aa31d88ac3074681ad902c90"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/rwmutex_unsafe.go",
+      "bytes": 8586,
+      "sha256": "535f8dbc89f96bbe5674a497e4573635a68a4c6ead2725b97984dcecc1f2737d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/seqcount.go",
+      "bytes": 4305,
+      "sha256": "836035f4dc6bbcea96ffb8a438f295c04be3820632dcf331913be3db2c55593e"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/sync/sync.go",
+      "bytes": 302,
+      "sha256": "f04c162af527a2c46f3f3e0984ca1828f1c646931efce7b3dbf2f9978ecfadeb"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/adapters/gonet/gonet.go",
+      "bytes": 18266,
+      "sha256": "7c6e776de42b349b185aa5ef896c28fe36e374b327e9d094ed4931f6cf14f3f9"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/adapters/gonet/gonet_state_autogen.go",
+      "bytes": 55,
+      "sha256": "f5bcda35822745d01dfba02b55e4eadd573dcbf1ecc3131abec694eac8feff37"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/checksum/checksum.go",
+      "bytes": 1977,
+      "sha256": "4c4d009336c6c743d222a89352a1e2d5b25df02c7562057fccc3c7ca479aa5d8"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/checksum/checksum_state_autogen.go",
+      "bytes": 58,
+      "sha256": "e7c4d33598477299104d9bdfc0d891f0abdb8a9b2d7c95a271798f8b94d6f70b"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/checksum/checksum_unsafe.go",
+      "bytes": 6346,
+      "sha256": "eb2727c336dedcf62af474ec8a1b77710116680e2de92532745bfafcad5a0f4c"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/checksum/checksum_unsafe_state_autogen.go",
+      "bytes": 58,
+      "sha256": "e7c4d33598477299104d9bdfc0d891f0abdb8a9b2d7c95a271798f8b94d6f70b"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/errors.go",
+      "bytes": 16777,
+      "sha256": "f3d554415677f0933801175fcd85bd1ade06367a866f1e22f789f6ed01e7ee39"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/errors_linux.go",
+      "bytes": 2053,
+      "sha256": "8d24004b9cc27a43008997b9b641a3ff583dcfed9d16f814c3a7383c816422e8"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/hash/jenkins/jenkins.go",
+      "bytes": 2146,
+      "sha256": "4998879404feab2d7c98fa16a3974f392384881994f07297d4716236c465322f"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/hash/jenkins/jenkins_state_autogen.go",
+      "bytes": 57,
+      "sha256": "e9c2b9ee8764df151c7a58df068b633cd5ac4f1f34d0ef10544ca160d153b0e2"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/arp.go",
+      "bytes": 4528,
+      "sha256": "af1950bf2c4a20aae4466909c8fd14fead8346b1bb22b32feee8b4db1cfe7255"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/checksum.go",
+      "bytes": 3941,
+      "sha256": "c77705c9fcdc2ae0b0b31ece4d0e851665d8d8a54568ad0c41df145360ce3c26"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/datagram.go",
+      "bytes": 732,
+      "sha256": "6bf99adf259caf950d5e9f3833d1d6dd7c43053610e605fead3e668029b80dc2"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/eth.go",
+      "bytes": 6734,
+      "sha256": "bd9b69ff6dc922b1734d3dc5cf6724ed4a8dc5296ec3a2dbe15153755615a367"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/gue.go",
+      "bytes": 2119,
+      "sha256": "f39e9299cc035a51fa5e344a0626c3853a1292eb263fffc044bb8ef339517e5d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/header_state_autogen.go",
+      "bytes": 2705,
+      "sha256": "2451211abc8139eef29ceb9ed0d40ec9235990414cbc9d55c7d2e3be039a40c9"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/icmpv4.go",
+      "bytes": 7765,
+      "sha256": "4729a3cb834d0883916c45158ecf56822db8848ec9e59217a5288c68f5844058"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/icmpv6.go",
+      "bytes": 10143,
+      "sha256": "3c16dd0380e5bd55f081ab669f0b2ece2848d3a1521b00f3fa3decf9da552ba9"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/igmp.go",
+      "bytes": 6219,
+      "sha256": "179eff74ac41122f242ff69949fc9be9ad4dac487365bbb111ac7d9d0c3172ca"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/igmpv3.go",
+      "bytes": 23609,
+      "sha256": "90338a2c560ffb5230d6feac84ca5983bdc0deb2e8f2f7170811d38f5a95239a"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/interfaces.go",
+      "bytes": 4449,
+      "sha256": "d8fc8fa602e6d204d3b960d3bf36732c967463549a63e02e87a55d6a6fa79ef3"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/ipv4.go",
+      "bytes": 44442,
+      "sha256": "78a83937362a46eea4ea813e7222738e74ac0040c884ece4d79b9d5fe3847b08"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/ipv6.go",
+      "bytes": 24388,
+      "sha256": "09b5484a8a6ce3e0deea7fc0e769ea48fde348e758ada80b56ed557cf0ddff82"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/ipv6_extension_headers.go",
+      "bytes": 39493,
+      "sha256": "7e8747f87eb9885e18d6183f236b16dde412a526f1faf8817b6e9f7887c6cada"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/ipv6_fragment.go",
+      "bytes": 4799,
+      "sha256": "654ebd2c5a3d7e386b3e8c9f03e967fe887e0c855081c4da4ebf41c9f54e1b2b"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/mld.go",
+      "bytes": 4227,
+      "sha256": "88596229f0e72dd33bfc90a9cd578756623dcf29046d64a2a01ec1c465a761f4"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/mldv2.go",
+      "bytes": 26513,
+      "sha256": "ed14a73af3817a657260d86c181300f2a7a0d2131444227d30bd1833aad916e2"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/mldv2_igmpv3_common.go",
+      "bytes": 4113,
+      "sha256": "b98b2183aa1ce925ee5e4985bd1e24796d39fd55b7090a777d1b15d7ac6fb5a3"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/ndp_neighbor_advert.go",
+      "bytes": 3611,
+      "sha256": "ace0aca4b0d5d1f40527180d2a239835d77350a58a5b5c2c02aeacc2037770fa"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/ndp_neighbor_solicit.go",
+      "bytes": 1849,
+      "sha256": "a0105f8f6ed157f4e8da165a3db14e1444568df6661788784b5484fb3209cc56"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/ndp_options.go",
+      "bytes": 37907,
+      "sha256": "112bb15194c86be27ae23fda135b2499f2d6313d75279b7f74a2bef611006f00"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/ndp_router_advert.go",
+      "bytes": 7514,
+      "sha256": "49a57987673a430a212fb8eef02f8087ff2d019b2e53712b18e214b2338403b7"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/ndp_router_solicit.go",
+      "bytes": 1210,
+      "sha256": "0c5d8bc8fa62dc70ab4cae6adf1f7435fa8dcab4109fdb99dd3911eb211e075b"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/ndpoptionidentifier_string.go",
+      "bytes": 1944,
+      "sha256": "279d5a33f5ab06a784385be2aef49677e90fbf86d307adf484d44b584bae0a97"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/parse/parse.go",
+      "bytes": 7808,
+      "sha256": "1f3ded87a84dc9a754a495c6315b7d0a3d6ba00217a0d3c9db50cff98d55a99d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/parse/parse_state_autogen.go",
+      "bytes": 55,
+      "sha256": "465b600244cd7f313dc70319d1c5e5350cde77fabfcf167bd86aa34617f2d497"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/tcp.go",
+      "bytes": 22129,
+      "sha256": "e4c4950f139bd1545300db59497341bd034d75bf6eade25ff5fd2dad30a1ac09"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/udp.go",
+      "bytes": 6142,
+      "sha256": "953b3473ec1e2f72188cc5f98851647f1aaacf738c5da9c93279401e2cd40090"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/header/virtionet.go",
+      "bytes": 2764,
+      "sha256": "2fa704bbf8bf3e5d57fe04547bdca1dae45fd28e834d3ed1c9bc1387264d480a"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/internal/tcp/tcp.go",
+      "bytes": 1572,
+      "sha256": "25efd81764be01c0254b607311056cf63bf18cb0665f4baa345768295dfae106"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/internal/tcp/tcp_state_autogen.go",
+      "bytes": 758,
+      "sha256": "9acf12cf30c0ca0951e7bf8121652a8d46cc81ffcca4614233f08860f0ce7b5f"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/link/channel/channel.go",
+      "bytes": 7903,
+      "sha256": "8c1ae6b1da82c3e69cefaad66eeb4c60cb11a2162cdce50bec7e7c4d29dd2b20"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/link/channel/channel_state_autogen.go",
+      "bytes": 1824,
+      "sha256": "a8a167b87be9767eb2749a6d2b69f904a329f777afb7cb251cb1453cf96772dd"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/link/channel/endpoint_mutex.go",
+      "bytes": 2447,
+      "sha256": "dc10afd2a39b181abfef4089781a0a174b60ca32197f9de03a20e6b7fddb1a1f"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/link/channel/queue_mutex.go",
+      "bytes": 2369,
+      "sha256": "67ba4ca9bf24ba8ff0590db04e6645377cef1907619ade8df3b695bbcdf9e4f8"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/hash/hash.go",
+      "bytes": 2674,
+      "sha256": "fde27ecd0318f674744ca2c7943d325c33acdfe0639d1a1ed9c87b0f6f15dea9"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/hash/hash_state_autogen.go",
+      "bytes": 54,
+      "sha256": "52fccc957892fa58c2c492f3cf3baf765c3cdaf640c2181ae30cbf64e5c91078"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/internal/fragmentation/fragmentation.go",
+      "bytes": 12484,
+      "sha256": "3f634d64ff53fbe0b01bdb0868a7fbd7b566b8d3757fdbc71d0199879f58a944"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/internal/fragmentation/fragmentation_state_autogen.go",
+      "bytes": 6118,
+      "sha256": "c2579222b5cf6fe5b4d8f13c01f5253fb60c6d27b2b24c1c8f70f06ca487c374"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/internal/fragmentation/reassembler.go",
+      "bytes": 6003,
+      "sha256": "ec44f894fe1512dbe8aaf0ffbabf6cd9b0684c31d5dfe35b0f466a2562391e90"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/internal/fragmentation/reassembler_list.go",
+      "bytes": 5416,
+      "sha256": "6e6b0288eefe36636b4ca466324268d7f5a1dc16ec728998f1f586c8f6c60d1e"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/internal/ip/duplicate_address_detection.go",
+      "bytes": 8164,
+      "sha256": "f787706b5f0a046fff7646a6624836c28f2eb3a16e95eb0a858a16db00ac6ded"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/internal/ip/errors.go",
+      "bytes": 4413,
+      "sha256": "6216e984360ff21637824c1ec7b9cfd4a07916797d34c49d1d42c0d21fd76178"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/internal/ip/generic_multicast_protocol.go",
+      "bytes": 43586,
+      "sha256": "9c1b0f18713c5fc2939c601ab5f9da1f6d457ed5570b5fa88f4264b6c86d3a2d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/internal/ip/ip_state_autogen.go",
+      "bytes": 13245,
+      "sha256": "01d0e93cc9a7c213f8527c1c62678ddfc1cca1f5e28afd9fece0833067d63dd7"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/internal/ip/reject_with_reset.go",
+      "bytes": 8984,
+      "sha256": "4565fa9d16af80be3a52c5e3e3772be6fd76993215d496a493378771e3bf0de8"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/internal/ip/stats.go",
+      "bytes": 9698,
+      "sha256": "5840eef3c832afd56f89e994ad545d17ffabb3198586b3e974c3c92e8f0850a1"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/internal/multicast/multicast_state_autogen.go",
+      "bytes": 3270,
+      "sha256": "b55909442ba10d8d21b810840abfbe4fac0c092d0d1b1f4291076f083e668ea6"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/internal/multicast/route_table.go",
+      "bytes": 14561,
+      "sha256": "7ba7c58270ea1cef7aaa27e18714383b0dbb809bc1641e0e0e2a5e71f80a2133"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/ipv4/icmp.go",
+      "bytes": 30937,
+      "sha256": "f387344bbd9fb9b9e4be99b5f6fccff231a323eced3f644ce392236abbb6dc8a"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/ipv4/igmp.go",
+      "bytes": 21282,
+      "sha256": "01ec979ae9b40d41dbaa696218d8fe1d0e6449e618a2cba11014fc138953a522"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/ipv4/ipv4.go",
+      "bytes": 87072,
+      "sha256": "998e0ccecd9d2274f83dcc4bad5048a448e8ace3061499f2849433184f4937d1"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/ipv4/ipv4_state_autogen.go",
+      "bytes": 23449,
+      "sha256": "4c14a9493759343b4c13984bfce0fdba38348a979c66185467168db833565627"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/ipv4/stats.go",
+      "bytes": 6442,
+      "sha256": "e804f33a6a9811eae2a3fc0e237697a15b2997c2e9823470d0e86cad0f797ec2"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/ipv6/dhcpv6configurationfromndpra_string.go",
+      "bytes": 1543,
+      "sha256": "1fb0b68bc302a705809e1e14d78de1ae6e9cd4a36a90a98518ea9d7cd4586ca1"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/ipv6/icmp.go",
+      "bytes": 44855,
+      "sha256": "b47f40b80c71fe4e674d531280ea887da678742d23b1bbc6616c8caced55009e"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/ipv6/ipv6.go",
+      "bytes": 103303,
+      "sha256": "9914860207f66fedb6d618817827e4f86dd5af897144367321b07e34286788dd"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/ipv6/ipv6_state_autogen.go",
+      "bytes": 29941,
+      "sha256": "cb086e17dcaeaa07391de42a51a8a9910ba5f3f6621383b49ee490350ecbf35e"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/ipv6/mld.go",
+      "bytes": 16606,
+      "sha256": "ef21f1ada42534590206799cb7c4cffad81666d228fae402ac01a33aba3cb853"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/ipv6/ndp.go",
+      "bytes": 72324,
+      "sha256": "46d3ce5fb5a0f24382a539441f175e49e311c59b24b06b13fdc6939501408812"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/network/ipv6/stats.go",
+      "bytes": 5223,
+      "sha256": "1afbccf97ff81f1c0c8ab08b6dbf3fe6eee9801c6240eabb58e06b764d3d59af"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/ports/flags.go",
+      "bytes": 3713,
+      "sha256": "8661ab161f49dce79c1bbdc6251903becf79be22dfb0734b216d7d73754c26d9"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/ports/ports.go",
+      "bytes": 13938,
+      "sha256": "9ff73047b8d301e4d4a51e360a8b7417c33c5d29575c36a3257743891e8d31e2"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/ports/ports_state_autogen.go",
+      "bytes": 3746,
+      "sha256": "0c91d5901245b2ca772977aeb5bb31b1f54adbbca597d47f29dee73760394b98"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/route_list.go",
+      "bytes": 5066,
+      "sha256": "a468b3fb2970c793271e4b05c3f219cccf1ff513e2950909087872d033dfee7f"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/seqnum/seqnum.go",
+      "bytes": 1885,
+      "sha256": "b9c830adb9cb3aebc470d0039a59bcbab03b7bfa926d3b779630f48c2a15cc62"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/seqnum/seqnum_state_autogen.go",
+      "bytes": 56,
+      "sha256": "235131dd0ba8197d6c2b004f1a8400a0eef91a208e5a54e45306633a509910e1"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/sock_err_list.go",
+      "bytes": 5294,
+      "sha256": "c8c60359a2000f58e8add5f323343b4f9dbd41dcf46934718e9620a06c86d7c9"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/socketops.go",
+      "bytes": 25162,
+      "sha256": "378110ac8dacfd0058f65f46a3b0182270ae551ecdc8cf1c6c95286fb29ac608"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/address_state_mutex.go",
+      "bytes": 2549,
+      "sha256": "94563a3c74ef7dfe3799ea59579550dd2e6a37236175b630940b0dcac470236f"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/address_state_refs.go",
+      "bytes": 4276,
+      "sha256": "8d14613bc01e5e2c215f1396377b84ebebc453f6f8ac9112baf9f7dc0578c6e8"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/addressable_endpoint_state.go",
+      "bytes": 29194,
+      "sha256": "f33b8a428c3eb3087c242d134b018dc4b8cba5e701f8f4290ad05fdedf0f219d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/addressable_endpoint_state_mutex.go",
+      "bytes": 2861,
+      "sha256": "09d91095a7fe52716c3c2a85235c0648cd5135dfdf867472e18c61c8fba66f64"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/bridge.go",
+      "bytes": 8758,
+      "sha256": "e65fc265584932876315fc0bc3273d0d4bb95d53c6f605f262a89b0dfe0db0f6"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/bridge_mutex.go",
+      "bytes": 2393,
+      "sha256": "2596efdc59a537b4d96891099eec384901c7ade7fbb502fea35dae88a6d71b08"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/bucket_mutex.go",
+      "bytes": 2463,
+      "sha256": "255eb1922f59400e3f9ceb920f6a573b532b400b293357e53062b9e5842cc4cf"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/cleanup_endpoints_mutex.go",
+      "bytes": 1822,
+      "sha256": "43bd7b0309a05c2119310a854a1d1ea895250817d852173ed61fe50020529bcb"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/conn_mutex.go",
+      "bytes": 2341,
+      "sha256": "4b945372c0a2d028685c2ef47939a969aba649b62921371ffb1a17f8d6f898c4"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/conn_track_mutex.go",
+      "bytes": 2471,
+      "sha256": "d7bfbb2b1965e2b87400dced7404e46cb8b955f27d7ab7228ed20620cba0d785"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/conntrack.go",
+      "bytes": 27186,
+      "sha256": "68bcd584eec6c6fc5157fde5ec9b4ed04400818e729fe2b09e3d204d4488b726"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/endpoints_by_nic_mutex.go",
+      "bytes": 2601,
+      "sha256": "869bb4cb071bf4461ecb5e64d25dd95f9f6b1e05d56fbdb2acb41711d2fba3d9"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/headertype_string.go",
+      "bytes": 1386,
+      "sha256": "acb149d4b3fdf7f424a22cb01fbd96dcaf528a9acae6ddc2472ef4e3addc30fb"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/hook_string.go",
+      "bytes": 1294,
+      "sha256": "eb470720d6b52a3a8538d9233cfb4b0f191f5d5ca5852a4a96fddf068471f721"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/icmp_rate_limit.go",
+      "bytes": 2252,
+      "sha256": "2cc324280494e376df2bab3b286757752f97736b721e51af518e6b08f0325c6a"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/iptables.go",
+      "bytes": 23305,
+      "sha256": "5b4a6cfa6ed3d947daef0c330ef6e853bc0b32c14eee7d3255bef2f6d19e49e3"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/iptables_mutex.go",
+      "bytes": 2445,
+      "sha256": "287bb7395aef06ed210c69ffd8355e1757d53cb5bacb8996616c8dc66900ae10"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/iptables_targets.go",
+      "bytes": 14588,
+      "sha256": "a7ece0e3fd5b92b64195cd0c154fa6ef554dbf59ae621aaf41a6b150c2b0da0a"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/iptables_types.go",
+      "bytes": 12012,
+      "sha256": "6fdfee293a8794ee42ab7c512f9ca28a0462d22a72fc406e3ad2ebc046d8bfa5"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/multi_port_endpoint_mutex.go",
+      "bytes": 2679,
+      "sha256": "543af12baea8e9ccf82adc142f02a9ece61e995ab244094d85d7ddf9c01c3f4a"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/nat.go",
+      "bytes": 15122,
+      "sha256": "9e64a58619db2fe799c6af84f87e9558aad66020db511d5b1ff49e57a3af98c1"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/neighbor_cache.go",
+      "bytes": 10231,
+      "sha256": "6d470962f84e3e10aaa0f7245353bb56b53d426c7f72300c5a523bf4602e1663"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/neighbor_cache_mutex.go",
+      "bytes": 2575,
+      "sha256": "1d37226e166a5af23c9b3558eb5238757179e597b624bffb58ba31f4b67a31d7"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/neighbor_entry.go",
+      "bytes": 20157,
+      "sha256": "44b18aebc234b1944f52050af06de60bb6f3d8c9d24a5010c4082914bedd2047"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/neighbor_entry_list.go",
+      "bytes": 5522,
+      "sha256": "3a53670e0dcfbd47ca57a620042ff2acff10118bdb62051ed01d626e3cb17ad3"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/neighbor_entry_mutex.go",
+      "bytes": 2575,
+      "sha256": "a4363c2238f8fcde68ef67d461390349425296a25ccd3835485091a605fd5a6b"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/neighborstate_string.go",
+      "bytes": 1433,
+      "sha256": "3490d836ffab4ae55ef24cc93af07cbcc2967c49dfe4be6e082e6c75599c0dd2"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/nftables_types.go",
+      "bytes": 5816,
+      "sha256": "93fe30f1223980e5cc540f9eca21ed4561c167cd464db37130e99f7d7764e9e4"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/nic.go",
+      "bytes": 34772,
+      "sha256": "d9ecea8b69f3afd53310f380b83f88fc68c2063f0c186b0a5dc5b7cea36cd590"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/nic_mutex.go",
+      "bytes": 2315,
+      "sha256": "052ed95a4e831cf1bf8ce300bb82d49117e43d1b567c9c4ac9c485f8773f4369"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/nic_stats.go",
+      "bytes": 3190,
+      "sha256": "8c78a5546b6301fac7ad92de0c10070462dffcfe355393bdba2a8af17120204a"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/nud.go",
+      "bytes": 16341,
+      "sha256": "2a95f1bb7e7be47b653c13fd9b24fa4e36b02ffbb50941eeced43890cb660636"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/packet_buffer.go",
+      "bytes": 35199,
+      "sha256": "972962ca0be832a31ba294ce05decfe179c30982fc3badcbf18952693553eb09"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/packet_buffer_list.go",
+      "bytes": 2380,
+      "sha256": "e99286da383ccfaba18dc0b4207248d1a8741334f4371b329ddd568472731374"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/packet_buffer_refs.go",
+      "bytes": 4276,
+      "sha256": "6996e71b17c0938725cc579366aa5d48a4e7417efa72a2294292d58acc5aedbc"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/packet_buffer_unsafe.go",
+      "bytes": 1022,
+      "sha256": "08f8cec210e3028dd7e865dcd2ffef95bcc5771c17fe9212fa08b39c2cecb5fe"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/packet_endpoint_list_mutex.go",
+      "bytes": 2705,
+      "sha256": "13dfdca36dd12cf61e4080a711517925d7fafa3bf4ad738924bcafc8acad68b1"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/packet_eps_mutex.go",
+      "bytes": 2471,
+      "sha256": "d1544ead6785ecf9b2d125755f3b6719d00512f657780e367dc955f60ccd260c"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/packets_pending_link_resolution_mutex.go",
+      "bytes": 2050,
+      "sha256": "e2900a75926e245241789ec9582f072d9473ea4f0c38dacee9b608de4a02e87b"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/pending_packets.go",
+      "bytes": 6710,
+      "sha256": "e0a74a172d69d59ef9420718d30a64b59f708a7a2213362c9d8866996d6b7b34"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/rand.go",
+      "bytes": 999,
+      "sha256": "2bb71782f5c1f6264f65d3c464fb9b8405865231c9404a320f780c19f86930d1"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/registration.go",
+      "bytes": 53799,
+      "sha256": "22729caf604992cd4152d9b30e15eec9417085ccbfe488e12fd9491ff5f77cf4"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/route.go",
+      "bytes": 18090,
+      "sha256": "dc872029c10fe4341562e826862740558a536ecb93097f5d9cea7a8b253a055e"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/route_mutex.go",
+      "bytes": 2367,
+      "sha256": "36abb67e9316734bb824092191601251f9c3361d650f6bf8ffab85190e849cac"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/route_stack_mutex.go",
+      "bytes": 2497,
+      "sha256": "d409352182fab34a02341e473a70711082399809fd25b67de5b0e36527778afd"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/save_restore.go",
+      "bytes": 1468,
+      "sha256": "f30302e492d017ab5bf17ec6bdd483c6d479dc01400b22b5cfd5be58a4246945"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/stack.go",
+      "bytes": 81219,
+      "sha256": "abb53c5520bb9e65ba4553153105aefc75c28820e48704b16022d246724d14be"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/stack_mutex.go",
+      "bytes": 2367,
+      "sha256": "daece6a606e863e2fac85439620a5def4cbc298488d7d7ac9c927ec9795cfb62"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/stack_options.go",
+      "bytes": 2989,
+      "sha256": "c541857cf4e9b60cc26ac7e27b4990405e5de1d3b369245120930c672a6c470d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/stack_state_autogen.go",
+      "bytes": 66752,
+      "sha256": "f042d4a510b0fc5255faa788ce0ab1e87ad931b8e9974e08ff24f83970c0fbc2"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/stack_unsafe_state_autogen.go",
+      "bytes": 55,
+      "sha256": "d79bb437eae459226b3ac50b7f1eb969d4464a93a24065de913d3cd0537e2fa8"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/state_conn_mutex.go",
+      "bytes": 2471,
+      "sha256": "01fa741beef4cba2432e51cc9d5bb12bb330898e81280eddbb9100e224ac8c82"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/transport_demuxer.go",
+      "bytes": 23124,
+      "sha256": "9693d2ea4efb0ac964ff2bd6b02bb7e9ee1b19012b75feed9fd66def57203a3d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/transport_endpoints_mutex.go",
+      "bytes": 2705,
+      "sha256": "b55796782d97029f2ff4bb7508aea52bf29ae58cb0b09fc39dc88ffdab97e59d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/tuple_list.go",
+      "bytes": 5066,
+      "sha256": "ee892dec572cb4b7362638235084c3bf09d4f3179806f0283264d1ae9aa1e3ce"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stack/win_bounded_pool_test.go",
+      "bytes": 5352,
+      "sha256": "a0d14ecaa32b0fa6a2d6945bb040cc04f62d7ccc073d3f1cac815083b618d01d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stdclock.go",
+      "bytes": 3656,
+      "sha256": "93ae7236a7de199082ac788eb1b083bd189d7598cf2091304b3cbddafe08ef9f"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/stdclock_state.go",
+      "bytes": 868,
+      "sha256": "7a293b1d54f79031f970fb5c042b04ef7315868afd875690971cb5259c02ddb0"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/tcpip.go",
+      "bytes": 87536,
+      "sha256": "5361d2c0b46d9faecccf1bb49a4d4742b087ecdc96127aeb28d502476b2fd36f"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/tcpip_linux_state_autogen.go",
+      "bytes": 89,
+      "sha256": "40ebc9d7a1f0185faaf44449d523f6de9969ba67d4bff0f7a31746e8d836f759"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/tcpip_state.go",
+      "bytes": 856,
+      "sha256": "91dac93906e6b7b13bb1bfeab3ce54b41d02b63f50feec9e293bbf2ec978bb64"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/tcpip_state_autogen.go",
+      "bytes": 91001,
+      "sha256": "21fda633e29bc7a69b6409b51ed5811f54c218206ce608bd4966c1befe515c26"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/timer.go",
+      "bytes": 7048,
+      "sha256": "759a13cf0d92fee286875c6b15b88e4a49adbeb65dd1099579ca8627853c945f"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/datagram.go",
+      "bytes": 1384,
+      "sha256": "4c4ec6f385da381fa24e514a3b29b1e5b929cb9ddffd7cb2d5f607bdf43408fe"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/icmp/endpoint.go",
+      "bytes": 23891,
+      "sha256": "e3c31584bc406247090cecd8e6b95ff7d5ac71b32c8090f9dbd9d10a19d2d96c"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/icmp/endpoint_state.go",
+      "bytes": 1720,
+      "sha256": "ee4c597de229f7c083b1a19c8387d1e8f8ff0bc08929e5fa95ad7ef40c05df4d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/icmp/icmp_packet_list.go",
+      "bytes": 5350,
+      "sha256": "4b460633301a952b597c7e04bed249592869e1052234a11f393b01c3733f1461"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/icmp/icmp_state_autogen.go",
+      "bytes": 5186,
+      "sha256": "db2ea222f04fdaf4bbc30c9971e16a298efbafdbdd0ec10b9ca279f968588ddd"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/icmp/protocol.go",
+      "bytes": 4878,
+      "sha256": "8b36982ee9ec4f22a1da8a32abd914d991abe9c3bef943136db2d7ea2b8a3f16"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/internal/network/endpoint.go",
+      "bytes": 33124,
+      "sha256": "8bd8612ede15bedc1598b47b3143a80dd7d34bd1290e9654a54b5d9785f3b0bb"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/internal/network/endpoint_state.go",
+      "bytes": 2501,
+      "sha256": "7dd44ebd3bd78fec17474b32a967b903f78b1672b894730538bd7b5c6f216282"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/internal/network/network_state_autogen.go",
+      "bytes": 3474,
+      "sha256": "5e64710a39b3765c76c1d9156a200f8e22769df40dbb8493b6338a7072008a85"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/internal/noop/endpoint.go",
+      "bytes": 5028,
+      "sha256": "ea41d2aa97f2f652950161a8d436416069c213711156bf81c58402ea9ece03d3"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/internal/noop/noop_state_autogen.go",
+      "bytes": 858,
+      "sha256": "61d3d751d50e370fabc36ead2f2d8ee907c3284e7674a62bb456184b9c79be0b"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/packet/endpoint.go",
+      "bytes": 17081,
+      "sha256": "9e3f25c4580920c767ba57fc7854f9d62a649409d10f2b457c0e0e606ed3d29e"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/packet/endpoint_mutex.go",
+      "bytes": 2446,
+      "sha256": "7ea6453dd6101c37250c0c4abaf168360209caa21ae044692d8576f8fa8a76ec"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/packet/endpoint_rcv_mutex.go",
+      "bytes": 1576,
+      "sha256": "bd72f3be82494b55d7e77c6e00b60eb3af44cbf3ca743b8a5783d880e74158ae"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/packet/endpoint_state.go",
+      "bytes": 1996,
+      "sha256": "71ee25baf7c71955f3c7bc0e67eeaefb219c2cc7c4ab598f0280afa5b63ff0db"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/packet/last_error_mutex.go",
+      "bytes": 1690,
+      "sha256": "1379610575a5945e566356205021ddc7226f85b1134559c3c1d2fc054c9c5000"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/packet/packet_list.go",
+      "bytes": 5124,
+      "sha256": "671a80dad3402c887af3bd819de30911a4b63d151c8dbd059358ed46bd1491d3"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/packet/packet_mmap_mutex.go",
+      "bytes": 2498,
+      "sha256": "ed42fb377fc2b683fdce97e26de807d8ceb0bc2d5b59fc9dc394dcc702d64573"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/packet/packet_state_autogen.go",
+      "bytes": 4737,
+      "sha256": "81f5fb239a5a85594bcc69147b9f78ec56510883885218b6c7881961ecb1b3da"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/raw/endpoint.go",
+      "bytes": 22853,
+      "sha256": "85ad049d2e0715b3d241faeb008aa575945b794706dca87ccbafa15a1e1e989d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/raw/endpoint_state.go",
+      "bytes": 1769,
+      "sha256": "4213422f45d281884eafad51817b7ff69b9241d66146230b8050a768c2028485"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/raw/protocol.go",
+      "bytes": 2410,
+      "sha256": "714da9d7f26ff5a3ca0f1ec6ac81a2b693a2a1b11ef543d95e6bbc8e2da5e45d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/raw/raw_packet_list.go",
+      "bytes": 5292,
+      "sha256": "0910e6f596d13f6a0f031f7cbe5b8ebd47c860972e4fc3ad2a291b503ffe177a"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/raw/raw_state_autogen.go",
+      "bytes": 5750,
+      "sha256": "597d129c1961dc845a6b8c620fb5407a15a0702cd38927ab8aa5bf724c81f100"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/accept.go",
+      "bytes": 23583,
+      "sha256": "0d4ca7f8a8d2b517332d125a20de56d5a7d93c27f6d0c1bee1713f5b4036220c"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/accept_mutex.go",
+      "bytes": 1630,
+      "sha256": "3d70df8901828f4ad1a0aa8582cf4f088d63fd8ea29f13ef90aeae6220889c53"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/connect.go",
+      "bytes": 52300,
+      "sha256": "231c315036a68b6d1d44d10f136a921520363cadb98c0e6ea59ac75a6253eb96"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/connect_unsafe.go",
+      "bytes": 986,
+      "sha256": "af498cf81b13922c4765039b05b49da48824fc606d72487efb864e34d7226ba6"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/cubic.go",
+      "bytes": 10051,
+      "sha256": "e3615b1cc7eac35a59a1c54cfc744c77c4f980a6e5b655920c239cb5e8c0c437"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/dispatcher.go",
+      "bytes": 15289,
+      "sha256": "35fabdccc4f8d8ef2444df06b71999369994aee8e4378d8b8ecfde32ffcb9bd8"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/dispatcher_mutex.go",
+      "bytes": 1706,
+      "sha256": "7e52d97b3aa1302b9294fd5db56080834ec6ff989584c97a320b2cf64f561722"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/endpoint.go",
+      "bytes": 105236,
+      "sha256": "0abf3a8614b26b7fed2f1828ce059bde1c425214b093c0ea8bdc1c5f920f87b7"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/endpoint_state.go",
+      "bytes": 12589,
+      "sha256": "964cae3c4556c658f6082add0639aca5635e5566021dc366a855704ead2e7074"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/ep_queue_mutex.go",
+      "bytes": 1649,
+      "sha256": "15812103da39dc573bf1ab1263c8c5ad3a59d4660746b0c59382de7cfd81be99"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/forwarder.go",
+      "bytes": 5567,
+      "sha256": "a71aaa2cea790e2954663292def3dc226ecb1da83d93a6a1c4d7c033762ae637"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/forwarder_mutex.go",
+      "bytes": 1687,
+      "sha256": "ccc1343bfab3e7a42bfc5efa690af274d76fd515bf1033ea16c36079b0b2fffa"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/forwarder_request_mutex.go",
+      "bytes": 1820,
+      "sha256": "0f9bfbd8fab52f8888f9bd28c77d68a3e6abe1e7e4bbe903150a108b5f7a5402"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/hasher_mutex.go",
+      "bytes": 1630,
+      "sha256": "1d5117a56b8642bd7e9a7706037f6788bed863853683bbcd7c0ed184377e64e5"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/keepalive_mutex.go",
+      "bytes": 1687,
+      "sha256": "0ad12ff1f4ec9a5823fcf58e51a75c838835a80a585910e46f59616166908012"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/last_error_mutex.go",
+      "bytes": 1687,
+      "sha256": "bb0e5e9dbd4838cad9dd47b7fdc4f000764e47b48fd5b82c9fb29c70f348deec"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/pending_processing_mutex.go",
+      "bytes": 1839,
+      "sha256": "d135a84ae7e2cc1fc4e337c9b25054bfdd04db5b28957270afec123e657b9816"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/protocol.go",
+      "bytes": 17921,
+      "sha256": "cc8df362d07015457cc8be74d4e1144fc35a8d697e529936eb74e8a9fa26845f"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/protocol_mutex.go",
+      "bytes": 2443,
+      "sha256": "f3e5689268fee319ae57cd2c9aa9fdb605d47accb58e4a8e19e24ffb254b9a6d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/protocol_state.go",
+      "bytes": 1117,
+      "sha256": "3e8a930855f77fab1131e30ba813a617f2c289c92d3b6cdaeaddeed2c1da7390"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/rack.go",
+      "bytes": 14357,
+      "sha256": "f6d2ae8d6d2c2d4f16bc65a3be501f82138cda4f74de290f193585bfe05d7721"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/rcv.go",
+      "bytes": 22166,
+      "sha256": "55fa9e2ee20da4b73540da23fecbb43fe630c364a91ffa65f52cb78e762e0c42"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/rcv_queue_mutex.go",
+      "bytes": 1668,
+      "sha256": "3794a4e907889d9b5b8a64580ca3ae4afddba43b8b7000f535ab613108f60514"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/reno.go",
+      "bytes": 3552,
+      "sha256": "fe3adbc618f1e28346f674529e17296ff40ee178c7bb13ca5eae50f10c8ae388"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/reno_recovery.go",
+      "bytes": 2088,
+      "sha256": "d3efb50ba458432a0926cd775221e4b42b35b0906444d454d1d775f8979f8a77"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/rtt_mutex.go",
+      "bytes": 1573,
+      "sha256": "23218c8e5791899e4e846e00c04208b3723275a587c026622db265bbcc1c42c4"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/sack.go",
+      "bytes": 3089,
+      "sha256": "6657232d172fe184164f982c88d6870bb1152d7c1e9c4a36998a9c4fde36b3a0"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/sack_recovery.go",
+      "bytes": 3848,
+      "sha256": "4f8380eb4728c433e141321a8fcd8612be8f7d80b003b6f66ea2c6a82c55496d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/sack_scoreboard.go",
+      "bytes": 8762,
+      "sha256": "1a69fe4333ffd09c51af4ffe9322bd1d79cad975930e06be1d2fcd3a73a94fef"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/segment.go",
+      "bytes": 8331,
+      "sha256": "05717d3506576c4a69064e546f80057561d021f880910b67388e8b02afa910ce"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/segment_heap.go",
+      "bytes": 1393,
+      "sha256": "660ded65b5e290981fac0077c56d668273fac5c71d31e34cd119ce0e3165cb96"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/segment_queue.go",
+      "bytes": 2874,
+      "sha256": "1f1f3c893472009f0f566c7dd783c014d684493bf48750783a2064685db91e7e"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/segment_queue_mutex.go",
+      "bytes": 1744,
+      "sha256": "2899ec999fe623e8841f5588bbed7a96d5bef3ec220ce7f4a6cf114732a0c3b1"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/segment_state.go",
+      "bytes": 1243,
+      "sha256": "0f1b03f01489b4faa56e2a0fc5e417134f2fb010eb8ff290fbaff48007e32ca9"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/segment_unsafe.go",
+      "bytes": 683,
+      "sha256": "f5809fc5357ae5d55da4de2a764191250fe980ade84787bf160bbd066c3f270a"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/snd.go",
+      "bytes": 63365,
+      "sha256": "9a07573ad827a965fe5806542ea46b4a11af58ad94939b049135ca9086bf93d0"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/snd_queue_mutex.go",
+      "bytes": 1668,
+      "sha256": "1230f987b29a315eb08006483c4cb1f3474bfddddd71e2e1101bf0f0b5e130ad"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/state.go",
+      "bytes": 14927,
+      "sha256": "8c5b1f13172940a464d6b87134ebb1f8e8e7a25e6dba44239e5632ce00962d01"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/tcp_endpoint_list.go",
+      "bytes": 5235,
+      "sha256": "adb91f2ec12e1c497e07db4fce7f981ca0ae7683673a68c706158167bbd7f26a"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/tcp_segment_list.go",
+      "bytes": 5178,
+      "sha256": "979fca46f3b79ddc62c73f95aca70d6c336d9365e80a34f43bd009edbd708fe7"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/tcp_segment_refs.go",
+      "bytes": 4184,
+      "sha256": "0f58f9003e611202a0506cfa5fc659cbf78a157b77d80d09f826237da3306348"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/tcp_state_autogen.go",
+      "bytes": 52430,
+      "sha256": "88cad6afda6761eb679cc735d6b1bbb4889d0917145b8e3c5a97f261f0795c80"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/tcp_unsafe_state_autogen.go",
+      "bytes": 53,
+      "sha256": "154c3b33d453947e7f50158d9c7bbef4f1c07336c16578b4dccc101cf002604f"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/timer.go",
+      "bytes": 5054,
+      "sha256": "a1d8c227529e284b7c9d01f7784b7815e710a6ee8cb3ca0c0174b64fb46797f0"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcp/win_bounded_pool_test.go",
+      "bytes": 4713,
+      "sha256": "0cd2398b585989b0b328d53df51299163751bdf1d27a9b364413261548a84b2b"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcpconntrack/tcp_conntrack.go",
+      "bytes": 13474,
+      "sha256": "555af46259a44b7f13a63b60dce7c987e29e157ebf8abbb0e785d4bed203acab"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/tcpconntrack/tcpconntrack_state_autogen.go",
+      "bytes": 1994,
+      "sha256": "7cb412ef6fb2a76eabbb183e819e2c901f2943a075ebc7cd26b0c198055c2460"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/transport.go",
+      "bytes": 666,
+      "sha256": "bb7bb859026819790b96d4e387266287f05dd7cda107cb76dc9de6ac36032e88"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/transport_state_autogen.go",
+      "bytes": 59,
+      "sha256": "3ebf343d2e4260a03be22ec415eb46a477045e01a6d6d57dc65979ee4d2c6d5a"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/udp/endpoint.go",
+      "bytes": 31574,
+      "sha256": "fcdd574274ec973e412a4243e3c306d3863239cc6f2bee663d24d82d58f385d7"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/udp/endpoint_state.go",
+      "bytes": 1810,
+      "sha256": "ccde03cc0c9d02cc2bfa73fae3783bd13279a162de3365e473af2508b599a113"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/udp/forwarder.go",
+      "bytes": 3797,
+      "sha256": "99bd12f4d248e7bf58dc068c31ccf36ae0a36379b67b829278c821ce6f14a056"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/udp/protocol.go",
+      "bytes": 4564,
+      "sha256": "57930341c2fe272817b37cf2c97c6d033f421be5acb9d201e9fcefbc8b92886d"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/udp/udp_packet_list.go",
+      "bytes": 5292,
+      "sha256": "61c2943a1914d3a464f9c35564e8f0d5a3393e43b537a638b6d8257e347925f4"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/tcpip/transport/udp/udp_state_autogen.go",
+      "bytes": 5947,
+      "sha256": "e0e21895e61c1009d6e968c4b6fcd31cc0a26ca677993ca13b670feeab7ada3a"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/waiter/waiter.go",
+      "bytes": 8876,
+      "sha256": "365047ef4c48722135e5e3f36cef54cc229c5073f6a83b59a0b21272e5c8a360"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/waiter/waiter_list.go",
+      "bytes": 5107,
+      "sha256": "7cacc1da655d2bbd6112825a07c92bff6087b3fa6a86a6372996318cf7e4a3df"
+    },
+    {
+      "path": "core/third_party/gvisor/pkg/waiter/waiter_state_autogen.go",
+      "bytes": 2696,
+      "sha256": "a1763452da6e877b778b844363743251eb2a07c1f1c8ced1be7d353716c41679"
     },
     {
       "path": "core/third_party/licenses/C50-TUNSTACK-FILE-NOTICES.tsv",

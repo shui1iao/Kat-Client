@@ -438,6 +438,7 @@ func (h *Host) applyContext(ctx context.Context, text string, formats ...Documen
 			return nil, applyFailure
 		}
 		if next != nil {
+			next.setServer(h.server)
 			old := h.bridge
 			h.bridge = next
 			next = nil
@@ -547,6 +548,7 @@ func (h *Host) startLocked() *Error {
 		h.state = "error"
 		return fail("start_failed", "kernel", "Kat could not start; document retained")
 	}
+	b.setServer(s)
 	h.server, h.bridge = s, b
 	h.probeCtx, h.probeCancel = context.WithCancel(context.Background())
 	h.resetManualLocked()

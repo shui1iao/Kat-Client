@@ -2,9 +2,87 @@ package tunplatform
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/shui1iao/Kat/internal/clientegress"
+	"io"
 	"net/netip"
+	"sync/atomic"
+	"syscall"
+	"time"
 )
+
+const (
+	wintunErrorBufferOverflow syscall.Errno = 111
+	wintunAllocateRetryLimit                = 8
+	wintunAllocateWaitMS                    = 1
+	wintunAllocateMaxWait                   = 8 * time.Millisecond
+)
+
+// ErrWintunRingFull identifies Wintun send-ring allocation exhaustion after bounded retry.
+var ErrWintunRingFull = errors.New("wintun send ring full")
+
+type WintunRingFullError struct {
+	Cause syscall.Errno
+}
+
+func (e *WintunRingFullError) Error() string {
+	if e == nil {
+		return "WINTUN_ALLOCATE"
+	}
+	return fmt.Sprintf("WINTUN_ALLOCATE: %v", e.Cause)
+}
+func (e *WintunRingFullError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
+}
+func (e *WintunRingFullError) Is(target error) bool {
+	return target == ErrWintunRingFull
+}
+func (e *WintunRingFullError) WintunRingFull() bool {
+	return e != nil && e.Cause == wintunErrorBufferOverflow
+}
+
+func retryWintunWrite(
+	b []byte,
+	firstErrno syscall.Errno,
+	closed *atomic.Bool,
+	now func() time.Time,
+	waitStop func() error,
+	allocate func(int) (uintptr, syscall.Errno),
+	send func(uintptr, []byte),
+) error {
+	errno := firstErrno
+	var deadline time.Time
+	for attempt := 0; ; attempt++ {
+		if errno != wintunErrorBufferOverflow {
+			return fmt.Errorf("WINTUN_ALLOCATE: %w", errno)
+		}
+		if attempt >= wintunAllocateRetryLimit {
+			return &WintunRingFullError{Cause: errno}
+		}
+		at := now()
+		if attempt == 0 {
+			deadline = at.Add(wintunAllocateMaxWait)
+		} else if !at.Before(deadline) {
+			return &WintunRingFullError{Cause: errno}
+		}
+		if err := waitStop(); err != nil {
+			return err
+		}
+		if closed.Load() {
+			return io.ErrClosedPipe
+		}
+		p, nextErrno := allocate(len(b))
+		if p != 0 {
+			send(p, b)
+			return nil
+		}
+		errno = nextErrno
+	}
+}
 
 type Device interface {
 	ReadPacket([]byte) (int, error)

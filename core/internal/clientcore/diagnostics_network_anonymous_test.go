@@ -76,7 +76,7 @@ func TestAnonymousActualNetflixSizeAndDecompressedBoundary(t *testing.T) {
 		name, path string
 		limit      int
 		ok         bool
-	}{{"old cap rejects actual response", "/", clientdiag.BodyLimit, false}, {"Netflix admits actual response", "/", clientdiag.ResponseLimit("Netflix"), true}, {"exact four MiB", "/exact", clientdiag.NetflixBodyLimit, true}, {"four MiB plus one", "/over", clientdiag.NetflixBodyLimit, false}, {"other services still two MiB", "/", clientdiag.ResponseLimit("Disney+"), false}} {
+	}{{"old cap rejects actual response", "/", clientdiag.BodyLimit, false}, {"Netflix admits actual response", "/", clientdiag.ResponseLimit("Netflix"), true}, {"exact four MiB", "/exact", clientdiag.NetflixBodyLimit, true}, {"four MiB plus one", "/over", clientdiag.NetflixBodyLimit, false}, {"other services still two MiB", "/", clientdiag.ResponseLimit("Google"), false}} {
 		t.Run(c.name, func(t *testing.T) {
 			fetch := fetchDiagnosticLimit(target.Client(), c.limit)
 			v := clientdiag.Detect(context.Background(), "Netflix", func(ctx context.Context, m, _ string) (clientdiag.Page, error) {
@@ -213,20 +213,10 @@ func TestAnonymousBatchRealRulesMultiExitAndSafeCache(t *testing.T) {
 		case strings.Contains(r.Host, "gemini.google.com"):
 			w.WriteHeader(403)
 			io.WriteString(w, "<title>Just a moment</title>cf-chl-check")
-		case strings.Contains(r.Host, "claude.ai"):
-			if r.URL.Path == "/cdn-cgi/trace" {
-				io.WriteString(w, "ip=203.0.113.9\nloc=HK\n")
-			} else {
-				io.WriteString(w, `<!DOCTYPE html><html><body><div id="root"></div></body></html>`)
-			}
 		case strings.Contains(r.Host, "www.google.com"):
 			io.WriteString(w, `<!DOCTYPE html><html><body><script>const _bar_=[null,2,1,200,"HKG"]</script></body></html>`)
-		case strings.Contains(r.Host, "www.youtube.com"):
-			io.WriteString(w, `<!DOCTYPE html><html><body>YouTube Premium ad-free <script>{"countryCode":"HK"}</script></body></html>`)
 		case strings.Contains(r.Host, "netflix.com"):
 			writeDiagnosticGzip(t, w, raw)
-		case strings.Contains(r.Host, "disneyplus.com"):
-			io.WriteString(w, `window.langRegionRedirectProps = {"location":"HK","hasContent":true,"countriesConfig":{"HK":{"commerce":{"defaultProduct":{"NU":{"skuList":["public-product"]}}}}}};`)
 		default:
 			io.WriteString(w, "<h1>About service</h1> Premium ad-free")
 		}
@@ -264,20 +254,11 @@ func TestAnonymousBatchRealRulesMultiExitAndSafeCache(t *testing.T) {
 	if x := rows["Gemini"]; x.Result != "challenge" || x.HTTP != 403 || !strings.Contains(x.Reason, "[challenge]") {
 		t.Fatal("lost HTTP/cause", x)
 	}
-	if x := rows["Claude"]; x.Result != "unlocked" || x.Region != "HK" {
-		t.Fatal(x)
-	}
 	if x := rows["Google"]; x.Result != "unlocked" || x.Region != "HK" {
-		t.Fatal(x)
-	}
-	if x := rows["YouTube"]; x.Result != "unlocked" || x.Region != "HK" {
 		t.Fatal(x)
 	}
 	if x := rows["Netflix"]; x.Result != "unlocked" || x.Region != "HK" || x.Node != "NodeA" || !strings.Contains(x.Reason, "[anonymous]") {
 		t.Fatal("real large sample not consumed through actual SOCKS", x)
-	}
-	if x := rows["Disney+"]; x.Result != "unlocked" || x.Region != "HK" {
-		t.Fatal(x)
 	}
 	if h.doc.text != before {
 		t.Fatal("changed rules/selections/source")
@@ -422,7 +403,7 @@ func TestAnonymousCanceledBatchKeepsPreviousCache(t *testing.T) {
 }
 
 func TestAnonymousFourServiceEvidenceViaRealSOCKS(t *testing.T) {
-	// All 7 services retain their semantic positive through SOCKS/TLS/rules.
+	// All 4 services retain their semantic positive through SOCKS/TLS/rules.
 	// None of these fixtures constitutes a public-egress live pass.
 	b, e := os.ReadFile("../clientdiag/testdata/unlock.json")
 	if e != nil {

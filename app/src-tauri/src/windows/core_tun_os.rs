@@ -3,16 +3,13 @@
 use super::journal::*;
 use crate::error::{Error,Result};
 use windows_sys::{core::GUID,Win32::{Devices::DeviceAndDriverInstallation::{CM_Locate_DevNodeW,CM_LOCATE_DEVNODE_PHANTOM,CR_NO_SUCH_DEVNODE,CR_SUCCESS},Foundation::*,Networking::WinSock::*,NetworkManagement::{IpHelper::*,Ndis::*}}};
-pub(super) unsafe fn is_uninstalled_tombstone(oper:i32,guid:&str,luid_val:u64)->bool{
- if oper!=2||luid_val==0||!guid_ok(guid){return false}
- let instance=super::super::identity::wide(&format!(r"SWD\Wintun\{{{guid}}}"));
- let mut dev=0u32;
- if CM_Locate_DevNodeW(&mut dev,instance.as_ptr(),CM_LOCATE_DEVNODE_PHANTOM)!=CR_NO_SUCH_DEVNODE{return false}
- for fam in [AF_INET,AF_INET6]{
-  let mut r=MIB_IPINTERFACE_ROW::default();r.Family=fam;r.InterfaceLuid=luid(luid_val);
-  if GetIpInterfaceEntry(&mut r)!=ERROR_NOT_FOUND{return false}
- }
- true
+pub(super) unsafe fn is_uninstalled_tombstone(oper:i32,guid:&str,luid_val:u64,index:u32)->bool{
+ if !tombstone_status(oper)||luid_val==0||index==0||!guid_ok(guid){return false}
+ let pnp=pnp_present(guid).map_err(|_|"INTERFACE_QUERY");
+ let families=[AF_INET,AF_INET6].map(|fam|{let mut r=MIB_IPINTERFACE_ROW::default();r.Family=fam;r.InterfaceLuid=luid(luid_val);
+  match GetIpInterfaceEntry(&mut r){NO_ERROR=>Ok(true),ERROR_NOT_FOUND=>Ok(false),_=>Err("RECOVERY_OS")}
+ });
+ tombstone_evidence(oper,luid_val,index,pnp,families)
 }
 use std::net::{IpAddr,Ipv4Addr,Ipv6Addr};
 fn bad(code:&'static str)->Error{Error::new(code,"Owned TUN recovery could not be verified")}
@@ -29,18 +26,18 @@ pub fn check_compartment(a:&Adapter)->Result<()> {if a.compartment!=1||unsafe{Ge
 pub fn adapter_present(a:&Adapter)->Result<bool>{check_compartment(a)?;unsafe{
  let mut t=std::ptr::null_mut();rc(GetIfTable2(&mut t))?;if t.is_null(){return Err(bad("INTERFACE_QUERY"))}
  let n=(*t).NumEntries as usize;if n>65536{FreeMibTable(t.cast());return Err(bad("INTERFACE_QUERY"))}
- let result=(||{
+ let mib=(||{
  let rows=std::slice::from_raw_parts((*t).Table.as_ptr(),n);
  if let Some(r)=rows.iter().find(|r|r.InterfaceLuid.Value==a.luid){
  let g=text(r.InterfaceGuid);
  if g!=a.guid{return Err(bad("RECOVERY_CONFLICT"))}
  let end=r.Alias.iter().position(|&v|v==0).unwrap_or(r.Alias.len());
  if String::from_utf16_lossy(&r.Alias[..end])!=a.alias{return Err(bad("RECOVERY_CONFLICT"))}
- if is_uninstalled_tombstone(r.OperStatus,&g,r.InterfaceLuid.Value){return Ok(false)}
- return Ok(true)
+ if is_uninstalled_tombstone(r.OperStatus,&g,r.InterfaceLuid.Value,r.InterfaceIndex){return Ok(Some(false))}
+ return Ok(Some(true))
  }
- if rows.iter().any(|r|{let g=text(r.InterfaceGuid);g==a.guid&&!is_uninstalled_tombstone(r.OperStatus,&g,r.InterfaceLuid.Value)}){return Err(bad("RECOVERY_CONFLICT"))}Ok(false)
- })();FreeMibTable(t.cast());result
+ if rows.iter().any(|r|{let g=text(r.InterfaceGuid);g==a.guid&&!is_uninstalled_tombstone(r.OperStatus,&g,r.InterfaceLuid.Value,r.InterfaceIndex)}){return Err(bad("RECOVERY_CONFLICT"))}Ok(None)
+ })();FreeMibTable(t.cast());adapter_presence(mib,||pnp_present(&a.guid))
 }}
 /// Read-only retirement proof for an already completed/restored journal.
 /// Never query routes/DNS by the old LUID: another adapter may now own it.
@@ -58,7 +55,7 @@ pub fn completed_adapter_absent(a: &Adapter) -> Result<bool> {
     let name = String::from_utf16(&r.Alias[..end]).map_err(|_| bad("INTERFACE_QUERY"))?;
     let g = text(r.InterfaceGuid);
     if retired_row_owned(a, &g, &name).map_err(bad)? {
-     if !is_uninstalled_tombstone(r.OperStatus, &g, r.InterfaceLuid.Value) { return Ok(false) }
+     if !is_uninstalled_tombstone(r.OperStatus, &g, r.InterfaceLuid.Value,r.InterfaceIndex) { return Ok(false) }
      own_tombstone = true;
     }
    }
@@ -106,11 +103,11 @@ pub fn restore(a:&Adapter,c:&Change)->Result<()> {
 
 pub fn alias_present(alias:&str)->Result<bool>{unsafe{
  let mut t=std::ptr::null_mut();rc(GetIfTable2(&mut t))?;if t.is_null(){return Err(bad("INTERFACE_QUERY"))}let n=(*t).NumEntries as usize;if n>65536{FreeMibTable(t.cast());return Err(bad("INTERFACE_QUERY"))}
- let found=std::slice::from_raw_parts((*t).Table.as_ptr(),n).iter().any(|r|{let end=r.Alias.iter().position(|&v|v==0).unwrap_or(r.Alias.len());String::from_utf16_lossy(&r.Alias[..end])==alias&&!is_uninstalled_tombstone(r.OperStatus,&text(r.InterfaceGuid),r.InterfaceLuid.Value)});FreeMibTable(t.cast());Ok(found)
+ let found=std::slice::from_raw_parts((*t).Table.as_ptr(),n).iter().any(|r|{let end=r.Alias.iter().position(|&v|v==0).unwrap_or(r.Alias.len());String::from_utf16_lossy(&r.Alias[..end])==alias&&!is_uninstalled_tombstone(r.OperStatus,&text(r.InterfaceGuid),r.InterfaceLuid.Value,r.InterfaceIndex)});FreeMibTable(t.cast());Ok(found)
 }}
 pub fn discover_adapter(a:&Adapter)->Result<Option<Adapter>>{unsafe{
  let mut t=std::ptr::null_mut();rc(GetIfTable2(&mut t))?;if t.is_null(){return Err(bad("INTERFACE_QUERY"))}let n=(*t).NumEntries as usize;if n>65536{FreeMibTable(t.cast());return Err(bad("INTERFACE_QUERY"))}
- let result=(||{for r in std::slice::from_raw_parts((*t).Table.as_ptr(),n){let end=r.Alias.iter().position(|&v|v==0).unwrap_or(r.Alias.len());let alias=String::from_utf16_lossy(&r.Alias[..end]);let g=text(r.InterfaceGuid);if g==a.guid {if alias!=a.alias{return Err(bad("RECOVERY_CONFLICT"))}if is_uninstalled_tombstone(r.OperStatus,&g,r.InterfaceLuid.Value){continue}let mut b=a.clone();b.luid=r.InterfaceLuid.Value;return Ok(Some(b))}if alias==a.alias{if is_uninstalled_tombstone(r.OperStatus,&g,r.InterfaceLuid.Value){continue}return Err(bad("RECOVERY_CONFLICT"))}}Ok(None)})();FreeMibTable(t.cast());result
+ let result=(||{for r in std::slice::from_raw_parts((*t).Table.as_ptr(),n){let end=r.Alias.iter().position(|&v|v==0).unwrap_or(r.Alias.len());let alias=String::from_utf16_lossy(&r.Alias[..end]);let g=text(r.InterfaceGuid);if g==a.guid {if alias!=a.alias{return Err(bad("RECOVERY_CONFLICT"))}if is_uninstalled_tombstone(r.OperStatus,&g,r.InterfaceLuid.Value,r.InterfaceIndex){continue}let mut b=a.clone();b.luid=r.InterfaceLuid.Value;return Ok(Some(b))}if alias==a.alias{if is_uninstalled_tombstone(r.OperStatus,&g,r.InterfaceLuid.Value,r.InterfaceIndex){continue}return Err(bad("RECOVERY_CONFLICT"))}}Ok(None)})();FreeMibTable(t.cast());result
 }}
 
 #[derive(Debug,Clone,PartialEq,Eq)]pub(super) struct AliasRow{pub adapter:Adapter,pub index:u32,pub oper:i32}
@@ -122,6 +119,47 @@ pub(super) fn alias_row(alias:&str)->Result<Option<AliasRow>>{unsafe{
   let end=r.Alias.iter().position(|&v|v==0).ok_or_else(||bad("INTERFACE_QUERY"))?;
   let name=String::from_utf16(&r.Alias[..end]).map_err(|_|bad("INTERFACE_QUERY"))?;
   let g=text(r.InterfaceGuid);
-  if name==alias&&!is_uninstalled_tombstone(r.OperStatus,&g,r.InterfaceLuid.Value) {if found.is_some(){return Err(bad("LEGACY_ADAPTER_PRESENT"))}found=Some(AliasRow{adapter:Adapter{alias:name,guid:g,luid:r.InterfaceLuid.Value,compartment:1},index:r.InterfaceIndex,oper:r.OperStatus});}
+  if name==alias&&!is_uninstalled_tombstone(r.OperStatus,&g,r.InterfaceLuid.Value,r.InterfaceIndex) {if found.is_some(){return Err(bad("LEGACY_ADAPTER_PRESENT"))}found=Some(AliasRow{adapter:Adapter{alias:name,guid:g,luid:r.InterfaceLuid.Value,compartment:1},index:r.InterfaceIndex,oper:r.OperStatus});}
  }Ok(found)})();FreeMibTable(t.cast());result
 }}
+
+/// Exact phantom-inclusive query: unknown CONFIGRET is never absence.
+pub(super) fn pnp_present(guid:&str)->Result<bool>{
+ if !guid_ok(guid){return Err(bad("JOURNAL_GUID"))}
+ let mut dev=0;let instance=super::super::identity::wide(&format!(r"SWD\Wintun\{{{guid}}}"));
+ match unsafe{CM_Locate_DevNodeW(&mut dev,instance.as_ptr(),CM_LOCATE_DEVNODE_PHANTOM)}{
+  CR_SUCCESS=>Ok(true),CR_NO_SUCH_DEVNODE=>Ok(false),_=>Err(bad("INTERFACE_QUERY"))
+ }
+}
+pub(super) fn stack_missing(a:&Adapter)->Result<bool>{check_compartment(a)?;unsafe{
+ for family in [AF_INET,AF_INET6]{let mut r=MIB_IPINTERFACE_ROW::default();r.Family=family;r.InterfaceLuid=luid(a.luid);
+  let n=GetIpInterfaceEntry(&mut r);if n==NO_ERROR{return Ok(false)}if n!=ERROR_NOT_FOUND{return Err(bad("RECOVERY_OS").native(n))}
+ }Ok(true)
+}}
+/// Re-read every original item, including already-restored ones, immediately
+/// before DIF_REMOVE. Do not delete an adapter to conceal third-party values.
+pub(super) fn notpresent_removal_safe(j:&Journal)->Result<()> {
+ check_compartment(&j.adapter)?;
+ // A partial write-ahead set cannot account for all settings which DIF_REMOVE
+ // would discard. Keep it fail-closed rather than infer ownership of missing WAL.
+ if j.changes.len()!=9{return Err(bad("RECOVERY_PENDING"))}
+ let row=alias_row(&j.adapter.alias)?.ok_or_else(||bad("RECOVERY_CONFLICT"))?;
+ if row.oper!=6||row.adapter!=j.adapter||row.index==0||!stack_missing(&j.adapter)?||!pnp_present(&j.adapter.guid)?{return Err(bad("RECOVERY_CONFLICT"))}
+ for c in &j.changes{removal_value_safe(c,&read(&j.adapter,c)?).map_err(bad)?;}
+ // Check for unjournaled rows as well: removal must not erase foreign addresses
+ // or routes merely because the original nine records looked safe.
+ unsafe{
+  let mut routes=std::ptr::null_mut();rc(GetIpForwardTable2(AF_UNSPEC,&mut routes))?;
+  if routes.is_null(){return Err(bad("RECOVERY_OS"))}
+  let n=(*routes).NumEntries as usize;
+  let safe=n<=65536 && !std::slice::from_raw_parts((*routes).Table.as_ptr(),n.min(65536)).iter().any(|r|r.InterfaceLuid.Value==j.adapter.luid);
+  FreeMibTable(routes.cast());if !safe{return Err(bad("RECOVERY_CONFLICT"))}
+  let mut addresses=std::ptr::null_mut();rc(GetUnicastIpAddressTable(AF_UNSPEC,&mut addresses))?;
+  if addresses.is_null(){return Err(bad("RECOVERY_OS"))}
+  let n=(*addresses).NumEntries as usize;
+  let result=(||{if n>65536{return Err(bad("RECOVERY_OS"))}for r in std::slice::from_raw_parts((*addresses).Table.as_ptr(),n){if r.InterfaceLuid.Value==j.adapter.luid{
+   let now=Value{route:None,address:Some(AddressValue{address:ip(&r.Address)?,prefix:r.OnLinkPrefixLength,prefix_origin:r.PrefixOrigin as u32,suffix_origin:r.SuffixOrigin as u32,skip_as_source:r.SkipAsSource}),interface:None,dns:None};
+   if !j.changes.iter().any(|c|c.installed==now){return Err(bad("RECOVERY_CONFLICT"))}
+  }}Ok(())})();FreeMibTable(addresses.cast());result?;
+ }Ok(())
+}

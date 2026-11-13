@@ -15,7 +15,14 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
+	"time"
 	"unsafe"
+)
+
+const (
+	_ = uint(windows.ERROR_BUFFER_OVERFLOW - wintunErrorBufferOverflow)
+	_ = uint(wintunErrorBufferOverflow - windows.ERROR_BUFFER_OVERFLOW)
 )
 
 const wintunSHA256 = "e5da8447dc2c320edc0fc52fa01885c103de8c118481f683643cacc3220dafce"
@@ -23,11 +30,13 @@ const wintunSHA256 = "e5da8447dc2c320edc0fc52fa01885c103de8c118481f683643cacc322
 type nativeDevice struct {
 	adapter, session                                    uintptr
 	stop, readEvent                                     windows.Handle
+	waitHandles                                         [2]windows.Handle
+	readSize                                            uint32
 	luid                                                uint64
 	guid                                                string
 	dll                                                 *windows.DLL
 	pins                                                []windows.Handle
-	receive, release, allocate, send, end, closeAdapter *windows.Proc
+	receive, release, allocate, send, end, closeAdapter uintptr
 	readMu, writeMu                                     sync.Mutex
 	once                                                sync.Once
 	closed                                              atomic.Bool
@@ -44,25 +53,26 @@ func (d *nativeDevice) ReadPacket(b []byte) (int, error) {
 		if d.closed.Load() {
 			return 0, io.ErrClosedPipe
 		}
-		var n uint32
-		p, _, e := d.receive.Call(d.session, uintptr(unsafe.Pointer(&n)))
+		d.readSize = 0
+		p, _, errno := syscall.SyscallN(d.receive, d.session, uintptr(unsafe.Pointer(&d.readSize)))
 		if p != 0 {
+			n := d.readSize
 			if n == 0 || n > 65535 {
-				d.release.Call(d.session, p)
+				syscall.SyscallN(d.release, d.session, p)
 				return 0, errors.New("WINTUN_PACKET_SIZE")
 			}
 			if int(n) > len(b) {
-				d.release.Call(d.session, p)
+				syscall.SyscallN(d.release, d.session, p)
 				return 0, io.ErrShortBuffer
 			}
 			copy(b, unsafe.Slice((*byte)(unsafe.Pointer(p)), int(n)))
-			d.release.Call(d.session, p)
+			syscall.SyscallN(d.release, d.session, p)
 			return int(n), nil
 		}
-		if e != windows.ERROR_NO_MORE_ITEMS {
-			return 0, fmt.Errorf("WINTUN_RECEIVE: %w", e)
+		if errno != windows.ERROR_NO_MORE_ITEMS {
+			return 0, fmt.Errorf("WINTUN_RECEIVE: %w", errno)
 		}
-		which, err := windows.WaitForMultipleObjects([]windows.Handle{d.stop, d.readEvent}, false, windows.INFINITE)
+		which, err := windows.WaitForMultipleObjects(d.waitHandles[:], false, windows.INFINITE)
 		if err != nil {
 			return 0, err
 		}
@@ -83,12 +93,42 @@ func (d *nativeDevice) WritePacket(b []byte) error {
 	if d.closed.Load() {
 		return io.ErrClosedPipe
 	}
-	p, _, e := d.allocate.Call(d.session, uintptr(len(b)))
-	if p == 0 {
-		return fmt.Errorf("WINTUN_ALLOCATE: %w", e)
+	p, _, errno := syscall.SyscallN(d.allocate, d.session, uintptr(len(b)))
+	if p != 0 {
+		copy(unsafe.Slice((*byte)(unsafe.Pointer(p)), len(b)), b)
+		syscall.SyscallN(d.send, d.session, p)
+		return nil
 	}
-	copy(unsafe.Slice((*byte)(unsafe.Pointer(p)), len(b)), b)
-	d.send.Call(d.session, p)
+	return retryWintunWrite(
+		b,
+		errno,
+		&d.closed,
+		time.Now,
+		d.waitWriteRetry,
+		func(n int) (uintptr, syscall.Errno) {
+			pkt, _, e := syscall.SyscallN(d.allocate, d.session, uintptr(n))
+			return pkt, e
+		},
+		func(pkt uintptr, src []byte) {
+			copy(unsafe.Slice((*byte)(unsafe.Pointer(pkt)), len(src)), src)
+			syscall.SyscallN(d.send, d.session, pkt)
+		},
+	)
+}
+func (d *nativeDevice) waitWriteRetry() error {
+	if d.stop == 0 {
+		return io.ErrClosedPipe
+	}
+	which, err := windows.WaitForSingleObject(d.stop, wintunAllocateWaitMS)
+	if err != nil {
+		return err
+	}
+	if which == windows.WAIT_OBJECT_0 {
+		return io.ErrClosedPipe
+	}
+	if which != uint32(windows.WAIT_TIMEOUT) {
+		return errors.New("WINTUN_WAIT")
+	}
 	return nil
 }
 func (d *nativeDevice) Close() error {
@@ -102,11 +142,11 @@ func (d *nativeDevice) Close() error {
 		d.writeMu.Lock()
 		defer d.writeMu.Unlock()
 		if d.session != 0 {
-			d.end.Call(d.session)
+			syscall.SyscallN(d.end, d.session)
 			d.session = 0
 		}
 		if d.adapter != 0 {
-			d.closeAdapter.Call(d.adapter)
+			syscall.SyscallN(d.closeAdapter, d.adapter)
 			d.adapter = 0
 		}
 		if d.stop != 0 {
@@ -283,17 +323,18 @@ func createNativeDevice(a Adapter) (dev Device, err error) {
 	d := &nativeDevice{dll: dll, pins: pins, guid: a.GUID}
 	fail := func(e error) (Device, error) { d.Close(); return nil, e }
 	stage = "dll_exports"
-	var create, start, event, getLUID *windows.Proc
+	var create, start, event, getLUID uintptr
 	for _, item := range []struct {
 		name string
-		out  **windows.Proc
+		out  *uintptr
 	}{
 		{"WintunCreateAdapter", &create}, {"WintunCloseAdapter", &d.closeAdapter}, {"WintunStartSession", &start}, {"WintunEndSession", &d.end}, {"WintunGetReadWaitEvent", &event}, {"WintunGetAdapterLUID", &getLUID}, {"WintunReceivePacket", &d.receive}, {"WintunReleaseReceivePacket", &d.release}, {"WintunAllocateSendPacket", &d.allocate}, {"WintunSendPacket", &d.send},
 	} {
-		*item.out, e = dll.FindProc(item.name)
+		proc, e := dll.FindProc(item.name)
 		if e != nil {
 			return fail(e)
 		}
+		*item.out = proc.Addr()
 	}
 	guid, e := windows.GUIDFromString("{" + a.GUID + "}")
 	if e != nil {
@@ -305,12 +346,13 @@ func createNativeDevice(a Adapter) (dev Device, err error) {
 	}
 	kind, _ := windows.UTF16PtrFromString("Kat")
 	stage = "adapter_create"
-	d.adapter, _, e = create.Call(uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(kind)), uintptr(unsafe.Pointer(&guid)))
+	var callErr syscall.Errno
+	d.adapter, _, callErr = syscall.SyscallN(create, uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(kind)), uintptr(unsafe.Pointer(&guid)))
 	if d.adapter == 0 {
-		return fail(At(stage, "WINTUN_CREATE", e))
+		return fail(At(stage, "WINTUN_CREATE", callErr))
 	}
 	stage = "adapter_luid"
-	getLUID.Call(d.adapter, uintptr(unsafe.Pointer(&d.luid)))
+	syscall.SyscallN(getLUID, d.adapter, uintptr(unsafe.Pointer(&d.luid)))
 	if d.luid == 0 {
 		return fail(errors.New("WINTUN_LUID"))
 	}
@@ -323,19 +365,20 @@ func createNativeDevice(a Adapter) (dev Device, err error) {
 		return fail(errors.New("WINTUN_GUID"))
 	}
 	stage = "adapter_session"
-	d.session, _, e = start.Call(d.adapter, 8<<20)
+	d.session, _, callErr = syscall.SyscallN(start, d.adapter, 8<<20)
 	if d.session == 0 {
-		return fail(At(stage, "WINTUN_SESSION", e))
+		return fail(At(stage, "WINTUN_SESSION", callErr))
 	}
 	stage = "adapter_event"
-	v, _, e := event.Call(d.session)
+	v, _, callErr := syscall.SyscallN(event, d.session)
 	if v == 0 {
-		return fail(At(stage, "WINTUN_EVENT", e))
+		return fail(At(stage, "WINTUN_EVENT", callErr))
 	}
 	d.readEvent = windows.Handle(v)
 	d.stop, e = windows.CreateEvent(nil, 1, 0, nil)
 	if e != nil {
 		return fail(e)
 	}
+	d.waitHandles = [2]windows.Handle{d.stop, d.readEvent}
 	return d, nil
 }

@@ -41,3 +41,36 @@ pub fn display_name(s:&ScHandle)->Result<String>{unsafe{
 pub fn set_display_name(s:&ScHandle,name:&str)->Result<()>{
  if unsafe{ChangeServiceConfigW(s.0,SERVICE_NO_CHANGE,SERVICE_NO_CHANGE,SERVICE_NO_CHANGE,std::ptr::null(),std::ptr::null(),std::ptr::null_mut(),std::ptr::null(),std::ptr::null(),std::ptr::null(),wide(name).as_ptr())}==0{return Err(Error::new("SCM_BINDING","Cannot update service display name"));}Ok(())
 }
+
+pub(super) use crate::installer_update::FailureActions;
+pub(super) fn failure_actions(service:&ScHandle)->Result<FailureActions>{unsafe{
+ let mut n=0;QueryServiceConfig2W(service.0,SERVICE_CONFIG_FAILURE_ACTIONS,std::ptr::null_mut(),0,&mut n);
+ if GetLastError()!=ERROR_INSUFFICIENT_BUFFER||n<std::mem::size_of::<SERVICE_FAILURE_ACTIONSW>()as u32||n>262144{return Err(Error::new("SCM_RECOVERY","Cannot size failure actions"))}
+ let mut buf=vec![0u64;(n as usize+7)/8];let cap=n as usize;
+ if QueryServiceConfig2W(service.0,SERVICE_CONFIG_FAILURE_ACTIONS,buf.as_mut_ptr().cast(),n,&mut n)==0{return Err(Error::new("SCM_RECOVERY","Cannot read failure actions"))}
+ let base=buf.as_ptr()as usize;let end=base+cap;let r=&*buf.as_ptr().cast::<SERVICE_FAILURE_ACTIONSW>();
+ let string=|p:*mut u16|->Result<Option<Vec<u16>>>{if p.is_null(){return Ok(None)}let a=p as usize;if a<base||a>=end||a%2!=0{return Err(Error::new("SCM_RECOVERY","Invalid failure action string"))}let b=std::slice::from_raw_parts(p,(end-a)/2);let len=b.iter().position(|x|*x==0).ok_or_else(||Error::new("SCM_RECOVERY","Unterminated failure action string"))?;Ok(Some(b[..=len].to_vec()))};
+ if r.cActions>64||r.cActions>0&&(r.lpsaActions.is_null()||(r.lpsaActions as usize)<base||(r.lpsaActions as usize)%std::mem::align_of::<SC_ACTION>()!=0||(r.lpsaActions as usize).checked_add(r.cActions as usize*std::mem::size_of::<SC_ACTION>()).is_none_or(|v|v>end)){return Err(Error::new("SCM_RECOVERY","Invalid failure action array"))}
+ let actions=if r.cActions==0{vec![]}else{std::slice::from_raw_parts(r.lpsaActions,r.cActions as usize).iter().map(|a|(a.Type,a.Delay)).collect()};
+ let value=FailureActions{reset:r.dwResetPeriod,reboot:string(r.lpRebootMsg)?,command:string(r.lpCommand)?,actions};value.validate()?;Ok(value)
+}}
+pub(super) fn set_failure_actions(service:&ScHandle,value:&FailureActions)->Result<()>{unsafe{
+ value.validate()?;let mut actions:Vec<SC_ACTION>=value.actions.iter().map(|&(Type,Delay)|SC_ACTION{Type,Delay}).collect();
+ // Non-NULL with cActions=0 deletes the list, whereas NULL means unchanged.
+ let mut sentinel=SC_ACTION{Type:SC_ACTION_NONE,Delay:0};
+ let mut reboot=value.reboot.clone();let mut command=value.command.clone();
+ let r=SERVICE_FAILURE_ACTIONSW{dwResetPeriod:value.reset,lpRebootMsg:reboot.as_mut().map_or(std::ptr::null_mut(),|s|s.as_mut_ptr()),lpCommand:command.as_mut().map_or(std::ptr::null_mut(),|s|s.as_mut_ptr()),cActions:actions.len()as u32,lpsaActions:if actions.is_empty(){&mut sentinel}else{actions.as_mut_ptr()}};
+ if ChangeServiceConfig2W(service.0,SERVICE_CONFIG_FAILURE_ACTIONS,(&r as *const SERVICE_FAILURE_ACTIONSW).cast())==0{return Err(Error::new("SCM_RECOVERY","Cannot set failure actions"))}
+ if failure_actions(service)?!=*value{return Err(Error::new("SCM_RECOVERY","Failure actions readback mismatch"))}Ok(())
+}}
+pub(super) fn suppress_failure_actions(service:&ScHandle,original:&FailureActions)->Result<()>{
+ if original.actions.iter().any(|(kind,_)|*kind==SC_ACTION_REBOOT){return Err(Error::new("SCM_RECOVERY","Reboot recovery policy is unsupported; unchanged"))}
+ let current=failure_actions(service)?;let suppressed=original.suppressed();
+ if current!=*original&&current!=suppressed{return Err(Error::new("SCM_RECOVERY","External failure actions change retained"))}
+ set_failure_actions(service,&suppressed)
+}
+pub(super) fn restore_failure_actions(service:&ScHandle,original:&FailureActions)->Result<()>{
+ let current=failure_actions(service)?;
+ if current==*original{return Ok(())}if current!=original.suppressed(){return Err(Error::new("SCM_RECOVERY","External failure actions change retained"))}
+ set_failure_actions(service,original)
+}

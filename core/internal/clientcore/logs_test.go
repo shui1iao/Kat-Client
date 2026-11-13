@@ -205,3 +205,36 @@ func TestLogsDefaultLevelProjection(t *testing.T) {
 		}
 	}
 }
+
+func TestRuntimeConfigBufferLimits(t *testing.T) {
+	var h Host
+	for _, tc := range []struct {
+		name      string
+		inSize    int
+		inPool    int
+		wantSize  int
+		wantPool  int
+		wantBytes int
+	}{
+		{"default_16k_128_upgraded_to_64k_64", 16384, 128, 65536, 64, 4 << 20},
+		{"default_size_custom_pool_preserves_32k", 16384, 32, 32768, 32, 1 << 20},
+		{"custom_size_default_pool_preserved", 8192, 128, 8192, 128, 1 << 20},
+		{"custom_size_and_pool_preserved", 4096, 16, 4096, 16, 64 << 10},
+		{"explicit_32k_128_preserved", 32768, 128, 32768, 128, 4 << 20},
+		{"explicit_64k_128_preserved", 65536, 128, 65536, 128, 8 << 20},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var c kernel.Config
+			c.Limits.BufferSize = tc.inSize
+			c.Limits.PoolBuffers = tc.inPool
+			got := h.runtimeConfig(c)
+			if got.Limits.BufferSize != tc.wantSize || got.Limits.PoolBuffers != tc.wantPool {
+				t.Fatalf("runtimeConfig(%d, %d) = (%d, %d), want (%d, %d)",
+					tc.inSize, tc.inPool, got.Limits.BufferSize, got.Limits.PoolBuffers, tc.wantSize, tc.wantPool)
+			}
+			if gotBytes := got.Limits.BufferSize * got.Limits.PoolBuffers; gotBytes != tc.wantBytes {
+				t.Fatalf("retained budget = %d, want %d", gotBytes, tc.wantBytes)
+			}
+		})
+	}
+}

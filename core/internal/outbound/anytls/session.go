@@ -3,7 +3,6 @@ package anytls
 import (
 	"bufio"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -59,15 +58,121 @@ type writeReq struct {
 	done  chan error // capacity 1; the writer never blocks
 }
 
+// maxRawWriteBatch bounds the synchronous per-writePadded buffer that coalesces
+// multiple 16 KiB TLS records (and any framing tail record) produced within a
+// single logical write into one underlying conn.Write call before immediate flush.
+const maxRawWriteBatch = 68 << 10
+
+type bufferedWriteConn struct {
+	net.Conn
+	mu       sync.Mutex
+	batching bool
+	buf      []byte
+}
+
+type bufferedWriteConnCW struct {
+	*bufferedWriteConn
+	cw interface{ CloseWrite() error }
+}
+
+func (c *bufferedWriteConnCW) CloseWrite() error {
+	if err := c.endBatchWrite(); err != nil {
+		_ = c.cw.CloseWrite()
+		return err
+	}
+	return c.cw.CloseWrite()
+}
+
+func wrapBufferedWriteConn(raw net.Conn) *bufferedWriteConn {
+	return &bufferedWriteConn{Conn: raw}
+}
+
+func (c *bufferedWriteConn) asNetConn() net.Conn {
+	if cw, ok := c.Conn.(interface{ CloseWrite() error }); ok {
+		return &bufferedWriteConnCW{bufferedWriteConn: c, cw: cw}
+	}
+	return c
+}
+
+func (c *bufferedWriteConn) beginBatchWrite() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.batching = true
+	c.mu.Unlock()
+}
+
+func (c *bufferedWriteConn) endBatchWrite() error {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.batching = false
+	if len(c.buf) == 0 {
+		return nil
+	}
+	err := writeAll(c.Conn, c.buf)
+	c.buf = c.buf[:0]
+	if cap(c.buf) > maxRawWriteBatch*2 {
+		c.buf = nil
+	}
+	return err
+}
+
+func (c *bufferedWriteConn) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.batching {
+		if len(c.buf) > 0 {
+			if err := writeAll(c.Conn, c.buf); err != nil {
+				c.buf = c.buf[:0]
+				return 0, err
+			}
+			c.buf = c.buf[:0]
+		}
+		return c.Conn.Write(p)
+	}
+	if len(c.buf) == 0 && len(p) >= maxRawWriteBatch {
+		if err := writeAll(c.Conn, p); err != nil {
+			return 0, err
+		}
+		return len(p), nil
+	}
+	if len(c.buf)+len(p) > maxRawWriteBatch && len(c.buf) > 0 {
+		if err := writeAll(c.Conn, c.buf); err != nil {
+			c.buf = c.buf[:0]
+			return 0, err
+		}
+		c.buf = c.buf[:0]
+		if len(p) >= maxRawWriteBatch {
+			if err := writeAll(c.Conn, p); err != nil {
+				return 0, err
+			}
+			return len(p), nil
+		}
+	}
+	if cap(c.buf) < maxRawWriteBatch {
+		buf := make([]byte, len(c.buf), maxRawWriteBatch)
+		copy(buf, c.buf)
+		c.buf = buf
+	}
+	c.buf = append(c.buf, p...)
+	return len(p), nil
+}
+
 type session struct {
-	o      *Outbound
-	conn   net.Conn // *tls.Conn over the under connection
-	scheme *paddingScheme
-	packet int // writer-owned padding packet counter (auth was packet 0)
+	o        *Outbound
+	conn     net.Conn // *tls.Conn over the under connection
+	rawWrite *bufferedWriteConn
+	scheme   *paddingScheme
+	packet   int // writer-owned padding packet counter (auth was packet 0)
 
 	mu              sync.Mutex
 	streams         map[uint32]*stream
 	nextID          uint32
+	writing         bool
 	queue           []*writeReq
 	pendingSettings []byte
 	err             error
@@ -92,9 +197,9 @@ type session struct {
 	route []func() bool
 }
 
-func newSession(o *Outbound, conn net.Conn, scheme *paddingScheme, settings []byte) *session {
+func newSession(o *Outbound, conn net.Conn, rawWrite *bufferedWriteConn, scheme *paddingScheme, settings []byte) *session {
 	return &session{
-		o: o, conn: conn, scheme: scheme, packet: 1, streams: make(map[uint32]*stream),
+		o: o, conn: conn, rawWrite: rawWrite, scheme: scheme, packet: 1, streams: make(map[uint32]*stream),
 		pendingSettings: settings, wake: make(chan struct{}, 1), done: make(chan struct{}), ver: make(chan struct{}),
 	}
 }
@@ -126,17 +231,22 @@ func (s *session) fail(err error) {
 		if err == nil {
 			err = io.ErrUnexpectedEOF
 		}
-		se := &sessionError{err}
 		s.failed.Store(true)
 		s.mu.Lock()
-		s.err = se
+		se := s.err
+		if se == nil {
+			se = &sessionError{err}
+			s.err = se
+		}
 		streams := s.streams
 		s.streams = make(map[uint32]*stream)
 		queue := s.queue
 		s.queue = nil
 		close(s.done)
 		s.mu.Unlock()
-		_ = s.conn.Close()
+		if s.conn != nil {
+			_ = s.conn.Close()
+		}
 		for _, q := range queue {
 			q.done <- se
 		}
@@ -218,12 +328,61 @@ func (s *session) lookup(id uint32) *stream {
 	return s.streams[id]
 }
 
+// tryAcquireInlineWrite claims the writer token when the session has no active
+// writer and no queued requests ahead of the caller, preserving strict FIFO
+// ordering with queued control/FIN/other-stream frames.
+func (s *session) tryAcquireInlineWrite() (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.err != nil {
+		return false, s.err
+	}
+	if s.conn == nil || s.writing || len(s.queue) > 0 {
+		return false, nil
+	}
+	s.writing = true
+	return true, nil
+}
+
+func (s *session) releaseInlineWrite() {
+	s.mu.Lock()
+	s.writing = false
+	hasQueued := len(s.queue) > 0 && s.err == nil
+	s.mu.Unlock()
+	if hasQueued {
+		select {
+		case s.wake <- struct{}{}:
+		default:
+		}
+	}
+}
+
+func (s *session) writeInline(wire []byte) error {
+	e := s.writePadded(wire)
+	if e != nil {
+		// Fail the session (sets s.err, drains s.queue, closes s.done) BEFORE
+		// releasing s.writing, and keep s.err non-nil so no concurrent stream or
+		// writeLoop can acquire the token or emit another frame after a failed write.
+		s.fail(e)
+		s.mu.Lock()
+		s.writing = false
+		cause := s.err
+		s.mu.Unlock()
+		return cause
+	}
+	s.releaseInlineWrite()
+	return nil
+}
+
 func (s *session) writeLoop() {
 	defer s.wg.Done()
-	var buf []byte
+	var (
+		buf      []byte
+		batchBuf [8]*writeReq
+	)
 	for {
 		s.mu.Lock()
-		for len(s.queue) == 0 && s.err == nil {
+		for (len(s.queue) == 0 || s.writing) && s.err == nil {
 			s.mu.Unlock()
 			select {
 			case <-s.wake:
@@ -235,32 +394,55 @@ func (s *session) writeLoop() {
 			s.mu.Unlock()
 			return
 		}
+		s.writing = true
 		n, size := 0, 0
 		for n < len(s.queue) && (n == 0 || size+len(s.queue[n].wire) <= maxBatch) {
 			s.queue[n].taken = true
 			size += len(s.queue[n].wire)
 			n++
 		}
-		batch := append([]*writeReq(nil), s.queue[:n]...)
+		var batch []*writeReq
+		if n <= len(batchBuf) {
+			batch = batchBuf[:n]
+			copy(batch, s.queue[:n])
+		} else {
+			batch = append([]*writeReq(nil), s.queue[:n]...)
+		}
 		remaining := copy(s.queue, s.queue[n:])
 		clear(s.queue[remaining:])
 		s.queue = s.queue[:remaining]
 		s.mu.Unlock()
-		buf = buf[:0]
-		for _, r := range batch {
-			buf = append(buf, r.wire...)
+
+		var payload []byte
+		if len(batch) == 1 {
+			payload = batch[0].wire
+		} else {
+			buf = buf[:0]
+			for _, r := range batch {
+				buf = append(buf, r.wire...)
+			}
+			payload = buf
 		}
-		e := s.writePadded(buf)
+		e := s.writePadded(payload)
 		if e != nil {
-			e = &sessionError{e}
-		}
-		for _, r := range batch {
-			r.done <- e
-		}
-		if e != nil {
-			s.fail(errors.Unwrap(e))
+			s.fail(e)
+			s.mu.Lock()
+			s.writing = false
+			cause := s.err
+			s.mu.Unlock()
+			for i, r := range batch {
+				r.done <- cause
+				batch[i] = nil
+			}
 			return
 		}
+		for i, r := range batch {
+			r.done <- nil
+			batch[i] = nil
+		}
+		s.mu.Lock()
+		s.writing = false
+		s.mu.Unlock()
 		if cap(buf) > maxBatch*2 {
 			buf = nil
 		}
@@ -272,13 +454,25 @@ func (s *session) writeLoop() {
 // a record left with spare room is topped up with a waste frame, and a size
 // with no payload left becomes a pure waste record. A checkpoint ends padding
 // for this packet once the payload is exhausted.
-func (s *session) writePadded(b []byte) error {
+func (s *session) writePadded(b []byte) (err error) {
 	_ = s.conn.SetWriteDeadline(time.Now().Add(writeStall))
+	if s.rawWrite != nil {
+		s.rawWrite.beginBatchWrite()
+		defer func() {
+			if fe := s.rawWrite.endBatchWrite(); err == nil {
+				err = fe
+			}
+		}()
+	}
 	packet := s.packet
-	if packet < s.scheme.stop {
+	if s.scheme != nil && packet < s.scheme.stop {
 		s.packet++
 	}
-	for _, size := range s.scheme.sizes(packet) {
+	var sizes []int
+	if s.scheme != nil {
+		sizes = s.scheme.sizes(packet)
+	}
+	for _, size := range sizes {
 		if size == checkMark {
 			if len(b) == 0 {
 				break
@@ -355,11 +549,25 @@ func (s *session) readFrames() error {
 			if n == 0 {
 				continue
 			}
-			data := make([]byte, n)
+			ok, sessionDone := st.waitSpace(n)
+			if !ok {
+				if sessionDone {
+					if e := s.cause(); e != nil {
+						return e
+					}
+					return io.ErrUnexpectedEOF
+				}
+				if _, e := r.Discard(n); e != nil {
+					return unexpected(e)
+				}
+				continue
+			}
+			data := acquireRecvBuf(n)
 			if _, e := io.ReadFull(r, data); e != nil {
+				releaseRecvBuf(data)
 				return unexpected(e)
 			}
-			st.push(data)
+			st.pushPooled(data)
 		case cmdFIN:
 			if st := s.lookup(id); st != nil {
 				st.remoteClose(io.EOF)

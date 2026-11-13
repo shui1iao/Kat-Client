@@ -58,7 +58,15 @@ func (f *flow) initDetails(ctx context.Context, target Address) {
 	if _, e := netip.ParseAddr(target.Host); e != nil {
 		f.details.DestHost = target.Host
 	}
-	if q, ok := processQuery(ctx, f.network, target); ok {
+	if ho, ok := ctx.Value(httpDirectOriginKey{}).(*httpDirectOrigin); ok && ho != nil {
+		f.httpObservation = ho.obs
+		if f.httpObservation != nil && f.httpObservation.Bind != nil {
+			f.httpObservation.Bind(f.id)
+		}
+		if im := inboundMetaOf(ctx); im != nil && im.remote.IsValid() {
+			f.details.SourceAddr, f.details.InboundKind = im.remote.String(), "system_proxy"
+		}
+	} else if q, ok := processQuery(ctx, f.network, target); ok {
 		f.httpObservation = procattr.HTTPFlowObservation(q)
 		if f.httpObservation != nil && f.httpObservation.Bind != nil {
 			f.httpObservation.Bind(f.id)
@@ -116,6 +124,10 @@ func (f *flow) scheduleDetails(ctx context.Context, target Address) {
 			}
 			if t, ok := tunFlowOf(ctx); ok {
 				source, kind = t.Source.String(), "tun"
+			} else if _, ok := ctx.Value(httpDirectOriginKey{}).(*httpDirectOrigin); ok {
+				if im := inboundMetaOf(ctx); im != nil && im.remote.IsValid() {
+					source, kind = im.remote.String(), "system_proxy"
+				}
 			}
 			f.details.SourceAddr, f.details.InboundKind = source, kind
 			f.details.ProcessStatus = id.Status

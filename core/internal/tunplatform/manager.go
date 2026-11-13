@@ -144,7 +144,7 @@ func (m *Manager) Prepare(ctx context.Context) (prepared Prepared, err error) {
 	m.cleanupStarted = time.Time{}
 	m.removalFirst, m.removalFinal, m.removalPending, m.removalSecond = false, false, false, false
 	m.pendingRequiresFinish = false
-	stage := "journal_begin"
+	stage := "physical_snapshot"
 	m.state = Status{Intent: true, State: "preparing", CleanupComplete: false}
 	m.publish()
 	defer func() {
@@ -153,31 +153,45 @@ func (m *Manager) Prepare(ctx context.Context) (prepared Prepared, err error) {
 			d := Describe(stage, err)
 			cleanup, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 			defer cancel()
-			ce := m.disableLocked(cleanup, false)
+			waiting := d.Code == "WAITING_NETWORK"
+			ce := m.disableLocked(cleanup, waiting)
+			if waiting && ce == nil && m.state.CleanupComplete && !m.state.CleanupPending {
+				m.state.Intent = true
+				m.state.State = "waiting_network"
+				m.state.Code = "WAITING_NETWORK"
+				m.state.Failure = nil
+				m.publish()
+				return
+			}
+			if ce != nil && waiting {
+				err = At("active_failure", "", ce)
+				d = Describe("active_failure", err)
+			}
+			m.state.Intent = false
 			m.state.Code = d.Code
 			m.state.Failure = &d
-			if ce != nil {
+			if ce != nil && !waiting {
 				m.state.Code += "; CLEANUP_PENDING"
 			}
 			m.state.State = "error"
 			m.publish()
 		}
 	}()
-	s, e := m.config.Broker.Begin(ctx)
-	if e != nil {
-		return prepared, e
-	}
-	stage = "journal_accept"
-	if e = m.accept(s); e != nil {
-		return prepared, e
-	}
-	stage = "physical_snapshot"
 	physical, e := m.os.Snapshot(ctx, 0)
 	if e != nil {
 		return prepared, e
 	}
 	stage = "physical_policy"
 	if e = physicalSafe(physical); e != nil {
+		return prepared, e
+	}
+	stage = "journal_begin"
+	s, e := m.config.Broker.Begin(ctx)
+	if e != nil {
+		return prepared, e
+	}
+	stage = "journal_accept"
+	if e = m.accept(s); e != nil {
 		return prepared, e
 	}
 	m.physical = physical
@@ -328,10 +342,27 @@ func (m *Manager) Commit(ctx context.Context, token uint64) (Status, error) {
 		d := Describe(stage, e)
 		cleanup, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
-		m.disableLocked(cleanup, false)
+		waiting := d.Code == "WAITING_NETWORK"
+		ce := m.disableLocked(cleanup, waiting)
+		if waiting && ce == nil && m.state.CleanupComplete && !m.state.CleanupPending {
+			m.state.Intent = true
+			m.state.State = "waiting_network"
+			m.state.Code = "WAITING_NETWORK"
+			m.state.Failure = nil
+			m.publish()
+			return m.state, e
+		}
+		if ce != nil && waiting {
+			e = At("active_failure", "", ce)
+			d = Describe("active_failure", e)
+		}
+		m.state.Intent = false
 		m.state.State = "error"
 		m.state.Code = d.Code
 		m.state.Failure = &d
+		if ce != nil && !waiting {
+			m.state.Code += "; CLEANUP_PENDING"
+		}
 		m.publish()
 		return m.state, e
 	}

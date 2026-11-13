@@ -78,3 +78,34 @@ pub fn rollback_details(error:&Error)->String{
   }let mut m=Missing{restarted:false};assert!(matches!(run(&mut m),Err(UpdateFailure::Operation(_))));assert!(m.restarted);
  }
 }
+
+/// Durable installer snapshot. Only action/reset fields are temporarily changed;
+/// reboot/command strings are retained byte-for-byte as UTF-16 (including NULL).
+#[derive(Clone,Debug,PartialEq,Eq,serde::Serialize,serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct FailureActions{pub reset:u32,pub reboot:Option<Vec<u16>>,pub command:Option<Vec<u16>>,pub actions:Vec<(i32,u32)>}
+impl FailureActions{
+ pub(crate) fn validate(&self)->Result<()>{if self.actions.len()>64||self.actions.iter().any(|(t,_)|!matches!(*t,0..=3))||[&self.reboot,&self.command].iter().any(|s|s.as_ref().is_some_and(|v|v.len()>32768||v.last()!=Some(&0)||v[..v.len().saturating_sub(1)].contains(&0))){return Err(Error::new("SCM_RECOVERY","Invalid failure actions snapshot"))}Ok(())}
+ pub(crate) fn suppressed(&self)->Self{Self{actions:vec![(0,0)],..self.clone()}}
+}
+
+#[cfg(test)]mod notpresent_setup_tests{
+ use super::*;
+ fn original()->FailureActions{FailureActions{reset:86400,reboot:None,command:Some(vec![0]),actions:vec![(1,1000),(1,5000),(0,0)]}}
+ #[test]fn exact_actions_snapshot_roundtrip_null_and_empty_preserved(){for reset in [0,86400,u32::MAX]{for text in [None,Some(vec![0]),Some(vec![65,0])]{let old=FailureActions{reset,reboot:text.clone(),command:text,actions:vec![(1,1000),(0,0)]};old.validate().unwrap();let saved=serde_json::to_vec(&old).unwrap();let restored:FailureActions=serde_json::from_slice(&saved).unwrap();assert_eq!(old,restored);let quiet=old.suppressed();assert_eq!(quiet.actions,vec![(0,0)]);assert_eq!(quiet.reset,old.reset);assert_eq!(quiet.reboot,old.reboot);assert_eq!(quiet.command,old.command);}}}
+ #[test]fn malformed_actions_fail_closed(){let mut a=original();a.actions=vec![(4,0)];assert!(a.validate().is_err());a=original();a.command=Some(vec![0,65,0]);assert!(a.validate().is_err());a=original();a.actions=vec![(0,0);65];assert!(a.validate().is_err());}
+ struct Install{old:FailureActions,current:FailureActions,durable:Option<Vec<u8>>,fail:&'static str,events:Vec<&'static str>}
+ impl Install{fn step(&mut self,n:&'static str)->Result<()>{self.events.push(n);if self.fail==n{Err(Error::new("INJECTED",n))}else{Ok(())}}fn restore(&mut self)->Result<()>{self.step("restore-actions")?;let saved:FailureActions=serde_json::from_slice(self.durable.as_ref().unwrap()).unwrap();assert_eq!(self.current,saved.suppressed());self.current=saved;Ok(())}}
+ impl UpdateSteps for Install{
+  fn prepare(&mut self)->Result<()>{self.step("read-actions")?;let saved=serde_json::to_vec(&self.old).unwrap();self.step("checkpoint")?;self.durable=Some(saved);Ok(())}
+  fn stop(&mut self)->Result<()>{self.step("suppress")?;assert!(self.durable.is_some());self.current=self.old.suppressed();self.step("stop")?;self.step("recover-network")}
+  fn replace(&mut self)->Result<()>{self.step("replace")}
+  fn configure(&mut self)->Result<()>{self.step("configure")}
+  fn start(&mut self)->Result<()>{self.step("start")?;self.restore()}
+  fn recover(&mut self)->Result<()>{if self.current==self.old{return Ok(())}let op=self.step("rollback-network");let restored=self.restore();op?;restored}
+ }
+ #[test]fn production_driver_faults_restore_complete_original_actions(){for fail in ["read-actions","checkpoint","suppress","stop","recover-network","replace","configure","start","none"]{let old=original();let mut i=Install{old:old.clone(),current:old.clone(),durable:None,fail,events:vec![]};let result=run(&mut i);assert_eq!(result.is_ok(),fail=="none");assert_eq!(i.current,old,"{fail}");if ["read-actions","checkpoint"].contains(&fail){assert!(!i.events.contains(&"suppress"));}}}
+ #[test]fn restore_failure_retains_snapshot_and_is_never_success(){let old=original();let mut i=Install{old:old.clone(),current:old.clone(),durable:None,fail:"restore-actions",events:vec![]};assert!(matches!(run(&mut i),Err(UpdateFailure::Recovery{..})));assert_eq!(i.current,old.suppressed());assert!(i.durable.is_some());i.fail="none";i.recover().unwrap();assert_eq!(i.current,old);}
+ #[test]fn interrupted_transaction_reenters_saved_restore_even_if_network_rollback_fails(){let old=original();let mut i=Install{old:old.clone(),current:old.clone(),durable:None,fail:"none",events:vec![]};i.prepare().unwrap();i.stop().unwrap();let raw=i.durable.clone();let mut restarted=Install{old:serde_json::from_slice(raw.as_ref().unwrap()).unwrap(),current:i.current,durable:raw,fail:"rollback-network",events:vec![]};assert!(restarted.recover().is_err());assert_eq!(restarted.current,old);}
+ #[test]fn native_transaction_checkpoint_and_finally_restore_order(){let inst=include_str!("windows/installer.rs");let tx=include_str!("windows/update_install.rs");let scm=include_str!("windows/scm.rs");let stop=inst.split("fn stop(&mut self)").nth(1).unwrap().split("fn replace").next().unwrap();assert!(stop.find("mark(&self.dir").unwrap()<stop.find("suppress_failure_actions").unwrap());assert!(stop.find("suppress_failure_actions").unwrap()<stop.find("stop_release").unwrap());let start=inst.split("fn start(&mut self)").nth(1).unwrap().split("fn recover").next().unwrap();assert!(start.find("restore_failure_actions").unwrap()<start.find("commit_setup").unwrap());assert!(tx.contains("self.old_failure_actions=Some(scm::failure_actions(service)?);self.save(dir)"));assert!(tx.contains("let restored=if !service.0.is_null(){self.restore_failure_actions(&service)}"));assert!(tx.contains("match (operation,restored)"));assert!(scm.contains("External failure actions change retained"));assert!(scm.contains("failure_actions(service)?!=*value"));assert!(!scm.contains("SERVICE_CONFIG_FAILURE_ACTIONS_FLAG"));}
+}

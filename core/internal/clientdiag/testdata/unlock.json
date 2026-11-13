@@ -105,48 +105,6 @@
     ]
   },
   {
-    "service": "Disney+",
-    "want": "unlocked",
-    "evidence": "Observed public visitor location joined to THAT country product SKU",
-    "pages": [
-      {
-        "url": "https://www.disneyplus.com/",
-        "body": "<script>window.langRegionRedirectProps = {\"location\": \"HK\", \"hasContent\": true, \"countriesConfig\": {\"HK\": {\"commerce\": {\"defaultProduct\": {\"NU\": {\"skuList\": [\"disney_plus_monthly_hk_web\"]}}}}, \"CN\": {\"group\": \"APAC\"}}};</script>",
-        "status": 200,
-        "location": "",
-        "method": "GET"
-      }
-    ]
-  },
-  {
-    "service": "Disney+",
-    "want": "blocked",
-    "evidence": "Official same-service unavailable redirect",
-    "pages": [
-      {
-        "url": "https://www.disneyplus.com/",
-        "body": "",
-        "status": 302,
-        "location": "https://www.disneyplus.com/welcome/unavailable",
-        "method": "GET"
-      }
-    ]
-  },
-  {
-    "service": "Disney+",
-    "want": "unknown",
-    "evidence": "Country map for another visitor is not a positive",
-    "pages": [
-      {
-        "url": "https://www.disneyplus.com/",
-        "body": "<script>window.langRegionRedirectProps = {\"location\": \"CN\", \"hasContent\": true, \"countriesConfig\": {\"US\": {\"commerce\": {\"defaultProduct\": {\"NU\": {\"skuList\": [\"sku\"]}}}}, \"CN\": {\"group\": \"APAC\"}}};</script>",
-        "status": 200,
-        "location": "",
-        "method": "GET"
-      }
-    ]
-  },
-  {
     "service": "ChatGPT",
     "want": "unknown",
     "evidence": "Bare successful empty JSON is not anonymous service availability",
@@ -336,69 +294,6 @@
     ]
   },
   {
-    "service": "Claude",
-    "want": "unlocked",
-    "evidence": "Ordinary Claude entry page without region refusal plus valid service trace",
-    "pages": [
-      {
-        "url": "https://claude.ai/",
-        "body": "<!DOCTYPE html><html><body><div id=\"root\"></div></body></html>",
-        "status": 200,
-        "location": "",
-        "method": "GET"
-      },
-      {
-        "url": "https://claude.ai/cdn-cgi/trace",
-        "body": "ip=203.0.113.9\nloc=US\n",
-        "status": 200,
-        "location": "",
-        "method": "GET"
-      }
-    ]
-  },
-  {
-    "service": "Claude",
-    "want": "blocked",
-    "evidence": "Explicit Claude region refusal page",
-    "pages": [
-      {
-        "url": "https://claude.ai/",
-        "body": "<!DOCTYPE html><html><head><title>Claude</title></head><body><h1>Unfortunately, Claude isn't available here.</h1><p>Claude is not yet available in your region.</p></body></html>",
-        "status": 200,
-        "location": "",
-        "method": "GET"
-      }
-    ]
-  },
-  {
-    "service": "Claude",
-    "want": "challenge",
-    "evidence": "Cloudflare challenge echoing /app-unavailable-in-region is still a challenge, not a block",
-    "pages": [
-      {
-        "url": "https://claude.ai/",
-        "body": "<!DOCTYPE html><html><head><title>Just a moment...</title></head><body><form id=\"challenge-form\" action=\"/app-unavailable-in-region?__cf_chl_tk=test\" method=\"POST\"></form><script>window._cf_chl_opt={};</script></body></html>",
-        "status": 403,
-        "location": "",
-        "method": "GET"
-      }
-    ]
-  },
-  {
-    "service": "Claude",
-    "want": "unknown",
-    "evidence": "Bare HTTP 403 without region refusal markers is inconclusive",
-    "pages": [
-      {
-        "url": "https://claude.ai/",
-        "body": "Forbidden",
-        "status": 403,
-        "location": "",
-        "method": "GET"
-      }
-    ]
-  },
-  {
     "service": "Google",
     "want": "unlocked",
     "evidence": "Google Search page without captcha/abuse block plus official embedded locale region",
@@ -435,48 +330,6 @@
         "url": "https://www.google.com/search?q=cats",
         "body": "Forbidden",
         "status": 403,
-        "location": "",
-        "method": "GET"
-      }
-    ]
-  },
-  {
-    "service": "YouTube",
-    "want": "unlocked",
-    "evidence": "YouTube Premium offer page with ad-free wording and served countryCode",
-    "pages": [
-      {
-        "url": "https://www.youtube.com/premium",
-        "body": "<!DOCTYPE html><html><body>YouTube Premium ad-free <script>{\"countryCode\":\"JP\"}</script></body></html>",
-        "status": 200,
-        "location": "",
-        "method": "GET"
-      }
-    ]
-  },
-  {
-    "service": "YouTube",
-    "want": "blocked",
-    "evidence": "YouTube Premium explicit country refusal sentence",
-    "pages": [
-      {
-        "url": "https://www.youtube.com/premium",
-        "body": "<!DOCTYPE html><html><body>YouTube Premium is not available in your country <script>{\"countryCode\":\"CN\"}</script></body></html>",
-        "status": 200,
-        "location": "",
-        "method": "GET"
-      }
-    ]
-  },
-  {
-    "service": "YouTube",
-    "want": "unknown",
-    "evidence": "Page with neither offer nor refusal wording is inconclusive",
-    "pages": [
-      {
-        "url": "https://www.youtube.com/premium",
-        "body": "<!DOCTYPE html><html><body><script>{\"countryCode\":\"JP\"}</script></body></html>",
-        "status": 200,
         "location": "",
         "method": "GET"
       }
