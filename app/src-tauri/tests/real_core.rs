@@ -43,13 +43,13 @@ async fn actual_core_protocol_document_entries_and_shutdown(){
 /// No OS switches or core.start: exercise the real Go format projections through host storage.
 /// Run with the controller's newly built peer, not the synthetic IPC fixture.
 #[tokio::test]
-async fn actual_core_yaml_host_backups_import_export_and_diagnostics(){
- use kat_host::{document::{AcceptedDocument,DocumentFormat,ValidatedDocument},backups,user_store::Store};
+async fn actual_core_yaml_host_import_export_and_diagnostics(){
+ use kat_host::{document::{AcceptedDocument,DocumentFormat,ValidatedDocument},document_files,user_store::Store};
  let peer=PathBuf::from(std::env::var("KAT_ACTUAL_CORE_PEER").expect("Updated actual Go Linux peer required"));
  let base=PathBuf::from(std::env::var("KAT_CORE_TEST_WORKSPACE").expect("Isolated workspace required"));
  assert!(base.starts_with("/opt/kat-windows-client-20261028/network-evidence/"));
  let workspace=base.join(format!("yaml-host-{}",std::process::id()));assert!(!workspace.exists());
- let store=Store::new(workspace.clone()).unwrap();let s=Supervisor::spawn_fixed(&peer,&workspace).await.unwrap();
+ let _store=Store::new(workspace.clone()).unwrap();let s=Supervisor::spawn_fixed(&peer,&workspace).await.unwrap();
  let hello=s.hello().await.unwrap();assert_eq!(hello["build_commit"],std::env::var("KAT_ACTUAL_CORE_COMMIT").expect("Ready build_commit required"));
  let saved=s.request("document.get",Value::Null,T).await.unwrap();let initial=AcceptedDocument::from_reply(&saved).unwrap();assert_eq!(initial.format,DocumentFormat::Json);
  let json_text=initial.text.clone();let mut previous=initial;
@@ -59,11 +59,10 @@ async fn actual_core_yaml_host_backups_import_export_and_diagnostics(){
   let prior=s.request("document.validate",previous.params(),T).await.unwrap();let prior=ValidatedDocument::from_reply(&previous.text,previous.format,&prior).unwrap();
   let v=s.request("document.validate",json!({"text":text,"format":format}),T).await.unwrap();let next=ValidatedDocument::from_reply(&text,format,&v).unwrap();
   assert_eq!(kat_host::apply_policy::assess(&prior,&next,Some(prior.ports()),true).unwrap(),kat_host::apply_policy::Restore{system_proxy:false,tun:false});
-  backups::snapshot_validated(&store,&prior).unwrap();
   let applied=s.request("document.apply",json!({"text":text,"format":format}),T).await.unwrap();assert_eq!(applied["format"],format.extension());assert_eq!(applied["text"],text);
   let accepted=s.request("document.get",Value::Null,T).await.unwrap();previous=AcceptedDocument::from_reply(&accepted).unwrap();assert_eq!(previous.format,format);assert_eq!(previous.text,text);
-  let imported=backups::imported(Some((format!("source.{}",format.extension()),text.as_bytes().to_vec()))).unwrap().unwrap();assert_eq!(imported.text,text);assert_eq!(imported.format,format);
-  let out=workspace.join("exports").join(format!("accepted.{}",format.extension()));assert!(backups::exported(Some(out.clone()),&previous).unwrap().saved);assert_eq!(std::fs::read(out).unwrap(),text.as_bytes());
+  let imported=document_files::imported(Some((format!("source.{}",format.extension()),text.as_bytes().to_vec()))).unwrap().unwrap();assert_eq!(imported.text,text);assert_eq!(imported.format,format);
+  let out=workspace.join("exports").join(format!("accepted.{}",format.extension()));assert!(document_files::exported(Some(out.clone()),&previous).unwrap().saved);assert_eq!(std::fs::read(out).unwrap(),text.as_bytes());
   // Omitted format means current format, not a silent JSON fallback.
   let v=s.request("document.validate",json!({"text":text}),T).await.unwrap();ValidatedDocument::from_reply(&text,format,&v).unwrap();
   let mut diagnostics=kat_host::diagnostics::DiagnosticReply::new(Vec::new());diagnostics.from_core(&s).await;assert_eq!(diagnostics.counts,Some(next.counts()));assert!(diagnostics.errors.is_empty());
@@ -71,9 +70,6 @@ async fn actual_core_yaml_host_backups_import_export_and_diagnostics(){
   assert!(s.request("document.apply",json!({"text":"[invalid","format":format}),T).await.is_err());
   let unchanged=s.request("document.get",Value::Null,T).await.unwrap();assert_eq!(unchanged["text"],text);assert_eq!(unchanged["format"],format.extension());
  }
- let list=backups::list(&store).unwrap();assert_eq!(list.items.len(),3);
- for item in list.items{let b=backups::read(&store,&item.id).unwrap();assert_eq!(b.format,item.format);let v=s.request("document.validate",json!({"text":b.text,"format":b.format}),T).await.unwrap();ValidatedDocument::from_reply(&b.text,b.format,&v).unwrap();}
- // Backup read is draft-only; accepted JSON stays unchanged until an explicit apply.
  let final_saved=s.request("document.get",Value::Null,T).await.unwrap();assert_eq!(final_saved["text"],json_text);assert_eq!(final_saved["format"],"json");
  assert_eq!(s.request("status",Value::Null,T).await.unwrap()["runtime"]["state"],"stopped");s.shutdown().await;std::fs::remove_dir_all(workspace).unwrap();
 }

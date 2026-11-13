@@ -47,6 +47,7 @@ type routingRuntime struct {
 	outbounds []outbound.Outbound          // protocol outbounds, dependency order
 	groups    []group.Group                // dependency order
 	engine    *route.Engine
+	icmp      *icmpRuntime
 	proxies   int // configured outbounds + groups: per-association UDP session cap
 }
 
@@ -197,6 +198,7 @@ func (s *Server) buildRouting() (*routingRuntime, error) {
 		return nil, e
 	}
 	rt.engine = engine
+	rt.icmp = newICMPRuntime(c.Outbounds)
 	return rt, nil
 }
 
@@ -249,6 +251,9 @@ func (rt *routingRuntime) close() {
 	}
 	for i := len(rt.outbounds) - 1; i >= 0; i-- {
 		rt.outbounds[i].Close()
+	}
+	if rt.icmp != nil {
+		rt.icmp.close()
 	}
 	if rt.engine != nil {
 		rt.engine.Close()

@@ -110,7 +110,7 @@ export function Policies({
         </label>
         <span className="sp" />
         <select
-          className="inp sm member-sort"
+          className="inp sm member-sort display-sort"
           aria-label="成员显示排序"
           value={sort}
           onChange={(e) => setSort(e.target.value as DisplaySort)}

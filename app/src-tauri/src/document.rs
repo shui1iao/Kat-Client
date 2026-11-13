@@ -39,7 +39,7 @@ impl AcceptedDocument {
     pub fn from_reply(value: &Value) -> Result<Self> {
         let format = DocumentFormat::deserialize(&value["format"]).map_err(|_|protocol())?;
         let text = value["text"].as_str().ok_or_else(protocol)?;
-        if text.len() > crate::backups::LIMIT { return Err(Error::new("FILE_LIMIT", "Configuration exceeds 1 MiB")); }
+        if text.len() > crate::document_files::LIMIT { return Err(Error::new("FILE_LIMIT", "Configuration exceeds 1 MiB")); }
         Ok(Self { text: text.into(), format })
     }
     pub fn params(&self) -> Value { json!({"text": self.text, "format": self.format}) }
@@ -54,7 +54,7 @@ impl ValidatedDocument {
         let ports = Ports::deserialize(&value["ports"]).map_err(|_|protocol())?;
         let counts = Counts::deserialize(&value["counts"]).map_err(|_|protocol())?;
         if format != expected || ports.http == 0 || ports.socks == 0 { return Err(protocol()); }
-        if text.len() > crate::backups::LIMIT { return Err(Error::new("FILE_LIMIT", "Configuration exceeds 1 MiB")); }
+        if text.len() > crate::document_files::LIMIT { return Err(Error::new("FILE_LIMIT", "Configuration exceeds 1 MiB")); }
         Ok(Self { advanced_dns:value["advanced_dns"].as_bool().unwrap_or(false),text: text.into(), format, ports, counts })
     }
     pub fn text(&self) -> &str { &self.text }
@@ -91,19 +91,18 @@ mod tests {
 }
 
 #[cfg(test)]mod wiring_tests{
- #[test]fn production_validation_backup_and_format_flow_precede_network_effects(){
+ #[test]fn production_validation_and_format_flow_precede_network_effects(){
   let network=include_str!("windows/network.rs");
   let input=network.find("crate::document::validation_params(&params)?").unwrap();
   let previous=network.find("let prior=core.request(\"document.validate\",previous.params()").unwrap();
   let next=network.find("let validated=core.request(\"document.validate\",input.clone()").unwrap();
-  let snapshot=network.find("crate::backups::snapshot_validated(&store,&previous)").unwrap();
   let network_read=network.find("let egress_before=").unwrap();
   let restore=network.find("if restore.system_proxy{proxy::restore()?").unwrap();
   let apply=network.rfind("core.request(method,params,timeout).await?").unwrap();
-  assert!(input<previous&&previous<next&&next<snapshot&&snapshot<network_read&&network_read<restore&&restore<apply);
+  assert!(input<previous&&previous<next&&next<network_read&&network_read<restore&&restore<apply);
   assert!(network.contains("p==next.ports()"));assert!(!network.contains("serde_json::from_str"));assert!(!network.contains("apply_policy::ports("));
-  let desktop=include_str!("desktop.rs");assert!(desktop.contains("Kind::ConfigExport(saved.format)"));assert!(desktop.contains("dialogs::save_document(path,&saved)"));assert_eq!(desktop.matches("\"text\":b.text,\"format\":b.format").count(),2);
-  let dialogs=include_str!("windows/dialogs.rs");assert!(dialogs.contains("*.json;*.yaml;*.yml"));assert!(dialogs.contains("backups::exported(path,document)"));
+  let desktop=include_str!("desktop.rs");assert!(desktop.contains("Kind::ConfigExport(saved.format)"));assert!(desktop.contains("dialogs::save_document(path,&saved)"));
+  let dialogs=include_str!("windows/dialogs.rs");assert!(dialogs.contains("*.json;*.yaml;*.yml"));assert!(dialogs.contains("document_files::exported(path,document)"));
   assert_eq!(crate::protocol::PUBLIC_METHODS.len(),31);assert!(crate::protocol::PUBLIC_METHODS.contains(&"dns.cache.clear"));assert!(crate::protocol::PUBLIC_METHODS.contains(&"diagnostics.network"));assert!(crate::protocol::PUBLIC_METHODS.contains(&"icon.cached"));assert!(!crate::protocol::PUBLIC_METHODS.iter().any(|m|m.starts_with("network.")));
  }
 }

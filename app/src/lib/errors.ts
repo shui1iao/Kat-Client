@@ -51,8 +51,6 @@ const messages: Record<string, string> = {
   FILE_PATH: '文件路径无效', FILE_DIALOG: '无法打开文件选择窗口', FILE_LINK: '不能使用链接文件', FILE_REPARSE: '不能使用重解析文件',
   LOCAL_FILE_INVALID: '本地配置文件无效', LOCAL_FILE_OPEN: '无法打开本地文件', LOCAL_FILE_WRITE: '无法写入本地文件',
   LOCAL_FILE_COMMIT: '无法完成本地文件保存', LOCAL_DIRECTORY: '无法访问本地目录', WORKSPACE_OPEN: '无法打开配置目录',
-  BACKUP_NOT_FOUND: '备份不存在', BACKUP_INTEGRITY: '备份完整性校验失败', BACKUP_CHANGED: '备份已变化，请刷新列表',
-  BACKUP_INVALID: '备份无效', BACKUP_WRITE: '无法写入备份', BACKUP_LIMIT: '备份超过大小限制',
   AUTOSTART_FOREIGN: '启动项被其它程序占用', AUTOSTART_CHANGED: '启动项已变化，请刷新后检查',
   AUTOSTART_REGISTRY: '无法更新登录启动项', AUTOSTART_ROLLBACK: '启动项恢复未完成，请查看诊断记录',
   DUPLICATE_KEY: 'YAML 配置含重复键', BAD_INDENT: 'YAML 缩进无效', BAD_SCALAR_START: 'YAML 标量起始字符无效',

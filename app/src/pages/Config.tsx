@@ -16,8 +16,7 @@ import {
   filenameOnly,
   savedDocumentFilename,
 } from '../client/daily';
-import type { BackupInfo, BackupList, DocumentFormat, ImportedDocument, SaveReply } from '../client/types';
-import { backupTime, backupSize } from '../lib/format';
+import type { DocumentFormat, ImportedDocument, SaveReply } from '../client/types';
 import { Icon } from '../components/Icon';
 import { convertDocument, editDocument, formatDocument, parseDocument, readDocument } from '../client/document';
 import type { Client } from '../client/useClient';
@@ -61,7 +60,6 @@ function parse(text: string, format: DocumentFormat): Parsed {
 
 export function Config({ c }: { c: Client }) {
   const { confirm, dialog } = useConfirmation();
-  const [backups, setBackups] = useState<BackupInfo[] | null>(null);
   const [preview, setPreview] = useState<{
     text: string;
     format: DocumentFormat;
@@ -93,39 +91,6 @@ export function Config({ c }: { c: Client }) {
       await exportSaved(
         () => confirm('导出已保存配置 · 包含节点凭据'),
         () => host<SaveReply>('document_export'),
-      );
-    });
-
-  const listBackups = () =>
-    c.run('files', async () => {
-      try {
-        setBackups((await host<BackupList>('backup_list')).items.slice(0, 10));
-      } catch (e) {
-        setBackups(null);
-        throw e;
-      }
-    });
-
-  useEffect(() => {
-    if (!c.hasHost || !c.connected) return;
-    let alive = true;
-    void host<BackupList>('backup_list')
-      .then((r) => {
-        if (alive) setBackups(r.items.slice(0, 10));
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [c.hasHost, c.connected, c.doc.saved]);
-
-  const restore = (backup: BackupInfo) =>
-    c.run('files', async () => {
-      if (!(await confirm('载入备份草稿 · 保存后生效'))) return;
-      await stageDraft(
-        c.doc,
-        () => host<{ text: string; format?: DocumentFormat }>('backup_read', { id: backup.id }),
-        () => confirm('替换未保存草稿？'),
       );
     });
 
@@ -195,8 +160,6 @@ export function Config({ c }: { c: Client }) {
         .filter(Boolean);
       const changed = new Set<keyof typeof value>(['dns_mode', 'servers', 'advanced_dns']);
       const next = editDocument(original, (d) => patchNetwork(d, value, changed), curFormat);
-      if (!(await c.run('files', () => host<SaveReply>('document_preserve_dns', { text: original, format: curFormat }))))
-        return;
       if (c.doc.revision !== revision) throw new Error('草稿已变化，请重新选择 DNS');
       c.doc.setDraft(next, curFormat);
       await c.save();
@@ -299,43 +262,24 @@ export function Config({ c }: { c: Client }) {
         </Modal>
       )}
 
-      {/* Left 228px Document Outline & File Tools Rail */}
-      <aside className="card cfg-rail" aria-label="配置导航与文件工具">
-        <div className="cfg-doc-box">
-          <div className="cfg-doc-name" {...tip(fileLabel, true)}>
-            <Icon name="doc" size={14} />
-            <span className="ell">{fileLabel}</span>
-          </div>
-          <div className="cfg-doc-meta">
-            <KState
-              tone={c.doc.saved === null ? 'muted' : !parsed.ok ? 'bad' : dirty ? 'warn' : 'ok'}
-              label={c.doc.saved === null ? '未连接' : !parsed.ok ? '语法错误' : dirty ? '未保存' : '已保存'}
-            />
-            <span className="num">
-              {lines.length} 行 · {format === 'json' ? 'JSON' : 'YAML'}
-            </span>
-          </div>
-        </div>
-
-        {v && (
-          <div className="cfg-sec">
-            <div className="cfg-sec-label">结构大纲</div>
-            <div className="cfg-outline-list">
-              {sections.map((s) => (
-                <button type="button" key={s.key} className="vsec" onClick={() => locate(s.key)}>
-                  <span className="vsec-label">
-                    <Icon name={s.icon} size={14} />
-                    <span>{s.label}</span>
-                  </span>
-                  <b className="num">{s.count}</b>
-                </button>
-              ))}
+      {/* Compact File Tools & Wrapping Document Outline */}
+      <section className="card cfg-tools" aria-label="配置导航与文件工具">
+        <div className="cfg-tools-row">
+          <div className="cfg-doc-box">
+            <div className="cfg-doc-name" {...tip(fileLabel, true)}>
+              <Icon name="doc" size={14} />
+              <span className="ell">{fileLabel}</span>
+            </div>
+            <div className="cfg-doc-meta">
+              <KState
+                tone={c.doc.saved === null ? 'muted' : !parsed.ok ? 'bad' : dirty ? 'warn' : 'ok'}
+                label={c.doc.saved === null ? '未连接' : !parsed.ok ? '语法错误' : dirty ? '未保存' : '已保存'}
+              />
+              <span className="num">
+                {lines.length} 行 · {format === 'json' ? 'JSON' : 'YAML'}
+              </span>
             </div>
           </div>
-        )}
-
-        <div className="cfg-sec">
-          <div className="cfg-sec-label">文件与日志</div>
           {v && (
             <label className="cfg-inline-field">
               <span>日志级别</span>
@@ -392,50 +336,25 @@ export function Config({ c }: { c: Client }) {
           </div>
         </div>
 
-        <div className="cfg-sec cfg-backups-sec">
-          <div className="cfg-sec-head">
-            <span className="cfg-sec-label">本地备份</span>
-            <button
-              type="button"
-              className={'ib ib-xs' + (filesBusy ? ' spin' : '')}
-              {...tip('刷新备份列表')}
-              aria-label="刷新备份列表"
-              disabled={!c.hasHost || filesBusy}
-              onClick={() => void listBackups()}
-            >
-              <Icon name="refresh" size={12} />
-            </button>
-          </div>
-          <div className="backup-list">
-            {backups && backups.length > 0 ? (
-              backups.map((b) => (
-                <div className="backup-row" key={b.id}>
-                  <span>
-                    <time className="num" {...tip(b.created_at)} dateTime={b.created_at}>
-                      {backupTime(b.created_at)}
-                    </time>
-                    <small className="num">
-                      {backupSize(b.bytes)} · {b.format === 'json' || !b.format ? 'JSON' : `YAML (.${b.format})`}
-                    </small>
+        {v && (
+          <nav className="cfg-outline" aria-label="结构大纲">
+            <div className="cfg-outline-label">结构大纲</div>
+            <div className="cfg-outline-list">
+              {sections.map((s) => (
+                <button type="button" key={s.key} className="vsec" onClick={() => locate(s.key)}>
+                  <span className="vsec-label">
+                    <Icon name={s.icon} size={14} />
+                    <span>{s.label}</span>
                   </span>
-                  <button
-                    type="button"
-                    className="btn sm"
-                    disabled={!c.connected || filesBusy || c.doc.saving}
-                    onClick={() => void restore(b)}
-                  >
-                    恢复
-                  </button>
-                </div>
-              ))
-            ) : (
-              <div className="backup-empty">{backups === null ? '点击右上刷新读取备份' : '暂无本地备份记录'}</div>
-            )}
-          </div>
-        </div>
-      </aside>
+                  <b className="num">{s.count}</b>
+                </button>
+              ))}
+            </div>
+          </nav>
+        )}
+      </section>
 
-      {/* Right 80%+ Syntax-Highlighted Code Workbench */}
+      {/* Full-Width Syntax-Highlighted Code Workbench */}
       <section className="card cfg-editor-card">
         <header className="cfg-editor-tb">
           <div
@@ -501,7 +420,7 @@ export function Config({ c }: { c: Client }) {
         {advancedDNS && (
           <div style={{ padding: '10px 18px', borderBottom: '1px solid var(--line)', background: 'var(--card-2)' }}>
             <div className="form-error" role="alert">
-              此配置包含已停用的高级 DNS，请选择系统 DNS 或自定义 DNS 后保存
+              此配置包含已停用的高级 DNS，请选择系统 DNS 或自定义 DNS 后保存。保存会替换旧 DNS 配置，可先使用“导出已保存配置”留存原文。
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
               <label htmlFor="legacy-dns-choice" style={{ fontSize: 12.5 }}>

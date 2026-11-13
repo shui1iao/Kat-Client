@@ -18,7 +18,7 @@
   --bg: var(--canvas);
   --window-material: var(--canvas);
   --side-bg: transparent;
-  --card: rgba(42, 49, 62, 0.72);
+  --card: rgba(42, 49, 62, 0.94);
   --card-2: rgba(255, 255, 255, 0.055);
   --pop: #2C333F;
   --hover: rgba(255, 255, 255, 0.085);
@@ -68,7 +68,7 @@
   --bg: var(--canvas);
   --window-material: var(--canvas);
   --side-bg: transparent;
-  --card: rgba(255, 255, 255, 0.66);
+  --card: rgba(255, 255, 255, 0.94);
   --card-2: rgba(28, 36, 48, 0.045);
   --pop: #FBFBFC;
   --hover: rgba(28, 36, 48, 0.075);
@@ -132,36 +132,49 @@
 
 /* Windows 11 Native Acrylic Gate (matches v0.2.4 translucent window + frosted cards) */
 :root[data-native-acrylic="enabled"] {
-  --window-material: rgba(20, 28, 42, 0.46);
-  --card: rgba(38, 45, 58, 0.60);
+  --window-material: rgba(20, 28, 42, 0.88);
+  --card: rgba(38, 45, 58, 0.94);
   --side-bg: transparent;
 }
 :root[data-native-acrylic="enabled"][data-theme="light"] {
-  --window-material: rgba(238, 242, 248, 0.44);
-  --card: rgba(255, 255, 255, 0.58);
+  --window-material: rgba(238, 242, 248, 0.90);
+  --card: rgba(255, 255, 255, 0.94);
   --side-bg: transparent;
 }
 :root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"] {
-  --window-material: rgba(22, 31, 48, 0.72);
-  --card: rgba(40, 46, 58, 0.75);
+  --window-material: rgba(22, 31, 48, 0.94);
+  --card: rgba(40, 46, 58, 0.96);
   --side-bg: transparent;
 }
 :root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"][data-theme="light"] {
-  --window-material: rgba(245, 246, 248, 0.72);
-  --card: rgba(252, 252, 253, 0.76);
+  --window-material: rgba(245, 246, 248, 0.94);
+  --card: rgba(252, 252, 253, 0.96);
   --side-bg: transparent;
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  :root[data-native-acrylic][data-theme],
-  :root[data-native-acrylic][data-native-acrylic-focus][data-theme] {
-    --window-material: var(--canvas);
+  :root,
+  :root[data-theme="dark"] {
+    --card: rgba(42, 49, 62, 1);
   }
-  :root[data-native-acrylic="enabled"]:not([data-theme="light"]) {
-    --card: rgba(42, 49, 62, 0.72);
+  :root[data-theme="light"] {
+    --card: rgba(255, 255, 255, 1);
+  }
+  :root[data-native-acrylic="enabled"] {
+    --window-material: rgba(20, 28, 42, 1);
+    --card: rgba(38, 45, 58, 1);
   }
   :root[data-native-acrylic="enabled"][data-theme="light"] {
-    --card: rgba(255, 255, 255, 0.66);
+    --window-material: rgba(238, 242, 248, 1);
+    --card: rgba(255, 255, 255, 1);
+  }
+  :root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"] {
+    --window-material: rgba(22, 31, 48, 1);
+    --card: rgba(40, 46, 58, 1);
+  }
+  :root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"][data-theme="light"] {
+    --window-material: rgba(245, 246, 248, 1);
+    --card: rgba(252, 252, 253, 1);
   }
 }
 

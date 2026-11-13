@@ -25,7 +25,7 @@ func (h *Host) withEgress(c kernel.Config) kernel.Config {
 	if clientegress.Supported {
 		s := &h.egressSwitch
 		s.SetIPv6(h.doc.client.IPv6)
-		c.SetClientEgress(&kernel.ClientEgress{UDPBinding: s.UDPBinding, UDPAssociationBinding: s.UDPAssociationBinding, Active: s.Enabled, Servers: s.Servers, Failure: s.Fail, Control: s.Control, PacketSource: s.PacketSource, PacketControl: s.PacketControl, PacketRelease: s.PacketRelease, DialContext: s.DialContext, Bootstrap: s.Bootstrap, SystemQuery: s.SystemQuery, DNSContext: s.DNSContext})
+		c.SetClientEgress(&kernel.ClientEgress{UDPBinding: s.UDPBinding, UDPAssociationBinding: s.UDPAssociationBinding, Active: s.Enabled, Servers: s.Servers, Failure: s.Fail, Control: s.Control, PacketSource: s.PacketSource, PacketControl: s.PacketControl, PacketRelease: s.PacketRelease, DialContext: s.DialContext, Bootstrap: s.Bootstrap, SystemQuery: s.SystemQuery, DNSContext: s.DNSContext, PingPhysical: s.PingPhysical, IsPhysicalSource: s.IsPhysicalSource, ProbeURL: h.doc.client.ProbeURL})
 	} else {
 		c.SetClientEgress(policyHooks(h.egress))
 	}

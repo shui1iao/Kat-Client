@@ -19,7 +19,7 @@ export function sniffInputError(field:SniffField,value:string):string {
  return value===''||Number.isFinite(Number(value))&&Number(value)>=1&&Number(value)<=2000?'':'等待首包须为 1–2000 毫秒';
 }
 export function patchSniff(cur:SniffSettings|undefined,patch:Partial<SniffSettings>):SniffSettings {
- const next={enabled:false,override_destination:false,...cur,...patch};
+ const next={enabled:true,override_destination:true,...cur,...patch};
  for(const k of ['tcp_ports','udp_ports','timeout'] as const)if(next[k]===undefined)delete next[k];
  return next;
 }

@@ -31,7 +31,7 @@ export function SubscriptionImport({
   const [text, setText] = useState(initialText || old?.url || '');
   const [name, setName] = useState(old?.name ?? '');
   const [interval, setInterval] = useState(
-    old?.auto_update === false ? '0' : old?.follow_interval ? 'follow' : String(old?.interval ?? 3600),
+    old?.auto_update === false ? '0' : old?.follow_interval ? 'follow' : String(old?.interval ?? 86400),
   );
   const [downloadMode, setDownloadMode] = useState<'auto' | 'direct' | 'proxy'>(old?.download_mode ?? 'auto');
   // Default visible when pasting/creating so users can verify the link immediately; toggleable via eye button
@@ -86,9 +86,9 @@ export function SubscriptionImport({
         ...(name ? { name } : {}),
         interval:
           interval === '0'
-            ? old?.interval ?? 3600
+            ? old?.interval ?? 86400
             : interval === 'follow'
-              ? old?.interval ?? 3600
+              ? old?.interval ?? 86400
               : Number(interval),
         follow_interval: interval === 'follow',
         auto_update: mode === 'remote' && interval !== '0',
@@ -113,7 +113,7 @@ export function SubscriptionImport({
   };
 
   const busy = c.busy.has('subscription:' + key) || c.busy.has('subscription-file') || c.doc.saving;
-  const presets = [1800, 3600, 21600, 43200, 86400];
+  const presets = [86400, 259200, 604800, 2592000];
   const custom = Number(interval) > 0 && !presets.includes(Number(interval));
 
   if (deleting && old) {
@@ -262,7 +262,7 @@ export function SubscriptionImport({
               <option value="0">关闭</option>
               {presets.map((n) => (
                 <option key={n} value={String(n)}>
-                  {n === 86400 ? '每 24 小时' : intervalLabel(n)}
+                  {intervalLabel(n)}
                 </option>
               ))}
               {custom && <option value={interval}>{intervalLabel(Number(interval))}</option>}

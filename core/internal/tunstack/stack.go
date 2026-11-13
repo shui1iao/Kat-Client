@@ -60,6 +60,10 @@ func (r *Runtime) initStack() error {
 	s.SetTransportProtocolHandler(tcp.ProtocolNumber, tf.HandlePacket)
 	// UDP is source-oriented; gVisor still validates/reassembles IP/UDP.
 	s.SetTransportProtocolHandler(udp.ProtocolNumber, r.udpPacket)
+	if _, ok := r.cfg.Ingress.(ICMPIngress); ok {
+		s.SetTransportProtocolHandler(icmp.ProtocolNumber4, r.icmpPacket4)
+		s.SetTransportProtocolHandler(icmp.ProtocolNumber6, r.icmpPacket6)
+	}
 	nic := s.NextNICID()
 	if e := s.CreateNIC(nic, r.link); e != nil {
 		return fmt.Errorf("tunstack NIC: %s", e)

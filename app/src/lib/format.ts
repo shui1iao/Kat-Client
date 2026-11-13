@@ -38,16 +38,6 @@ export function delayLabel(raw: number | null | undefined): string {
 
 // Display only: selection and weighted sorting continue to use source priorities.
 export const weightLabel = (weight:number) => weight === 1 ? '' : `权重 ${weight}`;
-export function backupTime(raw:string, now=new Date()):string {
-  const date=new Date(raw); if(!Number.isFinite(date.getTime()))return '—';
-  const pad=(n:number)=>String(n).padStart(2,'0');
-  return (date.getFullYear()===now.getFullYear()?'':date.getFullYear()+'-')+
-    `${pad(date.getMonth()+1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-}
-export function backupSize(bytes:number):string {
-  return bytes<1024?`${bytes} B`:`${Number((bytes/1024).toFixed(1))} KB`;
-}
-
 export function probeLabel(ms:number|null|undefined,error?:string){return error?'失败':delayLabel(ms);}
 // Closed, local text only: never put transport errors/URLs in the DOM title.
 export function probeFailureTitle(error?:string){return !error?'':({PROBE_TARGET_TIMEOUT:'超时',PROBE_QUEUE_TIMEOUT:'等待测速名额超时',PROBE_CANCELED:'已取消',PROBE_FAILED:'连接失败或HTTP响应异常'} as Record<string,string>)[error]??'测速失败';}

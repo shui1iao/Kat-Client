@@ -1,6 +1,7 @@
 package clientegress
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/netip"
@@ -284,4 +285,64 @@ func (s *Switch) ReleasePhysical() {
 	if old != nil {
 		old.Fail()
 	}
+}
+
+// IsPhysicalSource reports whether ip is a currently active physical source
+// address, preventing any OS weak-host loop from re-entering TUN ICMP handling.
+func (s *Switch) IsPhysicalSource(ip netip.Addr) bool {
+	if !ip.IsValid() {
+		return false
+	}
+	ip = ip.WithZone("").Unmap()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.snapshot == nil {
+		return false
+	}
+	for _, o := range s.snapshot.Owners {
+		for _, src := range o.Sources {
+			if src.Usable && src.Address.WithZone("").Unmap() == ip {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// PingPhysical sends a real ICMP/ICMPv6 Echo Request bound to the proven
+// physical egress source address for dst. It fails closed whenever physical
+// egress is fenced, unready, or IPv6 business traffic is disabled.
+func (s *Switch) PingPhysical(ctx context.Context, dst netip.Addr, ttl, tos uint8, df bool, payload []byte) ([]byte, uint8, error) {
+	if !dst.IsValid() || dst.Zone() != "" || dst.IsUnspecified() || dst.IsLoopback() || dst.IsMulticast() {
+		return nil, 0, errors.New("invalid physical ping destination")
+	}
+	dst = dst.Unmap()
+	s.mu.Lock()
+	if s.frozen || s.snapshot == nil || (s.current != nil && !s.current.Ready()) {
+		s.mu.Unlock()
+		return nil, 0, errors.New("physical egress unavailable")
+	}
+	if dst.Is6() && s.ipv6Set && !s.ipv6Enabled {
+		s.mu.Unlock()
+		return nil, 0, errors.New("IPv6 disabled")
+	}
+	owner, err := s.snapshot.selected(dst.Is6())
+	if err != nil {
+		s.mu.Unlock()
+		return nil, 0, err
+	}
+	gen, epoch := s.generation, s.epoch
+	s.mu.Unlock()
+
+	src, err := platformSelectSource(owner, dst, netip.Addr{})
+	if err != nil {
+		return nil, 0, err
+	}
+	s.mu.Lock()
+	valid := !s.frozen && s.snapshot != nil && s.generation == gen && s.epoch == epoch && (s.current == nil || s.current.Ready())
+	s.mu.Unlock()
+	if !valid {
+		return nil, 0, errors.New("physical egress changed")
+	}
+	return platformPing(ctx, owner, src, dst, ttl, tos, df, payload)
 }

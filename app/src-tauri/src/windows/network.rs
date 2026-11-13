@@ -139,7 +139,7 @@ impl NetworkController {
   self.ensure_core_mutation_settled().await?;
   let core=self.core.as_ref().ok_or_else(||Error::new("CORE_MISSING","Core unavailable"))?;
   if method=="core.stop"{let p=proxy::restore();let t=self.tun_disable_unlocked().await;p?;t?;return core.request(method,params,timeout).await;}
-  // All format/shape/projection and backup failures finish before any OS operation.
+  // All format/shape/projection validation finishes before any OS operation.
   let input=if method=="document.apply"{Some(crate::document::validation_params(&params)?)}else{None};
   let saved=core.request("document.get",Value::Null,Duration::from_secs(5)).await?;
   let previous=crate::document::AcceptedDocument::from_reply(&saved)?;
@@ -154,10 +154,6 @@ impl NetworkController {
    crate::document::ValidatedDocument::from_reply(previous.text(),previous.format(),&prior)?
   };
   next.ensure_enabled()?;
-  if method=="document.apply"{
-   let store=crate::user_store::Store::new(identity::workspace()?)?;
-   crate::backups::snapshot_validated(&store,&previous).map_err(|_|Error::new("BACKUP_WRITE","Could not back up the saved document; no configuration or network changes were made"))?;
-  }
   let egress_before=if self.tun_engaged.load(std::sync::atomic::Ordering::SeqCst){Some(core.request("network.egress.get",serde_json::json!({}),Duration::from_secs(5)).await?)}else{None};
   let before=core.request("status",Value::Null,Duration::from_secs(5)).await?;
   let running=before.pointer("/runtime/state").and_then(Value::as_str)==Some("running");

@@ -27,8 +27,11 @@ type ClientEgress struct {
 	// that closure retains full immutable owner/scope endpoint identities.
 	DNSServers []netip.Addr
 	// SystemQuery is the owner/scope-preserving physical DNS-only transport.
-	SystemQuery func(context.Context, []byte) ([]byte, error)
-	DNSContext  func(context.Context) (context.Context, func(), uint64)
+	SystemQuery      func(context.Context, []byte) ([]byte, error)
+	DNSContext       func(context.Context) (context.Context, func(), uint64)
+	PingPhysical     func(context.Context, netip.Addr, uint8, uint8, bool, []byte) ([]byte, uint8, error)
+	IsPhysicalSource func(netip.Addr) bool
+	ProbeURL         string
 }
 
 // SetClientIPv6 opts a desktop instance into the local address-family policy.

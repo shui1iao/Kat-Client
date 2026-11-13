@@ -14,12 +14,14 @@ import (
 	"github.com/shui1iao/Kat/internal/userio"
 	"net"
 	"os"
+	"runtime"
 
 	"path/filepath"
 	"reflect"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/shui1iao/Kat/internal/clientegress"
@@ -153,7 +155,7 @@ func subscriptionsOf(root map[string]json.RawMessage) ([]fullSubscription, error
 				}
 			}
 		}
-		if v.ServerInterval < 0 || v.ServerInterval > 604800 || len(v.Overlay.Rules) > 10000 || len(v.Overlay.Groups) > 1000 {
+		if v.ServerInterval < 0 || v.ServerInterval > 2592000 || len(v.Overlay.Rules) > 10000 || len(v.Overlay.Groups) > 1000 {
 			return nil, errors.New("invalid subscription metadata")
 		}
 		if v.UserInfo != nil {
@@ -163,7 +165,7 @@ func subscriptionsOf(root map[string]json.RawMessage) ([]fullSubscription, error
 			}
 		}
 
-		if len(v.ID) != 32 || seen[v.ID] || v.Interval < 60 || v.Interval > 604800 {
+		if len(v.ID) != 32 || seen[v.ID] || v.Interval < 60 || v.Interval > 2592000 {
 			return nil, errors.New("invalid subscription ownership")
 		}
 		if _, e := hex.DecodeString(v.ID); e != nil {
@@ -416,7 +418,7 @@ func (h *Host) previewSubscription(ctx context.Context, raw json.RawMessage) (an
 	// Validate the isolated graph before any network resource request. Paths are
 	// temporary placeholders solely for static validation, never read or trusted.
 
-	interval := 3600
+	interval := 86400
 	id := subscriptionID()
 	name := "完整配置 " + id[:6]
 	if old != nil {
@@ -436,8 +438,8 @@ func (h *Host) previewSubscription(ctx context.Context, raw json.RawMessage) (an
 		name = p.Name
 	}
 	if p.Interval != 0 {
-		if p.Interval < 60 || p.Interval > 604800 {
-			return nil, fail("invalid_params", "interval", "刷新间隔须为60至604800秒")
+		if p.Interval < 60 || p.Interval > 2592000 {
+			return nil, fail("invalid_params", "interval", "刷新间隔须为60至2592000秒")
 		}
 		interval = p.Interval
 	}
@@ -502,7 +504,7 @@ func (h *Host) previewSubscription(ctx context.Context, raw json.RawMessage) (an
 		if !migrating && old == nil && p.URL != "" && q.Type == "http" && q.URL == p.URL {
 			preview.Changes = append(preview.Changes, "同链接节点订阅将转换为完整配置订阅（其它订阅不变）")
 			if q.Interval != 0 {
-				sub.Interval = max(60, min(604800, int(time.Duration(q.Interval)/time.Second)))
+				sub.Interval = max(60, min(2592000, int(time.Duration(q.Interval)/time.Second)))
 			}
 			continue
 		}
@@ -1171,39 +1173,88 @@ func validateSubscriptionResources(c kernel.Config, owners ...fullSubscription) 
 			owned[rawName(v)] = [2]int{oi + 1, ri + 1}
 		}
 	}
+	deps := route.SubscriptionSetDependencies{GeoIP: c.GeoIP != nil, ASN: c.ASN != nil, Geosite: c.Geosite != nil}
+	var tasks []func() *Error
 	for _, s := range c.RuleSets {
-		if _, ok := owned[s.Name]; !ok {
+		ord, ok := owned[s.Name]
+		if !ok {
 			continue
 		}
-		b, e := readSubscriptionResource(s.Path, 16<<20)
-		if e != nil {
-			de := resourceError(context.Background(), "rule_set", owned[s.Name][1], "cache", "cache_verify", "unknown", e)
-			de.Detail.SubscriptionOrdinal = owned[s.Name][0]
-			return de
-		}
-		geo := c.GeoIP != nil
-		if _, e = route.ValidateSubscriptionSetWithDependencies(route.RuleSetOptions(s), b, route.SubscriptionSetDependencies{GeoIP: geo, ASN: c.ASN != nil, Geosite: c.Geosite != nil}); e != nil {
-			de := resourceError(context.Background(), "rule_set", owned[s.Name][1], "cache", "format_check", "invalid_format", nil)
-			de.Detail.SubscriptionOrdinal = owned[s.Name][0]
-			return de
-		}
+		rs := s
+		tasks = append(tasks, func() *Error {
+			b, e := readSubscriptionResource(rs.Path, 16<<20)
+			if e != nil {
+				de := resourceError(context.Background(), "rule_set", ord[1], "cache", "cache_verify", "unknown", e)
+				de.Detail.SubscriptionOrdinal = ord[0]
+				return de
+			}
+			if _, e = route.ValidateSubscriptionSetWithDependencies(route.RuleSetOptions(rs), b, deps); e != nil {
+				de := resourceError(context.Background(), "rule_set", ord[1], "cache", "format_check", "invalid_format", nil)
+				de.Detail.SubscriptionOrdinal = ord[0]
+				return de
+			}
+			return nil
+		})
 	}
 	if c.GeoIP != nil {
-		b, e := readSubscriptionResource(c.GeoIP.Path, 64<<20)
-		if e != nil {
-			return resourceError(context.Background(), "geoip", 0, "cache", "cache_verify", "unknown", e)
-		}
-		if route.ValidateSubscriptionGeoIP(b) != nil {
-			return resourceError(context.Background(), "geoip", 0, "cache", "format_check", "db_incompatible", nil)
-		}
+		geoPath := c.GeoIP.Path
+		tasks = append(tasks, func() *Error {
+			b, e := readSubscriptionResource(geoPath, 64<<20)
+			if e != nil {
+				return resourceError(context.Background(), "geoip", 0, "cache", "cache_verify", "unknown", e)
+			}
+			if route.ValidateSubscriptionGeoIPAt(geoPath, b) != nil {
+				return resourceError(context.Background(), "geoip", 0, "cache", "format_check", "db_incompatible", nil)
+			}
+			return nil
+		})
 	}
 	if c.ASN != nil {
-		b, e := readSubscriptionResource(c.ASN.Path, 64<<20)
-		if e != nil {
-			return resourceError(context.Background(), "asn", 0, "cache", "cache_verify", "unknown", e)
-		}
-		if validateSubscriptionDB("asn", b) != nil {
-			return resourceError(context.Background(), "asn", 0, "cache", "format_check", "db_incompatible", nil)
+		asnPath := c.ASN.Path
+		tasks = append(tasks, func() *Error {
+			b, e := readSubscriptionResource(asnPath, 64<<20)
+			if e != nil {
+				return resourceError(context.Background(), "asn", 0, "cache", "cache_verify", "unknown", e)
+			}
+			if validateSubscriptionDBAt("asn", asnPath, b) != nil {
+				return resourceError(context.Background(), "asn", 0, "cache", "format_check", "db_incompatible", nil)
+			}
+			return nil
+		})
+	}
+	if len(tasks) == 0 {
+		return nil
+	}
+	if len(tasks) == 1 {
+		return tasks[0]()
+	}
+	errs := make([]*Error, len(tasks))
+	workers := runtime.GOMAXPROCS(0)
+	if workers < 2 {
+		workers = 2
+	}
+	if workers > len(tasks) {
+		workers = len(tasks)
+	}
+	jobs := make(chan int, len(tasks))
+	for i := range tasks {
+		jobs <- i
+	}
+	close(jobs)
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for w := 0; w < workers; w++ {
+		go func() {
+			defer wg.Done()
+			for idx := range jobs {
+				errs[idx] = tasks[idx]()
+			}
+		}()
+	}
+	wg.Wait()
+	for _, de := range errs {
+		if de != nil {
+			return de
 		}
 	}
 	return nil
@@ -1320,13 +1371,17 @@ func safeSubscriptionName(s string) string {
 }
 
 func validateSubscriptionDB(kind string, b []byte) error {
+	return validateSubscriptionDBAt(kind, "", b)
+}
+
+func validateSubscriptionDBAt(kind, path string, b []byte) error {
 	if len(b) > 64<<20 {
 		return errors.New("resource limit")
 	}
 	if kind == "geoip" {
-		return route.ValidateSubscriptionGeoIP(b)
+		return route.ValidateSubscriptionGeoIPAt(path, b)
 	}
-	if e := route.ValidateSubscriptionASN(b); e != nil {
+	if e := route.ValidateSubscriptionASNAt(path, b); e != nil {
 		return e
 	}
 	r, e := maxminddb.FromBytes(b)

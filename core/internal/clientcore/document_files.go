@@ -240,9 +240,9 @@ func (tx *documentSave) rollback() error {
 }
 func (tx *documentSave) accept() {
 	tx.h.path, tx.h.sourceInfo = tx.target, tx.targetInfo
-	// This is transaction recovery material, not a second backup collection.
-	// Only an unsuccessful rollback retains it for manual recovery. The core
-	// remains independent of the native host's bounded user-visible backups.
+	// This is transaction recovery material, not a user-visible backup collection.
+	// Only an unsuccessful rollback retains it for manual recovery; removing the
+	// native local backup feature does not alter this transaction safety.
 	if tx.changed {
 		_ = userio.Remove(tx.backup)
 	}

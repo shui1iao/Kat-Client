@@ -4363,7 +4363,7 @@
         ],
         "additionalProperties": false
       },
-      "description": "Preview one existing legacy provider as a complete subscription; no mutation until native backup + document.apply. Per-provider source identity and rollback are retained. Never accepts a URL/path supplied as a new provider.",
+      "description": "Preview one existing legacy provider as a complete subscription; no mutation until validated document.apply with transaction rollback. Per-provider source identity and rollback are retained. Never accepts a URL/path supplied as a new provider.",
       "hostOnly": false
     },
     "probe.all": {

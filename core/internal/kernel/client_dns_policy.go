@@ -232,11 +232,18 @@ func (s *Server) closeDNS() {
 	s.bootstrapDNS.close()
 }
 func (s *Server) directLookup(ctx context.Context, host string) ([]netip.Addr, error) {
+	var ips []netip.Addr
+	var e error
 	if s.directDNS != nil {
-		ips, e := s.directDNS.lookup(ctx, host)
-		return s.realDNSAnswer(ips, e)
+		ips, e = s.directDNS.lookup(ctx, host)
+		ips, e = s.realDNSAnswer(ips, e)
+	} else {
+		ips, e = s.lookup(ctx, host)
 	}
-	return s.lookup(ctx, host)
+	if e == nil && s.rt != nil && s.rt.icmp != nil {
+		s.rt.icmp.noteResolved(host, ips, false)
+	}
+	return ips, e
 }
 func (s *Server) bootstrapLookup(ctx context.Context, host string) ([]netip.Addr, error) {
 	if s.bootstrapDNS != nil {

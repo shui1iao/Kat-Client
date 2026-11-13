@@ -3,6 +3,7 @@
 package clientegress
 
 import (
+	"context"
 	"errors"
 	"net/netip"
 	"syscall"
@@ -21,3 +22,7 @@ func platformSelectSource(o OwnerState, dest, configured netip.Addr) (netip.Addr
 	return chooseSnapshotSource(o, dest, configured)
 }
 func platformConfirmSource(OwnerState, netip.Addr) error { return errors.New("unsupported") }
+
+func platformPing(context.Context, OwnerState, netip.Addr, netip.Addr, uint8, uint8, bool, []byte) ([]byte, uint8, error) {
+	return nil, 0, errors.New("unsupported")
+}

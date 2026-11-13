@@ -133,7 +133,7 @@ func TestUISniffStrictProjectionAndSourceRoundTrips(t *testing.T) {
 	if got != old {
 		t.Fatal("old document changed")
 	}
-	if _, e := applyLegacyFixture(h, got); e != nil || h.doc.text != old || h.doc.config.Inbounds[0].Sniff != nil {
+	if _, e := applyLegacyFixture(h, got); e != nil || h.doc.text != old || h.doc.config.Inbounds[0].Sniff == nil || !h.doc.config.Inbounds[0].Sniff.Enabled || !h.doc.config.Inbounds[0].Sniff.OverrideDestination {
 		t.Fatal("old round trip", e)
 	}
 	for _, block := range []string{`null`, `true`, `"true"`, `[]`, `{}`, `{"enabled":true}`, `{"enabled":1,"override_destination":false}`, `{"enabled":true,"override_destination":null}`, `{"enabled":true,"override_destination":"false"}`, `{"enabled":true,"override_destination":false,"unknown_ports":"80"}`} {

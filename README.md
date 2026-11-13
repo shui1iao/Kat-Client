@@ -1,13 +1,9 @@
-# Kat-Client v0.2.7
+# Kat-Client v0.2.8
 
-Windows x64 客户端正式版 `v0.2.7`（内置 Windows Core `v0.8.5`，在线更新 sequence `1794580000`）。下载 Release 中的 `Kat-Setup-x64.exe` 安装，或通过客户端内置在线更新升级。
+Windows x64 客户端正式发布候选，内置 Windows Core v0.8.6，统一更新sequence `1794587687`。安装附件名 `Kat-Setup-x64.exe`；本准备阶段尚未在线发布，在线更新清单须在后续实际Release/asset分配后签发。
 
-本版重构全站桌面界面与交互层级，恢复微透 Acrylic 卡片材质与统一色彩体系，优化默认窗口 `3:2`（`1080×720`）屏幕占比保护、策略组手风琴展开与双层图标识别、Smart 自动命中虚线框与手动固定实线框区分、单列连接行内展开、圆角自定义下拉菜单，并大幅提速客户端与内核启动（建窗与内核并行启动、多核并发解析路由资源、首屏非阻塞水合）及修复 `--autostart` 开机静默启动进托盘。具体变化与限制见 [RELEASE_NOTES.md](RELEASE_NOTES.md)。Windows Core 单独发布在 Kat-Server 的 `windows-core-v0.8.5`，不改变 Linux 服务端 `v0.8.1`，也不自动部署任何节点。
+请以[RELEASE_NOTES.md](RELEASE_NOTES.md)理解完整合并行为及混合ICMP边界；[VALIDATION.md](VALIDATION.md)仅记录本轮实际验证，不把构建或模拟等同Windows实机。Linux Server v0.8.1不变。
 
-## 权利
-Source-available，不是 MIT 开源。Kat 自研代码保留所有权利，不授予通用使用、修改或再分发许可。第三方/上游原许可及其源码义务不变，见 [RIGHTS.md](RIGHTS.md)、`core/THIRD_PARTY_NOTICES.md` 及 `app` 中的许可材料。
+普通用户运行安装向导，安装/升级/卸载前正常退出Kat；只有固定helper请求UAC。保留用户配置及已有备份数据，恢复失败不删除日志/回滚材料。不进行远程部署或自动开放网络权限。需要WebView2 Evergreen Runtime。
 
-## 源码和构建对应
-本公共树与本版源码归档对应，`SOURCE-MANIFEST.json` 与 `BUILD-IDENTITY.json` 记录准确源码指纹、二进制摘要和验证范围。内核 BuildCommit 是 core 源码指纹前 40 位，不冒充 Git 提交。包与在线更新清单采用既有 Ed25519 公钥 `key_id: 0afa646ee76f17d8` 校验。
-
-构建需 Go 1.26.9、Node 依赖按 `app/package-lock.json`、Rust/cargo-xwin 与 Windows SDK、NSIS 3.11。前端在 app 运行 npm ci / npm run build；Windows core 入口是 core/cmd/kat-client-core（-tags desktop）。宿主在 app/src-tauri 构建 kat-desktop、kat-network-service、kat-proxy-watchdog、kat-elevate-helper，最后将这些角色与 core 的实际 SHA256 绑定进 kat-install-helper。完整构建和签包说明随 Release 的 BUILDING.md 与 Kat-Build-Support.tar.gz 提供；正式签名私钥不在公开源码中。
+构建与签包边界见[BUILDING.md](BUILDING.md)。Kat自研代码source-available、保留所有权利，非MIT；第三方各自原许可继续有效，见[RIGHTS.md](RIGHTS.md)。

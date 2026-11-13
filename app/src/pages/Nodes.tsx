@@ -241,7 +241,7 @@ export function Nodes({ c }: { c: Client }) {
           )}
           <span className="sp" />
           <select
-            className="inp sm"
+            className="inp sm display-sort"
             aria-label="节点显示排序"
             value={sort}
             onChange={(e) => setSort(e.target.value as DisplaySort)}

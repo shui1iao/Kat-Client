@@ -175,8 +175,14 @@ func TestK3BatchFourWorkersCacheAndRealRules(t *testing.T) {
 		t.Fatal(er)
 	}
 	r := v.(*diagnosticReply)
-	if len(r.Items) != 6 || peak.Load() > 4 || peak.Load() < 2 {
+	if len(r.Items) != 5 || peak.Load() > 4 || peak.Load() < 2 {
 		t.Fatal(len(r.Items), peak.Load())
+	}
+	wantNames := []string{"Google", "Telegram", "GitHub", "Cloudflare", "https://custom.example/check"}
+	for i, want := range wantNames {
+		if r.Items[i].Name != want {
+			t.Fatalf("connectivity target %d: got %q, want %q", i, r.Items[i].Name, want)
+		}
 	}
 	for _, row := range r.Items {
 		if row.Result != "ok" || !reflect.DeepEqual(row.Chain, []string{"Final", "FixtureNode"}) {

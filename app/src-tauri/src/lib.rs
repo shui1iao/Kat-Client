@@ -22,7 +22,7 @@ pub mod preferences;
 
 pub mod lifecycle;
 
-pub mod backups;
+pub mod document_files;
 pub mod safe_log;
 pub mod log_context;
 pub mod safe_archive;

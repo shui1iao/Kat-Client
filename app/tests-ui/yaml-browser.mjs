@@ -37,7 +37,7 @@ try{
   await ctx.addInitScript(installTransport,{});
   await ctx.addInitScript(({initial})=>{
     const state=window.__TEST,native=window.__TAURI_INTERNALS__.invoke;
-    const doc={text:initial,format:'yaml',imported:null,backup:null,readDelay:0,exports:[]};window.__YAML=doc;
+    const doc={text:initial,format:'yaml',imported:null,readDelay:0,exports:[]};window.__YAML=doc;
     state.text=JSON.stringify({schema_version:1,client:{mode:'rule',http_port:17890,socks_port:17891},kernel:{}});
     let ready=window.__parseYAML(initial).then(d=>{state.text=JSON.stringify(d);});
     window.__TAURI_INTERNALS__.invoke=async(cmd,args={})=>{
@@ -53,8 +53,6 @@ try{
         doc.text=p.text;doc.format=p.format;state.text=JSON.stringify(value);return {text:doc.text,format:doc.format,path:'C:\\Kat\\kat-client.'+doc.format,applied:true};
       }
       if(method==='document_import'){await new Promise(r=>setTimeout(r,doc.readDelay));return doc.imported;}
-      if(method==='backup_list')return {items:[{id:'backup',bytes:200,created_at:'test backup',format:doc.backup?.format??'json'}]};
-      if(method==='backup_read')return doc.backup;
       if(method==='document_export'){doc.exports.push({text:doc.text,format:doc.format});return {saved:true};}
       return native(cmd,args);
     };
@@ -75,8 +73,7 @@ try{
   await selector.selectOption('yaml');await page.getByRole('dialog').getByRole('button',{name:'载入草稿',exact:true}).click();assert.ok((await editor.inputValue()).includes('9007199254740993'));await page.getByRole('button',{name:'取消更改',exact:true}).click();
   await page.evaluate(initial=>{window.__YAML.imported={text:initial,format:'yml',filename:'imported.yml'};},initial);
   const applyCount=await page.evaluate(()=>window.__TEST.calls.filter(c=>c.method==='document.apply').length);await page.getByRole('button',{name:'导入配置 / Clash YAML',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[aria-label="配置格式"]').value==='yml');assert.equal(await editor.inputValue(),initial);assert.equal(await page.evaluate(()=>window.__YAML.format),'json');assert.equal(await page.evaluate(()=>window.__TEST.calls.filter(c=>c.method==='document.apply').length),applyCount);await page.getByRole('button',{name:'保存',exact:true}).click();await page.waitForFunction(()=>window.__YAML.format==='yml');
-  await page.evaluate(()=>{window.__YAML.backup={text:'{"schema_version":1,"client":{"mode":"global"},"kernel":{}}\n',format:'json'};});await page.getByRole('button',{name:'刷新备份',exact:true}).click();await page.getByRole('button',{name:'恢复',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'确认',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[aria-label="配置格式"]').value==='json');assert.ok((await editor.inputValue()).includes('global'));assert.equal(await page.evaluate(()=>window.__YAML.format),'yml');await page.getByRole('button',{name:'取消更改',exact:true}).click();assert.equal(await selector.inputValue(),'yml');
-  await page.getByRole('button',{name:'导出已保存配置',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'确认',exact:true}).click();await page.waitForFunction(()=>window.__YAML.exports.length===1);assert.deepEqual(await page.evaluate(()=>window.__YAML.exports[0]),{text:initial,format:'yml'});results.push('import, backup restore and accepted export honor host format without automatic conversion/apply');
+  await page.getByRole('button',{name:'导出已保存配置',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'确认',exact:true}).click();await page.waitForFunction(()=>window.__YAML.exports.length===1);assert.deepEqual(await page.evaluate(()=>window.__YAML.exports[0]),{text:initial,format:'yml'});results.push('import and accepted export honor host format without automatic conversion/apply');
   await page.evaluate(()=>{window.__YAML.readDelay=300;});await page.getByRole('button',{name:'导入配置 / Clash YAML',exact:true}).click();await editor.fill('# concurrent typing\n');await page.getByRole('dialog').getByRole('button',{name:'取消',exact:true}).click();assert.equal(await editor.inputValue(),'# concurrent typing\n');results.push('typing during asynchronous native file operation is not overwritten');
   for(const width of [1100,1440]){await page.setViewportSize({width,height:900});const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth);assert.equal(overflow,false,'width '+width);}
   assert.deepEqual(errors,[]);assert.deepEqual(external,[]);assert.equal(resourceError,'');

@@ -93,6 +93,11 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
   }
 
   const r = cache[kind];
+  // Display-only legacy default filtering. Custom rows use their URL as name,
+  // so even an explicitly added YouTube URL and all persisted data stay intact.
+  const connectivityItems = cache.connectivity?.items.filter(
+    (x) => !(x.name === 'YouTube' && x.url === 'https://www.youtube.com/'),
+  );
   const services = ['ChatGPT', 'Gemini', 'Google', 'Netflix'].map((name) => ({
     name,
     row: cache.unlock?.items.find((x) => x.name === name),
@@ -154,11 +159,11 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
               <div className="empty">点击下方检测查看连通性</div>
             ) : (
               <div className="diag-list" role="list" aria-label="连通性检测结果">
-                {r.items.map((x, i) => (
+                {connectivityItems?.map((x) => (
                   <div className="conn-diag-row" role="listitem" key={x.name}>
                     <div className="diagnostic-target">
                       <span {...tip(x.url, true)}>{x.name}</span>
-                      {i >= 5 && (
+                      {x.name === x.url && urls.includes(x.url ?? '') && (
                         <button
                           type="button"
                           className="ib ib-xs danger"
@@ -174,7 +179,7 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
                       {x.chain.map(c.label).join(' → ') || '—'}
                     </span>
                     <span className={'diagnostic-result num ' + (x.result === 'failed' ? 'failed' : 'ok')} {...tip(x.reason)}>
-                      {x.result === 'failed' ? x.reason || '失败' : `${x.http_status ?? 200} · ${x.duration_ms} ms`}
+                      {x.result === 'failed' ? x.reason || '失败' : `${x.duration_ms} ms`}
                     </span>
                   </div>
                 ))}

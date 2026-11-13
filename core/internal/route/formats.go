@@ -23,9 +23,135 @@ const maxInflated = 512 << 20
 // ---- Clash YAML rule-provider ----
 
 // yamlPayload returns the payload strings of a Clash rule-provider file.
+func fastYAMLPayload(b []byte) ([]string, bool) {
+	if len(b) >= 3 && b[0] == 0xef && b[1] == 0xbb && b[2] == 0xbf {
+		return nil, false
+	}
+	s := string(b)
+	estCap := strings.Count(s, "\n")
+	if estCap > 64 {
+		estCap = estCap * 9 / 10
+	}
+	var out []string
+	sawHeader := false
+	itemIndent := -1
+	for off := 0; off < len(s); {
+		end := strings.IndexByte(s[off:], '\n')
+		var line string
+		if end < 0 {
+			line = s[off:]
+			off = len(s)
+		} else {
+			line = s[off : off+end]
+			off += end + 1
+		}
+		if len(line) > 0 && line[len(line)-1] == '\r' {
+			line = line[:len(line)-1]
+		}
+		if strings.IndexByte(line, '\t') >= 0 {
+			return nil, false
+		}
+		indent := 0
+		for indent < len(line) && line[indent] == ' ' {
+			indent++
+		}
+		trimmed := strings.TrimRight(line[indent:], " ")
+		if trimmed == "" || trimmed[0] == '#' {
+			continue
+		}
+		if !sawHeader {
+			if indent != 0 || !strings.HasPrefix(trimmed, "payload:") {
+				return nil, false
+			}
+			rest := strings.TrimLeft(trimmed[len("payload:"):], " ")
+			if rest != "" && rest[0] != '#' {
+				return nil, false
+			}
+			sawHeader = true
+			out = make([]string, 0, estCap)
+			continue
+		}
+		if itemIndent < 0 {
+			itemIndent = indent
+		} else if indent != itemIndent {
+			return nil, false
+		}
+		if len(trimmed) < 2 || trimmed[0] != '-' || trimmed[1] != ' ' {
+			return nil, false
+		}
+		rest := strings.TrimLeft(trimmed[2:], " ")
+		if rest == "" {
+			return nil, false
+		}
+		switch rest[0] {
+		case '\'':
+			closeIdx := strings.IndexByte(rest[1:], '\'')
+			if closeIdx < 0 {
+				return nil, false
+			}
+			closeIdx++
+			if closeIdx+1 < len(rest) && rest[closeIdx+1] == '\'' {
+				return nil, false
+			}
+			tail := strings.TrimLeft(rest[closeIdx+1:], " ")
+			if tail != "" && tail[0] != '#' {
+				return nil, false
+			}
+			out = append(out, rest[1:closeIdx])
+		case '"':
+			closeIdx := -1
+			for i := 1; i < len(rest); i++ {
+				if rest[i] == '\\' {
+					return nil, false
+				}
+				if rest[i] == '"' {
+					closeIdx = i
+					break
+				}
+			}
+			if closeIdx < 0 {
+				return nil, false
+			}
+			tail := strings.TrimLeft(rest[closeIdx+1:], " ")
+			if tail != "" && tail[0] != '#' {
+				return nil, false
+			}
+			out = append(out, rest[1:closeIdx])
+		default:
+			if c := rest[0]; c == '-' || c == '?' || c == ':' || c == '[' || c == '{' || c == '#' || c == '&' || c == '*' || c == '!' || c == '|' || c == '>' || c == '%' || c == '@' || c == '`' || c == '~' {
+				return nil, false
+			}
+			val := rest
+			if idx := strings.Index(val, " #"); idx >= 0 {
+				val = strings.TrimRight(val[:idx], " ")
+			}
+			if val == "" || val[len(val)-1] == ':' || strings.Contains(val, ": ") || strings.ContainsAny(val, "\"'[]{}!*&") {
+				return nil, false
+			}
+			if (val[0] >= '0' && val[0] <= '9' || (val[0] == '+' && len(val) > 1 && val[1] >= '0' && val[1] <= '9')) && !strings.Contains(val, "/") && strings.Count(val, ".") < 2 {
+				return nil, false
+			}
+			if len(val) <= 5 {
+				switch strings.ToLower(val) {
+				case "null", "true", "false", "nan", ".nan", ".inf", "-.inf", "+.inf":
+					return nil, false
+				}
+			}
+			out = append(out, val)
+		}
+	}
+	if !sawHeader || len(out) == 0 {
+		return nil, false
+	}
+	return out, true
+}
+
 func yamlPayload(b []byte) ([]string, error) {
 	if _, err := checkText(b); err != nil {
 		return nil, err
+	}
+	if out, ok := fastYAMLPayload(b); ok {
+		return out, nil
 	}
 	var doc map[string]any
 	dec := yaml.NewDecoder(bytes.NewReader(b))

@@ -396,5 +396,9 @@ func (s *Server) answerDNS(ctx context.Context, wire []byte, tcp bool) ([]byte, 
 		return nil, ErrCoreNotRunning
 	}
 	defer g.unref()
-	return g.answerClientDNS(ctx, wire, tcp)
+	reply, err := g.answerClientDNS(ctx, wire, tcp)
+	if err == nil && g.rt != nil && g.rt.icmp != nil {
+		g.rt.icmp.noteDNSWire(reply)
+	}
+	return reply, err
 }

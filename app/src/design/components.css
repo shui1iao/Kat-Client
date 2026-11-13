@@ -251,6 +251,14 @@ select.inp.sm {
   background-position: right 7px center;
 }
 
+/* Only the member/node display-sort controls center their labels. */
+select.inp.display-sort {
+  min-width: 128px;
+  padding-inline: 24px;
+  text-align: center;
+  text-align-last: center;
+}
+
 .search {
   display: inline-flex;
   align-items: center;
@@ -905,6 +913,18 @@ select.inp.sm {
 .kat-opt.cur svg {
   color: var(--accent);
   flex: none;
+}
+
+.kat-pop.centered .kat-opt {
+  position: relative;
+  justify-content: center;
+  padding-inline: 24px;
+  text-align: center;
+}
+
+.kat-pop.centered .kat-opt > svg {
+  position: absolute;
+  right: 6px;
 }
 
 .kat-tip {

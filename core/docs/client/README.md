@@ -163,9 +163,10 @@ an optional format (default active). Validate also returns safe `ports` and
 The GUI format selector creates a cancellable draft. Save is the only operation
 that changes the active filename or running config. A pre-existing target is
 never overwritten, external source changes are rejected, and conversion failure
-retains the previous active file/runtime. Native host saves first snapshot the
-previous accepted raw source (10 backups, <=1 MiB each). Import/restore only stage
-raw text+format; export writes exact accepted bytes with a matching extension.
+retains the previous active file/runtime through the existing transaction rollback.
+The local backup feature and automatic snapshots are removed; existing backup files
+are left untouched. Import only stages raw text+format; export writes exact accepted
+bytes with a matching extension. Export before saving if you need to retain the source.
 Ordinary YAML visual edits preserve comments/order/untouched tokens; explicit
 formatting may normalize layout. YAML->JSON conversion warns about comment loss.
 Dirty raw/format drafts are never replaced by polling or a failed operation.
@@ -254,8 +255,8 @@ No default drain budget is enlarged by this change.
 客户端只提供完整订阅。`provider.refresh`已删除，hello不再宣告该能力；`resources.list/refresh`不再提供provider。底层provider解析与已接纳旧配置的后台刷新语义保持。节点页及配置/诊断中的“订阅”计数只算完整订阅；为兼容验证投影，counts.providers字段名保留，但值为完整subscriptions数量。
 
 - 新写入/修改kernel.providers、在新组加入use或include_all_providers会以`legacy_provider_unsupported`拒绝：“节点订阅已不再支持，请使用完整订阅”。已接纳旧文档可原样保留或删减旧provider/use，不能借遗留例外创建新项。Clash proxy-providers继续拒绝。
-- 初次连接时客户端按原顺序逐provider调用`subscription.migrate {name}`：它只产生绑定当前文档字节/format的完整候选，不直接接纳。随后仍经原生document.apply链：校验前后文档 → 现有最多10份备份机制持久化原文 → 既有可回滚文件/内核事务。失败后候选取消；该provider及引用原样保留，启动时再尝试，或待转换卡片手动重试。没有provider时循环为空，不请求迁移、不备份、不写文件、不改文档任何字节。
-- HTTP沿用同URL完整订阅所有权匹配/升级路径（URL保留、interval对应秒数，符合完整订阅60秒至7天范围）；headers/User-Agent/timeout/filter/exclude等作为完整订阅source_options私有元数据保存，并在后续刷新复用。所有下载仍用现有安全公共HTTPS、TLS、受控出口、不重定向/不环境代理路径；不会为了迁移放宽下载安全边界。旧非direct via无法安全映射时保旧为待转换；不静默改为direct。旧HTTP/内网URL被现有安全下载规则拒绝时亦保旧。下载超时不放宽现有30秒上限，原更短timeout优先。
+- 初次连接时客户端按原顺序逐provider调用`subscription.migrate {name}`：它只产生绑定当前文档字节/format的完整候选，不直接接纳。随后仍经原生document.apply链：校验前后文档 → 既有可回滚文件/内核事务（不再创建本地配置备份；需要留存原文可先导出）。失败后候选取消；该provider及引用原样保留，启动时再尝试，或待转换卡片手动重试。没有provider时循环为空，不请求迁移、不写文件、不改文档任何字节。
+- HTTP沿用同URL完整订阅所有权匹配/升级路径（URL保留、interval对应秒数，符合完整订阅60秒至30天范围）；headers/User-Agent/timeout/filter/exclude等作为完整订阅source_options私有元数据保存，并在后续刷新复用。所有下载仍用现有安全公共HTTPS、TLS、受控出口、不重定向/不环境代理路径；不会为了迁移放宽下载安全边界。旧非direct via无法安全映射时保旧为待转换；不静默改为direct。旧HTTP/内网URL被现有安全下载规则拒绝时亦保旧。下载超时不放宽现有30秒上限，原更短timeout优先。
 - file内容使用现有有界、不跟随叶子链接/重解析点的只读资源读取器，转本地完整快照。节点格式使用原provider解析器和依赖物化；filter/exclude保留RE2和依赖支持节点语义。真正完整Clash保留规则/组/资源；若过滤后图引用不成立，失败保旧，不丢规则伪装成功。
 - 成功候选移除本provider，将引用它的use成员（含include-all-providers）按筛选和原组筛选写成成员，保留原显式成员顺序/去重；可确定的selected/fixed映射沿用。其它provider仍保留，逐项原子。失败卡只显示安全原因、重试转换和现有危险删除入口，无旧编辑/刷新/导入为完整订阅入口。
 - `probe.all {}`：立即返回`{started:true,total:N}`并在core内运行后台批次（非整批同步IPC）。捕获单代非direct/reject节点；worker数取client.probe_concurrency（1..50，默认50），每个节点由worker取出后才开始其独立probe_round_timeout（默认10s，含依赖准备）和原probe_timeout（默认5s目标HTTP）；与单节点测速同一实现、失败分类。**没有共享整批截止时间**，排队不判失败；总时间随节点数增长。status.probe_round={done,total,names}按实际完成数递增，结束为null且最终逐行结果仍在status.nodes。导航/重连读status可恢复进度。Stop/Apply/Close取消并排空旧epoch，迟到结果不能写回新代；重复整批及与其它手动测速重叠请求返回probe_busy，不重复并发同一节点。组/单节点原预算和内核背景测速不变；本方法的既有IPC时限只约束接纳，不约束后台批次。
@@ -341,8 +342,8 @@ IPC `status.groups[]` 新增 `selection_mode / algorithm_version=2 / default_mem
 
 - `connections.list` / `logs.connections` 的连接详情新增 `process_name`、`process_path`、`domain_suffix`（PSL eTLD+1）。进程信息仅来自 procattr 已验证的本地套接字/原始流服务；unknown/ambiguous/denied 为空，UI 显示“未知”。不信任代理头。完整路径只在连接详情悬停，不进入安全诊断导出。
 - 连接行展开复用日志 FlowDetail，含关闭、生成规则；进程筛选带数量降序。生成规则进入既有 560 编辑器，由用户确认类型/值/策略/位置，默认域名后缀或 IP-CIDR、策略链首个组、列表最前。IPv6 使用 /128，IPv4 /32；缺进程归属不提供进程预填。无订阅时保存仍为既有 document.apply；有活动订阅时显式走 `subscription.select {id,edit_only:true,add_rule,rule_position:"top"|"end"}` 预览，再由既有 document.apply 接纳。本地覆盖保留全局插入位置，不改远端快照；普通规则页“新增规则”仍保持手动归属。
-- 新公共 `diagnostics.network`：`{kind:"unlock"|"connectivity"|"exit",run?:boolean,urls?:string[]}`。默认 `run:false` 只读内存缓存，无记录返回 null，绝不联网。显式 `run:true` 才检测。连通性含 Google/YouTube/Telegram/GitHub/Cloudflare，最多 16 个自定义 HTTPS URL；不接受账号、片段或强制组参数。网址存桌面偏好 `diagnostic_urls`，不是客户端核心文档。
-- 每主机仅一轮，最多四个并发项，每项总计八秒（含该服务多个端点/重定向/响应体）；最多 2 MiB 响应体（Netflix 为 4 MiB）、64 KiB 响应头。不登录、不使用 Cookie/用户凭据，不跟随跨主机或降级 HTTP 的跳转。公开地址仅在主动点击后访问。8 秒不是整个批次预算：最多 21 个连通性目标约 48 秒；IPC 上限 Go 70 秒、Rust 75 秒。
+- 新公共 `diagnostics.network`：`{kind:"unlock"|"connectivity"|"exit",run?:boolean,urls?:string[]}`。默认 `run:false` 只读内存缓存，无记录返回 null，绝不联网。显式 `run:true` 才检测。连通性含 Google/Telegram/GitHub/Cloudflare，最多 16 个自定义 HTTPS URL；不接受账号、片段或强制组参数。网址存桌面偏好 `diagnostic_urls`，不是客户端核心文档。
+- 每主机仅一轮，最多四个并发项，每项总计八秒（含该服务多个端点/重定向/响应体）；最多 2 MiB 响应体（Netflix 为 4 MiB）、64 KiB 响应头。不登录、不使用 Cookie/用户凭据，不跟随跨主机或降级 HTTP 的跳转。公开地址仅在主动点击后访问。8 秒不是整个批次预算：最多 20 个连通性目标约 40 秒；IPC 上限 Go 70 秒、Rust 75 秒。
 - 所有检测从 Kat 本地 SOCKS 入口进入真实路由。私有注册使用已打开套接字源二元组，不允许 IPC 或 HTTP/SOCKS 头伪造。返回实际连接 `rule`、`chain`、最终 `node`；服务子请求出口不一致则失败。出口 IP 固定使用 Cloudflare trace，规则顺序前五个不同组（最后补 final），私有强制组只作用于这条自有套接字，不改变用户 selected/fixed、模式、测速历史。
 - 返回 `{at,items:[{name,result,region?,reason?,rule?,chain,node?,http_status?,duration_ms,ip?}]}`。解锁 result=`unlocked|blocked|originals|unknown|challenge|failed`；连通性/出口成功为 `ok`。地区未知显示“—”；可悬停查看判定原因。结果以私有、最多 1 MiB/类别的原子文件缓存到下一轮成功检测，跨应用重启保留；不随配置改变自动重测；时间明确标注“上次检测”。检测只代表匿名公开页面的地区信号，不代表账号、付款或实际播放权。
 - 解锁项目为 ChatGPT、Gemini、Google、Netflix 四项。Gemini 与 Google 搜索验证码判据参考用户的 `service-unlock` v0.5.8；具体端点与边界见 `internal/clientdiag/TESTS.md`。地区等辅助信息缺失不改变已取得的主页面结论；Gemini 页面地区配置本身为主判据，缺失时仍为未知。不以 WAF/登录失败猜地区，也不以 Netflix 单片缺失猜“仅自制剧”。

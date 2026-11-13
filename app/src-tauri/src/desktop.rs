@@ -216,9 +216,9 @@ async fn select_file(app:tauri::AppHandle,kind:crate::windows::dialogs::Kind)->R
  rx.await.map_err(|_|Error::new("FILE_DIALOG","Native dialog interrupted"))?
 }
 #[tauri::command]
-async fn document_import(app:tauri::AppHandle)->Result<Option<crate::backups::ImportedDocument>>{{let a=app.clone();let result=crate::windows::dialogs::import(select_file(app,crate::windows::dialogs::Kind::Import).await?);a.state::<Host>().record(crate::safe_log::HostEvent::Import,&result);result}}
+async fn document_import(app:tauri::AppHandle)->Result<Option<crate::document_files::ImportedDocument>>{{let a=app.clone();let result=crate::windows::dialogs::import(select_file(app,crate::windows::dialogs::Kind::Import).await?);a.state::<Host>().record(crate::safe_log::HostEvent::Import,&result);result}}
 #[tauri::command]
-async fn document_export(app:tauri::AppHandle,state:tauri::State<'_,Host>)->Result<crate::backups::Saved>{
+async fn document_export(app:tauri::AppHandle,state:tauri::State<'_,Host>)->Result<crate::document_files::Saved>{
  let _guard=state.control.lock().await;
  let core=state.core.as_ref().ok_or_else(||state.core_error.clone())?;
  let reply=core.request("document.get",Value::Null,Duration::from_secs(5)).await?;
@@ -227,14 +227,7 @@ async fn document_export(app:tauri::AppHandle,state:tauri::State<'_,Host>)->Resu
  let result=crate::windows::dialogs::save_document(path,&saved);state.record(crate::safe_log::HostEvent::Export,&result);result
 }
 #[tauri::command]
-async fn backup_list(state:tauri::State<'_,Host>)->Result<crate::backups::BackupList>{let _guard=state.control.lock().await;let result=async{let list=crate::backups::list(&state.store)?;let c=state.core.as_ref().ok_or_else(||state.core_error.clone())?;
- for item in &list.items{let b=crate::backups::read(&state.store,&item.id)?;let v=c.request("document.validate",serde_json::json!({"text":b.text,"format":b.format}),Duration::from_secs(5)).await?;crate::document::ValidatedDocument::from_reply(&b.text,b.format,&v)?;}Ok(list)}.await;state.record(crate::safe_log::HostEvent::Backups,&result);result}
-#[tauri::command]
-async fn backup_read(state:tauri::State<'_,Host>,id:String)->Result<crate::backups::BackupRead>{let _guard=state.control.lock().await;let result=async{let b=crate::backups::read(&state.store,&id)?;let c=state.core.as_ref().ok_or_else(||state.core_error.clone())?;let v=c.request("document.validate",serde_json::json!({"text":b.text,"format":b.format}),Duration::from_secs(5)).await?;crate::document::ValidatedDocument::from_reply(&b.text,b.format,&v)?;Ok(b)}.await;state.record(crate::safe_log::HostEvent::Backups,&result);result}
-#[tauri::command]
-async fn document_preserve_dns(state:tauri::State<'_,Host>,text:String,format:crate::document::DocumentFormat)->Result<crate::backups::Saved>{let _control=state.control.lock().await;state.ensure_not_app_restarting()?;let core=state.core.as_ref().ok_or_else(||state.core_error.clone())?;let reply=core.request("document.validate",serde_json::json!({"text":text,"format":format}),Duration::from_secs(5)).await?;if reply["advanced_dns"]!=true{return Err(Error::new("INVALID_PARAMS","Only retired DNS source can be preserved by this operation"));}let validated=crate::document::ValidatedDocument::from_reply(&text,format,&reply)?;crate::backups::snapshot_validated(&state.store,&validated)?;Ok(crate::backups::Saved{saved:true})}
-#[tauri::command]
-fn workspace_open(state:tauri::State<'_,Host>)->Result<crate::backups::Opened>{let result=crate::windows::dialogs::workspace_open(&state.store);state.record(crate::safe_log::HostEvent::Workspace,&result);result}
+fn workspace_open(state:tauri::State<'_,Host>)->Result<crate::document_files::Opened>{let result=crate::windows::dialogs::workspace_open(&state.store);state.record(crate::safe_log::HostEvent::Workspace,&result);result}
 async fn diagnostic(state:&Host)->crate::diagnostics::DiagnosticReply{
  let mut reply=crate::diagnostics::DiagnosticReply::new(state.events.lock().unwrap().entries());
  match state.network.status().await{Ok(v)=>match serde_json::to_value(v){Ok(v)=>reply.network(&v),Err(_)=>reply.error("DIAGNOSTIC_FIELD_REJECTED")},Err(e)=>reply.error(&e.code)}
@@ -250,7 +243,7 @@ async fn diagnostic(state:&Host)->crate::diagnostics::DiagnosticReply{
 #[tauri::command]
 async fn diagnostics_get(state:tauri::State<'_,Host>)->Result<crate::diagnostics::DiagnosticReply>{Ok(diagnostic(&state).await)}
 #[tauri::command]
-async fn diagnostics_export(app:tauri::AppHandle,state:tauri::State<'_,Host>)->Result<crate::backups::Saved>{let path=select_file(app,crate::windows::dialogs::Kind::DiagnosticExport).await?;if path.is_none(){return Ok(crate::backups::Saved{saved:false});}let mut reply=diagnostic(&state).await;reply.bound_export();let bytes=serde_json::to_vec_pretty(&reply).map_err(|_|Error::new("DIAGNOSTIC_FIELD_REJECTED","Cannot encode safe diagnostics"))?;let result=crate::windows::dialogs::save(path,&bytes,1024*1024);state.record(crate::safe_log::HostEvent::Diagnostics,&result);result}
+async fn diagnostics_export(app:tauri::AppHandle,state:tauri::State<'_,Host>)->Result<crate::document_files::Saved>{let path=select_file(app,crate::windows::dialogs::Kind::DiagnosticExport).await?;if path.is_none(){return Ok(crate::document_files::Saved{saved:false});}let mut reply=diagnostic(&state).await;reply.bound_export();let bytes=serde_json::to_vec_pretty(&reply).map_err(|_|Error::new("DIAGNOSTIC_FIELD_REJECTED","Cannot encode safe diagnostics"))?;let result=crate::windows::dialogs::save(path,&bytes,1024*1024);state.record(crate::safe_log::HostEvent::Diagnostics,&result);result}
 // Fixed normal-user placement only. Errors are diagnostic; never propagate into network/exit recovery.
 pub(super) fn prepare_uac_window(app:&tauri::AppHandle){show_main(app);if let Some(w)=app.get_webview_window("main"){crate::windows::identity::set_uac_owner(w.hwnd().map(|h|h.0 as isize).unwrap_or(0));}}
 fn save_window_now(app:&tauri::AppHandle){
@@ -417,7 +410,7 @@ pub fn run() {
     match crate::windows::installed_handoff::receive(){Ok(true)=>{},Ok(false)=>return,Err(_)=>{crate::windows::installed_handoff::message("网络服务已安装，但自动打开已安装版失败。原窗口若仍在运行会予以保留；否则请从开始菜单打开 Kat（不要以管理员运行）。");return;}}
     let built=tauri::Builder::default()
 
-    .invoke_handler(tauri::generate_handler![update_recover,update_state,update_check,update_download,update_install,update_cancel,update_settings,update_handoff_reply,update_dismiss,core_request, core_restart, network_status, system_proxy_set, tun_set, network_service_install, network_service_uninstall, window_action, desktop_settings_get, desktop_settings_set, tray_sync, document_import, document_export, backup_list, backup_read, document_preserve_dns, workspace_open, diagnostics_get, diagnostics_export, tray_menu_state, tray_menu_select])
+    .invoke_handler(tauri::generate_handler![update_recover,update_state,update_check,update_download,update_install,update_cancel,update_settings,update_handoff_reply,update_dismiss,core_request, core_restart, network_status, system_proxy_set, tun_set, network_service_install, network_service_uninstall, window_action, desktop_settings_get, desktop_settings_set, tray_sync, document_import, document_export, workspace_open, diagnostics_get, diagnostics_export, tray_menu_state, tray_menu_select])
     .setup(move |app| {
         if let Err(e)=crate::windows::identity::require_normal_user(){if e.code=="GUI_ELEVATED"{crate::windows::identity::leave_elevated_launch();}return Err(Box::<dyn std::error::Error>::from(e));}
         // Static, local-only tray capability; main-local/host-controls are unchanged.

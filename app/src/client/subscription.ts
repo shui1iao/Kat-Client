@@ -104,6 +104,6 @@ export function subscriptionFieldErrors(p:{mode:'remote'|'local';text:string;nam
  const errors:Record<string,string>={};if(p.mode==='remote'){try{const u=new URL(p.text.trim());if(u.protocol!=='https:'||!u.hostname||u.username||u.password||u.hash)throw Error();}catch{errors.url='请输入不含账号密码或片段的 HTTPS 订阅链接';}}
  else if(!p.text.trim())errors.text='请选择文件或粘贴完整 Clash 配置';
  if(new TextEncoder().encode(p.name).length>128||/[\r\n\0]/.test(p.name))errors.name='名称须在 128 字节以内且不能换行';
- if(!['0','follow'].includes(p.interval)&&(!Number.isInteger(Number(p.interval))||Number(p.interval)<60||Number(p.interval)>604800))errors.interval='自动更新间隔须为 1 分钟至 7 天';
+ if(!['0','follow'].includes(p.interval)&&(!Number.isInteger(Number(p.interval))||Number(p.interval)<60||Number(p.interval)>2592000))errors.interval='自动更新间隔须为 1 分钟至 30 天';
  return errors;
 }

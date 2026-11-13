@@ -38,9 +38,24 @@ type TCPConn interface {
 	net.Conn
 	CloseWrite() error
 }
+type ICMPEchoRequest struct {
+	Source, Destination netip.Addr
+	Ident, Sequence     uint16
+	TTL, TOS            uint8
+	DF                  bool
+	Payload             []byte
+	Epoch               uint64
+}
+type ICMPEchoReply struct {
+	Payload []byte
+	TTL     uint8
+}
 type Ingress interface {
 	HandleTCP(context.Context, Flow, TCPConn) error
 	HandleUDP(context.Context, Flow, net.Conn) error
+}
+type ICMPIngress interface {
+	HandleICMP(context.Context, ICMPEchoRequest) (ICMPEchoReply, bool)
 }
 type Config struct {
 	Device    Device
@@ -74,6 +89,7 @@ type Runtime struct {
 	packetID         atomic.Uint32
 	active           map[net.Conn]struct{}
 	pending          int
+	icmpInFlight     int
 	wg               sync.WaitGroup
 	failed, done     chan struct{}
 	dropped          atomic.Uint64

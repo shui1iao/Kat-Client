@@ -1,38 +1,58 @@
 {
-  "candidate": "v0.2.7-release-20261113",
-  "not_published": false,
-  "app_version": "0.2.7",
-  "windows_clientcore_version": "0.8.5",
-  "sequence": 1794580000,
-  "core_source_fingerprint": "672015ec8e0179276872fb2cb90b5212a76051fa77c825c8697e1fc63db7da88",
-  "core_build_commit": "672015ec8e0179276872fb2cb90b5212a76051fa",
-  "source_manifest_sha256": "b19810a534e805aaf94a30c0d6babf10d59f6e72ad1f7decbfa5ab846eb657b8",
+  "candidate": "v0.2.8-windows-core-v0.8.6",
+  "not_published": true,
+  "app_version": "0.2.8",
+  "windows_clientcore_version": "0.8.6",
+  "sequence": 1794587687,
+  "core_source_fingerprint": "cc9a2539de5984cee366aa6b84e4996e684002925679286a524768ffbfedf19d",
+  "core_build_commit": "cc9a2539de5984cee366aa6b84e4996e68400292",
+  "core_build_commit_kind": "exact core source fingerprint first40, not a Git commit",
   "executables": {
     "kat-client-core.exe": {
-      "bytes": 16776192,
-      "sha256": "f5dcaf90e9ee994cdf579fc24a6b0837c6f5b1ddb5a65c158a84747c63972354"
+      "bytes": 16881152,
+      "sha256": "3f86ffb5fcef189e48b8f17daa0c5da5d42eb6e1d67cc4ef7c52f52c161f57a6"
     },
     "kat-desktop.exe": {
-      "bytes": 11859968,
-      "sha256": "85c8b5eedb9c30e9b4822790785e4fd5a27259af9cbab2eee4db73e81f5ddb05"
+      "bytes": 11785728,
+      "sha256": "6d590f85a9d2956075246d3d378551d809e773f67d28b1edd29047895635e49d"
     },
     "kat-elevate-helper.exe": {
       "bytes": 585728,
-      "sha256": "f4c4a7df17f8aa1c99c7f4cdee8e98165115373d8b0f4a9f5c3c5eea260ac119"
+      "sha256": "d751a642d0798d3fa78538c264c79de94fc672b79035668bdeeed393b4fa0361"
     },
     "kat-install-helper.exe": {
       "bytes": 1321984,
-      "sha256": "9fd5c4a2b1425bd3c740e7ffda9a27f27253b46f86bc6ded29c24ac74d516ba0"
+      "sha256": "12257131d04b58b22967eca02ca4bcd397132b54661110fdb9e575fa343d7c67"
     },
     "kat-network-service.exe": {
       "bytes": 1858048,
-      "sha256": "5712672c291d44273f3a8c2472ef2d07d06ef7b1834c252ac93bf0f4791a4aab"
+      "sha256": "da761457ff9b7844a47852cf4e0e45634b7de852f59cb7a0261a7e61c8cbbc02"
     },
     "kat-proxy-watchdog.exe": {
       "bytes": 481280,
-      "sha256": "2cbc294bc8c355b3095a2befa397a2c3b7dacfd3f1b0c905cf79a3cbe5da1fae"
+      "sha256": "274b90d83823541fae96bd62521b1e0565294fc2256af14f32e5d567aa12cd96"
     }
   },
   "signature_key_id": "0afa646ee76f17d8",
-  "validation": "pre-release Go 6-package (489 pass / 0 fail / 31 skip), Rust host (276 pass) & control-contract (11 pass), NSIS (7+8 pass) regression, and product verify_package authentication"
+  "package_auth_sha256": "d847941b1ab0ffd85702777331b6ae72b2b32377819d4a8b5738ea793e27b943",
+  "package_auth_signature_sha256": "75207fac40ee69d5a374b93ee91f727a6f476a99d4c7728121f27b63b9277f21",
+  "source_manifest_sha256": "36cb71207252aefb7c2be66d0cff2d2565cd03b8acbc4de404001204f0faa9ca",
+  "source_manifest_members": 2133,
+  "validation": {
+    "go_effective_top_level_pass": 504,
+    "go_existing_skip": 31,
+    "icmp_additional_top_level_pass": 6,
+    "rust_lib_pass": 268,
+    "rust_existing_ignored": 1,
+    "rust_control_contract_pass": 11,
+    "ts_behavior_pass": 17,
+    "ts_sniff_pass": 3,
+    "nsis_portable_pass": [
+      7,
+      8
+    ],
+    "real_product_package_validator": "passed",
+    "windows_ICMP_API_runtime": "NOTRUN",
+    "historical_snapshot_tests_failed_not_applicable": 8
+  }
 }

@@ -1,4 +1,4 @@
 [[permission]]
 identifier = "host-controls"
 description = "Only Kat's bounded core, network and native-window commands."
-commands.allow = ["update_recover","update_state","update_check","update_download","update_install","update_cancel","update_settings","update_handoff_reply","update_dismiss","core_request","core_restart","tray_sync", "network_status", "system_proxy_set", "tun_set", "network_service_install", "network_service_uninstall", "window_action","desktop_settings_get","desktop_settings_set","document_import","document_export","backup_list","backup_read", "document_preserve_dns","workspace_open","diagnostics_get","diagnostics_export"]
+commands.allow = ["update_recover","update_state","update_check","update_download","update_install","update_cancel","update_settings","update_handoff_reply","update_dismiss","core_request","core_restart","tray_sync", "network_status", "system_proxy_set", "tun_set", "network_service_install", "network_service_uninstall", "window_action","desktop_settings_get","desktop_settings_set","document_import","document_export","workspace_open","diagnostics_get","diagnostics_export"]

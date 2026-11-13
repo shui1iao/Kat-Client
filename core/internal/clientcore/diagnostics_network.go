@@ -37,7 +37,7 @@ type diagnosticReply struct {
 	Items []diagnosticRow `json:"items"`
 }
 
-var connectivityTargets = []struct{ Name, URL string }{{"Google", "https://www.google.com/generate_204"}, {"YouTube", "https://www.youtube.com/"}, {"Telegram", "https://telegram.org/"}, {"GitHub", "https://github.com/"}, {"Cloudflare", "https://www.cloudflare.com/cdn-cgi/trace"}}
+var connectivityTargets = []struct{ Name, URL string }{{"Google", "https://www.google.com/generate_204"}, {"Telegram", "https://telegram.org/"}, {"GitHub", "https://github.com/"}, {"Cloudflare", "https://www.cloudflare.com/cdn-cgi/trace"}}
 
 // Each forwarder owns ONE real local SOCKS TCP socket. The registration is made
 // before SOCKS sends the target and removed when the socket closes. This neither

@@ -22,7 +22,7 @@ import (
 
 const MaxFrame = 2 << 20
 const maxDocument = 1 << 20
-const initialDocument = `{"schema_version":1,"client":{"mode":"rule","global_group":"","probe_url":"https://www.gstatic.com/generate_204","http_port":7890,"socks_port":7891,"ipv6":false},"kernel":{}}` + "\n"
+const initialDocument = `{"schema_version":1,"client":{"mode":"rule","global_group":"","probe_url":"https://www.gstatic.com/generate_204","http_port":7890,"socks_port":7891,"ipv6":false,"sniff":{"enabled":true,"override_destination":true}},"kernel":{}}` + "\n"
 
 type Error struct {
 	Transport *TransportDiagnostic    `json:"transport,omitempty"`
@@ -261,7 +261,9 @@ func parseDocument(text, workspace string, formats ...DocumentFormat) (document,
 		}
 	}
 	inbound := kernel.Inbound{Protocol: "socks5", Listen: portAddress(cl.SOCKSPort), Name: "kat-client"}
-	if cl.Sniff != nil && cl.Sniff.Enabled {
+	if cl.Sniff == nil {
+		inbound.Sniff = &kernel.SniffOptions{Enabled: true, OverrideDestination: true}
+	} else if cl.Sniff.Enabled {
 		var timeout kernel.Duration
 		if cl.Sniff.Timeout != "" {
 			_ = timeout.UnmarshalJSON([]byte(strconv.Quote(cl.Sniff.Timeout)))

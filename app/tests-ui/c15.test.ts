@@ -13,7 +13,7 @@ test('c15 sniff milliseconds accept range and empty default, retain optional fie
  assert.equal(sniffTimeoutInput(), '');assert.equal(sniffTimeoutInput('0s'),'');assert.equal(sniffTimeoutInput('1s500ms'),'1500');
  const cur={enabled:true,override_destination:true,tcp_ports:'none',udp_ports:'443',timeout:'1.5s'};
  const off=patchSniff(cur,{enabled:false});assert.deepEqual(off,{...cur,enabled:false});assert.deepEqual(patchSniff(off,{enabled:true}),cur);
- assert.deepEqual(patchSniff(undefined,{}),{enabled:false,override_destination:false});assert.equal(patchSniff(cur,{timeout:undefined}).timeout,undefined);
+ assert.deepEqual(patchSniff(undefined,{}),{enabled:true,override_destination:true});assert.equal(patchSniff(cur,{timeout:undefined}).timeout,undefined);
 });
 test('c15 edits only selected sniff field, never materializes defaults or changes raw large integer',()=>{
  const raw=' {"schema_version":1,"client":{"mode":"rule","sniff":{"enabled":false,"override_destination":false,"tcp_ports":"none"}},"kernel":{"advanced":9007199254740993}}\n';

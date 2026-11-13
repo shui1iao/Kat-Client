@@ -113,7 +113,7 @@ func parseSubscriptionUserInfo(s string) *subscriptionUserInfo {
 }
 func parseSubscriptionInterval(s string) int {
 	hours, e := strconv.ParseUint(strings.TrimSpace(s), 10, 32)
-	if e != nil || hours == 0 || hours > 168 {
+	if e != nil || hours == 0 || hours > 720 {
 		return 0
 	}
 	return int(hours) * 3600
