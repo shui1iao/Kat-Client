@@ -1,0 +1,352 @@
+/* ==========================================================================
+   Kat Desktop — Precision Desktop Network Instrument
+   Design Tokens, Theme Palettes, Native Acrylic & Accessibility Gates
+   ========================================================================== */
+
+@font-face {
+  font-family: "Twemoji Country Flags";
+  src: url("/fonts/TwemojiCountryFlags.woff2") format("woff2");
+  font-weight: 100 600;
+  font-display: swap;
+  unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E007F;
+}
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #23272E;
+  --bg: var(--canvas);
+  --window-material: var(--canvas);
+  --side-bg: transparent;
+  --card: rgba(42, 49, 62, 0.72);
+  --card-2: rgba(255, 255, 255, 0.055);
+  --pop: #2C333F;
+  --hover: rgba(255, 255, 255, 0.085);
+  --press: rgba(255, 255, 255, 0.13);
+  --hig-thumb: #49505B;
+  --hig-selected: color-mix(in srgb, var(--accent) 13%, transparent);
+  --accent-text: #A9CBFF;
+  --line: rgba(255, 255, 255, 0.065);
+  --line-2: rgba(255, 255, 255, 0.11);
+  --line-3: rgba(255, 255, 255, 0.18);
+  --text: #F5F7FA;
+  --text-2: #D5DDE8;
+  --text-3: #9FAAB9;
+  --accent: #4C8DFF;
+  --accent-hover: #3B7EEF;
+  --accent-soft: rgba(76, 141, 255, 0.14);
+  --accent-line: rgba(76, 141, 255, 0.38);
+  --on-accent: #FFFFFF;
+  --down: #4C8DFF;
+  --up: #F2A33A;
+  --ok: #3FB950;
+  --ok-soft: rgba(63, 185, 80, 0.15);
+  --warn: #E09F24;
+  --warn-soft: rgba(224, 159, 36, 0.15);
+  --bad: #F85149;
+  --bad-soft: rgba(248, 81, 73, 0.14);
+  --track: rgba(255, 255, 255, 0.10);
+  --card-border: 1px solid rgba(255, 255, 255, 0.065);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-pop: 0 10px 28px rgba(0, 0, 0, 0.42), 0 1px 3px rgba(0, 0, 0, 0.30);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.54);
+  --mask: rgba(0, 0, 0, 0.40);
+  --scroll: rgba(255, 255, 255, 0.16);
+  --scroll-hover: rgba(255, 255, 255, 0.28);
+  --tk-k: #79C0FF;
+  --tk-s: #7EE787;
+  --tk-n: #FFA657;
+  --tk-b: #FF7B72;
+  --code: #F5F7FA;
+  --gutter: #8E9BAE;
+  --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m1.5 1.75 4.5 4.5 4.5-4.5' fill='none' stroke='%239FAAB9' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --canvas: #E4E9F0;
+  --bg: var(--canvas);
+  --window-material: var(--canvas);
+  --side-bg: transparent;
+  --card: rgba(255, 255, 255, 0.66);
+  --card-2: rgba(28, 36, 48, 0.045);
+  --pop: #FBFBFC;
+  --hover: rgba(28, 36, 48, 0.075);
+  --press: rgba(28, 36, 48, 0.11);
+  --hig-thumb: rgba(255, 255, 255, 0.88);
+  --hig-selected: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-text: #0057B3;
+  --line: rgba(20, 26, 35, 0.06);
+  --line-2: rgba(20, 26, 35, 0.11);
+  --line-3: rgba(20, 26, 35, 0.18);
+  --text: #1D1D1F;
+  --text-2: #3C3C43;
+  --text-3: #5F6368;
+  --accent: #0071E3;
+  --accent-hover: #0062C7;
+  --accent-soft: rgba(0, 113, 227, 0.09);
+  --accent-line: rgba(0, 113, 227, 0.32);
+  --on-accent: #FFFFFF;
+  --down: #0071E3;
+  --up: #D97706;
+  --ok: #16A34A;
+  --ok-soft: rgba(22, 163, 74, 0.11);
+  --warn: #C26A0A;
+  --warn-soft: rgba(194, 106, 10, 0.11);
+  --bad: #DC2626;
+  --bad-soft: rgba(220, 38, 38, 0.09);
+  --track: rgba(28, 36, 48, 0.085);
+  --card-border: 1px solid rgba(20, 26, 35, 0.06);
+  --shadow-card: 0 1px 2px rgba(20, 26, 35, 0.04);
+  --shadow-pop: 0 8px 24px rgba(15, 20, 30, 0.14), 0 1px 3px rgba(15, 20, 30, 0.08);
+  --shadow-modal: 0 24px 64px rgba(15, 23, 42, 0.18);
+  --mask: rgba(15, 23, 42, 0.22);
+  --scroll: rgba(20, 26, 35, 0.16);
+  --scroll-hover: rgba(20, 26, 35, 0.28);
+  --tk-k: #0B5CAD;
+  --tk-s: #1F7A3A;
+  --tk-n: #9A5B00;
+  --tk-b: #B4233C;
+  --code: #1D1D1F;
+  --gutter: #5F6368;
+  --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m1.5 1.75 4.5 4.5 4.5-4.5' fill='none' stroke='%235F6368' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+:root {
+  --font: "Twemoji Country Flags", "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
+  --mono: "Twemoji Country Flags", "Cascadia Mono", "JetBrains Mono", "Consolas", ui-monospace, monospace;
+  --r-card: 12px;
+  --r-ctl: 8px;
+  --r-chip: 5px;
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --t-fast: 0.12s;
+  --t: 0.18s;
+  --t-slow: 0.22s;
+}
+
+/* Windows 11 Native Acrylic Gate (matches v0.2.4 translucent window + frosted cards) */
+:root[data-native-acrylic="enabled"] {
+  --window-material: rgba(20, 28, 42, 0.46);
+  --card: rgba(38, 45, 58, 0.60);
+  --side-bg: transparent;
+}
+:root[data-native-acrylic="enabled"][data-theme="light"] {
+  --window-material: rgba(238, 242, 248, 0.44);
+  --card: rgba(255, 255, 255, 0.58);
+  --side-bg: transparent;
+}
+:root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"] {
+  --window-material: rgba(22, 31, 48, 0.72);
+  --card: rgba(40, 46, 58, 0.75);
+  --side-bg: transparent;
+}
+:root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"][data-theme="light"] {
+  --window-material: rgba(245, 246, 248, 0.72);
+  --card: rgba(252, 252, 253, 0.76);
+  --side-bg: transparent;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-native-acrylic][data-theme],
+  :root[data-native-acrylic][data-native-acrylic-focus][data-theme] {
+    --window-material: var(--canvas);
+  }
+  :root[data-native-acrylic="enabled"]:not([data-theme="light"]) {
+    --card: rgba(42, 49, 62, 0.72);
+  }
+  :root[data-native-acrylic="enabled"][data-theme="light"] {
+    --card: rgba(255, 255, 255, 0.66);
+  }
+}
+
+/* Hidden Window Power-Saving Gate */
+:root[data-kat-window-hidden="true"] *,
+:root[data-kat-window-hidden="true"] *::before,
+:root[data-kat-window-hidden="true"] *::after {
+  animation-play-state: paused !important;
+  transition: none !important;
+}
+
+/* Base Reset & Typography */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  background: transparent;
+}
+
+body {
+  font: 400 13px/1.45 var(--font);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+}
+
+b,
+strong {
+  font-weight: 500;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+.num,
+time {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.muted,
+.dim {
+  color: var(--text-3);
+}
+
+.ell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.r {
+  text-align: right;
+  justify-self: end;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--scroll);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scroll-hover);
+}
+
+::-webkit-scrollbar-corner,
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Focus Modality */
+:root[data-input="pointer"] :is(button, input, select, textarea, a, [tabindex]):focus {
+  outline: none;
+}
+
+:root:not([data-input="pointer"]) :is(button, input, select, textarea, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@keyframes kat-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin svg {
+  animation: kat-spin 0.9s linear infinite;
+}
+
+/* Forced Colors High-Contrast Mode */
+@media (forced-colors: active) {
+  :root,
+  :root[data-theme],
+  :root[data-native-acrylic="enabled"][data-native-acrylic-focus],
+  :root[data-native-acrylic="enabled"][data-native-acrylic-focus][data-theme] {
+    --window-material: Canvas;
+    --side-bg: Canvas;
+    --card: Canvas;
+    --card-2: Canvas;
+    --pop: Canvas;
+    --hover: Highlight;
+    --press: Highlight;
+  }
+  html,
+  body,
+  #root,
+  .app {
+    background: Canvas;
+    color: CanvasText;
+  }
+  select,
+  select.inp {
+    appearance: auto;
+    background-image: none;
+  }
+  .card,
+  .modal,
+  .kat-pop,
+  .kat-tip,
+  .tip,
+  .toast,
+  .mode-seg,
+  .net-card,
+  .inp,
+  .search,
+  .btn {
+    background: Canvas;
+    border: 1px solid ButtonText;
+    box-shadow: none;
+  }
+  :root:not([data-input="pointer"]) :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}

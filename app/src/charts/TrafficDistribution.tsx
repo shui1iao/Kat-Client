@@ -1,17 +1,97 @@
-import { useState, type CSSProperties } from 'react';
-import { Donut } from './Donut';
+import { useState } from 'react';
 import { ChartTip, type TipAnchor } from './ChartTip';
 import { showBytes, trafficPercent } from '../client/display';
-export interface TrafficSlice { label:string; value:number; color:string; up?:number|null; down?:number|null }
-export function TrafficDistribution({items}:{items:TrafficSlice[]}) {
-  const [hover,setHover]=useState<{index:number;anchor:TipAnchor}|null>(null);
-  const total=items.reduce((s,i)=>s+i.value,0),active=hover?items[hover.index]:undefined;
-  const percent=(value:number)=>trafficPercent(value,total);
-  // Preserve the formatter's exact digits; only separate its unit for the ring's safe center.
-  const formatted=items.length?showBytes(total):'—',split=formatted.lastIndexOf(' ');
-  const value=split<0?formatted:formatted.slice(0,split),unit=split<0?'':formatted.slice(split+1);
-  return <div className="donut-wrap"><Donut items={items} size={120} stroke={12} active={hover?.index??null} onHover={(index,anchor)=>setHover(index==null||!anchor?null:{index,anchor})} center={<><b className="num" style={{'--donut-value-scale':Math.min(1,7/value.length)} as CSSProperties}>{value}</b><span>{items.length?`${unit} · 累计`:'无数据'}</span></>}/>
-    {items.length?<ul className="donut-legend">{items.map((g,index)=><li key={g.label} tabIndex={0} className={hover?.index===index?'is-hovered':''} aria-label={`${g.label} 下载 ${showBytes(g.down)}，上传 ${showBytes(g.up)}，合计 ${showBytes(g.value)}，占 ${percent(g.value)}`} onMouseMove={e=>setHover({index,anchor:{target:e.currentTarget,x:e.clientX,y:e.clientY}})} onMouseLeave={()=>setHover(null)} onFocus={e=>setHover({index,anchor:{target:e.currentTarget}})} onBlur={()=>setHover(null)}><i style={{background:g.color}}/><span>{g.label}</span><b className="num">{percent(g.value)}</b></li>)}</ul>:<div className="empty distribution-empty">无数据</div>}
-    {active&&<ChartTip anchor={hover!.anchor} title={<><i style={{background:active.color}}/>{active.label}</>}><div><i style={{background:'var(--down)'}}/>下载<b>{showBytes(active.down)}</b></div><div><i style={{background:'var(--up)'}}/>上传<b>{showBytes(active.up)}</b></div><div className="chart-tip-total">合计<b>{showBytes(active.value)} · {percent(active.value)}</b></div></ChartTip>}
-  </div>;
+
+export interface TrafficSlice {
+  label: string;
+  value: number;
+  color: string;
+  up?: number | null;
+  down?: number | null;
+}
+
+export function TrafficDistribution({ items }: { items: TrafficSlice[] }) {
+  const [hover, setHover] = useState<{ index: number; anchor: TipAnchor } | null>(null);
+  const total = items.reduce((s, i) => s + i.value, 0);
+
+  if (!items.length || total <= 0) {
+    return <div className="empty distribution-empty">暂无流量记录</div>;
+  }
+
+  const top = items.slice(0, 4);
+  const rest = items.slice(4);
+  const folded: TrafficSlice[] = rest.length
+    ? [
+        ...top,
+        {
+          label: '其他策略',
+          value: rest.reduce((s, x) => s + x.value, 0),
+          up: rest.reduce((s, x) => s + (x.up ?? 0), 0),
+          down: rest.reduce((s, x) => s + (x.down ?? 0), 0),
+          color: '#8A94A3',
+        },
+      ]
+    : top;
+
+  const active = hover ? folded[hover.index] : undefined;
+  const percent = (v: number) => trafficPercent(v, total);
+
+  return (
+    <div className="share-wrap">
+      <div className="share-bar" role="img" aria-label="策略组流量占比">
+        {folded.map((g, i) => (
+          <i
+            key={g.label}
+            style={{
+              background: g.color,
+              width: `${Math.max(1.5, (g.value / total) * 100)}%`,
+              opacity: hover && hover.index !== i ? 0.45 : 1,
+            }}
+          />
+        ))}
+      </div>
+      <ul className="share-list">
+        {folded.map((g, index) => (
+          <li
+            key={g.label}
+            tabIndex={0}
+            className={'share-row' + (hover?.index === index ? ' is-hovered' : '')}
+            aria-label={`${g.label} 下载 ${showBytes(g.down)}，上传 ${showBytes(g.up)}，合计 ${showBytes(g.value)}，占 ${percent(g.value)}`}
+            onMouseMove={(e) => setHover({ index, anchor: { target: e.currentTarget, x: e.clientX, y: e.clientY } })}
+            onMouseLeave={() => setHover(null)}
+            onFocus={(e) => setHover({ index, anchor: { target: e.currentTarget } })}
+            onBlur={() => setHover(null)}
+          >
+            <span className="share-swatch" style={{ background: g.color }} />
+            <span className="share-name">{g.label}</span>
+            <span className="share-bytes num">{showBytes(g.value)}</span>
+            <span className="share-pct num">{percent(g.value)}</span>
+          </li>
+        ))}
+      </ul>
+      {active && (
+        <ChartTip
+          anchor={hover!.anchor}
+          title={
+            <>
+              <i style={{ background: active.color }} />
+              {active.label}
+            </>
+          }
+        >
+          <div>
+            <i style={{ background: 'var(--down)' }} />
+            下载<b>{showBytes(active.down)}</b>
+          </div>
+          <div>
+            <i style={{ background: 'var(--up)' }} />
+            上传<b>{showBytes(active.up)}</b>
+          </div>
+          <div className="chart-tip-total">
+            合计<b>{showBytes(active.value)} · {percent(active.value)}</b>
+          </div>
+        </ChartTip>
+      )}
+    </div>
+  );
 }

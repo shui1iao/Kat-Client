@@ -1,8 +1,8 @@
-# Kat-Client v0.2.4
+# Kat-Client v0.2.7
 
-Windows x64 客户端正式版 `v0.2.4`（内置 Windows Core `v0.8.3`，在线更新 sequence `1794300038`）。下载 Release 中的 `Kat-Setup-x64.exe` 安装，或通过客户端内置在线更新升级。
+Windows x64 客户端正式版 `v0.2.7`（内置 Windows Core `v0.8.5`，在线更新 sequence `1794580000`）。下载 Release 中的 `Kat-Setup-x64.exe` 安装，或通过客户端内置在线更新升级。
 
-本版重点优化 Windows 数据面吞吐、CPU 效率与连接延迟（系统代理直通内核转发、TUN UDP 端口身份租约缓存与逐包热路径减重、TUN TCP SACK 恢复与缓冲对齐、隐藏窗口渲染暂停），并同步调整首页数据展示与纯目标规则预判。具体变化与限制见 [RELEASE_NOTES.md](RELEASE_NOTES.md)。Windows Core 单独发布在 Kat-Server 的 `windows-core-v0.8.3`，不改变 Linux 服务端 `v0.8.1`，也不自动部署任何节点。
+本版重构全站桌面界面与交互层级，恢复微透 Acrylic 卡片材质与统一色彩体系，优化默认窗口 `3:2`（`1080×720`）屏幕占比保护、策略组手风琴展开与双层图标识别、Smart 自动命中虚线框与手动固定实线框区分、单列连接行内展开、圆角自定义下拉菜单，并大幅提速客户端与内核启动（建窗与内核并行启动、多核并发解析路由资源、首屏非阻塞水合）及修复 `--autostart` 开机静默启动进托盘。具体变化与限制见 [RELEASE_NOTES.md](RELEASE_NOTES.md)。Windows Core 单独发布在 Kat-Server 的 `windows-core-v0.8.5`，不改变 Linux 服务端 `v0.8.1`，也不自动部署任何节点。
 
 ## 权利
 Source-available，不是 MIT 开源。Kat 自研代码保留所有权利，不授予通用使用、修改或再分发许可。第三方/上游原许可及其源码义务不变，见 [RIGHTS.md](RIGHTS.md)、`core/THIRD_PARTY_NOTICES.md` 及 `app` 中的许可材料。

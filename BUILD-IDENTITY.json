@@ -1,38 +1,38 @@
 {
-  "candidate": "v0.2.4-release-20261113",
+  "candidate": "v0.2.7-release-20261113",
   "not_published": false,
-  "app_version": "0.2.4",
-  "windows_clientcore_version": "0.8.3",
-  "sequence": 1794300038,
-  "core_source_fingerprint": "58f7520a9fb6e28d27ccf28450ee33e2958d3c7ba0bc8671ff003f1b42244a01",
-  "core_build_commit": "58f7520a9fb6e28d27ccf28450ee33e2958d3c7b",
-  "source_manifest_sha256": "6b7bd6f9a86a7036f4942f577505cfbf750bd5603f94f80987bb51100daa9c22",
+  "app_version": "0.2.7",
+  "windows_clientcore_version": "0.8.5",
+  "sequence": 1794580000,
+  "core_source_fingerprint": "672015ec8e0179276872fb2cb90b5212a76051fa77c825c8697e1fc63db7da88",
+  "core_build_commit": "672015ec8e0179276872fb2cb90b5212a76051fa",
+  "source_manifest_sha256": "b19810a534e805aaf94a30c0d6babf10d59f6e72ad1f7decbfa5ab846eb657b8",
   "executables": {
     "kat-client-core.exe": {
-      "bytes": 16769536,
-      "sha256": "7f5630833b2bc2084f36063ab86b35caffe78243c4fdc48c63588ca1b80808eb"
+      "bytes": 16776192,
+      "sha256": "f5dcaf90e9ee994cdf579fc24a6b0837c6f5b1ddb5a65c158a84747c63972354"
     },
     "kat-desktop.exe": {
-      "bytes": 11873280,
-      "sha256": "860b6ba62e75891af0f37be464ad20e6c3cced9c59fbc920bec3b7e068011de8"
+      "bytes": 11859968,
+      "sha256": "85c8b5eedb9c30e9b4822790785e4fd5a27259af9cbab2eee4db73e81f5ddb05"
     },
     "kat-elevate-helper.exe": {
       "bytes": 585728,
-      "sha256": "290289939d144308f41877ea81e91c3bb40d8a79c9b686d4a2c93758a5043493"
+      "sha256": "f4c4a7df17f8aa1c99c7f4cdee8e98165115373d8b0f4a9f5c3c5eea260ac119"
     },
     "kat-install-helper.exe": {
       "bytes": 1321984,
-      "sha256": "d610e405838728f432dd5efd47018dded5230ea3eb6da996befcd19ccd2f6ecb"
+      "sha256": "9fd5c4a2b1425bd3c740e7ffda9a27f27253b46f86bc6ded29c24ac74d516ba0"
     },
     "kat-network-service.exe": {
       "bytes": 1858048,
-      "sha256": "9698bcdae805db7b216c0a02cd4901488cd61340bc417e3c3abdd4d1f932a55f"
+      "sha256": "5712672c291d44273f3a8c2472ef2d07d06ef7b1834c252ac93bf0f4791a4aab"
     },
     "kat-proxy-watchdog.exe": {
       "bytes": 481280,
-      "sha256": "33d98a92ee0ce1bbe55fe77d0af831e424af40f188808893ef7af71b74a14c73"
+      "sha256": "2cbc294bc8c355b3095a2befa397a2c3b7dacfd3f1b0c905cf79a3cbe5da1fae"
     }
   },
   "signature_key_id": "0afa646ee76f17d8",
-  "validation": "pre-release Go/Rust/NSIS regression, Windows 11 full Setup+UAC & 60-cell multi-protocol runtime verification, and package safety authentication"
+  "validation": "pre-release Go 6-package (489 pass / 0 fail / 31 skip), Rust host (276 pass) & control-contract (11 pass), NSIS (7+8 pass) regression, and product verify_package authentication"
 }

@@ -99,6 +99,7 @@ export function useClient() {
     try {
       s=await core<CoreStatus>('status');
       if(s.runtime.state==='running'){
+        if(!coreReachable.current&&active(life)&&request===statusRequest.current){coreReachable.current=true;setStatus(s);}
         try { s=withConnectionSnapshot(s,await core<ConnectionsReply>('connections.list',{closed_limit:1})); }
         catch(e) {
           if(active(life)&&request===statusRequest.current)observeUncertain(e);
@@ -162,13 +163,15 @@ export function useClient() {
       if (doc.uncertain) await reconcileAccepted();
       else if (doc.saved === null) {
         const reply=await core<DocumentReply>('document.get');
-        try{hydrateIcons(await core<Record<string,string>>('icon.cached'));}catch{/* missing cache never blocks accepted configuration */}
         if(!active(life))return;
         if(doc.uncertain)await reconcileAccepted();else if(doc.saved===null)doc.load(reply);
-        // Startup-only background refresh: core instantly returns fresh or stale
-        // disk data, refreshing expired bytes without blanking the visible map.
-        void (async()=>{const seen=new Set<string>();for(const g of doc.source?.kernel.groups??[]){if(!active(life))break;if(!g.icon||seen.has(g.icon)||!cachedIcon(g.icon))continue;seen.add(g.icon);try{const r=await core<{data_uri:string}>('icon.get',{url:g.icon,group:g.name});if(active(life))hydrateIcons({[g.icon]:r.data_uri});}catch{/* quiet icon task */}}})();
-
+        // Load disk/remote group icons asynchronously after publishing accepted config
+        // so large icon caches never block first-screen rendering or status refresh.
+        void (async()=>{
+          try{const cached=await core<Record<string,string>>('icon.cached');if(active(life)){hydrateIcons(cached);redraw(x=>x+1);}}catch{/* missing cache never blocks accepted configuration */}
+          const seen=new Set<string>();
+          for(const g of doc.source?.kernel.groups??[]){if(!active(life))break;if(!g.icon||seen.has(g.icon)||!cachedIcon(g.icon))continue;seen.add(g.icon);try{const r=await core<{data_uri:string}>('icon.get',{url:g.icon,group:g.name});if(active(life)){hydrateIcons({[g.icon]:r.data_uri});redraw(x=>x+1);}}catch{/* quiet icon task */}}
+        })();
       }
       if(active(life)){
        for(const p of [...(doc.source?.kernel.providers??[])]){if(!active(life))break;await migrateOne(p.name);}
@@ -176,11 +179,14 @@ export function useClient() {
        await refreshSubscriptionResults();
       }
     },e=>setErrorState(errorText(e)));
-    if (active(life)&&hasHost()) try { await refreshDesktop(); } catch(e) { if(active(life))setErrorState(errorText(e)); }
-    if (active(life)&&hasHost()) try { await refreshNetwork(); } catch (e) { if(active(life))setErrorState(errorText(e)); }
   }
   useEffect(() => {
     mounted.current=true;
+    if (hasHost()) {
+      void refreshDesktop().catch(e=>{if(mounted.current)setErrorState(errorText(e));});
+      void refreshNetwork().catch(e=>{if(mounted.current)setErrorState(errorText(e));});
+      void refreshStatus().catch(()=>{/* connect() owns startup error reporting */});
+    }
     void connect();
     if (!hasHost()) return () => { mounted.current=false;lifetime.current++; };
     let live = true, polling = false;

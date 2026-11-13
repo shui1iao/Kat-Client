@@ -15,7 +15,19 @@ export function nodeRows(source: DocumentSource | null, runtime: CoreStatus['nod
   const rows = configured.map(value => {
     configuredNames.add(value.name);
     const subName = ownerByName.get(value.name);
-    return { name: value.name, type: value.type, source: subName ?? '手动', manual: subName !== undefined ? undefined : value, copy: value };
+    return {
+      name: value.name,
+      type: value.type,
+      address: value.server && value.port ? `${value.server}:${value.port}` : undefined,
+      source: subName ?? '手动',
+      manual: subName !== undefined ? undefined : value,
+      copy: value,
+    };
   });
-  return [...rows, ...runtime.filter(n => !configuredNames.has(n.name)).map(n => ({...n, manual: undefined, copy: undefined}))];
+  return [
+    ...rows,
+    ...runtime
+      .filter((n) => !configuredNames.has(n.name))
+      .map((n) => ({ ...n, address: undefined, manual: undefined, copy: undefined })),
+  ];
 }

@@ -47,13 +47,12 @@ export function Segmented<T extends string>({ value, options, onChange, size }: 
   );
 }
 
-// String titles carry their colour-coded glyph (transparent, no tile); rich titles render as given.
-export function Card({ title, icon, extra, className, children }: { title?: ReactNode; icon?: string; extra?: ReactNode; className?: string; children?: ReactNode }) {
+export function Card({ title, extra, className, children }: { title?: ReactNode; icon?: string; extra?: ReactNode; className?: string; children?: ReactNode }) {
   return (
     <section className={'card ' + (className ?? '')}>
       {(title || extra) && (
         <header className="card-h">
-          {title && <h3>{typeof title === 'string' && icon && <span className={'card-glyph g-' + icon} aria-hidden="true"><Icon name={icon} size={16} /></span>}{title}</h3>}
+          {title && <h3>{title}</h3>}
           {extra && <div className="card-x">{extra}</div>}
         </header>
       )}

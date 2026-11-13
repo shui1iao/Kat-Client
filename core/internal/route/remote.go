@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -24,6 +25,7 @@ type source struct {
 	updateSlot chan struct{}
 	metaMu     sync.Mutex
 	metadata   ResourceView
+	inheritErr error
 	value      any    // immutable parsed value, retained by resource-only generations
 	kind       string // "rule_set" | "geoip" | "geosite" | "asn"
 	name       string // rule set name ("" for geoip)
@@ -133,39 +135,130 @@ func readLimited(path string, max int) ([]byte, os.FileInfo, error) {
 	return b, fi, nil
 }
 
-// loadLocal loads the source's file at startup (Engine.mu held). A missing
-// file is silent when a url will fetch it; every other failure is an event.
-func (e *Engine) loadLocal(s *source) {
+type preloadedSource struct {
+	b        []byte
+	fi       os.FileInfo
+	readErr  error
+	key      string
+	val      any
+	parseErr error
+}
+
+func preloadLocal(s *source) preloadedSource {
 	b, fi, err := readLimited(s.path, s.maxBytes)
 	if err != nil {
+		return preloadedSource{readErr: err}
+	}
+	key := cacheKey(s, b)
+	v := cacheGet(s.path, key)
+	if v == nil {
+		v, err = s.parse(b)
+		if err != nil {
+			return preloadedSource{b: b, fi: fi, key: key, parseErr: err}
+		}
+	}
+	return preloadedSource{b: b, fi: fi, key: key, val: v}
+}
+
+func (e *Engine) commitPreloaded(s *source, p preloadedSource) {
+	if p.readErr != nil {
 		switch {
-		case errors.Is(err, fs.ErrNotExist):
+		case errors.Is(p.readErr, fs.ErrNotExist):
 			if s.url == "" {
 				e.failed(s, classMissing)
 			}
-		case errors.Is(err, errTooLarge):
+		case errors.Is(p.readErr, errTooLarge):
 			e.failed(s, classTooLarge)
 		default:
 			e.failed(s, classRead)
 		}
 		return
 	}
-	key := cacheKey(s, b)
-	v := cacheGet(s.path, key)
-	if v == nil {
-		v, err = s.parse(b)
+	if p.parseErr != nil {
+		e.failedDetail(s, dataClass(p.parseErr), p.parseErr)
+		return
 	}
-	if err == nil {
-		err = s.check(v)
-	}
-	if err != nil {
+	if err := s.check(p.val); err != nil {
 		e.failedDetail(s, dataClass(err), err)
 		return
 	}
-	cachePut(s.path, key, v)
-	s.mtime = fi.ModTime()
-	s.swap(v)
-	s.loaded(v, len(b), fi.ModTime())
+	cachePut(s.path, p.key, p.val)
+	s.mtime = p.fi.ModTime()
+	s.swap(p.val)
+	s.loaded(p.val, len(p.b), p.fi.ModTime())
+}
+
+// loadLocal loads the source's file at startup (Engine.mu held). A missing
+// file is silent when a url will fetch it; every other failure is an event.
+func (e *Engine) loadLocal(s *source) {
+	e.commitPreloaded(s, preloadLocal(s))
+}
+
+// loadSources reads and parses independent local rule-set / GeoIP / ASN / geosite
+// files concurrently across CPU cores, then validates limits and publishes in
+// deterministic declaration order under Engine.mu.
+func (e *Engine) loadSources(previous *Engine, kind, name string) {
+	if len(e.sources) == 0 {
+		return
+	}
+	var toLoad []int
+	for i, s := range e.sources {
+		n := s.name
+		if n == "" {
+			n = s.kind
+		}
+		if !(previous != nil && (s.kind != kind || n != name)) {
+			toLoad = append(toLoad, i)
+		}
+	}
+	preloaded := make([]preloadedSource, len(e.sources))
+	if len(toLoad) <= 1 {
+		for _, idx := range toLoad {
+			preloaded[idx] = preloadLocal(e.sources[idx])
+		}
+	} else {
+		workers := runtime.GOMAXPROCS(0)
+		if workers < 2 {
+			workers = 2
+		}
+		if workers > len(toLoad) {
+			workers = len(toLoad)
+		}
+		jobs := make(chan int, len(toLoad))
+		for _, idx := range toLoad {
+			jobs <- idx
+		}
+		close(jobs)
+		var wg sync.WaitGroup
+		wg.Add(workers)
+		for w := 0; w < workers; w++ {
+			go func() {
+				defer wg.Done()
+				for idx := range jobs {
+					preloaded[idx] = preloadLocal(e.sources[idx])
+				}
+			}()
+		}
+		wg.Wait()
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for i, s := range e.sources {
+		n := s.name
+		if n == "" {
+			n = s.kind
+		}
+		if previous != nil && (s.kind != kind || n != name) {
+			if err := e.inheritResource(s, previous); err != nil {
+				s.metaMu.Lock()
+				s.inheritErr = err
+				s.metaMu.Unlock()
+				return
+			}
+		} else {
+			e.commitPreloaded(s, preloaded[i])
+		}
+	}
 }
 
 // run refreshes one source until ctx ends: first after delay, then every

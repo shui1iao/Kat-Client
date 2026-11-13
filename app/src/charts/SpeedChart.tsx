@@ -1,34 +1,155 @@
-import { useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
+import { useId, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
 import { useSize } from '../components/ui';
 import { rateStr, clock } from '../lib/format';
 import { speedAxis, axisLabel, speedTimeTicks } from './scale';
-import { speedColumns, columnAt, speedBar, columnPath } from './speedColumns';
+import { monotonePath, type Pt } from './path';
 
-const PAD = { l: 74, r: 8, t: 12, b: 24 };
-// relaxed (5-minute range): ~6px pitch, bar = half the pitch (3–5px). Other ranges keep 4px / 0.7.
-const DENSITY = { default: { pitch: 4, fill: .7 }, relaxed: { pitch: 6, fill: .5 } } as const;
-export function SpeedChart({ down, up, times, height: fixedH, withSec = true, density = 'default' }: { down: number[]; up: number[]; times: number[]; height?: number; withSec?: boolean; density?: keyof typeof DENSITY }) {
+const PAD = { l: 8, r: 58, t: 12, b: 22 };
+
+export function SpeedChart({
+  down,
+  up,
+  times,
+  height: fixedH,
+  withSec = true,
+}: {
+  down: number[];
+  up: number[];
+  times: number[];
+  height?: number;
+  withSec?: boolean;
+  density?: 'default' | 'relaxed';
+}) {
+  const gradId = 'speed-grad-' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const [ref, { w, h }] = useSize<HTMLDivElement>();
-  const height=fixedH??Math.max(120,h),n=down.length;
-  const [hover,setHover]=useState<number|null>(null),[tipWidth,setTipWidth]=useState(280),tipRef=useRef<HTMLDivElement>(null);
-  const downAxis=speedAxis(down),upAxis=speedAxis(up);
-  const downMax=downAxis.top*downAxis.unit,upMax=upAxis.top*upAxis.unit;
-  const iw=Math.max(0,w-PAD.l-PAD.r),ih=height-PAD.t-PAD.b,half=ih/2,base=PAD.t+half;
-  const d=DENSITY[density],columns=speedColumns(down,up,iw,PAD.l,d.pitch),column=hover==null?undefined:columns[hover];
-  const bar=(c:typeof columns[number],series:'down'|'up')=>speedBar(c,c[series],series==='down'?downMax:upMax,half,base,series==='down'?-1:1,d.fill);
-  const center=column?(column.x0+column.x1)/2:0;
-  useLayoutEffect(()=>{if(tipRef.current)setTipWidth(tipRef.current.offsetWidth);},[hover,column?.start,column?.end,column?.down,column?.up,w]);
-  const onMove=(e:MouseEvent<SVGSVGElement>)=>{const r=e.currentTarget.getBoundingClientRect(),y=e.clientY-r.top;setHover(y<PAD.t||y>height-PAD.b?null:columnAt(columns,e.clientX-r.left));};
-  const rate=(v:number|null)=>v==null?'—':rateStr(v);
-  return <div className={'speedchart'+(fixedH?'':' fill')} ref={ref} style={fixedH?{height:fixedH}:undefined}>
-    {n<2?<div className="empty chart-empty">无数据</div>:w>0&&<svg width={w} height={height} onMouseMove={onMove} onMouseLeave={()=>setHover(null)} role="img" aria-label="实时速率柱状图" data-axis-unit={downAxis.label} data-axis-max={downMax} data-down-axis-unit={downAxis.label} data-down-axis-max={downMax} data-up-axis-unit={upAxis.label} data-up-axis-max={upMax} data-columns={columns.length}>
-      {[-1,-.5,0,.5,1].map(t=>{const axis=t<0?downAxis:upAxis;return <g key={t}>{t!==0&&<line x1={PAD.l} x2={w-PAD.r} y1={base+t*half} y2={base+t*half} className="speed-grid"/>}<text x={PAD.l-10} y={base+t*half+4} className="ylab" textAnchor="end">{t===0?'0':`${axisLabel(Math.abs(t)*axis.top)} ${axis.label}`}</text></g>})}
-      {speedTimeTicks(n).map(i=><text key={i} x={PAD.l+i*iw/Math.max(1,n-1)} y={height-8} className="xlab" textAnchor={i===0?'start':i===n-1?'end':'middle'}>{clock(times[i],withSec)}</text>)}
-      {(['down','up'] as const).map(series=>columns.map((c,i)=>{const shape=bar(c,series);return shape&&<path key={`${series}-${i}`} data-series={series} data-column={i} d={columnPath(shape)} fill={`var(--${series})`} opacity={hover===i?1:.5+.5*i/Math.max(1,columns.length-1)}/>;}))}
-      {column&&<line x1={center} x2={center} y1={PAD.t} y2={height-PAD.b} className="cross"/>}
-    </svg>}
-    {n>=2&&column&&<div ref={tipRef} className="tip speed-tip" style={{left:Math.max(0,Math.min(center-120,w-tipWidth)),top:8}}>
-      <time>{clock(times[column.start],true)}{column.end-column.start>1?`–${clock(times[column.end-1],true)}`:''}</time>{column.end-column.start>1&&<span className="speed-average">平均</span>}<span className="up">↑ {rate(column.up)}</span><span className="down">↓ {rate(column.down)}</span>
-    </div>}
-  </div>;
+  const height = fixedH ?? Math.max(120, h);
+  const n = down.length;
+  const [hover, setHover] = useState<number | null>(null);
+  const [tipWidth, setTipWidth] = useState(240);
+  const tipRef = useRef<HTMLDivElement>(null);
+
+  const axis = speedAxis([...down, ...up]);
+  const maxVal = Math.max(1, axis.top * axis.unit);
+  const iw = Math.max(1, w - PAD.l - PAD.r);
+  const ih = Math.max(1, height - PAD.t - PAD.b);
+  const base = PAD.t + ih;
+
+  const xOf = (i: number) => PAD.l + (n > 1 ? (i * iw) / (n - 1) : iw);
+  const yOf = (v: number) => base - (Math.max(0, Math.min(maxVal, v)) / maxVal) * ih;
+
+  const downPts: Pt[] = n >= 2 ? down.map((v, i) => [xOf(i), yOf(v)]) : [];
+  const upPts: Pt[] = n >= 2 ? up.map((v, i) => [xOf(i), yOf(v)]) : [];
+  const downLine = monotonePath(downPts);
+  const upLine = monotonePath(upPts);
+  const downArea = downPts.length >= 2 ? `${downLine} L${downPts[downPts.length - 1][0].toFixed(1)},${base.toFixed(1)} L${downPts[0][0].toFixed(1)},${base.toFixed(1)} Z` : '';
+
+  const hoverIdx = hover != null && hover >= 0 && hover < n ? hover : null;
+  const hoverX = hoverIdx != null ? xOf(hoverIdx) : 0;
+
+  useLayoutEffect(() => {
+    if (tipRef.current) setTipWidth(tipRef.current.offsetWidth);
+  }, [hoverIdx, w]);
+
+  const onMove = (e: MouseEvent<SVGSVGElement>) => {
+    if (n < 2) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const rx = e.clientX - rect.left;
+    const ry = e.clientY - rect.top;
+    if (ry < PAD.t || ry > base || rx < PAD.l || rx > w - PAD.r + 6) {
+      setHover(null);
+      return;
+    }
+    const idx = Math.round(((rx - PAD.l) / iw) * (n - 1));
+    setHover(Math.max(0, Math.min(n - 1, idx)));
+  };
+
+  return (
+    <div className={'speedchart' + (fixedH ? '' : ' fill')} ref={ref} style={fixedH ? { height: fixedH } : undefined}>
+      {w > 0 && (
+        <svg
+          width={w}
+          height={height}
+          onMouseMove={onMove}
+          onMouseLeave={() => setHover(null)}
+          role="img"
+          aria-label="实时速率趋势图"
+          data-axis-unit={axis.label}
+          data-axis-max={maxVal}
+        >
+          <defs>
+            <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="var(--down)" stopOpacity="0.26" />
+              <stop offset="100%" stopColor="var(--down)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+
+          {[0, 0.5, 1].map((t) => {
+            const val = t * axis.top;
+            const gy = base - t * ih;
+            const text = t === 0 ? '0 B/s' : `${axisLabel(val)} ${axis.label}`;
+            return (
+              <g key={t}>
+                <line
+                  x1={PAD.l}
+                  x2={w - PAD.r}
+                  y1={gy}
+                  y2={gy}
+                  className={'speed-grid-line' + (t > 0 ? ' dashed' : '')}
+                />
+                <text x={w - 4} y={gy + 3.5} className="speed-axis-text" textAnchor="end">
+                  {text}
+                </text>
+              </g>
+            );
+          })}
+
+          {n >= 2 ? (
+            <>
+              {speedTimeTicks(n).map((i) => (
+                <text
+                  key={i}
+                  x={xOf(i)}
+                  y={height - 5}
+                  className="speed-axis-text"
+                  textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}
+                >
+                  {clock(times[i], withSec)}
+                </text>
+              ))}
+              <path d={downArea} fill={`url(#${gradId})`} />
+              <path d={downLine} fill="none" stroke="var(--down)" strokeWidth="1.6" />
+              <path d={upLine} fill="none" stroke="var(--up)" strokeWidth="1.4" />
+              <circle
+                cx={downPts[downPts.length - 1][0]}
+                cy={downPts[downPts.length - 1][1]}
+                r="3.5"
+                fill="var(--down)"
+              />
+              {hoverIdx != null && (
+                <g>
+                  <line x1={hoverX} x2={hoverX} y1={PAD.t} y2={base} className="speed-cross" />
+                  <circle cx={hoverX} cy={downPts[hoverIdx][1]} r="3.5" fill="var(--down)" stroke="var(--card)" strokeWidth="1.5" />
+                  <circle cx={hoverX} cy={upPts[hoverIdx][1]} r="3" fill="var(--up)" stroke="var(--card)" strokeWidth="1.5" />
+                </g>
+              )}
+            </>
+          ) : (
+            <line x1={PAD.l} x2={w - PAD.r} y1={base} y2={base} stroke="var(--down)" strokeOpacity="0.35" strokeWidth="1.4" />
+          )}
+        </svg>
+      )}
+
+      {n >= 2 && hoverIdx != null && (
+        <div
+          ref={tipRef}
+          className="tip speed-tip num"
+          style={{ left: Math.max(8, Math.min(hoverX - tipWidth / 2, w - tipWidth - 8)) }}
+        >
+          <time>{clock(times[hoverIdx], true)}</time>
+          <span className="down">↓ {rateStr(down[hoverIdx])}</span>
+          <span className="up">↑ {rateStr(up[hoverIdx])}</span>
+        </div>
+      )}
+    </div>
+  );
 }

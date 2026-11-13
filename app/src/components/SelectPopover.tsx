@@ -16,9 +16,8 @@ import { Icon } from './Icon';
 type Opt = { value: string; label: string; disabled: boolean };
 type OpenState = { el: HTMLSelectElement; options: Opt[]; active: number; left: number; top?: number; bottom?: number; width: number; maxHeight: number; up: boolean; label: string };
 
-const ITEM = 36;
+const ITEM = 34;
 const forced = () => window.matchMedia?.('(forced-colors: active)').matches;
-const nativePicker = () => CSS.supports('appearance', 'base-select') && CSS.supports('selector(::picker(select))');
 
 export function SelectPopover() {
   const [open, setOpen] = useState<OpenState | null>(null);
@@ -28,8 +27,6 @@ export function SelectPopover() {
   const commitRef = useRef<(index: number) => void>(() => {});
 
   useEffect(() => {
-    // Modern Chromium/WebView2 draws the themed native picker via CSS.
-    if (nativePicker()) return;
     const show = (el: HTMLSelectElement) => {
       if (el.disabled || el.multiple || el.size > 1 || forced()) return false;
       const options = Array.from(el.options).map((o) => ({ value: o.value, label: o.label || o.text, disabled: o.disabled }));

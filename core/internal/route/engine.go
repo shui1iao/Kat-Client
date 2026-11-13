@@ -287,22 +287,25 @@ func NewResourceEngine(o Options, dial func(via string) (func(ctx context.Contex
 		c.v.rule = i + 1
 		e.rules = append(e.rules, c)
 	}
-	e.mu.Lock()
-	for _, s := range e.sources {
-		n := s.name
-		if n == "" {
-			n = s.kind
-		}
-		if previous != nil && (s.kind != kind || n != name) {
-			if err := e.inheritResource(s, previous); err != nil {
-				e.mu.Unlock()
-				return nil, err
+	e.loadSources(previous, kind, name)
+	if previous != nil {
+		// Verify inheritance succeeded for all non-target sources; NewResourceEngine
+		// fails closed when any non-target source could not inherit.
+		for _, s := range e.sources {
+			n := s.name
+			if n == "" {
+				n = s.kind
 			}
-		} else {
-			e.loadLocal(s)
+			if s.kind != kind || n != name {
+				s.metaMu.Lock()
+				bad := s.inheritErr
+				s.metaMu.Unlock()
+				if bad != nil {
+					return nil, bad
+				}
+			}
 		}
 	}
-	e.mu.Unlock()
 	return e, nil
 }
 

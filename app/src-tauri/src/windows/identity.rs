@@ -85,6 +85,7 @@ pub fn uac_owner()->windows_sys::Win32::Foundation::HWND{unsafe{
  let hwnd=UAC_OWNER.load(std::sync::atomic::Ordering::SeqCst) as windows_sys::Win32::Foundation::HWND;
  let mut pid=0;GetWindowThreadProcessId(hwnd,&mut pid);
  if hwnd.is_null()||IsWindow(hwnd)==0||pid!=std::process::id(){return std::ptr::null_mut();}
- if IsIconic(hwnd)!=0{ShowWindow(hwnd,SW_RESTORE);}else{ShowWindow(hwnd,SW_SHOW);}
+ if IsWindowVisible(hwnd)==0{return std::ptr::null_mut();}
+ if IsIconic(hwnd)!=0{ShowWindow(hwnd,SW_RESTORE);}
  BringWindowToTop(hwnd);SetForegroundWindow(hwnd);hwnd
 }}

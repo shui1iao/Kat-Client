@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 export type SidebarPreference = 'expanded' | 'collapsed' | null;
 export const SIDEBAR_KEY = 'kat.sidebar';
-export const SIDEBAR_QUERY = '(max-width: 1200px)';
+export const SIDEBAR_QUERY = '(max-width: 960px)';
 type ReadStorage = Pick<Storage, 'getItem'>;
 type WriteStorage = Pick<Storage, 'setItem'>;
 export function readSidebarPreference(storage?: ReadStorage): SidebarPreference {

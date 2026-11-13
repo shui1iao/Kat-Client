@@ -413,6 +413,7 @@ fn window_action(app: tauri::AppHandle, action: String) -> Result<()> {
 }
 pub fn run() {
     let installed_handoff=std::env::args().nth(1).as_deref()==Some("--installed-handoff");
+    let autostart_launch=std::env::args().skip(1).any(|a|a=="--autostart");
     match crate::windows::installed_handoff::receive(){Ok(true)=>{},Ok(false)=>return,Err(_)=>{crate::windows::installed_handoff::message("网络服务已安装，但自动打开已安装版失败。原窗口若仍在运行会予以保留；否则请从开始菜单打开 Kat（不要以管理员运行）。");return;}}
     let built=tauri::Builder::default()
 
@@ -485,39 +486,46 @@ pub fn run() {
             }});
         }
         app.state::<Host>().events.lock().unwrap().record(crate::safe_log::HostEvent::Started,None);crate::safe_log::component("component.started",crate::log_context::Component::Gui,"startup",crate::log_context::Phase::Commit,None,None);crate::safe_log::component("component.ready",crate::log_context::Component::Gui,"startup",crate::log_context::Phase::Complete,None,None);
-        let config=app.config().app.windows.first().ok_or("Missing main window configuration")?;
-        let window=tauri::WebviewWindowBuilder::from_config(app,config)?
-          .on_page_load(|w,payload|{if matches!(payload.event(),tauri::webview::PageLoadEvent::Started){let s=w.state::<Host>();s.tray_state.lock().unwrap().listener_ready=false;*s.main_hidden.lock().unwrap()=None;}})
-          .transparent(true)
-          .on_navigation(|url| url.scheme()=="tauri" || (url.scheme()=="http" && url.host_str()==Some("tauri.localhost")))
-          .icon(tray_image())?
-          .visible((installed_handoff||crate::preferences::initially_visible(&settings,settings_error.is_some()||intent_error.is_some()||app.state::<Host>().core.is_none())||last.tun) && !settings.remember_window).build()?;
-        crate::windows::identity::set_uac_owner(window.hwnd().map(|h|h.0 as isize).unwrap_or(0));
-        crate::acrylic::install(&window);
-        if settings.remember_window{
-          let result=crate::windows::window_state::restore(&window,&app.state::<Host>().store);
-          match result{Ok((maximized,error))=>{app.state::<Host>().pending_maximize.store(maximized,Ordering::SeqCst);if let Some(e)=error{app.state::<Host>().record::<()>(crate::safe_log::HostEvent::Settings,&Err(e));}},Err(e)=>{app.state::<Host>().record::<()>(crate::safe_log::HostEvent::Settings,&Err(e));}}
-          if installed_handoff||crate::preferences::initially_visible(&settings,settings_error.is_some()||intent_error.is_some()||app.state::<Host>().core.is_none())||last.tun{show_main(app.handle());}
-        }
-        window.on_window_event({let a=app.handle().clone();move |e| match e{
-          tauri::WindowEvent::CloseRequested{api,..}=>{api.prevent_close();if a.state::<Host>().installing.load(Ordering::SeqCst){show_main(&a);return;}save_window_now(&a);if a.state::<Host>().settings.lock().unwrap().close_action==crate::preferences::CloseAction::Quit{quit(a.clone());}else{let _=close_to_tray(&a);}sync_main_window_visibility(&a,false);},
-          tauri::WindowEvent::Moved(_)|tauri::WindowEvent::Resized(_)|tauri::WindowEvent::ScaleFactorChanged{..}=>queue_window_save(&a),tauri::WindowEvent::Focused(_)=>sync_main_window_visibility(&a,false),_=>{}
-        }});
+        // Start core & base network concurrently with WebView2 window creation (~2.6s)
+        // so the kernel is already running when the frontend mounts.
+        let (window_ready_tx, window_ready_rx) = tokio::sync::oneshot::channel::<()>();
+        let startup_settings_err = settings_error.clone();
+        let startup_intent_err = intent_error.clone();
         let a=app.handle().clone();tauri::async_runtime::spawn(async move{
           let state=a.state::<Host>();let _control=state.control.lock().await;
-          let result=if let Some(e)=settings_error.or(intent_error){Err(e)}else if state.core.is_none(){Err(state.core_error.clone())}else{
+          let result=if let Some(e)=startup_settings_err.or(startup_intent_err){Err(e)}else if state.core.is_none(){Err(state.core_error.clone())}else{
             let migration=crate::windows::autostart::migrate_owned(&state.store);
             let recovery=match migration{Ok(())=>crate::lifecycle::trace("startup.cleanup",state.network.cleanup()).await,Err(e)=>Err(e)};
             if let Err(e)=recovery{Err(e)}else{match software_updates::keep_core_stopped(&state.store){Ok(true)=>Ok(false),Ok(false)=>crate::lifecycle::startup_base(state.network.as_ref(),crate::preferences::startup_plan(last)).await,Err(e)=>Err(e)}}
           };
           let need_tun=matches!(result,Ok(true));
           if !need_tun{state.record(crate::safe_log::HostEvent::Startup,&result);}
-          if let Err(e)=&result{let _=a.emit("network-recovery-required",crate::tun_diagnostics::safe_event(e));show_main(&a);}
           drop(_control);
+          let _ = window_ready_rx.await;
+          if let Err(e)=&result{let _=a.emit("network-recovery-required",crate::tun_diagnostics::safe_event(e));show_main(&a);}
           let _=a.emit("network-changed",());
           if need_tun{software_updates::set_startup_tun_pending(&a,true);}
           let _=software_updates::confirm_install(a.clone());
         });
+        let config=app.config().app.windows.first().ok_or("Missing main window configuration")?;
+        let window=tauri::WebviewWindowBuilder::from_config(app,config)?
+          .on_page_load(|w,payload|{if matches!(payload.event(),tauri::webview::PageLoadEvent::Started){let s=w.state::<Host>();s.tray_state.lock().unwrap().listener_ready=false;*s.main_hidden.lock().unwrap()=None;}})
+          .transparent(true)
+          .on_navigation(|url| url.scheme()=="tauri" || (url.scheme()=="http" && url.host_str()==Some("tauri.localhost")))
+          .icon(tray_image())?
+          .visible((installed_handoff||crate::preferences::initially_visible(&settings,autostart_launch,settings_error.is_some()||intent_error.is_some()||app.state::<Host>().core.is_none())) && !settings.remember_window).build()?;
+        crate::windows::identity::set_uac_owner(window.hwnd().map(|h|h.0 as isize).unwrap_or(0));
+        crate::acrylic::install(&window);
+        if settings.remember_window{
+          let result=crate::windows::window_state::restore(&window,&app.state::<Host>().store);
+          match result{Ok((maximized,error))=>{app.state::<Host>().pending_maximize.store(maximized,Ordering::SeqCst);if let Some(e)=error{app.state::<Host>().record::<()>(crate::safe_log::HostEvent::Settings,&Err(e));}},Err(e)=>{app.state::<Host>().record::<()>(crate::safe_log::HostEvent::Settings,&Err(e));}}
+          if installed_handoff||crate::preferences::initially_visible(&settings,autostart_launch,settings_error.is_some()||intent_error.is_some()||app.state::<Host>().core.is_none()){show_main(app.handle());}
+        }
+        window.on_window_event({let a=app.handle().clone();move |e| match e{
+          tauri::WindowEvent::CloseRequested{api,..}=>{api.prevent_close();if a.state::<Host>().installing.load(Ordering::SeqCst){show_main(&a);return;}save_window_now(&a);if a.state::<Host>().settings.lock().unwrap().close_action==crate::preferences::CloseAction::Quit{quit(a.clone());}else{let _=close_to_tray(&a);}sync_main_window_visibility(&a,false);},
+          tauri::WindowEvent::Moved(_)|tauri::WindowEvent::Resized(_)|tauri::WindowEvent::ScaleFactorChanged{..}=>queue_window_save(&a),tauri::WindowEvent::Focused(_)=>sync_main_window_visibility(&a,false),_=>{}
+        }});
+        let _ = window_ready_tx.send(());
         Ok(())
     })
     .build(tauri::generate_context!());

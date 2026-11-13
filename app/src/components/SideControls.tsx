@@ -1,51 +1,237 @@
-import { useState } from 'react';
-import {tip} from './Tooltip';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { tip } from './Tooltip';
 import { Icon } from './Icon';
-import { Switch, useThumb } from './ui';
+import { useThumb } from './ui';
 import { MODE_LABEL, stateLabel, type Mode } from '../client/types';
-import {errorText} from '../lib/errors';
+import { resolveGroupPath } from '../client/groupDisplay';
+import { errorText } from '../lib/errors';
 import type { Client } from '../client/useClient';
 
-/** Proxy mode + network takeover, living in the page title row (user 2026-10-30 19:10).
- *  Behaviour is unchanged from the former top bar: same commands, same enable/disable rules. */
-export function SideControls({ c }: { c: Client }) {
-  const mode = c.status?.mode ?? c.source?.client.mode, network = c.network, sys = network?.system_proxy, tun = network?.tun, service = network?.service;
-  const busy = c.busy.has('network'), running = c.status?.runtime.state === 'running';
-  const sysReady = running && c.status?.local?.http.ready, tunReady = running && c.status?.local?.socks.ready;
-  const modes: { value: Mode; icon: string }[] = [{ value: 'rule', icon: 'rules' }, { value: 'global', icon: 'nodes' }, { value: 'direct', icon: 'direct' }];
-  // The thumb follows the click at once; the saved mode stays authoritative (aria-checked)
-  // and the thumb glides back if the save does not take effect.
+export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobalGroup?: (groupName?: string) => void }) {
+  const mode = c.status?.mode ?? c.source?.client.mode;
+  const network = c.network;
+  const sys = network?.system_proxy;
+  const tun = network?.tun;
+  const service = network?.service;
+  const busy = c.busy.has('network');
+  const running = c.status?.runtime.state === 'running';
+  const sysReady = running && c.status?.local?.http.ready;
+  const tunReady = running && c.status?.local?.socks.ready;
+  const modes: Mode[] = ['rule', 'global', 'direct'];
+
   const [pending, setPending] = useState<Mode | null>(null);
-  const [netPending, setNetPending] = useState<{key:'sysproxy'|'tun'; enabled:boolean}|null>(null);
-  const toggle = (key:'sysproxy'|'tun', enabled:boolean) => {
+  const [netPending, setNetPending] = useState<{ key: 'sysproxy' | 'tun'; enabled: boolean } | null>(null);
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number; minWidth: number } | null>(null);
+  const pillRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+
+  const toggle = (key: 'sysproxy' | 'tun', enabled: boolean) => {
     if (netPending || busy) return;
-    setNetPending({key,enabled});
-    void c.os(key==='tun'?'tun_set':'system_proxy_set',{enabled}).finally(()=>setNetPending(null));
+    setNetPending({ key, enabled });
+    void c.os(key === 'tun' ? 'tun_set' : 'system_proxy_set', { enabled }).finally(() => setNetPending(null));
   };
-  const sysShown = netPending?.key==='sysproxy' ? netPending.enabled : !!sys?.enabled;
-  const tunShown = netPending?.key==='tun' ? netPending.enabled : !!(tun?.intent??tun?.enabled);
-  const tunState=netPending?.key==='tun'?(netPending.enabled?'starting':'stopping'):tun?.state;
+
+  const sysShown = netPending?.key === 'sysproxy' ? netPending.enabled : !!sys?.enabled;
+  const tunShown = netPending?.key === 'tun' ? netPending.enabled : !!(tun?.intent ?? tun?.enabled);
+  const tunState = netPending?.key === 'tun' ? (netPending.enabled ? 'starting' : 'stopping') : tun?.state;
+  const tunTransition = ['cleanup_pending', 'waiting_network', 'recovering', 'starting', 'stopping'].includes(tunState ?? '');
 
   const shown = pending ?? mode;
   const [segRef, thumb] = useThumb<HTMLDivElement>(shown);
-  const pick = (m: Mode) => { if (mode === m || pending) return; setPending(m); void c.edit((d) => { d.client.mode = m; }).finally(() => setPending(null)); };
-  const sysError=sys?.error?errorText({code:sys.error}):'',tunError=tun?.error?errorText({code:tun.error}):'';
+  const pick = (m: Mode) => {
+    if (mode === m || pending) return;
+    setMenuPos(null);
+    setPending(m);
+    void c.edit((d) => {
+      d.client.mode = m;
+    }).finally(() => setPending(null));
+  };
+
+  const sysError = sys?.error ? errorText({ code: sys.error }) : '';
+  const tunError = tun?.error ? errorText({ code: tun.error }) : '';
+  const groups = c.source?.kernel.groups ?? [];
+  const globalGroup = c.source?.client.global_group || groups[0]?.name;
+  const runningGroups = running ? c.status?.groups ?? [] : [];
+  const runtimeNodeNames = (c.status?.nodes ?? []).map((n) => n.name);
+  const groupNames = groups.map((g) => g.name);
+  const resolvedGlobalNode = globalGroup
+    ? resolveGroupPath(globalGroup, runningGroups, runtimeNodeNames, groupNames).node
+    : null;
+
+  useEffect(() => {
+    if (!menuPos) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node | null;
+      if (pillRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setMenuPos(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuPos(null);
+    };
+    const close = () => setMenuPos(null);
+    document.addEventListener('mousedown', onDown, true);
+    document.addEventListener('keydown', onKey, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('blur', close);
+    return () => {
+      document.removeEventListener('mousedown', onDown, true);
+      document.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('blur', close);
+    };
+  }, [menuPos]);
+
+  const toggleGlobalMenu = () => {
+    if (menuPos) {
+      setMenuPos(null);
+      return;
+    }
+    const r = pillRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const minWidth = Math.max(200, r.width);
+    const left = Math.max(10, Math.min(r.left, window.innerWidth - minWidth - 12));
+    setMenuPos({ left, top: r.bottom + 6, minWidth });
+  };
+
+  const selectGlobalGroup = (name: string) => {
+    setMenuPos(null);
+    if (name === globalGroup) return;
+    void c.edit((d) => {
+      d.client.global_group = name;
+    });
+  };
+
   return (
     <div className="top-controls">
+      {/* Global selector placed on the LEFT of mode segmented control so right-side controls never shift */}
+      {shown === 'global' && (
+        <button
+          ref={pillRef}
+          type="button"
+          className={'global-group-pill' + (menuPos ? ' is-open' : '')}
+          aria-haspopup="listbox"
+          aria-expanded={!!menuPos}
+          disabled={!c.connected || c.doc.saving}
+          onClick={toggleGlobalMenu}
+          {...tip(
+            globalGroup
+              ? `全局出口：${c.label(globalGroup)}${resolvedGlobalNode ? ' → ' + c.label(resolvedGlobalNode) : ''}`
+              : '选择全局策略组',
+          )}
+        >
+          <span className="global-pill-label">
+            {globalGroup ? c.label(globalGroup) : '选择策略组'}
+            {resolvedGlobalNode && resolvedGlobalNode !== globalGroup ? ` · ${c.label(resolvedGlobalNode)}` : ''}
+          </span>
+          <Icon name="chevDown" size={12} />
+        </button>
+      )}
+
+      {shown === 'global' &&
+        menuPos &&
+        createPortal(
+          <div
+            ref={popRef}
+            className="kat-pop global-pop"
+            role="listbox"
+            aria-label="全局策略组"
+            style={{ left: menuPos.left, top: menuPos.top, minWidth: menuPos.minWidth, maxHeight: 300 }}
+          >
+            {groups.map((g) => {
+              const cur = g.name === globalGroup;
+              const leaf = resolveGroupPath(g.name, runningGroups, runtimeNodeNames, groupNames).node;
+              return (
+                <button
+                  key={g.name}
+                  type="button"
+                  role="option"
+                  aria-selected={cur}
+                  className={'kat-opt' + (cur ? ' cur' : '')}
+                  onClick={() => selectGlobalGroup(g.name)}
+                >
+                  <span className="global-opt-copy">
+                    <b>{c.label(g.name)}</b>
+                    {leaf && <em>{c.label(leaf)}</em>}
+                  </span>
+                  {cur && <Icon name="check" size={15} stroke={2} />}
+                </button>
+              );
+            })}
+            {onOpenGlobalGroup && (
+              <>
+                <div className="kat-pop-sep" />
+                <button
+                  type="button"
+                  className="kat-opt global-opt-more"
+                  onClick={() => {
+                    setMenuPos(null);
+                    onOpenGlobalGroup(globalGroup);
+                  }}
+                >
+                  <span>在策略组中切换节点…</span>
+                  <Icon name="chevRight" size={13} />
+                </button>
+              </>
+            )}
+          </div>,
+          document.body,
+        )}
+
       <div ref={segRef} className="mode-seg" role="radiogroup" aria-label="代理模式" aria-busy={c.doc.saving || !!pending}>
         {thumb}
         {modes.map((m) => (
-          <button key={m.value} role="radio" aria-checked={mode === m.value} disabled={!c.connected || c.doc.saving} className={shown === m.value ? 'on m-' + m.value : ''} onClick={() => pick(m.value)} data-mode={m.value} {...tip(MODE_LABEL[m.value],true)}>
-            <Icon name={m.icon} size={16} /><span>{MODE_LABEL[m.value]}</span>
+          <button
+            key={m}
+            type="button"
+            role="radio"
+            aria-checked={mode === m}
+            disabled={!c.connected || c.doc.saving}
+            className={shown === m ? 'on m-' + m : ''}
+            onClick={() => pick(m)}
+            data-mode={m}
+          >
+            {MODE_LABEL[m]}
           </button>
         ))}
       </div>
+
       <div className="net-card">
-        <button className={'tgl net-row' + (sysShown ? ' on' : '')} disabled={!sys || busy || !!netPending || (!sys.error && !sys.enabled && !sysReady)} onClick={() => toggle('sysproxy', !sys?.enabled)} aria-pressed={sysShown} data-toggle="sysproxy" {...tip(sysError||'系统代理',!sysError)}>
-          <Icon name="monitor" size={17} /><span className="tg-txt"><b>系统代理</b>{sysError&&<span className="net-warning"><Icon name="alert" size={14}/></span>}</span><Switch on={sysShown} />
+        <button
+          type="button"
+          className={'net-pill' + (sysShown ? ' on' : '')}
+          disabled={!sys || busy || !!netPending || (!sys.error && !sys.enabled && !sysReady)}
+          onClick={() => toggle('sysproxy', !sys?.enabled)}
+          aria-pressed={sysShown}
+          data-toggle="sysproxy"
+          {...tip(sysError || (sysShown ? '系统代理：已开启' : '系统代理：已关闭'))}
+        >
+          <i className="pip" aria-hidden="true" />
+          <span>系统代理</span>
+          {sysError && (
+            <span className="net-warning">
+              <Icon name="alert" size={13} />
+            </span>
+          )}
         </button>
-        <button className={'tgl net-row' + (tunShown ? ' on' : '')} disabled={!tun || busy || !!netPending || (!tun.error && !tun.intent && !tun.enabled && (!tunReady || !service?.installed))} onClick={() => toggle('tun', !(tun?.intent??tun?.enabled))} aria-pressed={tunShown} data-toggle="tun" {...tip(tunError||stateLabel(tunState),!tunError)}>
-          <Icon name="shield" size={17} /><span className="tg-txt"><b>TUN</b>{['cleanup_pending','waiting_network','recovering','starting','stopping'].includes(tunState??'')&&<span>{stateLabel(tunState)}</span>}{tunError&&<span className="net-warning"><Icon name="alert" size={14}/></span>}</span><Switch on={tunShown} />
+
+        <button
+          type="button"
+          className={'net-pill' + (tunShown ? ' on' : '') + (tunTransition ? ' is-transition' : '')}
+          disabled={!tun || busy || !!netPending || (!tun.error && !tun.intent && !tun.enabled && (!tunReady || !service?.installed))}
+          onClick={() => toggle('tun', !(tun?.intent ?? tun?.enabled))}
+          aria-pressed={tunShown}
+          data-toggle="tun"
+          {...tip(tunError || `TUN：${stateLabel(tunState)}`)}
+        >
+          <i className="pip" aria-hidden="true" />
+          <span>TUN</span>
+          {tunTransition && <span className="net-sub">{stateLabel(tunState)}</span>}
+          {tunError && (
+            <span className="net-warning">
+              <Icon name="alert" size={13} />
+            </span>
+          )}
         </button>
       </div>
     </div>
