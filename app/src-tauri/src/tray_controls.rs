@@ -34,13 +34,15 @@ impl Snapshot{
  pub snapshot:Snapshot,pub theme:&'static str,revision:u64,
  pub listener_ready:bool,pub pending:Option<String>,delivery:u64,native_busy:bool,
  pub popup_epoch:u64,pub popup_read:u64,
+ pub cached_size:Option<(u64,f64,u32,u32)>,
  #[cfg(all(windows,feature="desktop"))]
  pub popup:Option<crate::tray_popup::Popup>,
 }
-impl Default for MenuState{fn default()->Self{Self{snapshot:Snapshot::default(),theme:"system",revision:1,listener_ready:false,pending:None,delivery:0,native_busy:false,popup_epoch:0,popup_read:0,#[cfg(all(windows,feature="desktop"))]popup:None}}}
+impl Default for MenuState{fn default()->Self{Self{snapshot:Snapshot::default(),theme:"system",revision:1,listener_ready:false,pending:None,delivery:0,native_busy:false,popup_epoch:0,popup_read:0,cached_size:None,#[cfg(all(windows,feature="desktop"))]popup:None}}}
 #[derive(Serialize)]pub struct MenuReply{pub revision:String,pub nodes:Vec<Node>,pub theme:&'static str,#[cfg(all(windows,feature="desktop"))]pub popup:Option<crate::tray_popup::PopupReply>}
 #[derive(Clone,Serialize)]pub struct Delivery{pub delivery_id:String,#[serde(flatten)]pub action:Action}
 impl MenuState{
+ pub fn revision(&self)->u64{self.revision}
  fn changed(&mut self){self.revision=self.revision.checked_add(1).expect("tray revision exhausted");}
  pub fn sync(&mut self,snapshot:Snapshot){
   if self.snapshot==snapshot{return;} // Exact equality only; invisible changes keep the original menu comparison below.

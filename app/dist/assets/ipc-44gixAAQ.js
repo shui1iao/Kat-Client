@@ -1,1 +1,0 @@
-export{n as core}from"./App-8J6sRtM_.js";

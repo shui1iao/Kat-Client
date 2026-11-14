@@ -297,9 +297,8 @@ impl Supervisor {
         if self.0.update.load(Ordering::Acquire){return Err(update_error("CORE_UPDATE_RECOVERY_REQUIRED","Resume the failed update before ordinary core termination"));}
         let mut exited=self.0.exited.subscribe();
         let graceful=tokio::time::timeout(grace,async{
-            // Failure/timeout is expected for a wedged core: EOF/child-handle
-            // termination must still run and never depend on mutation admission.
-            let _=self.request("core.stop",Value::Null,grace.min(Duration::from_secs(1))).await;
+            // Send EOF immediately: Host.Close() stops listeners, drains up to
+            // 150ms, samples final traffic, persists history, and exits cleanly.
             let _=self.0.write.send(Write::Close).await;
             while !*exited.borrow(){if exited.changed().await.is_err(){break;}}
         }).await.is_ok()&&*exited.borrow();

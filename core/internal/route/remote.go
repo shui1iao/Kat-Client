@@ -137,6 +137,7 @@ func readLimited(path string, max int) ([]byte, os.FileInfo, error) {
 
 type preloadedSource struct {
 	b        []byte
+	size     int
 	fi       os.FileInfo
 	readErr  error
 	key      string
@@ -145,6 +146,11 @@ type preloadedSource struct {
 }
 
 func preloadLocal(s *source) preloadedSource {
+	if fi, err := userio.Stat(s.path); err == nil && fi.Mode().IsRegular() && fi.Size() <= int64(s.maxBytes) {
+		if v, key, size, ok := cacheGetStat(s.path, s, fi); ok {
+			return preloadedSource{size: size, fi: fi, key: key, val: v}
+		}
+	}
 	b, fi, err := readLimited(s.path, s.maxBytes)
 	if err != nil {
 		return preloadedSource{readErr: err}
@@ -154,10 +160,10 @@ func preloadLocal(s *source) preloadedSource {
 	if v == nil {
 		v, err = s.parse(b)
 		if err != nil {
-			return preloadedSource{b: b, fi: fi, key: key, parseErr: err}
+			return preloadedSource{b: b, size: len(b), fi: fi, key: key, parseErr: err}
 		}
 	}
-	return preloadedSource{b: b, fi: fi, key: key, val: v}
+	return preloadedSource{b: b, size: len(b), fi: fi, key: key, val: v}
 }
 
 func (e *Engine) commitPreloaded(s *source, p preloadedSource) {
@@ -182,10 +188,10 @@ func (e *Engine) commitPreloaded(s *source, p preloadedSource) {
 		e.failedDetail(s, dataClass(err), err)
 		return
 	}
-	cachePut(s.path, p.key, p.val)
+	cachePutWithStat(s.path, p.key, fileStatKey(s, p.fi), p.size, p.fi.ModTime(), p.val)
 	s.mtime = p.fi.ModTime()
 	s.swap(p.val)
-	s.loaded(p.val, len(p.b), p.fi.ModTime())
+	s.loaded(p.val, p.size, p.fi.ModTime())
 }
 
 // loadLocal loads the source's file at startup (Engine.mu held). A missing

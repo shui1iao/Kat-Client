@@ -182,12 +182,29 @@ pub(super) fn tray_feedback(app:&tauri::AppHandle,error:Error){
  // Before the main listener exists an event alone is not visible feedback.
  if !ready{crate::windows::installed_handoff::message(&error.message);}
 }
+fn spawn_tray_prepare_watchdog(app:&tauri::AppHandle,epoch:u64){
+ let a=app.clone();
+ tauri::async_runtime::spawn(async move{
+  tokio::time::sleep(Duration::from_secs(8)).await;
+  let b=a.clone();let _=a.run_on_main_thread(move||{
+   let waiting={let state=b.state::<Host>();let current=state.tray_state.lock().unwrap();
+    current.popup.as_ref().is_some_and(|p|p.epoch==epoch&&p.phase=="preparing")};
+   if waiting{let _=crate::tray_popup::hide(&b);tray_feedback(&b,Error::new("TRAY_MENU_NOT_READY","托盘菜单尺寸尚未准备好，请在主窗口操作"));}
+  });
+ });
+}
 fn show_tray_popup(app:&tauri::AppHandle,rect:tauri::Rect,point:tauri::PhysicalPosition<f64>){
  let a=app.clone();let _=app.run_on_main_thread(move||{
   // Reserve/cancel on the same UI queue as geometry applies and dismissals.
   let epoch={let state=a.state::<Host>();let mut current=state.tray_state.lock().unwrap();
    current.popup_epoch=current.popup_epoch.wrapping_add(1);current.popup=None;current.popup_epoch};
-  if let Some(w)=a.get_webview_window(crate::tray_popup::LABEL){let _=w.hide();}
+  if let Some(w)=a.get_webview_window(crate::tray_popup::LABEL){
+   if let Err(e)=crate::tray_popup::prepare(&a,&w,rect,point,epoch){
+    let _=crate::tray_popup::hide(&a);tray_feedback(&a,e);return;
+   }
+   spawn_tray_prepare_watchdog(&a,epoch);
+   return;
+  }
   // Tauri documents WebView2 creation deadlocks in synchronous event handlers.
   tauri::async_runtime::spawn_blocking(move||open_tray_popup(&a,rect,point,epoch));
  });
@@ -198,16 +215,7 @@ fn open_tray_popup(app:&tauri::AppHandle,rect:tauri::Rect,point:tauri::PhysicalP
   if a.state::<Host>().tray_state.lock().unwrap().popup_epoch!=epoch{return;}
   let result=window.and_then(|w|crate::tray_popup::prepare(&a,&w,rect,point,epoch));
   if let Err(e)=result{let _=crate::tray_popup::hide(&a);tray_feedback(&a,e);return;}
-  tauri::async_runtime::spawn(async move{
-   // Hidden WebView timers may be throttled. Two stable samples before and
-   // after the final resize are required, not just a page-state read.
-   tokio::time::sleep(Duration::from_secs(8)).await;
-   let b=a.clone();let _=a.run_on_main_thread(move||{
-    let waiting={let state=b.state::<Host>();let current=state.tray_state.lock().unwrap();
-     current.popup.as_ref().is_some_and(|p|p.epoch==epoch&&p.phase=="preparing")};
-    if waiting{let _=crate::tray_popup::hide(&b);tray_feedback(&b,Error::new("TRAY_MENU_NOT_READY","托盘菜单尺寸尚未准备好，请在主窗口操作"));}
-   });
-  });
+  spawn_tray_prepare_watchdog(&a,epoch);
  });
 }
 // Win32 dialogs run on the UI thread; selected paths never come from WebView arguments.
@@ -424,11 +432,7 @@ pub fn run() {
         crate::safe_archive::init_user(&store,settings.log_retention_days);
         let intent=crate::preferences::intent(&store);let intent_error=intent.as_ref().err().cloned();let last=intent.unwrap_or_default();
         let (core, core_error)=tauri::async_runtime::block_on(async {
-            let result=async {
-                let c=Supervisor::spawn_fixed(&crate::supervisor::sibling_core()?, &workspace).await?;
-                if let Err(e)=c.hello().await{c.shutdown().await;return Err(e);}
-                Ok::<_,Error>(c)
-            }.await;
+            let result=async{Supervisor::spawn_fixed(&crate::supervisor::sibling_core()?, &workspace).await}.await;
             match result { Ok(c)=>(Some(c),Error::new("CORE_UNAVAILABLE","Core unavailable")), Err(e)=>(None,e) }
         });
         let network=Arc::new(NetworkController::new(workspace,core.clone())?);
@@ -486,11 +490,13 @@ pub fn run() {
         let startup_intent_err = intent_error.clone();
         let a=app.handle().clone();tauri::async_runtime::spawn(async move{
           let state=a.state::<Host>();let _control=state.control.lock().await;
-          let result=if let Some(e)=startup_settings_err.or(startup_intent_err){Err(e)}else if state.core.is_none(){Err(state.core_error.clone())}else{
-            let migration=crate::windows::autostart::migrate_owned(&state.store);
-            let recovery=match migration{Ok(())=>crate::lifecycle::trace("startup.cleanup",state.network.cleanup()).await,Err(e)=>Err(e)};
-            if let Err(e)=recovery{Err(e)}else{match software_updates::keep_core_stopped(&state.store){Ok(true)=>Ok(false),Ok(false)=>crate::lifecycle::startup_base(state.network.as_ref(),crate::preferences::startup_plan(last)).await,Err(e)=>Err(e)}}
-          };
+          let result=if let Some(e)=startup_settings_err.or(startup_intent_err){Err(e)}else if let Some(c)=&state.core{
+            if let Err(e)=c.hello().await{c.shutdown().await;Err(e)}else{
+              let migration=crate::windows::autostart::migrate_owned(&state.store);
+              let recovery=match migration{Ok(())=>crate::lifecycle::trace("startup.cleanup",state.network.cleanup()).await,Err(e)=>Err(e)};
+              if let Err(e)=recovery{Err(e)}else{match software_updates::keep_core_stopped(&state.store){Ok(true)=>Ok(false),Ok(false)=>crate::lifecycle::startup_base(state.network.as_ref(),crate::preferences::startup_plan(last)).await,Err(e)=>Err(e)}}
+            }
+          }else{Err(state.core_error.clone())};
           let need_tun=matches!(result,Ok(true));
           if !need_tun{state.record(crate::safe_log::HostEvent::Startup,&result);}
           drop(_control);
@@ -519,6 +525,7 @@ pub fn run() {
           tauri::WindowEvent::Moved(_)|tauri::WindowEvent::Resized(_)|tauri::WindowEvent::ScaleFactorChanged{..}=>queue_window_save(&a),tauri::WindowEvent::Focused(_)=>sync_main_window_visibility(&a,false),_=>{}
         }});
         let _ = window_ready_tx.send(());
+        crate::tray_popup::prewarm(app.handle().clone());
         Ok(())
     })
     .build(tauri::generate_context!());

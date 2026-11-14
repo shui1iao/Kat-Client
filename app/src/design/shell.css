@@ -644,15 +644,7 @@
 }
 
 .net-switch.on {
-  color: var(--text);
-  font-weight: 600;
-  background: color-mix(in srgb, var(--accent) 6%, var(--card));
-  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
-}
-
-:root[data-theme="light"] .net-switch.on {
-  background: color-mix(in srgb, var(--accent) 3.5%, var(--card));
-  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--text-2);
 }
 
 .net-switch.on .ns-track {
@@ -661,7 +653,8 @@
 }
 
 .net-switch.on:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  color: var(--text);
+  border-color: var(--line-2);
 }
 
 .net-switch.on:hover:not(:disabled) .ns-track {

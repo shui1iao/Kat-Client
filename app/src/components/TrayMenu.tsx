@@ -79,13 +79,14 @@ function Row({ node, busy, select, open, inSub }: { node: TrayMenuNode; busy: bo
 }
 
 /** Pure view of one native menu state (also used by the visual preview). */
-export function TrayMenuView({ state, busy = false, notice = '', onSelect, initialPath = [] }: { state: TrayMenuState; busy?: boolean; notice?: string; onSelect: (id: string) => void; initialPath?: string[] }) {
+export function TrayMenuView({ state, busy = false, notice = '', onSelect, initialPath = [], resetSignal = 0 }: { state: TrayMenuState; busy?: boolean; notice?: string; onSelect: (id: string) => void; initialPath?: string[]; resetSignal?: number }) {
   const [path, setPath] = useState<string[]>(initialPath);
   const [rootHeight, setRootHeight] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const panel = path.length ? find(state.nodes, path) : undefined;
+  useEffect(() => { if (resetSignal > 0) setPath([]); }, [resetSignal]);
   useEffect(() => { if (path.length && !panel) setPath([]); }, [path, panel]);
-  useEffect(() => { ref.current?.focus({ preventScroll: true }); }, [path.length]);
+  useEffect(() => { ref.current?.focus({ preventScroll: true }); }, [path.length, resetSignal]);
   // Keep the panel size stable when drilling in (no jump under the cursor).
   useLayoutEffect(() => {
     if (path.length || !ref.current) return;
@@ -142,8 +143,10 @@ function useTrayTheme(theme: TrayMenuState['theme'] | undefined) {
 export function TrayMenuWindow() {
   const [state, setState] = useState<TrayMenuState | null>(null);
   const [busy, setBusy] = useState(false), [notice, setNotice] = useState('');
+  const [resetSignal, setResetSignal] = useState(0);
   const root = useRef<HTMLDivElement>(null), confirmed = useRef<TrayMenuState | null>(null);
   const inFlight = useRef(false), sent = useRef({ key: '', count: 0 });
+  const prewarmSeeded = useRef('');
   const receive = useCallback((next: TrayMenuState) => {
     confirmed.current = next;
     setState(old => old?.revision === next.revision && old.theme === next.theme &&
@@ -157,29 +160,40 @@ export function TrayMenuWindow() {
     finally { inFlight.current = false; }
   }, [receive]);
   const measure = useCallback(async () => {
-    const popup = confirmed.current?.popup, wrapper = root.current;
-    if (!popup || !wrapper || inFlight.current) return;
+    const cur = confirmed.current, popup = cur?.popup, wrapper = root.current;
+    if (!cur || !wrapper || inFlight.current) return;
     const dpr = window.devicePixelRatio, vw = window.innerWidth, vh = window.innerHeight;
     if (![dpr, vw, vh].every(n => Number.isFinite(n) && n > 0)) return;
-    // Independent physical limits / actual CSS mapping: shrinking the window
-    // never becomes a new content max-height. Page zoom is deliberately kept.
-    wrapper.style.setProperty('--tm-available-width', `${popup.max_width / dpr}px`);
-    wrapper.style.setProperty('--tm-available-height', `${popup.max_height / dpr}px`);
+    if (popup) {
+      wrapper.style.setProperty('--tm-available-width', `${popup.max_width / dpr}px`);
+      wrapper.style.setProperty('--tm-available-height', `${popup.max_height / dpr}px`);
+    } else {
+      wrapper.style.setProperty('--tm-available-width', '360px');
+      wrapper.style.setProperty('--tm-available-height', '560px');
+    }
     const panel = wrapper.querySelector<HTMLElement>('.tray-menu');
     if (!panel) return;
     const rect = panel.getBoundingClientRect(), css = getComputedStyle(wrapper);
-    // The panel lays out against the independent cap above, including its
-    // scrollable list, rootHeight minimum, notice, padding and borders.
     const quantize = (n: number) => Math.ceil(n * 64) / 64;
     const width = quantize(rect.width + parseFloat(css.paddingLeft) + parseFloat(css.paddingRight));
     const height = quantize(rect.height + parseFloat(css.paddingTop) + parseFloat(css.paddingBottom));
     if (![width, height].every(n => Number.isFinite(n) && n > 0)) return;
+    if (!popup) {
+      // Prewarm cache seed while hidden before first click so the very first click opens immediately!
+      const seedKey = `${cur.revision}|${dpr}|${width}|${height}`;
+      if (prewarmSeeded.current === seedKey) return;
+      prewarmSeeded.current = seedKey;
+      const geometry = { epoch: '0', layout: '0', viewport_width: vw, viewport_height: vh, width, height, dpr };
+      inFlight.current = true;
+      try { receive(await invoke<TrayMenuState>('tray_menu_state', { geometry })); }
+      catch { /* ignore prewarm error */ }
+      finally { inFlight.current = false; }
+      return;
+    }
     const geometry = { epoch: popup.epoch, layout: popup.layout, viewport_width: vw, viewport_height: vh, width, height, dpr };
     const key = JSON.stringify(geometry);
     if (sent.current.key !== key) sent.current = { key, count: 0 };
-    // Native also requires two stable samples. A preparing page continues
-    // until final client geometry is confirmed; a visible equal size is inert.
-    if (popup.phase === 'visible' && sent.current.count >= 2) return;
+    if (popup.phase === 'visible' && sent.current.count >= 1) return;
     inFlight.current = true;
     try { receive(await invoke<TrayMenuState>('tray_menu_state', { geometry })); if (sent.current.key === key) sent.current.count++; }
     catch { /* never replay a selection; preparation failure uses native feedback */ }
@@ -190,15 +204,13 @@ export function TrayMenuWindow() {
     let stopped = false, ticking = false, lastPoll = 0;
     const wake = () => {
       sent.current = { key: '', count: 0 }; lastPoll = 0;
+      setResetSignal(x => x + 1);
       void refresh().then(() => { if (!stopped) void measure(); });
     };
-    // First mount must read even if hidden. On reopen the fixed native DOM wake
-    // refreshes the model before measuring. No hidden-page rAF dependency.
     wake();
-    // A single ordered loop prevents a throttled hidden-page model timer from
-    // repeatedly occupying the IPC slot ahead of the geometry timer.
     const sizing = window.setInterval(() => {
       if (stopped || ticking) return;
+      if (!confirmed.current?.popup && document.visibilityState !== 'visible') return;
       ticking = true;
       void (async () => {
         try {
@@ -208,7 +220,7 @@ export function TrayMenuWindow() {
           if (!stopped) await measure();
         } finally { ticking = false; }
       })();
-    }, 100);
+    }, 50);
     const observer = new ResizeObserver(() => { void measure(); });
     if (root.current) observer.observe(root.current);
     const changed = () => { if (document.visibilityState === 'visible') wake(); };
@@ -231,5 +243,5 @@ export function TrayMenuWindow() {
     catch { if (id !== TRAY_MENU_DISMISS) setNotice('菜单已更新，请重新选择'); }
     finally { setBusy(false); void refresh(); }
   };
-  return <div className="tray-menu-window" ref={root}>{state && <TrayMenuView state={state} busy={busy} notice={notice} onSelect={id => void select(id)} />}<TooltipHost/></div>;
+  return <div className="tray-menu-window" ref={root}>{state && <TrayMenuView state={state} busy={busy} notice={notice} resetSignal={resetSignal} onSelect={id => void select(id)} />}<TooltipHost/></div>;
 }

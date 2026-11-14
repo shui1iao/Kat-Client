@@ -174,11 +174,12 @@ export function useClient() {
         })();
       }
       if(active(life)){
+       setErrorState('');
        for(const p of [...(doc.source?.kernel.providers??[])]){if(!active(life))break;await migrateOne(p.name);}
        await refreshStatus();
        await refreshSubscriptionResults();
       }
-    },e=>setErrorState(errorText(e)));
+    },e=>{if(active(life))setErrorState(errorText(e));});
   }
   useEffect(() => {
     mounted.current=true;
@@ -197,13 +198,14 @@ export function useClient() {
         if(!live)return;
         // Do not await the get: normal read-only polling continues while it is in flight.
         if(live&&coreReachable.current&&doc.uncertain)void reconcileAccepted().catch(()=>{ /* keep gate and draft; next existing poll may read again */ });
+        else if(live&&coreReachable.current&&doc.saved===null&&!jobs.current.has('connect'))void connect();
       } finally { polling = false; }
     }, 2000);
     return () => { live = false;mounted.current=false;lifetime.current++;statusRequest.current++;networkRequest.current++;clearInterval(id); };
   }, []);
   useEffect(()=> {
     if (!hasHost()) return;
-    return watchNetworkEvents(listen, setError, () => { void refreshNetwork().catch(()=>{});void refreshStatus().catch(()=>{}); },setKernelRestarting,setQuitCleanupPending);
+    return watchNetworkEvents(listen, setError, () => { void refreshNetwork().catch(()=>{});void refreshStatus().then(()=>{if(mounted.current&&doc.saved===null&&!jobs.current.has('connect'))void connect();}).catch(()=>{}); },setKernelRestarting,setQuitCleanupPending);
   }, []);
   useEffect(()=>{
     if(!hasHost())return;let live=true;const stops:Array<()=>void>=[];
@@ -320,7 +322,7 @@ export function useClient() {
    },30000);return()=>clearInterval(timer);
   },[]);
   // Native remains responsible for core/OS write gating and safe network shutdown.
-  const restartCore=()=>run('core',async()=>{const revision=doc.revision;try{await host('core_restart');}catch(e){observeUncertain(e,revision);throw e;}finally{await readActualNetwork();try{await refreshStatus()}catch{/* final state owns the stopped/error projection */}}},reportOperationError);
+  const restartCore=()=>run('core',async()=>{const revision=doc.revision;try{await host('core_restart');}catch(e){observeUncertain(e,revision);throw e;}finally{await readActualNetwork();try{await refreshStatus();if(mounted.current&&doc.saved===null&&!jobs.current.has('connect'))void connect();}catch{/* final state owns the stopped/error projection */}}},reportOperationError);
   const control = (method: CoreMethod) => run('core', async () => { const revision=doc.revision;try { await core(method); } catch(e){observeUncertain(e,revision);throw e;} finally { await readActualNetwork(); } await refreshStatus(); });
   async function updateSubscription(id:string):Promise<'confirmation'|'done'> {
    const sub=doc.source?.subscriptions?.find(s=>s.id===id);if(!sub)return 'done';
@@ -369,7 +371,7 @@ export function useClient() {
       catch(e){appRestartingRef.current=false;setAppRestarting(false);throw e;}
     },reportOperationError);
   };
-  const trayAPI=useRef<TrayAPI|null>(null);trayAPI.current={blocked:trayBlocked,lifecycleBlocked,restartCore,restartApp,quit:()=>run('window',()=>host('window_action',{action:'quit'}),reportOperationError),mode:m=>edit(d=>{d.client.mode=m},reportOperationError),select:selectMember,network:(cmd,enabled)=>os(cmd,{enabled}),show:()=>host('window_action',{action:'show'}),error:reportOperationError};
+  const trayAPI=useRef<TrayAPI|null>(null);trayAPI.current={blocked:trayBlocked,lifecycleBlocked,restartCore,restartApp,quit:()=>run('window',()=>host('window_action',{action:'quit'}),reportOperationError),mode:m=>edit(d=>{d.client.mode=m;if(m==='global'){const gs=d.kernel.groups??[];if(gs.length&&(!d.client.global_group||!gs.some(g=>g.name===d.client.global_group)))d.client.global_group=gs[0].name;}},reportOperationError),select:selectMember,network:(cmd,enabled)=>os(cmd,{enabled}),show:()=>host('window_action',{action:'show'}),error:reportOperationError};
   const trayListenerReady=useRef(false);
   const lastTray=useRef<{state:string;payload:ReturnType<typeof traySnapshot>}|null>(null);
   const nextTray=traySnapshot(projectedSource,projectedStatus,network,trayProjectionBlocked(),label),trayState=JSON.stringify(nextTray);

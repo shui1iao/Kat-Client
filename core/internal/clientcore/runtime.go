@@ -647,7 +647,7 @@ func (h *Host) Close() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.clearFullPendingLocked()
-	e := h.stopLocked()
+	e := h.stopWithDrainLocked(150*time.Millisecond, true)
 	if h.updatePrepared {
 		if se := h.checkSourceLocked(); se != nil && e == nil {
 			e = fail("update_source_failed", "text", "Accepted source changed after update prepare")

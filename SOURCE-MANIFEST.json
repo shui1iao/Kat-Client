@@ -1,33 +1,31 @@
 {
   "schema": 1,
-  "app_version": "0.2.11",
-  "core_version": "0.8.6",
-  "sequence": 1794658669,
-  "client_sequence": 1794658669,
-  "core_sequence": 1794587687,
+  "app_version": "0.2.12",
+  "core_version": "0.8.7",
+  "sequence": 1794669600,
   "excludes": [
     "BUILD-IDENTITY.json",
     "SOURCE-MANIFEST.json"
   ],
-  "core_source_fingerprint": "cc9a2539de5984cee366aa6b84e4996e684002925679286a524768ffbfedf19d",
+  "core_source_fingerprint": "cec797d4d348f7887b79c46d5a569adccd6bfa90269d0ad3222042bc0a7e6fb5",
   "files": [
     {
       "path": "BUILDING.md",
-      "bytes": 1014,
+      "bytes": 932,
       "mode": "0644",
-      "sha256": "60d128c4afff3b124ff8a872f1a1da35e365d0392936a1cd33dc3129b4ea4bc5"
+      "sha256": "acd62b550902c1c9b6220cc869a1163f6b029c26ed939d04e472575b9244d6dc"
     },
     {
       "path": "README.md",
-      "bytes": 783,
+      "bytes": 499,
       "mode": "0644",
-      "sha256": "1ad4af36417d5b82f0ba2f408a300a530e7b4b7ba1ca648769465146e17f6d6b"
+      "sha256": "4973c0c0ca2b47f31f97c76e6b7935903c37eb0a2f46d52167bd2d84fb4ee1cf"
     },
     {
       "path": "RELEASE_NOTES.md",
-      "bytes": 1736,
+      "bytes": 2206,
       "mode": "0644",
-      "sha256": "289a36cd4715507ba776bfde900a0dd4201b170e30745cea40f4db427d53645d"
+      "sha256": "1ec67c0498f1e28f99d5bf8a1ba31f8a495766db3e2db51a18120de24e336351"
     },
     {
       "path": "RIGHTS.md",
@@ -37,9 +35,9 @@
     },
     {
       "path": "VALIDATION.md",
-      "bytes": 1325,
+      "bytes": 1303,
       "mode": "0644",
-      "sha256": "a74c795a9d9f7ca5f49194c94caea371f25bb1910d02e6b8335a159476976244"
+      "sha256": "b614b23b4a1ac5884753fe6c52e603688f6b81b791f691865c38bf8d4f21ed32"
     },
     {
       "path": "app/build.mjs",
@@ -48,22 +46,22 @@
       "sha256": "e2144e0f71b5f6858949b3df27b7663ae0afa79bd6fb5a44c4644e5720d59c42"
     },
     {
-      "path": "app/dist/assets/App-8J6sRtM_.js",
-      "bytes": 391404,
+      "path": "app/dist/assets/App-DWSApqGf.js",
+      "bytes": 391993,
       "mode": "0644",
-      "sha256": "4eac458a31cba69cc2f223edec3192b970f41e6123f1d642d13ff52f59058ed7"
+      "sha256": "0514a11416cea2e0e02b4964fe780e044bf16c174ead9c3e96a2fb4bfdfaa234"
     },
     {
-      "path": "app/dist/assets/Tooltip-DN9ubKPO.js",
+      "path": "app/dist/assets/Tooltip-B-_CvOB_.js",
       "bytes": 11965,
       "mode": "0644",
-      "sha256": "52f2bd1006042cca38ee415a352eec38baeafcc7d7e003476c8e376ec9873240"
+      "sha256": "65abf6cf88982c5889c500f175161d677be32f6fa06ee614ca7c5f688e11fc85"
     },
     {
-      "path": "app/dist/assets/TrayMenu-BmL3563N.js",
-      "bytes": 9420,
+      "path": "app/dist/assets/TrayMenu-sj72gMzS.js",
+      "bytes": 9977,
       "mode": "0644",
-      "sha256": "3c747cacaa70edc22201fa1b08e311b9d5a7a2a30774989c175952b4bf4c24c4"
+      "sha256": "3367185a148b8660642c1fb74f54c56a9d3202159c899c278f681d9db8faeb09"
     },
     {
       "path": "app/dist/assets/google-g-gradient-BqSrTii1.png",
@@ -72,22 +70,22 @@
       "sha256": "7b6054b2e8919bf44722eec59413da74a8fc7d16fcb827da165d0b8c8217f8e9"
     },
     {
-      "path": "app/dist/assets/index-D15g7nrE.js",
+      "path": "app/dist/assets/index-BFBzgx_B.js",
       "bytes": 221815,
       "mode": "0644",
-      "sha256": "d9e6d7c57a363d20591caaddd046dc6ba55df9445a3dcfccbfc3b0c4ce0c97fc"
+      "sha256": "901b1d0c50712b17c03a3015b5fe1d8c531d6dfab5400db8f5651f9ae4255c23"
     },
     {
-      "path": "app/dist/assets/ipc-44gixAAQ.js",
+      "path": "app/dist/assets/ipc-C7PY8HJR.js",
       "bytes": 41,
       "mode": "0644",
-      "sha256": "e79aef53a7fd18bac41974848155f78b520fa068bbf50041f4c475ab0a56f712"
+      "sha256": "fb27f335571d417e845d9b061f969b5e52266726ad68f1d8bb4eb0e05ea4da7f"
     },
     {
-      "path": "app/dist/assets/style-Cp5n8jAK.css",
-      "bytes": 82344,
+      "path": "app/dist/assets/style-DeXmZpN8.css",
+      "bytes": 82020,
       "mode": "0644",
-      "sha256": "f44390ce4b24e7f6f7a0c167128f2d2da93a022413f3a44a3d92b108fc94d40e"
+      "sha256": "9958223f243cb7d8047c72fd4e91aca0b3231bc328382a51404ce41db4474f9f"
     },
     {
       "path": "app/dist/fonts/NOTICE.txt",
@@ -111,7 +109,7 @@
       "path": "app/dist/index.html",
       "bytes": 420,
       "mode": "0644",
-      "sha256": "3097843f1084754d9a2adb0911dea99f52d98ffb6460d53703153a679d2286f8"
+      "sha256": "437425904682a6abf6e13481f9b50ec2f6b04980a1c6baea03b530ae23475776"
     },
     {
       "path": "app/dist/kat-icon.svg",
@@ -129,13 +127,13 @@
       "path": "app/package-lock.json",
       "bytes": 40846,
       "mode": "0644",
-      "sha256": "05ca29c65a3d4dadd9a9fceb02e2b690a1b131610eb3a453c649cb7a7375bf15"
+      "sha256": "98947c13f1f82287441044cc91ce8dbc99c18c8bfd12a8223b9f10594388a44f"
     },
     {
       "path": "app/package.json",
       "bytes": 527,
       "mode": "0644",
-      "sha256": "fbdd046f639003b735d3155c56792aa84cc9598a263e8eb02cda96bfab0456a6"
+      "sha256": "34ee4efa5587a21919664fca56ca3882ad6d6221df8d98e405a09d6bc55ed10e"
     },
     {
       "path": "app/public/fonts/NOTICE.txt",
@@ -165,13 +163,13 @@
       "path": "app/src-tauri/Cargo.lock",
       "bytes": 116752,
       "mode": "0644",
-      "sha256": "332a4079e12b696bb731a4cbf912490330bc35c3ab863e04657cb800210625d6"
+      "sha256": "2afad72cec4402e94f803daeeca96c53542a64c118c20851b749b5374a794373"
     },
     {
       "path": "app/src-tauri/Cargo.toml",
       "bytes": 2421,
       "mode": "0644",
-      "sha256": "9a036a04eca27f9d175566b9ecd8d1e4201520e98cdfbde63bd2717d943a9624"
+      "sha256": "d189707f77ef595500768df65ef36c770c6ea84f3180034d0a2e7e8e0449889d"
     },
     {
       "path": "app/src-tauri/build.rs",
@@ -205,9 +203,9 @@
     },
     {
       "path": "app/src-tauri/distribution/README-WINDOWS.txt",
-      "bytes": 386,
+      "bytes": 457,
       "mode": "0644",
-      "sha256": "9fa8909f9b635b3d05e8a5a6c2f1d9faab5df1ca331adeba74859ebcf376a0ec"
+      "sha256": "8954090424eef1175f74ced37bff651b2a842676346a4e6ea83ea75928e5b422"
     },
     {
       "path": "app/src-tauri/distribution/RUST-THIRD-PARTY-NOTICES.txt",
@@ -4761,7 +4759,7 @@
       "path": "app/src-tauri/scripts/build-setup.py",
       "bytes": 5088,
       "mode": "0644",
-      "sha256": "0d6e0372319b958766311764e4057fbd4e7382f16df2cd2d75fa9c0a2c2037d0"
+      "sha256": "edcd80cbc10703e55b489464405b49442589f7eaa91b990c2765a9ee1be1d9dc"
     },
     {
       "path": "app/src-tauri/scripts/build-windows.sh",
@@ -4873,9 +4871,9 @@
     },
     {
       "path": "app/src-tauri/src/core_process.rs",
-      "bytes": 13490,
+      "bytes": 13498,
       "mode": "0644",
-      "sha256": "946ad32e6aecfb66abc6254242e438600538759d77dd1a8a0ca523e93b7f03cf"
+      "sha256": "31d5a4d38eb0b873ad63f1e3d7efa296a256cfb26cad70d45b3c455997daa543"
     },
     {
       "path": "app/src-tauri/src/core_process_elevated.rs",
@@ -4891,9 +4889,9 @@
     },
     {
       "path": "app/src-tauri/src/desktop.rs",
-      "bytes": 46122,
+      "bytes": 46278,
       "mode": "0644",
-      "sha256": "e2d981b2d020e9fabaef408a230d732a9e0cb78f72057b64e1833e1b3605d2b2"
+      "sha256": "9cf22b07c02ce0d17eaa9c7471d5c3905ecfb0a709122df9e5edb8ba46eab0dc"
     },
     {
       "path": "app/src-tauri/src/desktop_update.rs",
@@ -5053,9 +5051,9 @@
     },
     {
       "path": "app/src-tauri/src/supervisor.rs",
-      "bytes": 36783,
+      "bytes": 36687,
       "mode": "0644",
-      "sha256": "8e2eab26a9223376fd7dcbc7b523b12b6cf5180507677d64ddf7cc0004e2c3a8"
+      "sha256": "9cabe48a00060ce214f5ddebb96ff232c5c1b841692ee6c97ff47b426d82ce75"
     },
     {
       "path": "app/src-tauri/src/supervisor_pipe.rs",
@@ -5077,9 +5075,9 @@
     },
     {
       "path": "app/src-tauri/src/tray_controls.rs",
-      "bytes": 13640,
+      "bytes": 13745,
       "mode": "0644",
-      "sha256": "047c67f9178268acd9475be0a65852354c22259ae645f158758f6907250241a4"
+      "sha256": "e867a22e28c7785e2d039c37c8b262e53e39596faca27e1a1a890a3b25c89ed7"
     },
     {
       "path": "app/src-tauri/src/tray_lifecycle.rs",
@@ -5089,9 +5087,9 @@
     },
     {
       "path": "app/src-tauri/src/tray_popup.rs",
-      "bytes": 12414,
+      "bytes": 13150,
       "mode": "0644",
-      "sha256": "6273d3cf01a0362d1dead8927cf333ea29a9d5ae88d11fbd71dff596f4859b5d"
+      "sha256": "063ecfd134065dfc77a64065d87579ba69d1ebcc01d31d24ee1bd147cb21d216"
     },
     {
       "path": "app/src-tauri/src/tun_diagnostics.rs",
@@ -5367,7 +5365,7 @@
       "path": "app/src-tauri/tauri.conf.json",
       "bytes": 862,
       "mode": "0644",
-      "sha256": "cc36a877b69a3f40d8a4173ca140be699cbc70014160f73c3d7ede7208c5c87d"
+      "sha256": "8c83062fc98e44444997bdce0d61ec0b8de6996950052a4f9e29ecb95c2c814e"
     },
     {
       "path": "app/src-tauri/tests/control_contract.rs",
@@ -5917,9 +5915,9 @@
     },
     {
       "path": "app/src/client/useClient.ts",
-      "bytes": 30493,
+      "bytes": 30989,
       "mode": "0644",
-      "sha256": "c58dc152ccedfa4bb6d0346da09a100cabda33d6b2546435f4881f90414f3fa3"
+      "sha256": "4cb0e8cc4c32df3d0c06c334086ae3d98337590627587190d3ab57aa4989a163"
     },
     {
       "path": "app/src/client/yaml.ts",
@@ -6037,9 +6035,9 @@
     },
     {
       "path": "app/src/components/SideControls.tsx",
-      "bytes": 9870,
+      "bytes": 10176,
       "mode": "0644",
-      "sha256": "997fe535d38ac681982758202ee37f71744a8cbddda248c88132e8d2451c4afd"
+      "sha256": "eba10b8137e2ffc0152d81d8afff2d7551506faa5c8f32d5f7fd35ead9c7e5b4"
     },
     {
       "path": "app/src/components/SideStatus.tsx",
@@ -6091,9 +6089,9 @@
     },
     {
       "path": "app/src/components/TrayMenu.tsx",
-      "bytes": 15837,
+      "bytes": 16229,
       "mode": "0644",
-      "sha256": "5fa3510f4bb7a3da743b7986630e55889d75f2729b9e2764a295c6e54253ef40"
+      "sha256": "f8f82b67942bbec89945d9f47965431f9547ac6edb547cfbb819daefd48b0a77"
     },
     {
       "path": "app/src/components/labels.tsx",
@@ -6127,9 +6125,9 @@
     },
     {
       "path": "app/src/design/shell.css",
-      "bytes": 14427,
+      "bytes": 14080,
       "mode": "0644",
-      "sha256": "6e293a0b65a2a282ec739db0865c1c44c2da8c7769bb569f559546cc47635e0b"
+      "sha256": "50376d9d3b971cb7542151711c13c516273dbc73d3e6e3465d52a54ecc68a378"
     },
     {
       "path": "app/src/design/tokens.css",
@@ -7669,9 +7667,9 @@
     },
     {
       "path": "core/internal/clientcore/runtime.go",
-      "bytes": 20916,
+      "bytes": 20951,
       "mode": "0644",
-      "sha256": "12fe486582806db6870d67391ec09d50256558795fd4fedb0bf006ebaeb5c574"
+      "sha256": "f4f52a540b85b1b313986b752b994928bc96c4895bf58406ff64c8571e45d049"
     },
     {
       "path": "core/internal/clientcore/runtime_test.go",
@@ -7723,15 +7721,15 @@
     },
     {
       "path": "core/internal/clientcore/status.go",
-      "bytes": 8640,
+      "bytes": 8808,
       "mode": "0644",
-      "sha256": "de1dfa393fb7e59bd91955b4d52e2dbf8b8e84dbe7ec4d1c1835bb327090765f"
+      "sha256": "fb6e0462b64a019650d8924e59308e2b91ea6cfa70c1afda6dc24054d9dad058"
     },
     {
       "path": "core/internal/clientcore/subscription.go",
-      "bytes": 51523,
+      "bytes": 51829,
       "mode": "0644",
-      "sha256": "f6017772677a785d2ae427c42a84f088c62838de8365be9b556d411ef9338cf0"
+      "sha256": "301cbba271f0a25697f03b2481d373018c60c964ddf56cc15edbb7d02b81ea44"
     },
     {
       "path": "core/internal/clientcore/subscription_atomic_test.go",
@@ -7849,9 +7847,9 @@
     },
     {
       "path": "core/internal/clientcore/subscription_resource.go",
-      "bytes": 1773,
+      "bytes": 1987,
       "mode": "0644",
-      "sha256": "6ce80884e5fec8d74f5ca5ce081a68ca87e5ce9994514a7650530886257704ed"
+      "sha256": "45ce59c08be4aa76957ed33d359d308b1ba2ddb6a47490304d254ad5c2b039f9"
     },
     {
       "path": "core/internal/clientcore/subscription_resource_read_test.go",
@@ -9637,9 +9635,9 @@
     },
     {
       "path": "core/internal/route/cache.go",
-      "bytes": 2255,
+      "bytes": 3919,
       "mode": "0644",
-      "sha256": "2b155536db859d334b57fbef34b606d6f182b9ad4e61710da08d20dbacf55910"
+      "sha256": "e5cc14ec619e269c2b39a6e159d718ae58e53bdff48505b2b57c516ee3c651a8"
     },
     {
       "path": "core/internal/route/check.go",
@@ -9739,9 +9737,9 @@
     },
     {
       "path": "core/internal/route/remote.go",
-      "bytes": 11210,
+      "bytes": 11542,
       "mode": "0644",
-      "sha256": "d9da6d177048d59f57d0b0dd55be212e4aae91f9755f02c843d9d7ef597e113a"
+      "sha256": "6c0d52c82f86d0e29f0834c44f8e98fe9017648a8d64723d72d1d9735b061f11"
     },
     {
       "path": "core/internal/route/remote_test.go",
@@ -12807,7 +12805,7 @@
       "path": "release-config.json",
       "bytes": 329,
       "mode": "0644",
-      "sha256": "a45634eb98be62457c52fc16b48412c5e1751945c39fb7456160ddb0b387d40e"
+      "sha256": "64d29a37761ee2b59e5dd2540e901137e40265a6dfe2092ca01134f589de4b33"
     }
   ]
 }

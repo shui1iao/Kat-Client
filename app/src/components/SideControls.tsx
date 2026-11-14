@@ -45,7 +45,13 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
     setPending(m);
     void c.edit((d) => {
       d.client.mode = m;
-    }).finally(() => setPending(null));
+      if (m === 'global') {
+        const gs = d.kernel.groups ?? [];
+        if (gs.length && (!d.client.global_group || !gs.some((g) => g.name === d.client.global_group))) {
+          d.client.global_group = gs[0].name;
+        }
+      }
+    }, c.reportOperationError).finally(() => setPending(null));
   };
 
   const sysError = sys?.error ? errorText({ code: sys.error }) : '';
@@ -96,10 +102,10 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
 
   const selectGlobalGroup = (name: string) => {
     setMenuPos(null);
-    if (name === globalGroup) return;
+    if (name === c.source?.client.global_group) return;
     void c.edit((d) => {
       d.client.global_group = name;
-    });
+    }, c.reportOperationError);
   };
 
   return (

@@ -12,36 +12,43 @@ import (
 
 // Protocol-level loopback checks, never a bare connect or a remote test.
 func (h *Host) checkLocal() bool {
-	c, e := net.DialTimeout("tcp", portAddress(h.doc.client.SOCKSPort), time.Second)
-	if e != nil {
-		return false
-	}
-	c.SetDeadline(time.Now().Add(time.Second))
-	_, e = c.Write([]byte{5, 1, 0})
-	var b [2]byte
-	if e == nil {
-		_, e = io.ReadFull(c, b[:])
-	}
-	c.Close()
-	if e != nil || b != [2]byte{5, 0} {
-		return false
-	}
-	c, e = net.DialTimeout("tcp", portAddress(h.doc.client.HTTPPort), time.Second)
-	if e != nil {
-		return false
-	}
-	defer c.Close()
-	c.SetDeadline(time.Now().Add(time.Second))
-	_, e = io.WriteString(c, "OPTIONS * HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
-	if e != nil {
-		return false
-	}
-	r, e := http.ReadResponse(bufio.NewReader(c), nil)
-	if e != nil {
-		return false
-	}
-	r.Body.Close()
-	return r.StatusCode == 204 && r.Header.Get("Kat-Client-Proxy") == "1"
+	sp := portAddress(h.doc.client.SOCKSPort)
+	hp := portAddress(h.doc.client.HTTPPort)
+	socksDone := make(chan bool, 1)
+	go func() {
+		c, e := net.DialTimeout("tcp", sp, time.Second)
+		if e != nil {
+			socksDone <- false
+			return
+		}
+		c.SetDeadline(time.Now().Add(time.Second))
+		_, e = c.Write([]byte{5, 1, 0})
+		var b [2]byte
+		if e == nil {
+			_, e = io.ReadFull(c, b[:])
+		}
+		c.Close()
+		socksDone <- (e == nil && b == [2]byte{5, 0})
+	}()
+	httpOK := func() bool {
+		c, e := net.DialTimeout("tcp", hp, time.Second)
+		if e != nil {
+			return false
+		}
+		defer c.Close()
+		c.SetDeadline(time.Now().Add(time.Second))
+		_, e = io.WriteString(c, "OPTIONS * HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+		if e != nil {
+			return false
+		}
+		r, e := http.ReadResponse(bufio.NewReader(c), nil)
+		if e != nil {
+			return false
+		}
+		r.Body.Close()
+		return r.StatusCode == 204 && r.Header.Get("Kat-Client-Proxy") == "1"
+	}()
+	return <-socksDone && httpOK
 }
 func (h *Host) Status() any { h.mu.Lock(); defer h.mu.Unlock(); return h.statusLocked() }
 func (h *Host) statusLocked() any {

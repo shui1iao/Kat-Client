@@ -2,6 +2,7 @@ package route
 
 import (
 	"hash/crc32"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -14,13 +15,16 @@ import (
 // weak for long-term reuse, with a brief strong pin so preflight validation in
 // Open() is guaranteed to hand off parsed sets/MMDBs to Start() without GC loss.
 type cacheEntry struct {
-	key    string
-	pin    any
-	pinSeq uint64
-	set    weak.Pointer[setData]
-	geo    weak.Pointer[geoDB]
-	asn    weak.Pointer[asnDB]
-	site   weak.Pointer[siteDB]
+	key     string
+	statKey string
+	size    int
+	mtime   time.Time
+	pin     any
+	pinSeq  uint64
+	set     weak.Pointer[setData]
+	geo     weak.Pointer[geoDB]
+	asn     weak.Pointer[asnDB]
+	site    weak.Pointer[siteDB]
 }
 
 const startupCachePinTTL = 15 * time.Second
@@ -38,13 +42,14 @@ func cacheKey(s *source, b []byte) string {
 	return s.kind + "|" + s.stamp + "|" + strconv.Itoa(len(b)) + "|" + strconv.FormatUint(uint64(crc32.Checksum(b, castagnoli)), 16)
 }
 
-func cacheGet(path, key string) any {
-	parsedCache.Lock()
-	defer parsedCache.Unlock()
-	c, ok := parsedCache.m[path]
-	if !ok || c.key != key {
-		return nil
+func fileStatKey(s *source, fi os.FileInfo) string {
+	if fi == nil {
+		return ""
 	}
+	return s.kind + "|" + s.stamp + "|" + strconv.FormatInt(fi.Size(), 10) + "|" + strconv.FormatInt(fi.ModTime().UnixNano(), 10)
+}
+
+func (c cacheEntry) resolve() any {
 	if c.pin != nil {
 		return c.pin
 	}
@@ -58,15 +63,72 @@ func cacheGet(path, key string) any {
 	case c.site.Value() != nil:
 		return c.site.Value()
 	}
+	return nil
+}
+
+func cacheGet(path, key string) any {
+	parsedCache.Lock()
+	defer parsedCache.Unlock()
+	c, ok := parsedCache.m[path]
+	if !ok || c.key != key {
+		return nil
+	}
+	if v := c.resolve(); v != nil {
+		return v
+	}
 	delete(parsedCache.m, path)
 	return nil
 }
 
+func cacheGetStat(path string, s *source, fi os.FileInfo) (any, string, int, bool) {
+	if path == "" || fi == nil || !fi.Mode().IsRegular() {
+		return nil, "", 0, false
+	}
+	sk := fileStatKey(s, fi)
+	if sk == "" {
+		return nil, "", 0, false
+	}
+	parsedCache.Lock()
+	defer parsedCache.Unlock()
+	c, ok := parsedCache.m[path]
+	if !ok || c.statKey == "" || c.statKey != sk {
+		return nil, "", 0, false
+	}
+	if v := c.resolve(); v != nil {
+		return v, c.key, c.size, true
+	}
+	delete(parsedCache.m, path)
+	return nil, "", 0, false
+}
+
 func cachePut(path, key string, v any) {
+	cachePutWithStat(path, key, "", 0, time.Time{}, v)
+}
+
+func CacheRecordStat(path, kind, stamp string, fi os.FileInfo) {
+	if path == "" || fi == nil {
+		return
+	}
+	src := &source{kind: kind, path: path, stamp: stamp}
+	sk := fileStatKey(src, fi)
+	if sk == "" {
+		return
+	}
+	parsedCache.Lock()
+	if cur, ok := parsedCache.m[path]; ok {
+		cur.statKey = sk
+		cur.size = int(fi.Size())
+		cur.mtime = fi.ModTime()
+		parsedCache.m[path] = cur
+	}
+	parsedCache.Unlock()
+}
+
+func cachePutWithStat(path, key, statKey string, size int, mtime time.Time, v any) {
 	if path == "" {
 		return
 	}
-	c := cacheEntry{key: key, pin: v}
+	c := cacheEntry{key: key, statKey: statKey, size: size, mtime: mtime, pin: v}
 	switch x := v.(type) {
 	case *setData:
 		c.set = weak.Make(x)
@@ -82,6 +144,11 @@ func cachePut(path, key string, v any) {
 	parsedCache.Lock()
 	if parsedCache.m == nil {
 		parsedCache.m = map[string]cacheEntry{}
+	}
+	if prev, ok := parsedCache.m[path]; ok && prev.key == key && c.statKey == "" && prev.statKey != "" {
+		c.statKey = prev.statKey
+		c.size = prev.size
+		c.mtime = prev.mtime
 	}
 	parsedCache.seq++
 	seq := parsedCache.seq

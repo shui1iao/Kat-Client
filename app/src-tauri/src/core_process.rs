@@ -89,7 +89,7 @@ impl CoreProcess{
  pub async fn request(&self,m:&str,p:Value,t:Duration)->Result<Value>{if self.0.transition.load(Ordering::SeqCst){return Err(Error::new("CORE_HANDOVER","Core handover is in progress"))}let _entry=entry_mutation(m).then(||self.invalidate_update_transport());self.snapshot().request(m,p,t).await}
  pub async fn request_public(&self,m:&str,p:Value,t:Duration)->Result<Value>{
   if self.0.transition.load(Ordering::SeqCst){
-   if matches!(m,"status"|"document.get"|"logs.get"|"logs.connections"|"logs.kernel"){
+   if matches!(m,"hello"|"status"|"document.get"|"logs.get"|"logs.connections"|"logs.kernel"){
     let deadline=std::time::Instant::now()+Duration::from_secs(3);
     while self.0.transition.load(Ordering::SeqCst)&&std::time::Instant::now()<deadline{tokio::time::sleep(Duration::from_millis(25)).await;}
    }
