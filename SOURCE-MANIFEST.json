@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "app_version": "0.2.9",
+  "app_version": "0.2.10",
   "core_version": "0.8.6",
-  "sequence": 1794638859,
-  "client_sequence": 1794638859,
+  "sequence": 1794642156,
+  "client_sequence": 1794642156,
   "core_sequence": 1794587687,
   "excludes": [
     "BUILD-IDENTITY.json",
@@ -13,21 +13,21 @@
   "files": [
     {
       "path": "BUILDING.md",
-      "bytes": 1013,
+      "bytes": 1014,
       "mode": "0644",
-      "sha256": "aebe47a3447436f5c3a734a6ec83f2e1e97ff3cce73fdc8a3dd23cb5be6e3983"
+      "sha256": "6d38a154d88b72f8c9e80f8163903c2082447c3b91401c5688d467e0bca0767e"
     },
     {
       "path": "README.md",
-      "bytes": 782,
+      "bytes": 783,
       "mode": "0644",
-      "sha256": "4d7a1a047889a02b0f22c06aefcfc1a14dba3db1932d3ee4cf65886fef27a62b"
+      "sha256": "80750b5f7f96127fc3ea08162de6147005a36840a3de3ccf5a18c2f820ce4e71"
     },
     {
       "path": "RELEASE_NOTES.md",
-      "bytes": 2455,
+      "bytes": 1534,
       "mode": "0644",
-      "sha256": "4839467b6e2cf06590eef3b3b0950809301e0e26e77b4e1d3565ead16218485a"
+      "sha256": "be1a9954af405ec2a75e2cdb445f7dfe13a84e9fa301ac7b532093027ef13857"
     },
     {
       "path": "RIGHTS.md",
@@ -37,9 +37,9 @@
     },
     {
       "path": "VALIDATION.md",
-      "bytes": 1330,
+      "bytes": 1253,
       "mode": "0644",
-      "sha256": "a40c650638e21cac3be2f696b3eeb2718a0e85c466a496e89fa0d4e886001c7f"
+      "sha256": "bf3001df553e10917d0a7da5d9ae4a7379f7b9941fb7b9c1e2c9a4be86111695"
     },
     {
       "path": "app/build.mjs",
@@ -84,10 +84,10 @@
       "sha256": "e79aef53a7fd18bac41974848155f78b520fa068bbf50041f4c475ab0a56f712"
     },
     {
-      "path": "app/dist/assets/style-B-wVFTmn.css",
+      "path": "app/dist/assets/style-BUa9pnAK.css",
       "bytes": 82344,
       "mode": "0644",
-      "sha256": "3cc0d05ca292a8089a7d8d2c22ad317b8e5dde3d821dbe1872924778bfde0d81"
+      "sha256": "84a99798a4a98880831067fe4fb9440934c6e015926529dca43c3a0ada02827f"
     },
     {
       "path": "app/dist/fonts/NOTICE.txt",
@@ -111,7 +111,7 @@
       "path": "app/dist/index.html",
       "bytes": 420,
       "mode": "0644",
-      "sha256": "9c2a7ce4788a299a6a5d9023f55edc8aabdffc6902d24afe3c113cc40763e69d"
+      "sha256": "6aa6cbf80666e10631dfcc2110775d6afc30f6b02da5633437bdc8e1fd56b372"
     },
     {
       "path": "app/dist/kat-icon.svg",
@@ -127,15 +127,15 @@
     },
     {
       "path": "app/package-lock.json",
-      "bytes": 40844,
+      "bytes": 40846,
       "mode": "0644",
-      "sha256": "5b05b451457733b3a1501808febfe75d904e0ed1411fbd234c8c243053ea874e"
+      "sha256": "0d54082392d39e817e078145f215cdd214b247f9e7cb7a19c604677c44c43262"
     },
     {
       "path": "app/package.json",
-      "bytes": 526,
+      "bytes": 527,
       "mode": "0644",
-      "sha256": "2a7a980a8e3b12c85ffe82251add1a88e4de7bc6a1aab8655c6c3739e6ad2c07"
+      "sha256": "c9e5a1c2bdfb7f6078106306af08a000cd114cc662f1e46aa8ed66fc3d6677ca"
     },
     {
       "path": "app/public/fonts/NOTICE.txt",
@@ -163,15 +163,15 @@
     },
     {
       "path": "app/src-tauri/Cargo.lock",
-      "bytes": 116751,
+      "bytes": 116752,
       "mode": "0644",
-      "sha256": "dfc99444bd3318ded336d5d81abe08650cf4f5fa12be511d84fbcf6c049e1924"
+      "sha256": "bcbea054334ef777427d06780ae1fdd2b9a18961544a38d20933b93cd99b0f79"
     },
     {
       "path": "app/src-tauri/Cargo.toml",
-      "bytes": 2420,
+      "bytes": 2421,
       "mode": "0644",
-      "sha256": "bd06538fa62871af68e10360d1120ce5de4addf5e2e41534cf72a5b6910df00d"
+      "sha256": "3dc522d0d43b903ea7c793f3d316518a5b3d3bfe5f700bb86e0e85fd2cff1a55"
     },
     {
       "path": "app/src-tauri/build.rs",
@@ -205,9 +205,9 @@
     },
     {
       "path": "app/src-tauri/distribution/README-WINDOWS.txt",
-      "bytes": 385,
+      "bytes": 386,
       "mode": "0644",
-      "sha256": "e561ef549cf7daaf5f574938e4c995acbe08a78dae39ed2a7e47f9df74b1ac57"
+      "sha256": "a311b442139a71e69af10cb52cbeade1b2e324a4e9540318de7c67d6d136c20e"
     },
     {
       "path": "app/src-tauri/distribution/RUST-THIRD-PARTY-NOTICES.txt",
@@ -5365,9 +5365,9 @@
     },
     {
       "path": "app/src-tauri/tauri.conf.json",
-      "bytes": 861,
+      "bytes": 862,
       "mode": "0644",
-      "sha256": "92a422ffa521e850f31844ac8bb0b168904840a9f14c3a15b07608abad20ca0b"
+      "sha256": "4e717900a4455c32a0b0e792cd3cc27ef8bbf9f777482c1e30945da98320acb6"
     },
     {
       "path": "app/src-tauri/tests/control_contract.rs",
@@ -6123,7 +6123,7 @@
       "path": "app/src/design/pages.css",
       "bytes": 59039,
       "mode": "0644",
-      "sha256": "27e61bd0226296079993cfa397a37f71f68e31bdd1e0e92ea5a7cb0d29f2781f"
+      "sha256": "04272a9a52e35dc7c0e7eb5e6c69bd4a3c324ba95de8d78923d223456b8f2adc"
     },
     {
       "path": "app/src/design/shell.css",
@@ -6135,7 +6135,7 @@
       "path": "app/src/design/tokens.css",
       "bytes": 9241,
       "mode": "0644",
-      "sha256": "2953ce76cf4de73d72e5cd74be1fc2f196926f72f12c0a0ca852dd640bee6a2a"
+      "sha256": "33cd270dd2c58e5304e0e4b721484910d039f0939333565f492b2aaf23416a5f"
     },
     {
       "path": "app/src/lib/displaySort.ts",
@@ -12805,9 +12805,9 @@
     },
     {
       "path": "release-config.json",
-      "bytes": 328,
+      "bytes": 329,
       "mode": "0644",
-      "sha256": "05ff49438139eb7d239a3287dc59de18dc15fdd6d377f5dd1df664da7795b6db"
+      "sha256": "57f4d31808796e4b93144cd6b383441beaecd214d540e69476c0788d7b16b8c7"
     }
   ]
 }
