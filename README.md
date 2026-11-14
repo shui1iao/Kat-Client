@@ -1,6 +1,6 @@
-# Kat-Client v0.2.10
+# Kat-Client v0.2.11
 
-Windows x64 客户端正式发布版，内置 Windows Core v0.8.6（客户端 sequence `1794642156`，内核 sequence `1794587687`）。安装附件名 `Kat-Setup-x64.exe`。
+Windows x64 客户端正式发布版，内置 Windows Core v0.8.6（客户端 sequence `1794658669`，内核 sequence `1794587687`）。安装附件名 `Kat-Setup-x64.exe`。
 
 完整更新说明与行为边界见 [RELEASE_NOTES.md](RELEASE_NOTES.md)；验证范围见 [VALIDATION.md](VALIDATION.md)。Linux Server v0.8.1 不变。
 

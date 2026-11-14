@@ -1,6 +1,6 @@
-# Build: Client 0.2.10 / Windows Core 0.8.6
+# Build: Client 0.2.11 / Windows Core 0.8.6
 
-客户端 sequence `1794642156`，内置 Windows Core v0.8.6 sequence `1794587687`。源归档与发布 Git index 逐成员字节/模式一致；`SOURCE-MANIFEST.json` 排除自身及 `BUILD-IDENTITY.json` 以避免循环。`CORE-BUILD.json` 按精确 `core/` 成员排序 JSON 计算指纹，前 40 位注入 `BuildCommit`（不是 Git commit）。
+客户端 sequence `1794658669`，内置 Windows Core v0.8.6 sequence `1794587687`。源归档与发布 Git index 逐成员字节/模式一致；`SOURCE-MANIFEST.json` 排除自身及 `BUILD-IDENTITY.json` 以避免循环。`CORE-BUILD.json` 按精确 `core/` 成员排序 JSON 计算指纹，前 40 位注入 `BuildCommit`（不是 Git commit）。
 
 环境：Go 1.26.9、Node 24.19.0/npm、锁定 Rust 1.99.1/cargo-xwin、Windows SDK 10.0.26100 及 MSVC 14.44；离线锁定 `go.mod`/`go.sum`、`Cargo.lock` 和 `package-lock.json`。
 

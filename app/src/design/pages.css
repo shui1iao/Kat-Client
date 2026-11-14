@@ -1388,17 +1388,17 @@
 }
 
 :root[data-theme="light"] .policy-editor-v2 :is(.pe-details, .pe-members) .inp {
-  background-color: rgba(252, 252, 252, 0.86);
+  background-color: rgba(255, 255, 255, 0.82);
   box-shadow: inset 0 0 0 1px var(--line-2);
 }
 
 :root[data-theme="light"] .policy-editor-v2 :is(.pe-details, .pe-members) .inp:hover:not(:disabled):not(:focus) {
-  background-color: rgba(252, 252, 252, 0.86);
+  background-color: rgba(255, 255, 255, 0.82);
   box-shadow: inset 0 0 0 1px var(--line-3);
 }
 
 :root[data-theme="light"] .policy-editor-v2 :is(.pe-details, .pe-members) .inp:focus {
-  background-color: rgba(252, 252, 252, 0.86);
+  background-color: rgba(255, 255, 255, 0.82);
   box-shadow: inset 0 0 0 1.5px var(--accent-line);
 }
 
@@ -1413,7 +1413,7 @@
 }
 
 :root[data-theme="light"] .policy-editor-v2 .pe-details .pick:not(.on) {
-  background: rgba(252, 252, 252, 0.86);
+  background: rgba(255, 255, 255, 0.82);
   box-shadow: inset 0 0 0 1px var(--line-2);
   color: var(--text-2);
 }

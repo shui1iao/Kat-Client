@@ -1,9 +1,9 @@
 {
   "schema": 1,
-  "app_version": "0.2.10",
+  "app_version": "0.2.11",
   "core_version": "0.8.6",
-  "sequence": 1794642156,
-  "client_sequence": 1794642156,
+  "sequence": 1794658669,
+  "client_sequence": 1794658669,
   "core_sequence": 1794587687,
   "excludes": [
     "BUILD-IDENTITY.json",
@@ -15,19 +15,19 @@
       "path": "BUILDING.md",
       "bytes": 1014,
       "mode": "0644",
-      "sha256": "6d38a154d88b72f8c9e80f8163903c2082447c3b91401c5688d467e0bca0767e"
+      "sha256": "60d128c4afff3b124ff8a872f1a1da35e365d0392936a1cd33dc3129b4ea4bc5"
     },
     {
       "path": "README.md",
       "bytes": 783,
       "mode": "0644",
-      "sha256": "80750b5f7f96127fc3ea08162de6147005a36840a3de3ccf5a18c2f820ce4e71"
+      "sha256": "1ad4af36417d5b82f0ba2f408a300a530e7b4b7ba1ca648769465146e17f6d6b"
     },
     {
       "path": "RELEASE_NOTES.md",
-      "bytes": 1534,
+      "bytes": 1736,
       "mode": "0644",
-      "sha256": "be1a9954af405ec2a75e2cdb445f7dfe13a84e9fa301ac7b532093027ef13857"
+      "sha256": "289a36cd4715507ba776bfde900a0dd4201b170e30745cea40f4db427d53645d"
     },
     {
       "path": "RIGHTS.md",
@@ -37,9 +37,9 @@
     },
     {
       "path": "VALIDATION.md",
-      "bytes": 1253,
+      "bytes": 1325,
       "mode": "0644",
-      "sha256": "bf3001df553e10917d0a7da5d9ae4a7379f7b9941fb7b9c1e2c9a4be86111695"
+      "sha256": "a74c795a9d9f7ca5f49194c94caea371f25bb1910d02e6b8335a159476976244"
     },
     {
       "path": "app/build.mjs",
@@ -84,10 +84,10 @@
       "sha256": "e79aef53a7fd18bac41974848155f78b520fa068bbf50041f4c475ab0a56f712"
     },
     {
-      "path": "app/dist/assets/style-BUa9pnAK.css",
+      "path": "app/dist/assets/style-Cp5n8jAK.css",
       "bytes": 82344,
       "mode": "0644",
-      "sha256": "84a99798a4a98880831067fe4fb9440934c6e015926529dca43c3a0ada02827f"
+      "sha256": "f44390ce4b24e7f6f7a0c167128f2d2da93a022413f3a44a3d92b108fc94d40e"
     },
     {
       "path": "app/dist/fonts/NOTICE.txt",
@@ -111,7 +111,7 @@
       "path": "app/dist/index.html",
       "bytes": 420,
       "mode": "0644",
-      "sha256": "6aa6cbf80666e10631dfcc2110775d6afc30f6b02da5633437bdc8e1fd56b372"
+      "sha256": "3097843f1084754d9a2adb0911dea99f52d98ffb6460d53703153a679d2286f8"
     },
     {
       "path": "app/dist/kat-icon.svg",
@@ -129,13 +129,13 @@
       "path": "app/package-lock.json",
       "bytes": 40846,
       "mode": "0644",
-      "sha256": "0d54082392d39e817e078145f215cdd214b247f9e7cb7a19c604677c44c43262"
+      "sha256": "05ca29c65a3d4dadd9a9fceb02e2b690a1b131610eb3a453c649cb7a7375bf15"
     },
     {
       "path": "app/package.json",
       "bytes": 527,
       "mode": "0644",
-      "sha256": "c9e5a1c2bdfb7f6078106306af08a000cd114cc662f1e46aa8ed66fc3d6677ca"
+      "sha256": "fbdd046f639003b735d3155c56792aa84cc9598a263e8eb02cda96bfab0456a6"
     },
     {
       "path": "app/public/fonts/NOTICE.txt",
@@ -165,13 +165,13 @@
       "path": "app/src-tauri/Cargo.lock",
       "bytes": 116752,
       "mode": "0644",
-      "sha256": "bcbea054334ef777427d06780ae1fdd2b9a18961544a38d20933b93cd99b0f79"
+      "sha256": "332a4079e12b696bb731a4cbf912490330bc35c3ab863e04657cb800210625d6"
     },
     {
       "path": "app/src-tauri/Cargo.toml",
       "bytes": 2421,
       "mode": "0644",
-      "sha256": "3dc522d0d43b903ea7c793f3d316518a5b3d3bfe5f700bb86e0e85fd2cff1a55"
+      "sha256": "9a036a04eca27f9d175566b9ecd8d1e4201520e98cdfbde63bd2717d943a9624"
     },
     {
       "path": "app/src-tauri/build.rs",
@@ -207,7 +207,7 @@
       "path": "app/src-tauri/distribution/README-WINDOWS.txt",
       "bytes": 386,
       "mode": "0644",
-      "sha256": "a311b442139a71e69af10cb52cbeade1b2e324a4e9540318de7c67d6d136c20e"
+      "sha256": "9fa8909f9b635b3d05e8a5a6c2f1d9faab5df1ca331adeba74859ebcf376a0ec"
     },
     {
       "path": "app/src-tauri/distribution/RUST-THIRD-PARTY-NOTICES.txt",
@@ -5367,7 +5367,7 @@
       "path": "app/src-tauri/tauri.conf.json",
       "bytes": 862,
       "mode": "0644",
-      "sha256": "4e717900a4455c32a0b0e792cd3cc27ef8bbf9f777482c1e30945da98320acb6"
+      "sha256": "cc36a877b69a3f40d8a4173ca140be699cbc70014160f73c3d7ede7208c5c87d"
     },
     {
       "path": "app/src-tauri/tests/control_contract.rs",
@@ -6123,7 +6123,7 @@
       "path": "app/src/design/pages.css",
       "bytes": 59039,
       "mode": "0644",
-      "sha256": "04272a9a52e35dc7c0e7eb5e6c69bd4a3c324ba95de8d78923d223456b8f2adc"
+      "sha256": "320d34af1be1897466854a3e4d446604331e30d77597719bb3b48ea40938ad0e"
     },
     {
       "path": "app/src/design/shell.css",
@@ -6133,9 +6133,9 @@
     },
     {
       "path": "app/src/design/tokens.css",
-      "bytes": 9241,
+      "bytes": 9258,
       "mode": "0644",
-      "sha256": "33cd270dd2c58e5304e0e4b721484910d039f0939333565f492b2aaf23416a5f"
+      "sha256": "aad3ada541a2192f66d570afa29cbd3a625607e1bda4cb132c05504d8b67fd66"
     },
     {
       "path": "app/src/lib/displaySort.ts",
@@ -12807,7 +12807,7 @@
       "path": "release-config.json",
       "bytes": 329,
       "mode": "0644",
-      "sha256": "57f4d31808796e4b93144cd6b383441beaecd214d540e69476c0788d7b16b8c7"
+      "sha256": "a45634eb98be62457c52fc16b48412c5e1751945c39fb7456160ddb0b387d40e"
     }
   ]
 }

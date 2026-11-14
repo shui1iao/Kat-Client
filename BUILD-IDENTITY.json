@@ -1,10 +1,10 @@
 {
-  "candidate": "v0.2.10-windows-core-v0.8.6",
+  "candidate": "v0.2.11-windows-core-v0.8.6",
   "not_published": true,
-  "app_version": "0.2.10",
+  "app_version": "0.2.11",
   "windows_clientcore_version": "0.8.6",
-  "sequence": 1794642156,
-  "client_sequence": 1794642156,
+  "sequence": 1794658669,
+  "client_sequence": 1794658669,
   "core_sequence": 1794587687,
   "core_source_fingerprint": "cc9a2539de5984cee366aa6b84e4996e684002925679286a524768ffbfedf19d",
   "core_build_commit": "cc9a2539de5984cee366aa6b84e4996e68400292",
@@ -16,29 +16,29 @@
     },
     "kat-desktop.exe": {
       "bytes": 11790336,
-      "sha256": "1db4a91fff6d6cdf26ae3ed75eed8a708074ccdba15bfd6296cfc0c0d5e05015"
+      "sha256": "14777c3498a94c2020428741266a992594cac92e4bf1bd5b43e0e566d690461a"
     },
     "kat-elevate-helper.exe": {
       "bytes": 585728,
-      "sha256": "b99472ec02cdff3ee020d136b7687beec321b853c83ca5b4aa8d67f12c13dfbc"
+      "sha256": "1bf9a1fc48296005c4b8ecf0b4b19669890b913777648cdcaa9f8487df541116"
     },
     "kat-install-helper.exe": {
       "bytes": 1321984,
-      "sha256": "ad8d982a3e40c9be8a649d45750a1e235655b8491f3147894269e7f333ba3592"
+      "sha256": "c7313be0783e53dcc31242cb1bcb3550de115be8ff3b775398616346667c2aa4"
     },
     "kat-network-service.exe": {
       "bytes": 1858048,
-      "sha256": "87fa0c1714afca1f220a4d4a38c6325e3b19e6dd4a3556e5793df513344a5ff0"
+      "sha256": "2c58a3e28f1061136d739f9f2f168a9553f83a2c808139b12826ef4f7804389b"
     },
     "kat-proxy-watchdog.exe": {
       "bytes": 481280,
-      "sha256": "c6418eb3f64e95399a33341e02e22fbbabc60f6181aaa998f4581436402bec43"
+      "sha256": "e9cdf82a5b9026d28cba0de03240a9fdc70f1b904d9d9df03fa8fe86a67a26d3"
     }
   },
   "signature_key_id": "0afa646ee76f17d8",
-  "package_auth_sha256": "01f31e7f13f9f6d0f5960e7ef900ad4fe59cd4559d87d700945d2d89b114667f",
-  "package_auth_signature_sha256": "1efcda35ba1b16435f05e431182b197c084ce727f57611b84ddf53bd1f5328ce",
-  "source_manifest_sha256": "12fdf00f21adf71dfd68cba7163fe80effb7cdbeee479c3cfb30c42fb2b8952b",
+  "package_auth_sha256": "6bc359518f11892329c8c52b4e10fb5307ead6cb094f924b6b4e356530b8c8f5",
+  "package_auth_signature_sha256": "6b04b1658707790d40fa9b539f2240211693ec41e76b2fca0e97af9225ea7af3",
+  "source_manifest_sha256": "77a407b09f24a99c0475b32cf4e3ec39911da72b2f993902aa8303552bbc67f5",
   "source_manifest_members": 2133,
   "validation": {
     "core_unchanged_from_v0_8_6": true,
