@@ -70,7 +70,7 @@
 .sidebar-toggle {
   width: 28px;
   height: 28px;
-  border-radius: 7px;
+  border-radius: var(--r-inner);
   display: grid;
   place-items: center;
   color: var(--text-3);
@@ -179,7 +179,7 @@
   height: 18px;
   min-width: 20px;
   padding: 0 6px;
-  border-radius: 9px;
+  border-radius: var(--r-pill);
   background: var(--card-2);
   color: var(--text-3);
   font-size: 11px;
@@ -320,7 +320,7 @@
   right: 10px;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--r-inner);
   display: grid;
   place-items: center;
   color: var(--text-2);
@@ -444,14 +444,14 @@
   gap: 2px;
   background: var(--card);
   border: var(--card-border);
-  border-radius: var(--r-ctl);
+  border-radius: 9px;
   box-shadow: var(--shadow-card);
 }
 
 .mode-seg > .seg-thumb {
   position: absolute;
   z-index: -1;
-  border-radius: 6px;
+  border-radius: var(--r-inner);
   background: var(--accent);
   transition: left var(--t) var(--ease), width var(--t) var(--ease);
 }
@@ -464,7 +464,7 @@
   position: relative;
   height: 26px;
   padding: 0 12px;
-  border-radius: 6px;
+  border-radius: var(--r-inner);
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -486,7 +486,7 @@
 .global-group-pill {
   height: 32px;
   padding: 0 10px 0 11px;
-  border-radius: var(--r-ctl);
+  border-radius: 9px;
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 12px;
@@ -494,7 +494,9 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  max-width: 196px;
+  min-width: 0;
+  max-width: 176px;
+  flex: 0 1 auto;
   transition: background-color var(--t-fast) var(--ease);
 }
 
@@ -551,72 +553,159 @@
   font-size: 12px;
 }
 
-.net-card {
+.net-toggles {
   display: flex;
   align-items: center;
-  height: 32px;
-  padding: 3px;
-  gap: 3px;
-  background: var(--card);
-  border: var(--card-border);
-  border-radius: var(--r-ctl);
-  box-shadow: var(--shadow-card);
+  gap: 6px;
+  flex: none;
 }
 
-.net-pill {
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 6px;
+.net-switch {
+  height: 32px;
+  padding: 0 8px 0 11px;
+  border-radius: 9px;
+  background: var(--card);
+  border: var(--card-border);
+  box-shadow: var(--shadow-card);
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   font-size: 12.5px;
   font-weight: 500;
   color: var(--text-2);
   white-space: nowrap;
-  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition:
+    background-color var(--t-fast) var(--ease),
+    border-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 
-.net-pill:hover:not(:disabled) {
-  background: var(--hover);
-  color: var(--text);
+.net-switch .ns-label {
+  line-height: 1;
 }
 
-.net-pill .pip {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-3);
+.net-switch {
+  --ns-track-off: rgba(255, 255, 255, 0.14);
+  --ns-track-off-hover: rgba(255, 255, 255, 0.20);
+  --ns-track-ring: rgba(255, 255, 255, 0.07);
+  --ns-thumb-off: #D5DDE8;
+  --ns-thumb-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+:root[data-theme="light"] .net-switch {
+  --ns-track-off: rgba(20, 26, 35, 0.14);
+  --ns-track-off-hover: rgba(20, 26, 35, 0.20);
+  --ns-track-ring: rgba(20, 26, 35, 0.06);
+  --ns-thumb-off: #FFFFFF;
+  --ns-thumb-shadow: 0 1px 2.5px rgba(15, 23, 42, 0.22);
+}
+
+.net-switch .ns-track {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--ns-track-off);
+  box-shadow: inset 0 0 0 1px var(--ns-track-ring);
   flex: none;
+  transition: background-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
 
-.net-pill.on {
-  background: var(--ok-soft);
-  color: var(--ok);
+.net-switch .ns-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ns-thumb-off);
+  box-shadow: var(--ns-thumb-shadow);
+  transition:
+    transform var(--t) var(--ease),
+    width var(--t-fast) var(--ease),
+    background-color var(--t-fast) var(--ease);
 }
 
-.net-pill.on .pip {
-  background: var(--ok);
+.net-switch:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--line-2);
 }
 
-.net-pill.is-transition {
-  background: var(--warn-soft);
+.net-switch:hover:not(:disabled):not(.on):not(.is-transition) .ns-track {
+  background: var(--ns-track-off-hover);
+}
+
+.net-switch:hover:not(:disabled) .ns-thumb {
+  background: #FFFFFF;
+}
+
+.net-switch:active:not(:disabled) .ns-thumb {
+  width: 14px;
+}
+
+.net-switch.on {
+  color: var(--text);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 6%, var(--card));
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+:root[data-theme="light"] .net-switch.on {
+  background: color-mix(in srgb, var(--accent) 3.5%, var(--card));
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.net-switch.on .ns-track {
+  background: var(--accent);
+  box-shadow: none;
+}
+
+.net-switch.on:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.net-switch.on:hover:not(:disabled) .ns-track {
+  background: var(--accent-hover);
+}
+
+.net-switch.on .ns-thumb {
+  background: #FFFFFF;
+  transform: translateX(12px);
+}
+
+.net-switch.on:active:not(:disabled) .ns-thumb {
+  width: 14px;
+  transform: translateX(10px);
+}
+
+.net-switch.is-transition {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--warn) 38%, transparent);
+}
+
+.net-switch.is-transition .ns-track {
+  background: var(--warn);
+  box-shadow: none;
+}
+
+.net-switch.is-transition .ns-thumb {
+  background: #FFFFFF;
+}
+
+.net-switch.has-error {
+  border-color: color-mix(in srgb, var(--bad) 45%, transparent);
+}
+
+.net-switch .net-sub {
+  font-size: 11px;
+  font-weight: 500;
   color: var(--warn);
 }
 
-.net-pill.is-transition .pip {
-  background: var(--warn);
-}
-
-.net-pill .net-sub {
-  font-size: 11px;
-  font-weight: 400;
-  opacity: 0.9;
-}
-
-.net-pill .net-warning {
+.net-switch .net-warning {
   display: inline-flex;
   color: var(--bad);
+  margin-right: -2px;
 }
 
 /* Window Buttons */
@@ -633,7 +722,7 @@
 .winbtns button {
   width: 30px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--r-inner);
   display: grid;
   place-items: center;
   color: var(--text-3);

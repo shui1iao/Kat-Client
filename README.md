@@ -1,9 +1,9 @@
-# Kat-Client v0.2.8
+# Kat-Client v0.2.9
 
-Windows x64 客户端正式发布候选，内置 Windows Core v0.8.6，统一更新sequence `1794587687`。安装附件名 `Kat-Setup-x64.exe`；本准备阶段尚未在线发布，在线更新清单须在后续实际Release/asset分配后签发。
+Windows x64 客户端正式发布版，内置 Windows Core v0.8.6（客户端 sequence `1794638859`，内核 sequence `1794587687`）。安装附件名 `Kat-Setup-x64.exe`。
 
-请以[RELEASE_NOTES.md](RELEASE_NOTES.md)理解完整合并行为及混合ICMP边界；[VALIDATION.md](VALIDATION.md)仅记录本轮实际验证，不把构建或模拟等同Windows实机。Linux Server v0.8.1不变。
+完整更新说明与行为边界见 [RELEASE_NOTES.md](RELEASE_NOTES.md)；验证范围见 [VALIDATION.md](VALIDATION.md)。Linux Server v0.8.1 不变。
 
-普通用户运行安装向导，安装/升级/卸载前正常退出Kat；只有固定helper请求UAC。保留用户配置及已有备份数据，恢复失败不删除日志/回滚材料。不进行远程部署或自动开放网络权限。需要WebView2 Evergreen Runtime。
+普通用户运行安装向导，安装/升级/卸载前正常退出 Kat（支持运行中安全交接的新版会请求确认）；只有固定 helper 请求 UAC。保留用户配置及已有数据。需要 WebView2 Evergreen Runtime。
 
-构建与签包边界见[BUILDING.md](BUILDING.md)。Kat自研代码source-available、保留所有权利，非MIT；第三方各自原许可继续有效，见[RIGHTS.md](RIGHTS.md)。
+构建与签包边界见 [BUILDING.md](BUILDING.md)。Kat 自研代码 source-available、保留所有权利，非 MIT；第三方各自原许可继续有效，见 [RIGHTS.md](RIGHTS.md)。

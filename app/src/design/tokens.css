@@ -18,7 +18,7 @@
   --bg: var(--canvas);
   --window-material: var(--canvas);
   --side-bg: transparent;
-  --card: rgba(42, 49, 62, 0.94);
+  --card: rgba(42, 49, 62, 0.80);
   --card-2: rgba(255, 255, 255, 0.055);
   --pop: #2C333F;
   --hover: rgba(255, 255, 255, 0.085);
@@ -64,13 +64,13 @@
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --canvas: #E4E9F0;
+  --canvas: #E3E8EF;
   --bg: var(--canvas);
   --window-material: var(--canvas);
   --side-bg: transparent;
-  --card: rgba(255, 255, 255, 0.94);
-  --card-2: rgba(28, 36, 48, 0.045);
-  --pop: #FBFBFC;
+  --card: rgba(247, 249, 252, 0.76);
+  --card-2: rgba(24, 32, 44, 0.048);
+  --pop: #F5F7FA;
   --hover: rgba(28, 36, 48, 0.075);
   --press: rgba(28, 36, 48, 0.11);
   --hig-thumb: rgba(255, 255, 255, 0.88);
@@ -115,9 +115,12 @@
 :root {
   --font: "Twemoji Country Flags", "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif;
   --mono: "Twemoji Country Flags", "Cascadia Mono", "JetBrains Mono", "Consolas", ui-monospace, monospace;
-  --r-card: 12px;
+  --r-card: 14px;
+  --r-tray: 10px;
   --r-ctl: 8px;
-  --r-chip: 5px;
+  --r-inner: 6px;
+  --r-chip: 6px;
+  --r-pill: 999px;
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;
@@ -130,25 +133,25 @@
   --t-slow: 0.22s;
 }
 
-/* Windows 11 Native Acrylic Gate (matches v0.2.4 translucent window + frosted cards) */
+/* Windows 11 Native Acrylic Gate (balanced translucent window + soft frosted cards) */
 :root[data-native-acrylic="enabled"] {
-  --window-material: rgba(20, 28, 42, 0.88);
-  --card: rgba(38, 45, 58, 0.94);
+  --window-material: rgba(21, 28, 40, 0.64);
+  --card: rgba(38, 45, 58, 0.76);
   --side-bg: transparent;
 }
 :root[data-native-acrylic="enabled"][data-theme="light"] {
-  --window-material: rgba(238, 242, 248, 0.90);
-  --card: rgba(255, 255, 255, 0.94);
+  --window-material: rgba(234, 239, 246, 0.64);
+  --card: rgba(247, 249, 252, 0.74);
   --side-bg: transparent;
 }
 :root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"] {
-  --window-material: rgba(22, 31, 48, 0.94);
-  --card: rgba(40, 46, 58, 0.96);
+  --window-material: rgba(22, 30, 44, 0.78);
+  --card: rgba(40, 46, 58, 0.84);
   --side-bg: transparent;
 }
 :root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"][data-theme="light"] {
-  --window-material: rgba(245, 246, 248, 0.94);
-  --card: rgba(252, 252, 253, 0.96);
+  --window-material: rgba(240, 244, 249, 0.78);
+  --card: rgba(248, 250, 252, 0.84);
   --side-bg: transparent;
 }
 
@@ -350,7 +353,7 @@ time {
   .tip,
   .toast,
   .mode-seg,
-  .net-card,
+  .net-switch,
   .inp,
   .search,
   .btn {

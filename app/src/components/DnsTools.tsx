@@ -54,7 +54,7 @@ export function DnsQuery({ c }: { c: Client }) {
           <option value="A">仅 A</option>
           <option value="AAAA">仅 AAAA</option>
         </select>
-        <button className="btn sm primary" type="submit" disabled={!running || !name.trim() || busy}>
+        <button className="btn primary" type="submit" disabled={!running || !name.trim() || busy}>
           <Icon name="search" size={13} />
           {busy ? '查询中…' : '查询'}
         </button>
@@ -247,7 +247,7 @@ function SniffInput({
               }
             }}
           />
-          {field === 'timeout' && <span className="muted">ms</span>}
+          {field === 'timeout' && <span className="sniff-unit">ms</span>}
         </div>
       </div>
       {error && (

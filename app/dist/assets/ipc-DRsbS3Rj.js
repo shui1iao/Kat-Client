@@ -1,1 +1,0 @@
-export{n as core}from"./App-DcSj8Npt.js";

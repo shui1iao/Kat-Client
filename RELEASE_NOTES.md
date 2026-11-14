@@ -1,22 +1,14 @@
-# Kat-Client v0.2.8 / Windows Core v0.8.6
+# Kat-Client v0.2.9（内置 Windows Core v0.8.6）
 
-本版发布当前完整合并版本。仅 Windows x64；Linux Server v0.8.1 不变，不部署节点或远程安装电脑。
+本版为 Windows x64 客户端正式界面与交互升级版；内置 Windows Core 保持 v0.8.6 不变（源码与二进制字节同 v0.8.6），Linux Server v0.8.1 不变。
 
-## 界面与配置
-- 卡片底色加实至94%；策略组移除hover效果，Smart自动命中虚线、手动固定实线；HK标记采用正文font，规则命中图自适应。
-- 连通性默认仅 Google、Telegram、GitHub、Cloudflare，移除 YouTube，结果仅显示毫秒；不改变独立解锁检测的服务名单。
-- 订阅自动更新提供1/3/7/30天，旧间隔数据继续兼容。
-- 移除本地备份UI、对应IPC及保存前自动快照；保留导入/导出、内部事务失败保护以及已有备份数据，不删除历史备份。
-- 按可用workspace的800/600断点重排；内容真实滚动、图表保留高度；日志表头与结果共用720px横向滚动轨。配置顶部工具和横向结构大纲、全宽编辑器；排序居中、窗口按钮30×28、策略滚动条留白。
+## 本轮更新内容
+- **修复策略组二级编辑弹窗**：彻底解决 Smart / URL Test 等长表单在编辑弹窗内上下穿模、滚轮无法滚动及聚焦跳顶遮挡问题；移除行内重复无障碍标签与成员表双重高度裁切，拉开嵌套控件表面对比度，补齐无边框输入框红色校验环。
+- **重设计顶栏「系统代理」与「TUN」开关**：拆分为两枚独立拨杆开关胶囊，清晰区分于左侧代理模式单选组，统一品牌蓝点亮拨杆、琥珀色过渡态与红色告警提示。
+- **全站输入框与下拉筛选框精修**：移除数值框原生微调箭头留白，将 HTTP / SOCKS 端口、DNS 缓存、测速并发、超时等短框统一为紧凑居中显示；各页筛选与排序下拉框（「全部类型」「全部进程」「按速率」「配置顺序」等）自适应当前选中文字宽度并视觉居中，修复悬停/展开时下拉箭头消失及节点页、事件日志工具栏折行问题。
+- **全局统一圆角与 Apple 同心几何标准**：全站收敛为 `14 / 10 / 8 / 6 / 999px` 五级圆角阶梯，校准概览 6 卡片、设置卡片、工具栏与弹窗头尾的同心圆角边距及垂直对齐轴线，修复概览「规则命中」末行裁剪。
+- **材质通透度与浅色卡片柔化回调**：将 Windows 11 原生亚克力窗口与卡片透明度回调至通透且不糊字的平衡区间，并将浅色卡片由刺眼纯白柔化为冷瓷白。
 
-## TUN混合ICMP（请准确理解）
-- 新增ICMP/ICMPv6 Echo入口。DIRECT经受保护的物理出口调用Windows真实ping；REJECT不回包。
-- 代理规则目的地按当前出站对配置的探测URL执行HTTP HEAD（405/501可回退GET）可用性检测，成功再本地生成Echo Reply。这不是通过代理协议向原ICMP目的地传输真实ICMP，不能据此证明原目标主机ICMP可达或目标真实ping时延。
-- 回写受准入/epoch/暂停/context栅栏保护。Windows ICMP API、实际物理绑定和实机ping本轮未执行；纯逻辑回归不等于Windows实机验收。
-
-## 默认值与启动性能
-- 完全缺少sniff段时默认enabled=true、override_destination=true；显式关闭保持关闭。
-- 启动并行订阅预检、YAML快速扫描、错误行号延迟计算；15秒强缓存、GeoIP/ASN缓存；Windows已保护DACL快路径。
-
-## 验证边界与权利
-本轮离线Go/Rust/前端/NSIS及ICMP纯逻辑门禁见VALIDATION.md。未运行Setup、未修改用户配置、未实机验证Windows服务/UAC/TUN网络或代理ICMP；没有Authenticode证书签名承诺。包身份沿用原Ed25519公钥验证，不代表Windows代码签名。Kat自研代码source-available、保留所有权利，非MIT开源许可；第三方原许可和来源义务保留，见RIGHTS.md及随包notices。
+## 内核说明与验证边界
+- 内置 Windows Core 保持 v0.8.6（`core_sequence = 1794587687`，SHA256 `3f86ffb5fcef189e48b8f17daa0c5da5d42eb6e1d67cc4ef7c52f52c161f57a6`），已装 v0.8.6 内核无需单独在线更新内核。TUN 混合 ICMP 语义不变（DIRECT 物理真 ping，REJECT 丢弃，代理目标按当前出站 HTTP 探测可用性本地生成 Echo Reply，非代理传输原目标真实 ICMP）。
+- 离线门禁见 `VALIDATION.md`；本轮未执行 Windows 实机安装/卸载、UAC/SCM/TUN 或 Win32 ICMP 实机探测。包身份使用原 Ed25519 公钥（`0afa646ee76f17d8`）验签，非 Authenticode 证书签名。Kat 自研代码 source-available、保留所有权利，非 MIT；第三方原许可保留，见 `RIGHTS.md`。

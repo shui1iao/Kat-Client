@@ -196,42 +196,56 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
         ))}
       </div>
 
-      <div className="net-card">
+      <div className="net-toggles" role="group" aria-label="入站接管开关">
         <button
           type="button"
-          className={'net-pill' + (sysShown ? ' on' : '')}
+          className={'net-switch' + (sysShown ? ' on' : '') + (sysError ? ' has-error' : '')}
           disabled={!sys || busy || !!netPending || (!sys.error && !sys.enabled && !sysReady)}
           onClick={() => toggle('sysproxy', !sys?.enabled)}
           aria-pressed={sysShown}
           data-toggle="sysproxy"
-          {...tip(sysError || (sysShown ? '系统代理：已开启' : '系统代理：已关闭'))}
+          {...tip(sysError || (sysShown ? '系统代理：已开启（点击关闭）' : '系统代理：已关闭（点击开启）'))}
         >
-          <i className="pip" aria-hidden="true" />
-          <span>系统代理</span>
           {sysError && (
-            <span className="net-warning">
+            <span className="net-warning" title={sysError}>
               <Icon name="alert" size={13} />
             </span>
           )}
+          <span className="ns-label">系统代理</span>
+          <span className="ns-track" aria-hidden="true">
+            <i className="ns-thumb" />
+          </span>
         </button>
 
         <button
           type="button"
-          className={'net-pill' + (tunShown ? ' on' : '') + (tunTransition ? ' is-transition' : '')}
+          className={
+            'net-switch' +
+            (tunShown ? ' on' : '') +
+            (tunTransition ? ' is-transition' : '') +
+            (tunError ? ' has-error' : '')
+          }
           disabled={!tun || busy || !!netPending || (!tun.error && !tun.intent && !tun.enabled && (!tunReady || !service?.installed))}
           onClick={() => toggle('tun', !(tun?.intent ?? tun?.enabled))}
           aria-pressed={tunShown}
           data-toggle="tun"
-          {...tip(tunError || `TUN：${stateLabel(tunState)}`)}
+          {...tip(
+            tunError ||
+              (!service?.installed && !tunShown
+                ? 'TUN：需先在设置中安装网络服务'
+                : `TUN：${stateLabel(tunState)}${tunTransition ? '' : tunShown ? '（点击关闭）' : '（点击开启）'}`),
+          )}
         >
-          <i className="pip" aria-hidden="true" />
-          <span>TUN</span>
-          {tunTransition && <span className="net-sub">{stateLabel(tunState)}</span>}
           {tunError && (
-            <span className="net-warning">
+            <span className="net-warning" title={tunError}>
               <Icon name="alert" size={13} />
             </span>
           )}
+          <span className="ns-label">TUN</span>
+          {tunTransition && <span className="net-sub">{stateLabel(tunState)}</span>}
+          <span className="ns-track" aria-hidden="true">
+            <i className="ns-thumb" />
+          </span>
         </button>
       </div>
     </div>
