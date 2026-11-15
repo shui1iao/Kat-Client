@@ -1,1 +1,0 @@
-export{n as core}from"./App-BCAtv6U-.js";

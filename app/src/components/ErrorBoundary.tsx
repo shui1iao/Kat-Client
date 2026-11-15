@@ -3,6 +3,21 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: 
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
   render() {
-    return this.state.failed ? <section className="card"><p>界面出现错误</p><button className="btn" onClick={() => location.reload()}>重新加载</button></section> : this.props.children;
+    return this.state.failed ? (
+      <section className="card">
+        <p>界面出现错误</p>
+        <button
+          className="btn"
+          onClick={() => {
+            if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+            location.reload();
+          }}
+        >
+          重新加载
+        </button>
+      </section>
+    ) : (
+      this.props.children
+    );
   }
 }

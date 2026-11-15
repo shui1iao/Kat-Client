@@ -23,16 +23,24 @@ const RECENT_PILLS: { value: string; label: string }[] = [
   { value: 'failed', label: '空 / 失败' },
 ];
 
-const SOURCE_LABEL: Record<DNSLogEntry['source'], string> = {
+const SOURCE_LABEL: Record<string, string> = {
   tun: 'TUN',
   kernel: '路由',
   test: '测试',
 };
 
+function asStringArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
+
 function mergeDNSLogs(old: DNSLogEntry[], incoming: DNSLogEntry[]): DNSLogEntry[] {
-  if (!incoming.length) return old;
-  const seen = new Set(incoming.map((x) => x.seq));
-  const next = [...incoming.slice().reverse(), ...old.filter((x) => !seen.has(x.seq))];
+  if (!Array.isArray(incoming) || !incoming.length) return old;
+  const normalized = incoming.map((x) => ({
+    ...x,
+    addresses: asStringArray(x.addresses),
+  }));
+  const seen = new Set(normalized.map((x) => x.seq));
+  const next = [...normalized.slice().reverse(), ...old.filter((x) => !seen.has(x.seq))];
   return next.slice(0, KEEP);
 }
 
@@ -53,9 +61,10 @@ function formatServer(s?: string): string {
 }
 
 function formatTTL(sec: number): string {
-  if (sec < 60) return `${sec}s`;
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
+  const n = Number.isFinite(sec) ? Math.max(0, Math.floor(sec)) : 0;
+  if (n < 60) return `${n}s`;
+  const m = Math.floor(n / 60);
+  const s = n % 60;
   return s ? `${m}m ${s}s` : `${m}m`;
 }
 
@@ -120,16 +129,17 @@ function QuickQueryStrip({ c, onQueried }: { c: Client; onQueried?: () => void }
       try {
         const res = await core<{
           name: string;
-          addresses: { addr: string; type: string }[];
+          addresses?: { addr: string; type: string }[] | null;
           server: string;
           duration_ms: number;
           cached: boolean;
         }>('dns.query', { name: name.trim(), type });
-        const ips = res.addresses.map((a) => a.addr).join(', ');
+        const list = Array.isArray(res?.addresses) ? res.addresses : [];
+        const ips = list.map((a) => a.addr).filter(Boolean).join(', ');
         setNotice({
           ok: true,
           text: ips
-            ? `${res.name} → ${ips}（${formatServer(res.server)}${res.cached ? ' · 缓存命中' : ` · ${Math.round(res.duration_ms)} ms`}）`
+            ? `${res.name} → ${ips}（${formatServer(res.server)}${res.cached ? ' · 缓存命中' : ` · ${Math.round(res.duration_ms ?? 0)} ms`}）`
             : `${res.name}：无匹配记录（${formatServer(res.server)}）`,
         });
         onQueried?.();
@@ -203,10 +213,12 @@ function RecentDnsView({ c, tabs }: { c: Client; tabs: ReactNode }) {
         after: cursor.current,
         limit: 500,
       });
+      if (!r) return;
       const reset = instance.current !== r.instance;
       instance.current = r.instance;
-      cursor.current = r.next_seq;
-      setEntries((old) => mergeDNSLogs(reset ? [] : old, r.entries));
+      cursor.current = r.next_seq ?? 0;
+      const incoming = Array.isArray(r.entries) ? r.entries : [];
+      setEntries((old) => mergeDNSLogs(reset ? [] : old, incoming));
       setError('');
     } catch (e) {
       setError(errorText(e));
@@ -236,7 +248,8 @@ function RecentDnsView({ c, tabs }: { c: Client; tabs: ReactNode }) {
     if (filter === 'upstream' && (e.cached || e.outcome !== 'ok')) return false;
     if (filter === 'failed' && e.outcome === 'ok') return false;
     if (!needle) return true;
-    return [e.name, e.qtype, e.server, formatServer(e.server), SOURCE_LABEL[e.source], ...e.addresses].some((x) =>
+    const addrs = asStringArray(e.addresses);
+    return [e.name, e.qtype, e.server, formatServer(e.server), SOURCE_LABEL[e.source] ?? e.source, ...addrs].some((x) =>
       x?.toLowerCase().includes(needle),
     );
   });
@@ -305,10 +318,13 @@ function RecentDnsView({ c, tabs }: { c: Client; tabs: ReactNode }) {
         </div>
 
         {shown.map((e) => {
-          const primaryIp = e.addresses[0] ?? '';
-          const extraCount = Math.max(0, e.addresses.length - 1);
-          const allIps = e.addresses.join(', ');
+          const addrs = asStringArray(e.addresses);
+          const primaryIp = addrs[0] ?? '';
+          const extraCount = Math.max(0, addrs.length - 1);
+          const allIps = addrs.join(', ');
           const serverText = formatServer(e.server);
+          const srcLabel = SOURCE_LABEL[e.source] ?? e.source ?? '路由';
+          const qtype = e.qtype || 'A';
           return (
             <div key={e.seq} className="dns-log-grid dns-grid-row" role="row">
               <span className="num muted" role="cell">
@@ -316,15 +332,15 @@ function RecentDnsView({ c, tabs }: { c: Client; tabs: ReactNode }) {
               </span>
 
               <span className="dns-domain-cell" role="cell">
-                <DomainIcon domain={e.name} size="sm" />
+                <DomainIcon domain={e.name || ''} size="sm" />
                 <span className="dns-domain-name" {...tip(e.name, true)}>
-                  {e.name}
+                  {e.name || '—'}
                 </span>
-                <small className={'dns-src-tag is-' + e.source}>{SOURCE_LABEL[e.source]}</small>
+                <small className={'dns-src-tag is-' + (e.source || 'kernel')}>{srcLabel}</small>
               </span>
 
               <span className="dns-qtype-cell" role="cell">
-                <KTag label={e.qtype} color="var(--text-2)" />
+                <KTag label={qtype} color="var(--text-2)" />
               </span>
 
               <span className="dns-addr-cell" role="cell">
@@ -341,7 +357,13 @@ function RecentDnsView({ c, tabs }: { c: Client; tabs: ReactNode }) {
                   </button>
                 ) : (
                   <span className="muted">
-                    {e.outcome === 'nxdomain' ? '域名不存在 (NXDOMAIN)' : e.outcome === 'nodata' ? '无该类型记录' : '解析未返回地址'}
+                    {e.outcome === 'ok'
+                      ? `${qtype} 记录已应答`
+                      : e.outcome === 'nxdomain'
+                        ? '域名不存在 (NXDOMAIN)'
+                        : e.outcome === 'nodata'
+                          ? '无该类型记录'
+                          : '解析未返回地址'}
                   </span>
                 )}
               </span>
@@ -351,7 +373,7 @@ function RecentDnsView({ c, tabs }: { c: Client; tabs: ReactNode }) {
               </span>
 
               <span className="r num" role="cell">
-                {e.cached ? <span className="dns-cache-hit">缓存 0 ms</span> : <span className="muted">{e.duration_ms} ms</span>}
+                {e.cached ? <span className="dns-cache-hit">缓存 0 ms</span> : <span className="muted">{e.duration_ms ?? 0} ms</span>}
               </span>
 
               <span className="r" role="cell">
@@ -389,7 +411,7 @@ function DnsCacheView({ c, tabs }: { c: Client; tabs: ReactNode }) {
     }
     try {
       const r = await core<DNSCacheListReply>('dns.cache.list');
-      setData(r);
+      setData(r ? { capacity: r.capacity ?? 0, entries: Array.isArray(r.entries) ? r.entries : [] } : null);
       setError('');
     } catch (e) {
       setError(errorText(e));
@@ -425,19 +447,19 @@ function DnsCacheView({ c, tabs }: { c: Client; tabs: ReactNode }) {
       'dns-clear',
       async () => {
         const r = await core<{ cleared: number }>('dns.cache.clear');
-        setCleared(r.cleared);
+        setCleared(r?.cleared ?? 0);
         await load();
       },
       c.reportOperationError,
     );
 
-  const items: DNSCacheItem[] = data?.entries ?? [];
+  const items: DNSCacheItem[] = Array.isArray(data?.entries) ? data.entries : [];
   const needle = q.trim().toLowerCase();
-  const shown = items.filter(
-    (x) =>
-      !needle ||
-      [x.name, x.qtype, x.server, formatServer(x.server), ...x.addresses].some((v) => v?.toLowerCase().includes(needle)),
-  );
+  const shown = items.filter((x) => {
+    if (!needle) return true;
+    const addrs = asStringArray(x.addresses);
+    return [x.name, x.qtype, x.server, formatServer(x.server), ...addrs].some((v) => v?.toLowerCase().includes(needle));
+  });
 
   const copyAddr = (key: string, text: string) => {
     if (!text) return;
@@ -466,7 +488,7 @@ function DnsCacheView({ c, tabs }: { c: Client; tabs: ReactNode }) {
           </span>
         )}
         <span className="muted num">
-          {data ? `${items.length} / ${data.capacity} 条` : '0 条'}
+          {data ? `${items.length} / ${data.capacity ?? 0} 条` : '0 条'}
         </span>
         <button type="button" className="btn sm" disabled={!running} onClick={() => void load()}>
           <Icon name="refresh" size={13} />
@@ -497,23 +519,25 @@ function DnsCacheView({ c, tabs }: { c: Client; tabs: ReactNode }) {
           <span className="r">剩余 TTL</span>
         </div>
 
-        {shown.map((it) => {
-          const rowKey = `${it.name}:${it.qtype}`;
-          const allIps = it.addresses.join(', ');
-          const primaryIp = it.addresses[0] ?? '';
-          const extraCount = Math.max(0, it.addresses.length - 1);
+        {shown.map((it, idx) => {
+          const addrs = asStringArray(it.addresses);
+          const qtype = it.qtype || 'A';
+          const rowKey = `${it.name || idx}:${qtype}:${idx}`;
+          const allIps = addrs.join(', ');
+          const primaryIp = addrs[0] ?? '';
+          const extraCount = Math.max(0, addrs.length - 1);
           const serverText = formatServer(it.server);
           return (
             <div key={rowKey} className="dns-cache-grid dns-grid-row" role="row">
               <span className="dns-domain-cell" role="cell">
-                <DomainIcon domain={it.name} size="sm" />
+                <DomainIcon domain={it.name || ''} size="sm" />
                 <span className="dns-domain-name" {...tip(it.name, true)}>
-                  {it.name}
+                  {it.name || '—'}
                 </span>
               </span>
 
               <span className="dns-qtype-cell" role="cell">
-                <KTag label={it.qtype} color="var(--text-2)" />
+                <KTag label={qtype} color="var(--text-2)" />
               </span>
 
               <span className="dns-addr-cell" role="cell">
@@ -529,7 +553,7 @@ function DnsCacheView({ c, tabs }: { c: Client; tabs: ReactNode }) {
                     {copiedKey === rowKey && <span className="dns-copied-badge">已复制</span>}
                   </button>
                 ) : (
-                  <span className="muted">—</span>
+                  <span className="muted">{`${qtype} 缓存已就绪`}</span>
                 )}
               </span>
 
@@ -575,15 +599,19 @@ function DnsSettingsView({ c, tabs }: { c: Client; tabs: ReactNode }) {
       'dns-clear',
       async () => {
         const r = await core<{ cleared: number }>('dns.cache.clear');
-        setCleared(r.cleared);
+        setCleared(r?.cleared ?? 0);
       },
       c.reportOperationError,
     );
 
-  const rawServers = c.source?.kernel.dns?.servers ?? (c.source?.kernel.dns?.server ? [c.source.kernel.dns.server] : []);
+  const rawServers = Array.isArray(c.source?.kernel?.dns?.servers)
+    ? c.source.kernel.dns.servers
+    : typeof c.source?.kernel?.dns?.server === 'string' && c.source.kernel.dns.server
+      ? [c.source.kernel.dns.server]
+      : [];
   const isCustom = rawServers.length > 0 && !(rawServers.length === 1 && rawServers[0] === 'system');
   const tunOn = !!c.network?.tun.enabled;
-  const ipv6On = !!c.source?.client.ipv6;
+  const ipv6On = !!c.source?.client?.ipv6;
 
   return (
     <section className="card table-card dns-table-card">

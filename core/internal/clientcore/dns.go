@@ -39,7 +39,7 @@ func (r *dnsRing) record(e kernel.DNSEvent) {
 		return
 	}
 	r.seq++
-	e.Addresses = append([]string(nil), e.Addresses...)
+	e.Addresses = append([]string{}, e.Addresses...)
 	r.entries[(r.seq-1)%logCapacity] = DNSEntry{r.seq, e}
 	if r.size < logCapacity {
 		r.size++
@@ -64,7 +64,7 @@ func (r *dnsRing) read(after uint64, limit int) DNSLogsReply {
 	}
 	for seq := first; seq <= r.seq && len(out.Entries) < limit; seq++ {
 		e := r.entries[(seq-1)%logCapacity]
-		e.Addresses = append([]string(nil), e.Addresses...)
+		e.Addresses = append([]string{}, e.Addresses...)
 		out.Entries = append(out.Entries, e)
 		out.NextSeq = seq
 	}
@@ -107,6 +107,9 @@ func (h *Host) listDNSCache(raw json.RawMessage) (any, *Error) {
 	items, capVal, e := s.ListDNSCache()
 	if e != nil {
 		return nil, fail("core_not_running", "runtime", "Core is stopped")
+	}
+	if items == nil {
+		items = []kernel.DNSCacheItem{}
 	}
 	return DNSCacheListReply{Capacity: capVal, Entries: items}, nil
 }

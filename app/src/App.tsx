@@ -109,7 +109,7 @@ export default function App() {
   const meta: Record<PageId, string> = {
     overview: '',
     connections: running ? `${activeCount} 个活跃连接` : '',
-    dns: c.source?.kernel.dns?.servers?.length && !(c.source.kernel.dns.servers.length === 1 && c.source.kernel.dns.servers[0] === 'system') ? `自定义上游 (${c.source.kernel.dns.servers.length})` : '系统 DNS',
+    dns: Array.isArray(c.source?.kernel?.dns?.servers) && c.source.kernel.dns.servers.length > 0 && !(c.source.kernel.dns.servers.length === 1 && c.source.kernel.dns.servers[0] === 'system') ? `自定义上游 (${c.source.kernel.dns.servers.length})` : '系统 DNS',
     logs: '',
     policies: `${groups.length} 组${chain.at(-1) ? ' · ' + chain.at(-1) : ''}`,
     nodes: `${nodes} 个节点${subsCount ? ` · ${subsCount} 个订阅` : ''}`,

@@ -90,7 +90,7 @@ func extractWireAddresses(b []byte) ([]string, uint32, dnsmessage.RCode, bool) {
 	if len(b) < 12 || m.Unpack(b) != nil {
 		return nil, 0, dnsmessage.RCodeServerFailure, false
 	}
-	var addrs []string
+	addrs := []string{}
 	seen := map[string]bool{}
 	minTTL := uint32(0)
 	hasTTL := false
@@ -156,6 +156,9 @@ func (r *internalDNS) collectCache(out *[]DNSCacheItem, seen map[string]bool) {
 		} else if has6 {
 			qt = "AAAA"
 		}
+		if addrs == nil {
+			addrs = []string{}
+		}
 		*out = append(*out, DNSCacheItem{
 			Name:      name,
 			QType:     qt,
@@ -187,6 +190,9 @@ func (r *internalDNS) collectCache(out *[]DNSCacheItem, seen map[string]bool) {
 		addrs, _, _, ok := extractWireAddresses(e.wire)
 		if !ok {
 			continue
+		}
+		if addrs == nil {
+			addrs = []string{}
 		}
 		*out = append(*out, DNSCacheItem{
 			Name:      name,
