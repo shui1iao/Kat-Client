@@ -1,4 +1,6 @@
 import { FlowDetail } from '../components/FlowDetail';
+import { PolicyReveal } from '../components/PolicyReveal';
+import { ProcessIcon } from '../components/EntityIcons';
 import { tip } from '../components/Tooltip';
 import { RuleEditor } from './Rules';
 import { flowRuleDraft, type FlowRuleSource } from '../client/flowRule';
@@ -205,100 +207,103 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
       <div className="log-scroll" role="table" aria-label="连接日志">
         <div className="conn-log-grid conn-log-head" role="row">
           <span>时间</span>
+          <span>进程</span>
           <span>协议</span>
           <span>目标</span>
-          <span>进程</span>
           <span>规则</span>
           <span>出口链路</span>
           <span className="r">流量</span>
           <span className="r">结果</span>
         </div>
 
-        {shown.map((raw) => {
-          const e = flowLog(raw, flows);
-          const chain = e.chain.map(c.label);
-          const open = expanded === e.seq;
-          const parsedRule = parseConnectionRule(e.rule);
-          const shortType = parsedRule
-            ? parsedRule.type
-                .replace('DOMAIN-SUFFIX', 'SUFFIX')
-                .replace('DOMAIN-KEYWORD', 'KEYWORD')
-                .replace('PROCESS-NAME', 'PROC')
-                .replace('RULE-SET', 'SET')
-            : '';
-          return (
-            <div className="conn-log-entry" key={e.seq}>
-              <div
-                className={'conn-log-grid conn-log-row o-' + e.outcome}
-                role="row"
-                tabIndex={0}
-                aria-expanded={open}
-                aria-label={'连接日志 ' + (e.dest_host || e.host || e.target)}
-                onClick={() => setExpanded(open ? null : e.seq)}
-                onKeyDown={(ev) => {
-                  if (ev.target === ev.currentTarget && (ev.key === 'Enter' || ev.key === ' ')) {
-                    ev.preventDefault();
-                    setExpanded(open ? null : e.seq);
-                  }
-                }}
-              >
-                <time className="num muted" {...tip(e.time)}>
-                  {clockStr(e.time)}
-                </time>
-                <span className="proto-cell">
-                  <NetworkTag network={e.network} />
-                </span>
-                <ConnectionTarget
-                  name={e.dest_host || e.host || e.target || '—'}
-                  title={e.target}
-                  sniffed={e.sniffed && !!(e.dest_host || e.host)}
-                />
-                <span className="ell dim" {...tip(e.process_path || e.process_name, true)}>
-                  {e.process_name || '—'}
-                </span>
-                <span className="conn-rule-compact" {...tip(e.rule, true)}>
-                  {parsedRule ? (
-                    <>
-                      <KTag label={shortType} color={ruleColor(parsedRule.type)} />
-                      {parsedRule.payload && <span className="ell">{parsedRule.payload}</span>}
-                    </>
-                  ) : (
-                    <span className="ell">{e.rule || '—'}</span>
-                  )}
-                </span>
-                <span className="conn-chain" {...tip(chain.join(' → '), true)}>
-                  {chain.join(' → ') || '—'}
-                </span>
-                <span className="log-bytes num r">
-                  {e.up == null || e.down == null ? '—' : `↑${showBytes(e.up)} ↓${showBytes(e.down)}`}
-                </span>
-                <span className="r">
-                  <KState
-                    tone={e.outcome === 'idle' ? 'muted' : e.outcome === 'ok' ? 'ok' : 'bad'}
-                    label={OUTCOME[e.outcome]}
-                    title={e.code}
+        {(() => {
+          const nodeProtoMap = new Map<string, string>();
+          for (const n of c.status?.nodes ?? []) nodeProtoMap.set(n.name, n.type);
+          for (const o of c.source?.kernel.outbounds ?? []) {
+            if (!nodeProtoMap.has(o.name)) nodeProtoMap.set(o.name, o.type);
+          }
+          return shown.map((raw) => {
+            const e = flowLog(raw, flows);
+            const rawChain = Array.isArray(e.chain) ? e.chain : [];
+            const chain = rawChain.map(c.label);
+            const open = expanded === e.seq;
+            const parsedRule = parseConnectionRule(e.rule);
+            const shortType = parsedRule
+              ? parsedRule.type
+                  .replace('DOMAIN-SUFFIX', 'SUFFIX')
+                  .replace('DOMAIN-KEYWORD', 'KEYWORD')
+                  .replace('PROCESS-NAME', 'PROC')
+                  .replace('RULE-SET', 'SET')
+              : '';
+            return (
+              <div className={'conn-log-entry' + (open ? ' is-open' : '')} key={e.seq}>
+                <div
+                  className={'conn-log-grid conn-log-row o-' + e.outcome + (open ? ' is-selected' : '')}
+                  role="row"
+                  tabIndex={0}
+                  aria-expanded={open}
+                  aria-label={'连接日志 ' + (e.dest_host || e.host || e.target)}
+                  onClick={() => setExpanded(open ? null : e.seq)}
+                  onKeyDown={(ev) => {
+                    if (ev.target === ev.currentTarget && (ev.key === 'Enter' || ev.key === ' ')) {
+                      ev.preventDefault();
+                      setExpanded(open ? null : e.seq);
+                    }
+                  }}
+                >
+                  <time className="num muted" {...tip(e.time)}>
+                    {clockStr(e.time)}
+                  </time>
+                  <span className="conn-proc-cell ell" {...tip(e.process_path || e.process_name, true)}>
+                    <ProcessIcon name={e.process_name} path={e.process_path} fallbackDomain={e.dest_host || e.host} />
+                    <span className="ell">{e.process_name || '未知'}</span>
+                  </span>
+                  <span className="proto-cell">
+                    <NetworkTag network={e.network} />
+                  </span>
+                  <ConnectionTarget
+                    name={e.dest_host || e.host || e.target || '—'}
+                    title={e.target}
+                    sniffed={e.sniffed && !!(e.dest_host || e.host)}
                   />
-                </span>
+                  <span className="conn-rule-compact" {...tip(e.rule, true)}>
+                    {parsedRule ? (
+                      <>
+                        <KTag label={shortType} color={ruleColor(parsedRule.type)} />
+                        {parsedRule.payload && <span className="ell">{parsedRule.payload}</span>}
+                      </>
+                    ) : (
+                      <span className="ell">{e.rule || '—'}</span>
+                    )}
+                  </span>
+                  <span className="conn-chain" {...tip(chain.join(' → '), true)}>
+                    {chain.join(' → ') || '—'}
+                  </span>
+                  <span className="log-bytes num r">
+                    {e.up == null || e.down == null ? '—' : `↑${showBytes(e.up)} ↓${showBytes(e.down)}`}
+                  </span>
+                  <span className="r">
+                    <KState
+                      tone={e.outcome === 'idle' ? 'muted' : e.outcome === 'ok' ? 'ok' : 'bad'}
+                      label={OUTCOME[e.outcome]}
+                      title={e.code}
+                    />
+                  </span>
+                </div>
+                <PolicyReveal open={open}>
+                  <FlowDetail
+                    e={e}
+                    rawChain={rawChain}
+                    labelOf={c.label}
+                    nodeProtoMap={nodeProtoMap}
+                    canCreateRule={c.connected && !c.doc.saving}
+                    onCreateRule={() => setRuleFlow(e)}
+                  />
+                </PolicyReveal>
               </div>
-              {open && (
-                <FlowDetail
-                  e={e}
-                  chain={chain}
-                  actions={
-                    <button
-                      type="button"
-                      className="btn primary sm"
-                      disabled={!c.connected || c.doc.saving}
-                      onClick={() => setRuleFlow(e)}
-                    >
-                      生成规则
-                    </button>
-                  }
-                />
-              )}
-            </div>
-          );
-        })}
+            );
+          });
+        })()}
 
         {!shown.length && <div className="empty">{needle || outcome !== 'all' ? '没有匹配的记录' : '暂无连接日志'}</div>}
       </div>

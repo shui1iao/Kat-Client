@@ -42,7 +42,6 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
   const urls = c.desktop?.preferences.diagnostic_urls ?? [];
   const running = c.status?.runtime.state === 'running';
 
-  // Read-only cached results: NEVER starts a probe on mount/navigation.
   useEffect(() => {
     let alive = true;
     if (c.hasHost) {
@@ -93,8 +92,6 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
   }
 
   const r = cache[kind];
-  // Display-only legacy default filtering. Custom rows use their URL as name,
-  // so even an explicitly added YouTube URL and all persisted data stay intact.
   const connectivityItems = cache.connectivity?.items.filter(
     (x) => !(x.name === 'YouTube' && x.url === 'https://www.youtube.com/'),
   );
@@ -110,7 +107,7 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
   return (
     <>
       <Card
-        className="diagnostic-card c5"
+        className="diagnostic-card c6"
         title="网络检测"
         extra={
           <Segmented
@@ -162,12 +159,11 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
                 {connectivityItems?.map((x) => (
                   <div className="conn-diag-row" role="listitem" key={x.name}>
                     <div className="diagnostic-target">
-                      <span {...tip(x.url, true)}>{x.name}</span>
+                      <span>{x.name}</span>
                       {x.name === x.url && urls.includes(x.url ?? '') && (
                         <button
                           type="button"
                           className="ib ib-xs danger"
-                          {...tip('移除网址')}
                           aria-label={'移除网址 ' + x.name}
                           onClick={() => void c.setPreferences({ diagnostic_urls: urls.filter((v) => v !== x.url) })}
                         >
@@ -175,10 +171,8 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
                         </button>
                       )}
                     </div>
-                    <span className="diagnostic-chain" {...tip(x.chain.map(c.label).join(' → '), true)}>
-                      {x.chain.map(c.label).join(' → ') || '—'}
-                    </span>
-                    <span className={'diagnostic-result num ' + (x.result === 'failed' ? 'failed' : 'ok')} {...tip(x.reason)}>
+                    <span className="diagnostic-chain">{x.chain.map(c.label).join(' → ') || '—'}</span>
+                    <span className={'diagnostic-result num ' + (x.result === 'failed' ? 'failed' : 'ok')}>
                       {x.result === 'failed' ? x.reason || '失败' : `${x.duration_ms} ms`}
                     </span>
                   </div>
@@ -192,15 +186,14 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
             ) : cache.exit.items.length ? (
               <div className="diag-list" role="list" aria-label="出口 IP">
                 {cache.exit.items.map((x) => {
-                  const chain = x.chain.map(c.label).join(' → ');
                   const failed = x.result === 'failed';
                   return (
                     <div className="exit-row" role="listitem" key={x.name}>
-                      <div className="exit-route" {...tip(chain || c.label(x.name), true)}>
+                      <div className="exit-route">
                         <span className="exit-group">{c.label(x.name)}</span>
                         {x.node && <span className="exit-node">→ {c.label(x.node)}</span>}
                       </div>
-                      <span className={'exit-address num' + (failed ? ' diagnostic-result failed' : '')} {...tip(failed ? x.reason : x.ip, true)}>
+                      <span className={'exit-address num' + (failed ? ' diagnostic-result failed' : '')}>
                         {failed ? x.reason || '检测失败' : ipBreak(x.ip)}
                       </span>
                       <span className="exit-region">{failed ? '—' : regionLabel(x.region)}</span>
@@ -229,7 +222,7 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
             )}
             <button
               type="button"
-              className={'btn sm' + (busy === kind ? ' spin' : '')}
+              className={'btn sm diag-run-btn' + (busy === kind ? ' spin' : '')}
               disabled={!running || !!busy}
               onClick={() => void detect(kind)}
             >

@@ -12,10 +12,10 @@ import { updatePreferences } from './daily';
 import { DocumentSession } from './session';
 import type { ConnectionsReply, DesktopPreferences, DesktopSettingsReply, CoreMethod, CoreStatus, DocumentReply, DocumentSource, HostCommand, NetworkStatus, ProbeResult, SubscriptionPreview, SubscriptionStatus } from './types';
 export interface Sample { at: number; down: number; up: number }
-export function appendSample(old: readonly Sample[], sample: Sample, now = sample.at): Sample[] {
-  const cutoff = now - 3600000, keepLast = sample.at > cutoff ? 1 : 0;
+export function appendSample(old: readonly Sample[], sample: Sample, now = sample.at, windowMs = 3600000, maxCount = 1801): Sample[] {
+  const cutoff = now - windowMs, keepLast = sample.at > cutoff ? 1 : 0;
   let count = keepLast, start = old.length;
-  while (start > 0 && count < 1801) {
+  while (start > 0 && count < maxCount) {
     start--;
     if (old[start].at > cutoff) count++;
   }
@@ -64,7 +64,7 @@ export function useClient() {
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [connectionSpeeds,setConnectionSpeeds]=useState<Record<number,number|null>>({});
   const lastConnections=useRef<{at:number;items:CoreStatus['connections']['items']}|null>(null);
-  const [samples, setSamples] = useState<Sample[]>([]);
+  const [samples, setSamples] = useState<Sample[]>(() => Array.isArray((globalThis as any).__KAT_INITIAL_SAMPLES) ? (globalThis as any).__KAT_INITIAL_SAMPLES : []);
   const [kernelRestarting,setKernelRestarting]=useState(false);
   const [appRestarting,setAppRestarting]=useState(false);
   const [quitCleanupPending,setQuitCleanupPending]=useState(false);
@@ -118,7 +118,7 @@ export function useClient() {
     setStatus(s);
     if (s.traffic?.down_rate != null && s.traffic?.up_rate != null) setSamples(old => {
       const now = Date.now();
-      return appendSample(old, { at: now, down: s.traffic.down_rate!, up: s.traffic.up_rate! }, now);
+      return appendSample(old, { at: now, down: s.traffic.down_rate!, up: s.traffic.up_rate! }, now, 12 * 3600000, 21601);
     });
     return s;
   }

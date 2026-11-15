@@ -23,6 +23,8 @@ type acceptedState struct{ hand bool }
 // inbound listening sockets. A reload replaces the generation, never the core.
 type core struct {
 	clientDiagnostics sync.Map // private loopback socket tuple -> *ClientDiagnostic
+	domainStats       sync.Map // normalized domain -> *domainStat
+	domainCount       atomic.Int64
 
 	failures                                  *failureLog
 	events                                    *eventLog

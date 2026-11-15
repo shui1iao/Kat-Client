@@ -12,7 +12,9 @@ export function installInputModality() {
     if (searchEditing && e.key !== 'Tab') return;
     if (!e.metaKey && !e.ctrlKey && ['Tab','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End','Enter',' '].includes(e.key)) root.dataset.input = 'keyboard';
   };
+  root.dataset.input = 'pointer';
   document.addEventListener('pointerdown', pointer, true);
+  document.addEventListener('pointermove', pointer, { capture: true, passive: true });
   document.addEventListener('keydown', keyboard, true);
-  return () => { document.removeEventListener('pointerdown', pointer, true); document.removeEventListener('keydown', keyboard, true); };
+  return () => { document.removeEventListener('pointerdown', pointer, true); document.removeEventListener('pointermove', pointer, true); document.removeEventListener('keydown', keyboard, true); };
 }

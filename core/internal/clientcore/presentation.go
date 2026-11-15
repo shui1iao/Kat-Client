@@ -16,12 +16,16 @@ import (
 	"github.com/shui1iao/Kat/internal/procattr"
 	"github.com/shui1iao/Kat/internal/userio"
 	"golang.org/x/net/proxy"
+	"golang.org/x/net/publicsuffix"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptrace"
+	"net/netip"
 	"net/url"
 	"os"
+	"regexp"
+	"sync"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -270,8 +274,10 @@ func (h *Host) fetchKernelAsset(ctx context.Context, raw string, limit int64) ([
 }
 func (h *Host) getIcon(ctx context.Context, raw json.RawMessage) (any, *Error) {
 	var p struct {
-		URL      string           `json:"url"`
+		URL      string           `json:"url,omitempty"`
 		Group    string           `json:"group,omitempty"`
+		Domain   string           `json:"domain,omitempty"`
+		Process  string           `json:"process_path,omitempty"`
 		Proxy    *bootstrapProxy  `json:"_system_proxy,omitempty"`
 		Expected *bootstrapEgress `json:"_egress,omitempty"`
 	}
@@ -305,6 +311,15 @@ func (h *Host) getIcon(ctx context.Context, raw json.RawMessage) (any, *Error) {
 		ctx = context.WithValue(ctx, bootstrapKey{}, p.Proxy)
 	}
 	empty := map[string]any{"data_uri": ""}
+	if p.URL == "" && p.Process != "" {
+		if !h.isObservedProcessPath(p.Process) {
+			return empty, nil
+		}
+		return map[string]any{"data_uri": extractProcessIconDataURI(p.Process)}, nil
+	}
+	if p.URL == "" && p.Domain != "" {
+		return h.getDomainIcon(ctx, p.Domain, p.Proxy, p.Expected, bootstrapLife), nil
+	}
 	if strings.HasPrefix(strings.TrimSpace(p.URL), "<svg") {
 		if !group.ValidIcon(p.URL) {
 			h.iconFailureFor(ctx, "url_check", "invalid_format")
@@ -434,4 +449,289 @@ func (h *Host) cachedIcons() map[string]string {
 		}
 	}
 	return out
+}
+
+var (
+	observedProcPaths sync.Map
+	htmlLinkTagRe     = regexp.MustCompile(`(?is)<link\b[^>]*>`)
+	htmlAttrRe        = regexp.MustCompile(`(?is)\b(rel|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))`)
+)
+
+func rememberObservedProcessPath(p string) {
+	p = strings.TrimSpace(p)
+	if p != "" && len(p) <= 1024 && !strings.HasPrefix(p, `\`) && !strings.HasPrefix(p, "//") {
+		observedProcPaths.Store(strings.ToLower(p), struct{}{})
+	}
+}
+
+func validIconDomain(raw string) (string, bool) {
+	d := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(raw), "."))
+	if len(d) == 0 || len(d) > 253 || !strings.Contains(d, ".") || d == "localhost" || strings.HasSuffix(d, ".local") || strings.HasSuffix(d, ".internal") {
+		return "", false
+	}
+	if _, err := netip.ParseAddr(d); err == nil {
+		return "", false
+	}
+	for i := 0; i < len(d); i++ {
+		c := d[i]
+		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '.') {
+			return "", false
+		}
+	}
+	return d, true
+}
+
+func (h *Host) isObservedProcessPath(targetPath string) bool {
+	want := strings.TrimSpace(targetPath)
+	if want == "" || strings.HasPrefix(want, `\`) || strings.HasPrefix(want, "//") {
+		return false
+	}
+	if _, ok := observedProcPaths.Load(strings.ToLower(want)); ok {
+		return true
+	}
+	h.mu.Lock()
+	s := h.server
+	h.mu.Unlock()
+	if s == nil {
+		return false
+	}
+	active, closed := s.ClientConnections(500)
+	found := false
+	for i := range active {
+		rememberObservedProcessPath(active[i].ProcessPath)
+		if strings.EqualFold(active[i].ProcessPath, want) {
+			found = true
+		}
+	}
+	for i := range closed {
+		rememberObservedProcessPath(closed[i].ProcessPath)
+		if strings.EqualFold(closed[i].ProcessPath, want) {
+			found = true
+		}
+	}
+	return found
+}
+
+// fetchSiteBytes performs a bounded GET via the running kernel SOCKS5 port,
+// permitting up to 4 HTTPS redirects to public hosts so real websites'
+// root pages and <link rel="icon"> assets resolve cleanly.
+func (h *Host) fetchSiteBytes(ctx context.Context, rawURL string, limit int64) ([]byte, *url.URL, error) {
+	h.mu.Lock()
+	running := h.server != nil
+	port := h.doc.client.SOCKSPort
+	epoch := h.manualCtx
+	h.mu.Unlock()
+	if !running {
+		b, err := h.fetchIcon(ctx, rawURL)
+		u, _ := url.Parse(rawURL)
+		return b, u, err
+	}
+	child, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stop := context.AfterFunc(epoch, cancel)
+	defer stop()
+	if epoch.Err() != nil {
+		cancel()
+	}
+	d, err := proxy.SOCKS5("tcp", portAddress(port), nil, &iconSOCKSForward{})
+	if err != nil {
+		return nil, nil, err
+	}
+	cd, ok := d.(proxy.ContextDialer)
+	if !ok {
+		return nil, nil, errors.New("socks dialer")
+	}
+	tr := &http.Transport{Proxy: nil, DisableKeepAlives: true, MaxResponseHeaderBytes: 64 << 10, DialContext: cd.DialContext}
+	defer tr.CloseIdleConnections()
+	cl := &http.Client{
+		Transport: tr,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 4 || (req.URL.Scheme != "https" && req.URL.Scheme != "http") || req.URL.User != nil {
+				return http.ErrUseLastResponse
+			}
+			if _, ok := validIconDomain(req.URL.Hostname()); !ok {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
+	}
+	req, err := http.NewRequestWithContext(child, "GET", rawURL, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+	req.Header.Set("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+	resp, err := cl.Do(req)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, nil, errors.New("http status")
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err != nil || int64(len(b)) > limit {
+		return nil, nil, errors.New("body size")
+	}
+	return b, resp.Request.URL, nil
+}
+
+func extractHTMLIconURLs(htmlBytes []byte, base *url.URL) []string {
+	if base == nil || len(htmlBytes) == 0 {
+		return nil
+	}
+	// Inspect up to </head> or first 64 KiB
+	s := string(htmlBytes)
+	if idx := strings.Index(strings.ToLower(s), "</head>"); idx > 0 {
+		s = s[:idx]
+	}
+	var appleIcons, stdIcons []string
+	for _, tag := range htmlLinkTagRe.FindAllString(s, 32) {
+		var rel, href string
+		for _, m := range htmlAttrRe.FindAllStringSubmatch(tag, -1) {
+			k := strings.ToLower(m[1])
+			v := m[2]
+			if v == "" {
+				v = m[3]
+			}
+			if v == "" {
+				v = m[4]
+			}
+			if k == "rel" {
+				rel = strings.ToLower(v)
+			} else if k == "href" {
+				href = strings.TrimSpace(v)
+			}
+		}
+		if href == "" || strings.HasPrefix(href, "data:") || strings.HasPrefix(href, "javascript:") {
+			continue
+		}
+		hasIcon := false
+		isApple := false
+		for _, tok := range strings.Fields(rel) {
+			if tok == "apple-touch-icon" || tok == "apple-touch-icon-precomposed" {
+				hasIcon, isApple = true, true
+			} else if tok == "icon" {
+				hasIcon = true
+			}
+		}
+		if !hasIcon {
+			continue
+		}
+		u, err := base.Parse(href)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil {
+			continue
+		}
+		if _, ok := validIconDomain(u.Hostname()); !ok {
+			continue
+		}
+		if isApple {
+			appleIcons = append(appleIcons, u.String())
+		} else {
+			stdIcons = append(stdIcons, u.String())
+		}
+	}
+	return append(appleIcons, stdIcons...)
+}
+
+func (h *Host) resolveDomainIconBytes(baseCtx context.Context, domain string) []byte {
+	hosts := []string{domain}
+	if etld1, err := publicsuffix.EffectiveTLDPlusOne(domain); err == nil && etld1 != "" && etld1 != domain {
+		hosts = append(hosts, etld1)
+	}
+	// 1. Try direct website: HTML <link rel="icon" / "apple-touch-icon"> & /favicon.ico
+	for _, host := range hosts {
+		c1, cancel1 := context.WithTimeout(baseCtx, 4*time.Second)
+		favBytes, _, err := h.fetchSiteBytes(c1, "https://"+host+"/favicon.ico", maxIconBytes)
+		cancel1()
+		if err == nil {
+			if _, ierr := iconData(favBytes); ierr == nil {
+				return favBytes
+			}
+		}
+		c2, cancel2 := context.WithTimeout(baseCtx, 4*time.Second)
+		pageBytes, finalURL, err := h.fetchSiteBytes(c2, "https://"+host+"/", 64<<10)
+		cancel2()
+		if err == nil {
+			for _, iconHref := range extractHTMLIconURLs(pageBytes, finalURL) {
+				c3, cancel3 := context.WithTimeout(baseCtx, 4*time.Second)
+				ib, _, err := h.fetchSiteBytes(c3, iconHref, maxIconBytes)
+				cancel3()
+				if err == nil {
+					if _, ierr := iconData(ib); ierr == nil {
+						return ib
+					}
+				}
+			}
+		}
+	}
+	// 2. Fallback to high-res favicon services (handles pure CDN/API subdomains)
+	var fallbacks []string
+	for _, host := range hosts {
+		fallbacks = append(fallbacks,
+			"https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://"+host+"&size=64",
+			"https://icons.duckduckgo.com/ip3/"+host+".ico",
+		)
+	}
+	for _, u := range fallbacks {
+		c, cancel := context.WithTimeout(baseCtx, 5*time.Second)
+		b, _, err := h.fetchSiteBytes(c, u, maxIconBytes)
+		cancel()
+		if err == nil {
+			if _, ierr := iconData(b); ierr == nil {
+				return b
+			}
+		}
+	}
+	return nil
+}
+
+func (h *Host) getDomainIcon(ctx context.Context, rawDomain string, proxyCfg *bootstrapProxy, expected *bootstrapEgress, _ context.Context) map[string]any {
+	empty := map[string]any{"data_uri": ""}
+	domain, ok := validIconDomain(rawDomain)
+	if !ok {
+		return empty
+	}
+	dir, e := h.iconDir()
+	if e != nil {
+		return empty
+	}
+	path := filepath.Join(dir, fmt.Sprintf("dom-%x.img", sha256.Sum256([]byte(domain))))
+	data, at := readIcon(path)
+	if data != "" && time.Since(at) < 7*24*time.Hour {
+		return map[string]any{"data_uri": data}
+	}
+	h.iconMu.Lock()
+	if h.iconClosed {
+		h.iconMu.Unlock()
+		return empty
+	}
+	done, exists := h.iconPending[path]
+	if !exists {
+		done = make(chan struct{})
+		h.iconPending[path] = done
+		h.iconWG.Add(1)
+		go func() {
+			defer h.iconWG.Done()
+			baseCtx := context.WithValue(context.WithValue(h.iconCtx, iconExpectedKey{}, expected), bootstrapKey{}, proxyCfg)
+			if b := h.resolveDomainIconBytes(baseCtx, domain); len(b) > 0 {
+				_ = atomicWriteContext(h.iconCtx, path, b)
+			}
+			h.iconMu.Lock()
+			delete(h.iconPending, path)
+			close(done)
+			h.iconMu.Unlock()
+		}()
+	}
+	h.iconMu.Unlock()
+	if data != "" {
+		return map[string]any{"data_uri": data}
+	}
+	select {
+	case <-ctx.Done():
+		return empty
+	case <-done:
+	}
+	data, _ = readIcon(path)
+	return map[string]any{"data_uri": data}
 }

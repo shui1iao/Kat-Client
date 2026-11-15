@@ -427,6 +427,11 @@ func (s *Server) dialProxy(parent context.Context, start time.Time, name string,
 		if e == nil {
 			// Only the head was metered by route(); add the chosen members.
 			f.meters = append(f.meters, s.chainCounters(f.chain[1:])...)
+			if len(f.chain) > 0 && f.chain[len(f.chain)-1] == "direct" && f.domMeterIdx >= 0 && f.domMeterIdx < len(f.meters) {
+				if dm := f.domainMeter(true); dm != nil {
+					f.meters[f.domMeterIdx] = dm
+				}
+			}
 		}
 	}
 	if e != nil {

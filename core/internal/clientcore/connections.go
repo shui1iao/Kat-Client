@@ -28,6 +28,7 @@ type connectionRing struct {
 }
 
 func (r *connectionRing) record(e kernel.ConnectionEvent) {
+	rememberObservedProcessPath(e.ProcessPath)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.seq == maxLogSeq {

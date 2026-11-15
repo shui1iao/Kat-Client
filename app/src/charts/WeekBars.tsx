@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useSize } from '../components/ui';
 import { showBytes } from '../client/display';
 import { ChartTip, type TipAnchor } from './ChartTip';
@@ -6,91 +6,161 @@ import { byteAxis, axisLabel, weekDateLabel, showWeekLabel } from './scale';
 
 export interface Bar {
   label: string;
+  title?: string;
   down?: number | null;
   up?: number | null;
+  proxy?: number | null;
+  direct?: number | null;
   today?: boolean;
+  elapsed?: boolean;
 }
 
-const PAD = { l: 36, r: 12, t: 18, b: 20 };
+const PAD = { l: 0, r: 48, t: 8, b: 18 };
 const known = (v: number | null | undefined): v is number => v != null && Number.isFinite(v) && v >= 0;
-const total = (d: Bar) => (known(d.down) && known(d.up) ? d.down + d.up : null);
+const totalOf = (d: Bar) => {
+  if (known(d.proxy) || known(d.direct)) return (known(d.proxy) ? d.proxy : 0) + (known(d.direct) ? d.direct : 0);
+  return known(d.down) && known(d.up) ? d.down + d.up : null;
+};
 
-export function WeekBars({ data, height: fixed }: { data: Bar[]; height?: number }) {
+export function WeekBars({
+  data,
+  height: fixed,
+  mode = '7d',
+}: {
+  data: Bar[];
+  height?: number;
+  mode?: 'today' | '7d' | 'month';
+}) {
+  const clipPrefix = 'wb-clip-' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const [ref, { w, h }] = useSize<HTMLDivElement>();
-  const height = fixed ?? Math.max(100, h);
+  const height = fixed ?? Math.max(108, h);
   const [hover, setHover] = useState<{ index: number; anchor: TipAnchor } | null>(null);
-  const { unit, label, top, ticks } = byteAxis(data.map((d) => total(d) ?? NaN));
-  const yMax = top * unit;
+  const { unit, label, top, ticks } = byteAxis(data.map((d) => totalOf(d) ?? NaN));
+  const yMax = Math.max(1, top * unit);
   const ih = Math.max(10, height - PAD.t - PAD.b);
   const iw = Math.max(10, w - PAD.l - PAD.r);
   const slot = iw / Math.max(1, data.length);
-  const bw = Math.min(24, slot * 0.48);
-  const y = (v: number) => PAD.t + ih - (v / yMax) * ih;
+  const bw =
+    mode === '7d'
+      ? Math.max(10, Math.min(24, slot * 0.52))
+      : Math.max(5, Math.min(mode === 'today' ? 10 : 12, slot * 0.64));
+  const rx = mode === '7d' ? 3.5 : 2;
+  const base = PAD.t + ih;
+  const y = (v: number) => base - (Math.max(0, Math.min(yMax, v)) / yMax) * ih;
   const active = hover ? data[hover.index] : undefined;
+
+  const displayTicks = ticks.length > 3 ? [ticks[0], ticks[Math.floor(ticks.length / 2)], ticks[ticks.length - 1]] : ticks;
+
+  const showXLabel = (i: number) => {
+    if (mode === 'today') return i === 0 || i === 6 || i === 12 || i === 18;
+    if (mode === 'month') {
+      const n = data.length;
+      if (n <= 7) return showWeekLabel(i, n, slot);
+      const step = Math.max(2, Math.ceil(n / 5));
+      return i === 0 || i === n - 1 || (i % step === 0 && n - 1 - i >= Math.floor(step * 0.6));
+    }
+    return showWeekLabel(i, data.length, slot);
+  };
 
   return (
     <div ref={ref} className={'weekbars' + (fixed ? '' : ' fill')} style={fixed ? { height: fixed } : undefined}>
       {w > 0 && (fixed || h > 0) && (
-        <svg width={w} height={height} role="img" aria-label="近 7 日用量" data-axis-unit={label} data-axis-max={yMax}>
-          {ticks.map((t) => (
-            <g key={t}>
-              <line x1={PAD.l} x2={w - PAD.r} y1={y(t * unit)} y2={y(t * unit)} className={t === 0 ? 'axis' : 'grid'} />
-              <text x={PAD.l - 6} y={y(t * unit) + 3.5} className="ylab" textAnchor="end">
-                {axisLabel(t)}
-              </text>
-            </g>
-          ))}
-          <text x={PAD.l - 6} y={11} className="ylab unit" textAnchor="end">
-            {label}
-          </text>
+        <svg
+          width={w}
+          height={height}
+          role="img"
+          aria-label={mode === 'today' ? '今日分时流量' : mode === 'month' ? '本月每日流量' : '近 7 日用量'}
+          data-axis-unit={label}
+          data-axis-max={yMax}
+          onMouseLeave={() => setHover(null)}
+        >
+          {displayTicks.map((t) => {
+            const gy = y(t * unit);
+            return (
+              <g key={t}>
+                <line x1={PAD.l} x2={w - PAD.r} y1={gy} y2={gy} className={t === 0 ? 'axis' : 'grid'} />
+                {t > 0 && (
+                  <text x={w} y={gy + 3.5} className="ylab" textAnchor="end">
+                    {axisLabel(t)} {label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
           {data.map((d, i) => {
             const cx = PAD.l + slot * i + slot / 2;
-            const sum = total(d);
-            const yd = sum == null ? null : y(d.down!);
-            const yu = sum == null ? null : y(sum);
-            const name = d.today ? '今天' : weekDateLabel(d.label);
-            const barOpacity = d.today ? 1 : 0.6;
+            const hasSplit = known(d.proxy) || known(d.direct);
+            const directVal = hasSplit ? (d.direct ?? 0) : (d.up ?? 0);
+            const proxyVal = hasSplit ? (d.proxy ?? 0) : (d.down ?? 0);
+            const totalVal = directVal + proxyVal;
+            const totalH = totalVal > 0 ? Math.max(4, (totalVal / yMax) * ih) : 0;
+            const clampedH = Math.min(ih, totalH);
+            const directH = totalVal > 0 ? (directVal / totalVal) * clampedH : 0;
+            const proxyH = Math.max(0, clampedH - directH);
+            const topY = base - clampedH;
+            const name = d.title ?? (mode === 'today' ? `${i}时` : d.today ? '今天' : weekDateLabel(d.label));
+            const clipId = `${clipPrefix}-${i}`;
+            const isHovered = hover?.index === i;
+
             return (
               <g
                 key={d.label}
                 data-day={d.label}
-                tabIndex={0}
+                className="wb-col"
                 role="img"
-                aria-label={`${name} 下载 ${showBytes(d.down)}，上传 ${showBytes(d.up)}`}
+                aria-label={`${name} 代理 ${showBytes(proxyVal)}，直连 ${showBytes(directVal)}，下载 ${showBytes(d.down)}，上传 ${showBytes(d.up)}`}
                 onMouseMove={(e) => setHover({ index: i, anchor: { target: e.currentTarget, x: e.clientX, y: e.clientY } })}
-                onMouseLeave={() => setHover(null)}
-                onFocus={(e) => setHover({ index: i, anchor: { target: e.currentTarget } })}
-                onBlur={() => setHover(null)}
-                opacity={hover && hover.index !== i ? 0.4 : 1}
+                opacity={hover && !isHovered ? 0.35 : 1}
               >
                 <rect className="week-hit" x={cx - slot / 2} y={PAD.t} width={slot} height={ih} fill="transparent" />
-                {yd != null && yu != null && (
+                {totalVal > 0 ? (
                   <>
-                    <rect
-                      data-series="down"
-                      x={cx - bw / 2}
-                      y={yd}
-                      width={bw}
-                      height={Math.max(0, PAD.t + ih - yd)}
-                      rx="3"
-                      fill="var(--down)"
-                      opacity={barOpacity}
-                    />
-                    <rect
-                      data-series="up"
-                      x={cx - bw / 2}
-                      y={yu}
-                      width={bw}
-                      height={Math.max(0, yd - yu)}
-                      rx="3"
-                      fill="var(--up)"
-                      opacity={barOpacity}
-                    />
+                    <clipPath id={clipId}>
+                      <rect x={cx - bw / 2} y={topY} width={bw} height={clampedH} rx={rx} />
+                    </clipPath>
+                    <g clipPath={`url(#${clipId})`}>
+                      {proxyH > 0 && (
+                        <rect
+                          data-series="proxy"
+                          x={cx - bw / 2}
+                          y={topY}
+                          width={bw}
+                          height={proxyH + (directH > 0 ? 0.5 : 0)}
+                          fill="var(--proxy)"
+                        />
+                      )}
+                      {directH > 0 && (
+                        <rect
+                          data-series="direct"
+                          x={cx - bw / 2}
+                          y={topY + proxyH}
+                          width={bw}
+                          height={directH}
+                          fill="var(--direct)"
+                        />
+                      )}
+                    </g>
                   </>
+                ) : (
+                  <rect
+                    x={cx - bw / 2}
+                    y={base - 2}
+                    width={bw}
+                    height={2}
+                    rx={1}
+                    fill={d.elapsed ? 'var(--proxy)' : 'var(--track)'}
+                    opacity={isHovered ? 0.85 : d.elapsed ? 0.32 : 0.72}
+                  />
                 )}
-                {showWeekLabel(i, data.length, slot) && (
-                  <text x={cx} y={height - 5} className="xlab" textAnchor="middle" style={d.today ? { fill: 'var(--text)' } : undefined}>
-                    {name}
+                {showXLabel(i) && (
+                  <text
+                    x={cx}
+                    y={height - 3}
+                    className="xlab"
+                    textAnchor={i === 0 ? 'start' : 'middle'}
+                    style={isHovered || d.today ? { fill: 'var(--text)', fontWeight: 500 } : undefined}
+                  >
+                    {mode === 'today' ? `${i}时` : d.today ? '今天' : weekDateLabel(d.label)}
                   </text>
                 )}
               </g>
@@ -99,17 +169,36 @@ export function WeekBars({ data, height: fixed }: { data: Bar[]; height?: number
         </svg>
       )}
       {active && (
-        <ChartTip anchor={hover!.anchor} title={active.today ? '今天' : weekDateLabel(active.label)}>
+        <ChartTip
+          anchor={hover!.anchor}
+          title={active.title ?? (mode === 'today' ? `今天 ${String(hover!.index).padStart(2, '0')}:00–${String(hover!.index).padStart(2, '0')}:59` : active.today ? '今天' : weekDateLabel(active.label))}
+        >
+          {(known(active.proxy) || known(active.direct)) && (
+            <>
+              <div>
+                <i style={{ background: 'var(--proxy)' }} />
+                <span style={{ color: 'var(--proxy)' }}>代理</span>
+                <b>{showBytes(active.proxy ?? 0)}</b>
+              </div>
+              <div>
+                <i style={{ background: 'var(--direct)' }} />
+                <span style={{ color: 'var(--direct)' }}>直连</span>
+                <b>{showBytes(active.direct ?? 0)}</b>
+              </div>
+            </>
+          )}
           <div>
             <i style={{ background: 'var(--down)' }} />
-            下载<b>{showBytes(active.down)}</b>
+            <span style={{ color: 'var(--down)' }}>下载</span>
+            <b>{showBytes(active.down)}</b>
           </div>
           <div>
             <i style={{ background: 'var(--up)' }} />
-            上传<b>{showBytes(active.up)}</b>
+            <span style={{ color: 'var(--up)' }}>上传</span>
+            <b>{showBytes(active.up)}</b>
           </div>
           <div className="chart-tip-total">
-            合计<b>{showBytes(total(active))}</b>
+            合计<b>{showBytes(totalOf(active))}</b>
           </div>
         </ChartTip>
       )}

@@ -328,7 +328,8 @@ type flow struct {
 	detailsOnce sync.Once
 
 	// TCP: set once by route() before the relay starts, read lock-free after.
-	meters []*stats.Counter
+	meters      []*stats.Counter
+	domMeterIdx int
 
 	mu            sync.Mutex // guards the descriptive fields below for readers
 	target        string
@@ -467,6 +468,13 @@ func (f *flow) route(rule int, chain []string) {
 		meters = append(meters, &rc.Counter)
 	}
 	meters = append(meters, f.s.chainCounters(chain)...)
+	f.domMeterIdx = -1
+	if len(chain) > 0 && chain[len(chain)-1] != "reject" {
+		if dm := f.domainMeter(chain[len(chain)-1] == "direct"); dm != nil {
+			f.domMeterIdx = len(meters)
+			meters = append(meters, dm)
+		}
+	}
 	f.meters = meters
 	f.mu.Lock()
 	f.ruleKey, f.chain = key, chain
@@ -524,6 +532,11 @@ func (f *flow) udpRouteFor(rule int, chain []string) *udpRoute {
 		r.meters = append(r.meters, &rc.Counter)
 	}
 	r.meters = append(r.meters, f.s.chainCounters(chain)...)
+	if len(chain) > 0 && chain[len(chain)-1] != "reject" {
+		if dm := f.domainMeter(chain[len(chain)-1] == "direct"); dm != nil {
+			r.meters = append(r.meters, dm)
+		}
+	}
 	return r
 }
 
@@ -533,6 +546,13 @@ func (f *flow) udpRouteFor(rule int, chain []string) *udpRoute {
 func (f *flow) udpDecided(target Address, rule int, chain []string) *udpRoute {
 	if f == nil {
 		return nil
+	}
+	if target.Port != 0 {
+		f.mu.Lock()
+		if f.target == "" {
+			f.target = target.String()
+		}
+		f.mu.Unlock()
 	}
 	r := f.udpRouteFor(rule, chain)
 	rc, key := f.s.ruleCounter(rule)

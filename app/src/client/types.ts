@@ -48,7 +48,37 @@ export interface CoreStatus {
   local?: { http: { host: string; port: number; ready: boolean }; socks: { host: string; port: number; ready: boolean } };
   groups: GroupStatus[];
   nodes: { name: string; type: string; source?: string; probe_ms: number | null; probe_at?: string | null; probe_error?:string }[];
-  traffic: { up_rate: number | null; down_rate: number | null; total_up: number | null; total_down: number | null; today_up: number | null; today_down: number | null; daily: { date: string; up: number; down: number }[]; groups?: { name: string; up: number | null; down: number | null }[]; rule_targets?:{name:string;hits:number}[]; rules?: RuleHits[]; rules_since?: string | null };
+  traffic: {
+    up_rate: number | null;
+    down_rate: number | null;
+    total_up: number | null;
+    total_down: number | null;
+    today_up: number | null;
+    today_down: number | null;
+    today_direct_up?: number | null;
+    today_direct_down?: number | null;
+    today_proxy_up?: number | null;
+    today_proxy_down?: number | null;
+    direct_up?: number | null;
+    direct_down?: number | null;
+    hourly?: { hour: number; up: number; down: number; direct_up?: number; direct_down?: number; proxy_up?: number; proxy_down?: number }[];
+    domains?: { name: string; up: number; down: number; direct_up?: number; direct_down?: number; proxy_up?: number; proxy_down?: number }[];
+    daily: {
+      date: string;
+      up: number;
+      down: number;
+      direct_up?: number;
+      direct_down?: number;
+      proxy_up?: number;
+      proxy_down?: number;
+      domain_count?: number;
+      domains?: { name: string; up: number; down: number; direct_up?: number; direct_down?: number; proxy_up?: number; proxy_down?: number }[];
+    }[];
+    groups?: { name: string; up: number | null; down: number | null }[];
+    rule_targets?: { name: string; hits: number }[];
+    rules?: RuleHits[];
+    rules_since?: string | null;
+  };
   connections: { active: number | null; total?: number | null; tcp?: number | null; udp?: number | null; items: ConnectionInfo[] };
   providers: SourceObject[];
 }

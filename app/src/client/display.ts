@@ -15,7 +15,7 @@ export function exitChain(status:CoreStatus|null,source:DocumentSource|null):str
 // Only actual cumulative per-group counters define distribution slices. Missing
 // or unknown counters are not inferred from daily totals or connection counts.
 export function trafficSlices(groups: CoreStatus['traffic']['groups']) {
-  const colors = ['var(--down)', '#8B5CF6', 'var(--up)', '#10B981', '#EAB308', '#EC4899'];
+  const colors = ['var(--proxy)', 'var(--down)', '#20A4B8', '#E06C96', '#4E9B85', '#6875DF'];
   return (groups ?? []).filter(g => typeof g.name === 'string' && g.name.length > 0 && g.up != null && g.down != null && Number.isFinite(g.up) && Number.isFinite(g.down) && g.up >= 0 && g.down >= 0 && Number.isFinite(g.up + g.down) && g.up + g.down > 0)
     .sort((a,b)=>(b.up!+b.down!)-(a.up!+a.down!)||nameOrder(a.name,b.name))
     .map((g, i) => ({ label: g.name, value: g.up! + g.down!, up: g.up!, down: g.down!, color: colors[i % colors.length] }));
