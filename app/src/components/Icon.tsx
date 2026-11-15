@@ -7,6 +7,7 @@ const P: Record<string, ReactNode> = {
   rules: (<><path d="M10 6h10M10 12h10M10 18h10" /><path d="M4.5 6h1.5M4.5 12h1.5M4.5 18h1.5" /></>),
   config: (<><path d="M14 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5z" /><path d="M14 3.5v5h5" /><path d="M10 12.5l-2 2 2 2M14 12.5l2 2-2 2" /></>),
   kernel: (<><rect x="6" y="6" width="12" height="12" rx="2" /><rect x="9.5" y="9.5" width="5" height="5" rx="1" /><path d="M9 2.5v3M15 2.5v3M9 18.5v3M15 18.5v3M2.5 9h3M2.5 15h3M18.5 9h3M18.5 15h3" /></>),
+  dns: (<><circle cx="11" cy="11" r="7" /><path d="M4 11h14M11 4c2 2.1 3 4.4 3 7s-1 4.9-3 7c-2-2.1-3-4.4-3-7s1-4.9 3-7z" /><path d="M16.2 16.2L20 20" /></>),
   connections: (<><path d="M4 8h14M14 4l4 4-4 4" /><path d="M20 16H6M10 12l-4 4 4 4" /></>),
   logs: (<><rect x="4.5" y="3.5" width="15" height="17" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></>),
   settings: (<><path d="M4 7h9M17 7h3M4 17h3M11 17h9" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></>),

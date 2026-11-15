@@ -63,14 +63,14 @@
 }
 
 .tm-brand {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   flex: none;
   -webkit-user-drag: none;
 }
 
 .tm-head > b {
-  font: 600 14px/20px var(--font);
+  font: 650 15px/20px var(--font);
   color: var(--text);
 }
 

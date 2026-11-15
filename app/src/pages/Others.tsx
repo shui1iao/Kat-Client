@@ -6,7 +6,7 @@ import { ProbeSettings } from '../components/ProbeSettings';
 import { ProxyBypass } from '../components/ProxyBypass';
 import { desktopExtras } from '../client/settings';
 import { NetworkSettings } from '../components/NetworkSettings';
-import { DnsQuery, SniffSettingsCard } from '../components/DnsTools';
+import { SniffSettingsCard } from '../components/DnsTools';
 import { Diagnostics } from '../components/Diagnostics';
 import { Card, Segmented, Switch } from '../components/ui';
 import { KState } from '../components/labels';
@@ -21,7 +21,7 @@ export type SettingsSection = 'general' | 'network' | 'dns' | 'kernel' | 'update
 const SECTIONS: { value: SettingsSection; label: string }[] = [
   { value: 'general', label: '常规' },
   { value: 'network', label: '网络与测速' },
-  { value: 'dns', label: 'DNS 与嗅探' },
+  { value: 'dns', label: '域名嗅探' },
   { value: 'kernel', label: '内核与服务' },
   { value: 'updates', label: '更新与诊断' },
 ];
@@ -362,11 +362,8 @@ export function Settings({
             <ProbeSettings c={c} />
           </div>
 
-          {/* 3. DNS 与嗅探 */}
+          {/* 3. 域名嗅探 */}
           <div className="settings-group" data-sec-id="dns">
-            <NetworkSettings c={c} section="dns">
-              <DnsQuery c={c} />
-            </NetworkSettings>
             <SniffSettingsCard c={c} />
           </div>
 

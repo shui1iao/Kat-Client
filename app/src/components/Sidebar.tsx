@@ -5,6 +5,7 @@ import { Icon } from './Icon';
 export type PageId =
   | 'overview'
   | 'connections'
+  | 'dns'
   | 'logs'
   | 'policies'
   | 'nodes'
@@ -18,6 +19,7 @@ export const NAV: { section: string; items: { id: PageId; label: string; icon: s
     items: [
       { id: 'overview', label: '概览', icon: 'overview' },
       { id: 'connections', label: '连接', icon: 'connections' },
+      { id: 'dns', label: 'DNS', icon: 'dns' },
       { id: 'logs', label: '日志', icon: 'logs' },
     ],
   },
@@ -51,6 +53,7 @@ export function Sidebar({
   onDrag,
   activeConnections,
   configDirty,
+  hasUpdate,
   footer,
 }: {
   page: PageId;
@@ -60,6 +63,7 @@ export function Sidebar({
   onDrag?: (e: React.MouseEvent<HTMLElement>) => void;
   activeConnections?: number | null;
   configDirty?: boolean;
+  hasUpdate?: boolean;
   footer?: ReactNode;
 }) {
   return (
@@ -101,6 +105,7 @@ export function Sidebar({
               {group.items.map((it) => {
                 const showConnBadge = it.id === 'connections' && activeConnections != null && activeConnections > 0;
                 const showDirtyDot = it.id === 'config' && !!configDirty;
+                const showUpdateDot = it.id === 'settings' && !!hasUpdate;
                 return (
                   <button
                     key={it.id}
@@ -118,6 +123,7 @@ export function Sidebar({
                     <span className="nav-txt">{it.label}</span>
                     {showConnBadge && <span className="nav-badge num">{activeConnections}</span>}
                     {showDirtyDot && <span className="nav-dirty-dot" {...tip('配置有未保存修改')} aria-label="未保存" />}
+                    {showUpdateDot && <span className="nav-update-dot" {...tip('有新版本可用，点击查看更新内容')} aria-label="有可用更新" />}
                   </button>
                 );
               })}

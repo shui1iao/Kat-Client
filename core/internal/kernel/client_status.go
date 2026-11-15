@@ -37,8 +37,12 @@ func normalizeDomainKey(raw string) string {
 	if h == "" || h == "localhost" || h == "dns" || h == "-" {
 		return ""
 	}
-	if _, err := netip.ParseAddr(h); err == nil {
-		return ""
+	if ip, err := netip.ParseAddr(strings.Trim(h, "[]")); err == nil {
+		ip = ip.Unmap()
+		if ip.IsLoopback() || ip.IsUnspecified() || ip.IsMulticast() {
+			return ""
+		}
+		return ip.String()
 	}
 	return h
 }

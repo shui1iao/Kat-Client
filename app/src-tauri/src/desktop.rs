@@ -285,6 +285,14 @@ fn show_main(app:&tauri::AppHandle){if let Some(w)=app.get_webview_window("main"
 }sync_main_window_visibility(app,false);}
 
 fn tray_image()->tauri::image::Image<'static>{tauri::image::Image::new(include_bytes!("../icons/icon-32.rgba"),32,32)}
+fn window_image()->tauri::image::Image<'static>{tauri::image::Image::new(include_bytes!("../icons/icon-128.rgba"),128,128)}
+pub(crate) fn refresh_shell_icons(){
+ #[cfg(windows)]
+ unsafe{
+  use windows_sys::Win32::UI::Shell::{SHChangeNotify,SHCNE_ASSOCCHANGED,SHCNF_IDLIST};
+  SHChangeNotify(SHCNE_ASSOCCHANGED as i32,SHCNF_IDLIST,std::ptr::null(),std::ptr::null());
+ }
+}
 // Called from Ready and window actions. Tauri owns a resource-table clone, and
 // Host also retains the verified handle explicitly. A successful build alone can
 // hide a failed NIM_ADD in tray-icon 0.25.1; set_icon propagates NIM_MODIFY failure.
@@ -511,9 +519,10 @@ pub fn run() {
           .on_page_load(|w,payload|{if matches!(payload.event(),tauri::webview::PageLoadEvent::Started){let s=w.state::<Host>();s.tray_state.lock().unwrap().listener_ready=false;*s.main_hidden.lock().unwrap()=None;}})
           .transparent(true)
           .on_navigation(|url| url.scheme()=="tauri" || (url.scheme()=="http" && url.host_str()==Some("tauri.localhost")))
-          .icon(tray_image())?
+          .icon(window_image())?
           .visible((installed_handoff||crate::preferences::initially_visible(&settings,autostart_launch,settings_error.is_some()||intent_error.is_some()||app.state::<Host>().core.is_none())) && !settings.remember_window).build()?;
         crate::windows::identity::set_uac_owner(window.hwnd().map(|h|h.0 as isize).unwrap_or(0));
+        if installed_handoff { refresh_shell_icons(); }
         crate::acrylic::install(&window);
         if settings.remember_window{
           let result=crate::windows::window_state::restore(&window,&app.state::<Host>().store);

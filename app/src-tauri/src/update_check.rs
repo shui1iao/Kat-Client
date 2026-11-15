@@ -20,18 +20,19 @@ const DOWNLOAD_SECONDS: u64 = 600;
 const USER_AGENT: &str = "Kat-Client-Signed-Update/1";
 
 #[derive(Clone, Debug)]
-pub struct VerifiedOffer { verified: VerifiedManifest }
+pub struct VerifiedOffer { verified: VerifiedManifest, notes: Option<String> }
 impl VerifiedOffer {
     pub fn manifest(&self) -> &Manifest { self.verified.manifest() }
     pub fn manifest_bytes(&self) -> &[u8] { self.verified.manifest_bytes() }
     pub fn signature_hex(&self) -> &str { self.verified.signature_hex() }
     pub fn digest(&self) -> &str { self.verified.digest() }
     pub fn verified(&self) -> &VerifiedManifest { &self.verified }
+    pub fn notes(&self) -> Option<&str> { self.notes.as_deref() }
 }
 #[derive(Clone, Debug)]
 pub enum CheckOutcome {
     Available { offer: VerifiedOffer, message: String },
-    Current { version: String },
+    Current { version: String, notes: Option<String> },
     Unavailable { reason: String },
 }
 // Only Verified can become an offer; the other states carry no install authorization.
@@ -102,6 +103,7 @@ struct Release {
     tag_name: String,
     draft: bool,
     prerelease: bool,
+    #[serde(default)] body: Option<String>,
     assets: Vec<GitHubAsset>,
 }
 #[derive(Deserialize)]
@@ -163,8 +165,8 @@ impl UpdateChecker {
             return Ok(CheckOutcome::Unavailable { reason: "客户端更新资源尚未发布：暂无公开稳定发行".into() });
         }
         match self.check_release(kind, &release, current, deadline)? {
-            ReleaseCheck::Verified(verified) => Ok(verified_outcome(verified, "有可用更新".into())),
-            ReleaseCheck::Current(version) => Ok(CheckOutcome::Current { version }),
+            ReleaseCheck::Verified(verified) => Ok(verified_outcome(verified, "有可用更新".into(), clean_notes(release.body.as_deref()))),
+            ReleaseCheck::Current(version) => Ok(CheckOutcome::Current { version, notes: clean_notes(release.body.as_deref()) }),
             ReleaseCheck::Unavailable(reason) | ReleaseCheck::Incompatible { reason, .. } => {
                 Ok(CheckOutcome::Unavailable { reason })
             }
@@ -234,7 +236,7 @@ impl UpdateChecker {
         };
         let installed = signed_version(&current.core_version)?;
         let mut tag_versions = Vec::<Version>::new();
-        let mut verified = Vec::<(Version, VerifiedManifest)>::new();
+        let mut verified = Vec::<(Version, VerifiedManifest, Option<String>)>::new();
         let mut missing = None;
         let mut incompatible = Vec::<(Version, String)>::new();
         for release in releases {
@@ -247,7 +249,7 @@ impl UpdateChecker {
             }
             tag_versions.push(tag_version);
             match self.check_release(UpdateKind::Core, &release, current, deadline)? {
-                ReleaseCheck::Verified(value) => verified.push((signed_version(&value.manifest().version)?, value)),
+                ReleaseCheck::Verified(value) => verified.push((signed_version(&value.manifest().version)?, value, clean_notes(release.body.as_deref()))),
                 ReleaseCheck::Current(_) => {}
                 ReleaseCheck::Unavailable(reason) => { if missing.is_none() { missing = Some(reason); } }
                 ReleaseCheck::Incompatible { version, reason } => incompatible.push((version, reason)),
@@ -274,12 +276,12 @@ impl UpdateChecker {
             notices.push(format!("已发现{newer}Windows 内核 {version}，但与当前客户端不兼容，未提供该版本下载：{reason}"));
         }
         let notice = notices.join("；");
-        if let Some((_, value)) = verified.pop() {
+        if let Some((_, value, notes)) = verified.pop() {
             if value.disposition() == VersionDisposition::Newer {
                 let message = if notice.is_empty() { "有可用更新".into() } else { format!("有兼容更新；{notice}") };
-                return Ok(verified_outcome(value, message));
+                return Ok(verified_outcome(value, message, notes));
             }
-            if notice.is_empty() { return Ok(verified_outcome(value, String::new())); }
+            if notice.is_empty() { return Ok(verified_outcome(value, String::new(), notes)); }
             return Ok(CheckOutcome::Unavailable { reason: format!("{notice}；无法确认已是最新版本") });
         }
         Ok(CheckOutcome::Unavailable { reason: if notice.is_empty() {
@@ -493,10 +495,15 @@ fn core_tag_version(tag: &str) -> Option<Version> {
     if version.to_string() != suffix { return None; }
     Some(version)
 }
-fn verified_outcome(verified: VerifiedManifest, message: String) -> CheckOutcome {
+fn clean_notes(raw: Option<&str>) -> Option<String> {
+    let s = raw?.trim();
+    if s.is_empty() { return None; }
+    Some(s.chars().take(16384).collect())
+}
+fn verified_outcome(verified: VerifiedManifest, message: String, notes: Option<String>) -> CheckOutcome {
     match verified.disposition() {
-        VersionDisposition::Newer => CheckOutcome::Available { offer: VerifiedOffer { verified }, message },
-        VersionDisposition::Current => CheckOutcome::Current { version: verified.manifest().version.clone() },
+        VersionDisposition::Newer => CheckOutcome::Available { offer: VerifiedOffer { verified, notes }, message },
+        VersionDisposition::Current => CheckOutcome::Current { version: verified.manifest().version.clone(), notes },
     }
 }
 fn asset_api(kind: UpdateKind, id: u64) -> String { format!("{}/releases/assets/{}", repo_api(kind), id) }

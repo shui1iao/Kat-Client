@@ -2,7 +2,7 @@ import { NetworkDiagnostics } from '../components/NetworkDiagnostics';
 import { parseConnectionRule, policyColor, topConnections } from '../client/presentation';
 import { useRef, useState } from 'react';
 import { Icon } from '../components/Icon';
-import { ProcessIcon } from '../components/EntityIcons';
+import { DomainIcon } from '../components/EntityIcons';
 import { tip } from '../components/Tooltip';
 import { Card, Segmented } from '../components/ui';
 import { SpeedChart } from '../charts/SpeedChart';
@@ -171,8 +171,8 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
     groupMeta.set(c.label(g.name), meta);
   }
   const rawGroups = [...(t?.groups ?? [])].map((g) => ({ ...g, name: c.label(g.name) }));
-  if ((t?.direct_up || t?.direct_down) && !rawGroups.some((g) => g.name === 'direct' || g.name === '直连')) {
-    rawGroups.push({ name: '直连', up: t?.direct_up ?? 0, down: t?.direct_down ?? 0 });
+  if ((t?.direct_up || t?.direct_down) && !rawGroups.some((g) => g.name === 'direct' || g.name === 'Direct')) {
+    rawGroups.push({ name: 'direct', up: t?.direct_up ?? 0, down: t?.direct_down ?? 0 });
   }
   const groupPalette = ['var(--proxy)', 'var(--down)', '#20A4B8', '#E06C96', '#4E9B85', '#6875DF'];
   let paletteIdx = 0;
@@ -235,7 +235,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
     if (!ruleColors.current.has(name)) ruleColors.current.set(name, ruleColors.current.size);
   }
   const rules = policySlices(t?.rule_targets).map((g) => {
-    const lbl = g.key === 'direct' ? '直连' : c.label(g.key);
+    const lbl = g.key === 'direct' ? 'direct' : c.label(g.key);
     const meta = groupMeta.get(g.key) ?? groupMeta.get(lbl);
     return {
       ...g,
@@ -442,7 +442,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
           {topRows.map((x) => {
             const chain = x.chain ?? [];
             const rawExit = chain.at(-1);
-            const exit = chain.length ? (rawExit === 'direct' ? '直连' : c.label(rawExit)) : null;
+            const exit = chain.length ? (rawExit === 'direct' ? 'direct' : c.label(rawExit)) : null;
             const exitColor = rawExit ? policyColor(rawExit, s, c.label) : undefined;
             const target = x.dest_host || x.host || x.target;
             const parsedRule = parseConnectionRule(x.rule);
@@ -466,7 +466,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
                 {...tip(hoverDetail)}
               >
                 <span className="ac-main-cell">
-                  <ProcessIcon name={x.process_name} path={x.process_path} fallbackDomain={x.dest_host || x.host} />
+                  <DomainIcon domain={target} size="sm" />
                   <span className="ac-target">{target || '—'}</span>
                 </span>
                 <span className="ac-exit" style={exitColor && exitColor !== '#64748B' ? { color: exitColor } : undefined}>

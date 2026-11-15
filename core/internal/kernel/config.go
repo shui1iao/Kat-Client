@@ -89,6 +89,7 @@ type Config struct {
 	clientKernelLog   func(KernelLogEvent)
 	clientLog         func(ClientLogEvent)
 	clientConnections func(ConnectionEvent)
+	clientDNSSink     func(DNSEvent)
 	clientIPv6        *bool
 	clientEgress      *ClientEgress
 	clientEgressSet   bool

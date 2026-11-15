@@ -23,7 +23,7 @@ export function trafficSlices(groups: CoreStatus['traffic']['groups']) {
 
 // Rule hit counts (connections matched per rule) for the overview donut: largest five, the rest folded.
 export function ruleSlices(rules: CoreStatus['traffic']['rules']) {
-  const colors = ['var(--down)', '#8B5CF6', 'var(--up)', '#10B981', '#EAB308', '#94A3B8'];
+  const colors = ['var(--down)', 'var(--proxy)', 'var(--up)', '#10B981', '#EAB308', '#94A3B8'];
   const valid = (rules ?? []).filter(r => typeof r.name === 'string' && r.name.length > 0 && Number.isFinite(r.hits) && r.hits > 0).sort((a, b) => b.hits - a.hits);
   const top = valid.slice(0, 5).map((r, i) => ({ label: r.name, value: r.hits, color: colors[i] }));
   const rest = valid.slice(5).reduce((n, r) => n + r.hits, 0);

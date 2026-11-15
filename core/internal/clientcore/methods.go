@@ -71,6 +71,10 @@ func (h *Host) Request(ctx context.Context, method string, params json.RawMessag
 		return h.getKernelLogs(params)
 	case "logs.connections":
 		return h.getConnectionLogs(params)
+	case "logs.dns":
+		return h.getDNSLogs(params)
+	case "dns.cache.list":
+		return h.listDNSCache(params)
 	case "dns.cache.clear":
 		if e := decodeParams(params, &struct{}{}); e != nil {
 			return nil, e

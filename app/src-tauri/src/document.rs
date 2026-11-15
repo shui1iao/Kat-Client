@@ -103,6 +103,6 @@ mod tests {
   assert!(network.contains("p==next.ports()"));assert!(!network.contains("serde_json::from_str"));assert!(!network.contains("apply_policy::ports("));
   let desktop=include_str!("desktop.rs");assert!(desktop.contains("Kind::ConfigExport(saved.format)"));assert!(desktop.contains("dialogs::save_document(path,&saved)"));
   let dialogs=include_str!("windows/dialogs.rs");assert!(dialogs.contains("*.json;*.yaml;*.yml"));assert!(dialogs.contains("document_files::exported(path,document)"));
-  assert_eq!(crate::protocol::PUBLIC_METHODS.len(),31);assert!(crate::protocol::PUBLIC_METHODS.contains(&"dns.cache.clear"));assert!(crate::protocol::PUBLIC_METHODS.contains(&"diagnostics.network"));assert!(crate::protocol::PUBLIC_METHODS.contains(&"icon.cached"));assert!(!crate::protocol::PUBLIC_METHODS.iter().any(|m|m.starts_with("network.")));
+  assert_eq!(crate::protocol::PUBLIC_METHODS.len(),33);assert!(crate::protocol::PUBLIC_METHODS.contains(&"dns.cache.clear"));assert!(crate::protocol::PUBLIC_METHODS.contains(&"diagnostics.network"));assert!(crate::protocol::PUBLIC_METHODS.contains(&"icon.cached"));assert!(!crate::protocol::PUBLIC_METHODS.iter().any(|m|m.starts_with("network.")));
  }
 }

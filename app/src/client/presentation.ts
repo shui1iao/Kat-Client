@@ -23,7 +23,7 @@ export function parseConnectionRule(raw:string){const m=/^([a-z][a-z0-9_]*)(?::(
 // connection snapshot already used by the Connections page (no kernel flag changes).
 export function withConnectionSnapshot(s:CoreStatus,r:ConnectionsReply):CoreStatus{return {...s,connections:{active:r.active.length,total:r.total,tcp:r.active.filter(x=>x.network!=='udp').length,udp:r.active.filter(x=>x.network==='udp').length,items:r.active}};}
 
-export function ruleColor(type:string){return type.startsWith('DOMAIN')?'#3B82F6':['IP-CIDR','IP-CIDR6','GEOIP','IP-ASN','SRC-IP'].includes(type)?'#CA8A35':type.startsWith('PROCESS-')?'#DE5B5B':type==='RULE-SET'?'#8866E8':'#64748B';}
+export function ruleColor(type:string){return type.startsWith('DOMAIN')?'#3B82F6':['IP-CIDR','IP-CIDR6','GEOIP','IP-ASN','SRC-IP'].includes(type)?'#CA8A35':type.startsWith('PROCESS-')?'#DE5B5B':type==='RULE-SET'?'#5C7CFA':'#64748B';}
 function conditionKey(r:SourceObject):string{if(r.and)return 'and('+r.and.map(conditionKey).join(',')+')';if(r.or)return 'or('+r.or.map(conditionKey).join(',')+')';if(r.not)return 'not('+conditionKey(r.not)+')';const f=simpleMatch(r);return f?f+':'+r[f]+(r.no_resolve&&['ip_cidr','ip_suffix','ip_asn','geoip','rule_set'].includes(f)?',no_resolve':''):'unknown';}
 // Same statistics identity as route.RuleKeys, not row position; no inferred hits.
 export function ruleKeys(rules:SourceObject[]){const seen=new Map<string,number>();return rules.map(r=>{const key=conditionKey(r)+'->'+targetOf(r),n=(seen.get(key)??0)+1;seen.set(key,n);return key+(n>1?'#'+n:'');});}

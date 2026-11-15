@@ -12,6 +12,7 @@ import { Nodes } from './pages/Nodes';
 import { Settings, type SettingsSection } from './pages/Others';
 import { Connections } from './pages/Connections';
 import { Logs, type LogTab } from './pages/Logs';
+import { Dns, type DnsTab } from './pages/Dns';
 import { useClient } from './client/useClient';
 import { configurationMeta } from './client/daily';
 import { exitChain } from './client/display';
@@ -27,6 +28,7 @@ function parseRouteHash(): {
   rulesTab?: 'rules' | 'resources';
   settingsSection?: SettingsSection;
   logTab?: LogTab;
+  dnsTab?: DnsTab;
 } {
   const raw = location.hash.replace('#', '');
   if (raw === 'resources') return { page: 'rules', rulesTab: 'resources' };
@@ -40,6 +42,8 @@ function parseRouteHash(): {
   if (raw === 'logs-kernel') return { page: 'logs', logTab: 'kernel' };
   if (raw === 'logs-conn') return { page: 'logs', logTab: 'conn' };
   if (raw === 'logs-events') return { page: 'logs', logTab: 'events' };
+  if (raw === 'dns-cache') return { page: 'dns', dnsTab: 'cache' };
+  if (raw === 'dns-settings') return { page: 'dns', dnsTab: 'settings' };
   if (PAGE_IDS.includes(raw as PageId)) return { page: raw as PageId };
   return { page: 'overview' };
 }
@@ -51,6 +55,7 @@ export default function App() {
   const [rulesTab, setRulesTab] = useState<'rules' | 'resources'>(initial.rulesTab ?? 'rules');
   const [settingsSection, setSettingsSection] = useState<SettingsSection>(initial.settingsSection ?? 'general');
   const [logTab, setLogTab] = useState<LogTab>(initial.logTab ?? 'conn');
+  const [dnsTab, setDnsTab] = useState<DnsTab>(initial.dnsTab ?? 'recent');
   const [connTab, setConnTab] = useState<ConnTab>('active');
   const [selectedConnId, setSelectedConnId] = useState<number | null>(null);
   const [selectedGroupName, setSelectedGroupName] = useState<string | null>(null);
@@ -66,6 +71,7 @@ export default function App() {
       if (next.rulesTab) setRulesTab(next.rulesTab);
       if (next.settingsSection) setSettingsSection(next.settingsSection);
       if (next.logTab) setLogTab(next.logTab);
+      if (next.dnsTab) setDnsTab(next.dnsTab);
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
@@ -103,6 +109,7 @@ export default function App() {
   const meta: Record<PageId, string> = {
     overview: '',
     connections: running ? `${activeCount} 个活跃连接` : '',
+    dns: c.source?.kernel.dns?.servers?.length && !(c.source.kernel.dns.servers.length === 1 && c.source.kernel.dns.servers[0] === 'system') ? `自定义上游 (${c.source.kernel.dns.servers.length})` : '系统 DNS',
     logs: '',
     policies: `${groups.length} 组${chain.at(-1) ? ' · ' + chain.at(-1) : ''}`,
     nodes: `${nodes} 个节点${subsCount ? ` · ${subsCount} 个订阅` : ''}`,
@@ -126,6 +133,7 @@ export default function App() {
             onDrag={drag}
             activeConnections={running ? activeCount : null}
             configDirty={c.doc.dirty}
+            hasUpdate={(updates.data?.rows ?? []).some((r) => !!(r.offer && r.latest && r.latest !== r.current))}
             footer={
               <SideStatus
                 c={c}
@@ -174,6 +182,7 @@ export default function App() {
                     onSelectId={setSelectedConnId}
                   />
                 )}
+                {page === 'dns' && <Dns c={c} tab={dnsTab} onTab={setDnsTab} />}
                 {page === 'logs' && <Logs c={c} tab={logTab} onTab={setLogTab} />}
                 {page === 'config' && <Config c={c} />}
                 {page === 'settings' && (

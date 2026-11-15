@@ -1,40 +1,38 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState } from 'react';
 import { cachedIcon, requestDomainIcon, requestProcessIcon, validCachedImage } from '../client/iconCache';
 import { GroupIcon } from './GroupIcon';
+import { Icon } from './Icon';
 
-const MONOGRAM_PALETTE = [
-  '#8866E8',
-  '#3B82F6',
-  '#2EAD76',
-  '#EA8538',
-  '#DE6890',
-  '#24A3B6',
-  '#6875DF',
-  '#D4923A',
-];
-
-function hashPick(s: string): string {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return MONOGRAM_PALETTE[Math.abs(h) % MONOGRAM_PALETTE.length];
+function normalizeHostOrIp(raw?: string): string {
+  if (!raw) return '';
+  let s = raw.trim().toLowerCase();
+  if (!s || s === '—' || s === '-' || s === 'dns' || s === 'localhost') return '';
+  if (s.startsWith('[')) {
+    const end = s.indexOf(']');
+    if (end > 1) return s.slice(1, end);
+  }
+  const firstColon = s.indexOf(':');
+  const lastColon = s.lastIndexOf(':');
+  if (firstColon > 0 && firstColon === lastColon) {
+    // host:port or ipv4:port
+    s = s.slice(0, firstColon);
+  }
+  if (s.endsWith('.')) s = s.slice(0, -1);
+  return s;
 }
 
-function primaryDomainLabel(domain: string): string {
-  const parts = domain.toLowerCase().split('.').filter(Boolean);
-  if (parts.length >= 3 && ['com', 'net', 'org', 'gov', 'edu', 'co'].includes(parts[parts.length - 2])) {
-    return parts[parts.length - 3];
-  }
-  return parts.length >= 2 ? parts[parts.length - 2] : parts[0] || '?';
+function isIpLiteral(s: string): boolean {
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(s) || s.includes(':');
 }
 
 export function DomainIcon({ domain, size = 'md' }: { domain: string; size?: 'sm' | 'md' }) {
-  const clean = domain.trim().toLowerCase();
-  const key = 'dom:' + clean;
-  const [src, setSrc] = useState(() => (clean ? cachedIcon(key) : ''));
+  const clean = normalizeHostOrIp(domain);
+  const key = clean ? 'dom:' + clean : '';
+  const [src, setSrc] = useState(() => (key ? cachedIcon(key) : ''));
 
   useEffect(() => {
     let live = true;
-    if (!clean) {
+    if (!clean || !key) {
       setSrc('');
       return;
     }
@@ -64,12 +62,10 @@ export function DomainIcon({ domain, size = 'md' }: { domain: string; size?: 'sm
     );
   }
 
-  const label = primaryDomainLabel(clean);
-  const ch = (label[0] ?? '?').toUpperCase();
-  const tone = hashPick(label);
+  // Clean unified default icon placeholder (globe for domains, network node for unresolved raw IP)
   return (
-    <span className={cls + ' is-mono'} style={{ '--ei-color': tone } as CSSProperties} aria-hidden="true">
-      {ch}
+    <span className={cls + ' is-placeholder'} aria-hidden="true">
+      <Icon name={isIpLiteral(clean) ? 'target' : 'nodes'} size={size === 'sm' ? 13 : 15} stroke={1.65} />
     </span>
   );
 }
@@ -103,9 +99,7 @@ export function ProcessIcon({
   fallbackDomain?: string;
 }) {
   const pKey = path ? 'proc:' + path.trim().toLowerCase() : '';
-  const dClean = fallbackDomain && !/^\d+\.\d+\.\d+\.\d+$/.test(fallbackDomain) && !fallbackDomain.includes(':')
-    ? fallbackDomain.trim().toLowerCase()
-    : '';
+  const dClean = normalizeHostOrIp(fallbackDomain);
   const dKey = dClean ? 'dom:' + dClean : '';
 
   const [procSrc, setProcSrc] = useState(() => (pKey ? cachedIcon(pKey) : ''));
@@ -167,13 +161,10 @@ export function ProcessIcon({
     );
   }
 
-  if (!name && !dClean) return null;
-  const raw = (name ? name.replace(/\.exe$/i, '') : primaryDomainLabel(dClean)).trim();
-  const ch = (raw[0] ?? '•').toUpperCase();
-  const tone = hashPick(raw.toLowerCase());
+  // Always show a clean default app/terminal placeholder icon instead of returning null or random letters!
   return (
-    <span className="ei-proc-box is-mono" style={{ '--ei-color': tone } as CSSProperties} aria-hidden="true">
-      {ch}
+    <span className="ei-proc-box is-placeholder" aria-hidden="true">
+      <Icon name="monitor" size={13} stroke={1.65} />
     </span>
   );
 }

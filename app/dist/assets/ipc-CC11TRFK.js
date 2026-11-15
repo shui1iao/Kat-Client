@@ -1,1 +1,0 @@
-export{n as core}from"./App-Jd91U5rI.js";

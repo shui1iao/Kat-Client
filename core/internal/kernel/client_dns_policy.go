@@ -126,6 +126,7 @@ func (s *Server) configureClientDNS(bootstrap func(context.Context, string, stri
 				}
 			}
 			dns.setDiagnostic(s.runtimeDiagnostic)
+	dns.setEventSink(s.core.dnsSink)
 			dns.configureIO(s.cfg.IPv6Disabled(), bootstrap, dial, physical, system...)
 			s.dns.close()
 			s.dns = dns
@@ -169,7 +170,9 @@ func (s *Server) configureClientDNS(bootstrap func(context.Context, string, stri
 	}
 	s.bootstrapDNS = bootDNS
 	s.directDNS.setDiagnostic(s.runtimeDiagnostic)
+	s.directDNS.setEventSink(s.core.dnsSink)
 	s.bootstrapDNS.setDiagnostic(s.runtimeDiagnostic)
+	s.bootstrapDNS.setEventSink(s.core.dnsSink)
 	s.directDNS.configureIO(s.cfg.IPv6Disabled(), bootstrap, dial, physical, system...)
 	s.bootstrapDNS.configureIO(s.cfg.IPv6Disabled(), bootstrap, dial, physical, system...)
 	options := cloneDNSOptions(p.Source)
@@ -195,6 +198,7 @@ func (s *Server) configureClientDNS(bootstrap func(context.Context, string, stri
 		}
 	}
 	dns.setDiagnostic(s.runtimeDiagnostic)
+	dns.setEventSink(s.core.dnsSink)
 	dns.configureIO(s.cfg.IPv6Disabled(), bootstrap, dial, physical, system...)
 	dns.protected = protected
 	if protected {

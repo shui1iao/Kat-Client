@@ -310,7 +310,7 @@ export function Connections({
         >
           {!omitProcessCol && (
             <span className="conn-proc-cell ell" {...tip(x.process_path || x.process_name, true)}>
-              <ProcessIcon name={x.process_name} path={x.process_path} fallbackDomain={x.dest_host || x.host} />
+              <ProcessIcon name={x.process_name} path={x.process_path} fallbackDomain={x.dest_host || x.host || x.dest_ip || x.target} />
               <span className="ell">{x.process_name || '未知'}</span>
             </span>
           )}
@@ -318,6 +318,7 @@ export function Connections({
             <NetworkTag network={x.network} />
           </span>
           <ConnectionTarget
+            showIcon
             name={name}
             title={name && name !== x.target ? `${name} · ${x.target}` : x.target}
             sniffed={x.sniffed && !!(x.dest_host || x.host)}

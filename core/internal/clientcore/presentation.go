@@ -636,8 +636,17 @@ func extractHTMLIconURLs(htmlBytes []byte, base *url.URL) []string {
 
 func (h *Host) resolveDomainIconBytes(baseCtx context.Context, domain string) []byte {
 	hosts := []string{domain}
-	if etld1, err := publicsuffix.EffectiveTLDPlusOne(domain); err == nil && etld1 != "" && etld1 != domain {
-		hosts = append(hosts, etld1)
+	seen := map[string]bool{domain: true}
+	addHost := func(cand string) {
+		if d, ok := validIconDomain(cand); ok && !seen[d] {
+			seen[d] = true
+			hosts = append(hosts, d)
+		}
+	}
+	addHost(canonicalBrandForDomain(domain))
+	if etld1, err := publicsuffix.EffectiveTLDPlusOne(domain); err == nil && etld1 != "" {
+		addHost(etld1)
+		addHost(canonicalBrandForDomain(etld1))
 	}
 	// 1. Try direct website: HTML <link rel="icon" / "apple-touch-icon"> & /favicon.ico
 	for _, host := range hosts {
@@ -688,7 +697,25 @@ func (h *Host) resolveDomainIconBytes(baseCtx context.Context, domain string) []
 
 func (h *Host) getDomainIcon(ctx context.Context, rawDomain string, proxyCfg *bootstrapProxy, expected *bootstrapEgress, _ context.Context) map[string]any {
 	empty := map[string]any{"data_uri": ""}
-	domain, ok := validIconDomain(rawDomain)
+	cleaned := stripHostPort(rawDomain)
+	if ip, err := netip.ParseAddr(cleaned); err == nil {
+		mapped := h.resolveIPToDomain(ip)
+		if mapped == "" {
+			return empty
+		}
+		cleaned = mapped
+	} else if brand := canonicalBrandForDomain(cleaned); brand != "" && !strings.Contains(cleaned, ".") {
+		cleaned = brand
+	} else if strings.HasPrefix(cleaned, "raw.github") {
+		cleaned = "github.com"
+	}
+	// Cache by canonical brand when alias maps to a known brand (so raw.githubusercontent.com & api.github.com share 1 instant cached icon!)
+	if brand := canonicalBrandForDomain(cleaned); brand != "" && brand != cleaned {
+		if _, err := publicsuffix.EffectiveTLDPlusOne(cleaned); err != nil || brand != func() string { e, _ := publicsuffix.EffectiveTLDPlusOne(cleaned); return e }() {
+			cleaned = brand
+		}
+	}
+	domain, ok := validIconDomain(cleaned)
 	if !ok {
 		return empty
 	}

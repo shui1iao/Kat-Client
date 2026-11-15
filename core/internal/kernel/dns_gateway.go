@@ -21,6 +21,7 @@ import (
 
 type dnsWireEntry struct {
 	wire           []byte
+	server         string
 	added, expires time.Time
 	epoch          uint64
 }
@@ -44,25 +45,54 @@ func dnsGatewayReply(m dnsmessage.Message, code dnsmessage.RCode) dnsmessage.Mes
 func (r *internalDNS) gateway(ctx context.Context, wire []byte, tcp bool) (response []byte, result error) {
 	started := time.Now()
 	cacheHit := false
+	delegated := false
+	usedServer := ""
+	qName := ""
+	qType := ""
 	mode := "custom"
 	if len(r.upstreams) == 0 {
 		mode = "system"
 	}
 	defer func() {
 		category, native := outbound.Category(result)
+		elapsed := time.Since(started).Milliseconds()
+		var addrs []string
+		outcome := "error"
 		if result == nil {
 			var m dnsmessage.Message
 			if m.Unpack(response) == nil {
+				addrs, _, _, _ = extractWireAddresses(response)
 				if m.RCode == dnsmessage.RCodeNameError {
 					category = "nxdomain"
+					outcome = "nxdomain"
 				} else if m.RCode != dnsmessage.RCodeSuccess {
 					category = "dns"
+					outcome = "error"
 				} else if len(m.Answers) == 0 {
 					category = "nodata"
+					outcome = "nodata"
+				} else {
+					outcome = "ok"
 				}
 			}
 		}
-		r.observe(ctx, outbound.Diagnostic{Stage: "dns_exchange", Category: category, Protocol: mode, Native: native, ElapsedMS: outbound.Known(uint64(time.Since(started).Milliseconds())), CacheHit: &cacheHit})
+		r.observe(ctx, outbound.Diagnostic{Stage: "dns_exchange", Category: category, Protocol: mode, Native: native, ElapsedMS: outbound.Known(uint64(elapsed)), CacheHit: &cacheHit})
+		if !delegated && r.eventSink != nil && qName != "" && result != context.Canceled {
+			if addrs == nil {
+				addrs = []string{}
+			}
+			r.eventSink(DNSEvent{
+				Time:       time.Now(),
+				Name:       qName,
+				QType:      qType,
+				Addresses:  addrs,
+				Server:     usedServer,
+				Cached:     cacheHit,
+				DurationMS: elapsed,
+				Outcome:    outcome,
+				Source:     dnsSourceOf(ctx, "tun"),
+			})
+		}
 	}()
 	ctx, cancelScope, epoch := r.dnsScope(ctx)
 	defer cancelScope()
@@ -72,11 +102,15 @@ func (r *internalDNS) gateway(ctx context.Context, wire []byte, tcp bool) (respo
 	}
 	q := m.Questions[0]
 	name := strings.ToLower(strings.TrimSuffix(q.Name.String(), "."))
+	qName = name
+	qType = dnsTypeString(q.Type)
 	reply := dnsGatewayReply(m, dnsmessage.RCodeSuccess)
 	if q.Type == dnsmessage.TypeAAAA && r.disableIPv6 {
+		usedServer = "IPv6 已关闭"
 		return reply.Pack()
 	}
 	if ips, ok := r.host(name); ok && (q.Type == dnsmessage.TypeA || q.Type == dnsmessage.TypeAAAA) {
+		usedServer = "hosts"
 		for _, ip := range ips {
 			rr := dnsmessage.Resource{Header: dnsmessage.ResourceHeader{Name: q.Name, Class: dnsmessage.ClassINET, TTL: 60, Type: q.Type}}
 			if ip.Is4() && q.Type == dnsmessage.TypeA {
@@ -93,6 +127,7 @@ func (r *internalDNS) gateway(ctx context.Context, wire []byte, tcp bool) (respo
 	}
 	p := r.policy(name)
 	if p == r && r.local != nil && localDNSName(name) {
+		delegated = true
 		return r.local.gateway(ctx, wire, tcp)
 	}
 	// One bounded worker per admitted connection/association; never per packet.
@@ -123,6 +158,7 @@ func (r *internalDNS) gateway(ctx context.Context, wire []byte, tcp bool) (respo
 				}
 			}
 			cacheHit = true
+			usedServer = entry.server
 			b, e := cached.Pack()
 			if epoch != p.dnsEpoch() {
 				return nil, context.Canceled
@@ -162,7 +198,9 @@ func (r *internalDNS) gateway(ctx context.Context, wire []byte, tcp bool) (respo
 		attempt, cancel := context.WithTimeout(ctx, remaining/time.Duration(attempts-i))
 		var b []byte
 		var e error
+		curSrv := "system"
 		if i < len(upstreams) {
+			curSrv = upstreams[i].ep.label()
 			b, e = upstreams[i].rawQuery(attempt, wire, q, m.ID)
 		} else {
 			b, e = p.systemQuery(attempt, wire)
@@ -176,6 +214,7 @@ func (r *internalDNS) gateway(ctx context.Context, wire []byte, tcp bool) (respo
 		if answer.Unpack(b) != nil || answer.RCode != dnsmessage.RCodeSuccess && answer.RCode != dnsmessage.RCodeNameError {
 			continue
 		}
+		usedServer = curSrv
 		ttl := uint32(300)
 		for _, section := range [][]dnsmessage.Resource{answer.Answers, answer.Authorities} {
 			for _, rr := range section {
@@ -195,7 +234,7 @@ func (r *internalDNS) gateway(ctx context.Context, wire []byte, tcp bool) (respo
 					break
 				}
 			}
-			p.wireCache[key] = dnsWireEntry{append([]byte(nil), b...), p.now(), p.now().Add(time.Duration(ttl) * time.Second), epoch}
+			p.wireCache[key] = dnsWireEntry{append([]byte(nil), b...), curSrv, p.now(), p.now().Add(time.Duration(ttl) * time.Second), epoch}
 			p.mu.Unlock()
 		}
 		if epoch != p.dnsEpoch() || ctx.Err() != nil {

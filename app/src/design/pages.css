@@ -870,9 +870,8 @@
 .domain-rank-track,
 .hit-row,
 .hit-track,
-.unlock-row,
-.conn-diag-row,
-.exit-row {
+/* Network diagnostics rows are static read-only items — no hover dimming */
+.noop-diag-placeholder {
   transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
 }
 
@@ -912,9 +911,7 @@
   background: var(--hit-light, var(--accent));
 }
 
-.diag-list:has(> :hover) > :not(:hover) {
-  opacity: 0.48;
-}
+/* Removed .diag-list hover dimming per user instruction */
 
 
 /* Entity Icons: Real Site Favicons, Reused GroupIcon & System Process Icons */
@@ -3789,4 +3786,602 @@
 .diagnostic-summary > div b {
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+
+
+/* ==========================================================================
+   Dedicated DNS Page (Recent Resolutions / Active Cache / DNS Settings)
+   ========================================================================== */
+.dns-page {
+  flex: 1;
+  padding-bottom: 14px;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.dns-table-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dns-quick-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+}
+
+.dns-quick-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dns-quick-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.dns-quick-inp {
+  flex: 1;
+  min-width: 180px;
+  height: 28px;
+  font-size: 12.5px;
+}
+
+.dns-quick-form .set-inp-sm {
+  height: 28px;
+  padding-block: 0;
+  font-size: 12px;
+}
+
+.dns-quick-feedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+.dns-quick-feedback.is-ok {
+  background: var(--ok-soft);
+  color: var(--text);
+}
+
+.dns-quick-feedback.is-err {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+.dns-log-grid {
+  display: grid;
+  grid-template-columns: 62px minmax(168px, 1.5fr) 64px minmax(146px, 1.25fr) minmax(112px, 0.95fr) 78px 64px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  min-width: 720px;
+}
+
+.dns-cache-grid {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.55fr) 70px minmax(168px, 1.35fr) minmax(128px, 1fr) 86px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  min-width: 640px;
+}
+
+.dns-grid-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 32px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-3);
+  background: var(--card);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+}
+
+.dns-grid-row {
+  min-height: 38px;
+  padding-block: 5px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--line);
+  transition: background 0.12s ease;
+}
+
+.dns-grid-row:hover {
+  background: var(--hover);
+}
+
+.dns-grid-row:last-child {
+  border-bottom: 0;
+}
+
+.dns-domain-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dns-domain-name {
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dns-src-tag {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--card-2);
+  color: var(--text-3);
+}
+
+.dns-src-tag.is-tun {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.dns-src-tag.is-test {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.dns-addr-cell {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.dns-ip-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 2px 7px;
+  margin-left: -7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.dns-ip-copy:hover {
+  background: var(--hover);
+}
+
+.dns-ip-copy code {
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dns-ip-more {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--card-2);
+  color: var(--text-2);
+}
+
+.dns-copied-badge {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ok);
+}
+
+.dns-server-cell {
+  min-width: 0;
+  color: var(--text-2);
+}
+
+.dns-server-txt {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.dns-cache-hit {
+  color: var(--ok);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.dns-ttl-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--card-2);
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.dns-empty {
+  padding: 42px 16px;
+}
+
+.dns-settings-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dns-settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 2px 2px 0;
+}
+
+.dns-settings-hint {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.dns-settings-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 18px;
+  scrollbar-gutter: stable;
+}
+
+.dns-table-card .table-toolbar {
+  flex-wrap: nowrap;
+}
+.dns-table-card .table-toolbar .search {
+  max-width: 196px;
+  min-width: 130px;
+}
+
+.ei-domain-tile.is-sm {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+}
+.ei-domain-tile.is-sm .ei-img {
+  width: 16px;
+  height: 16px;
+  border-radius: 3.5px;
+}
+.ei-domain-tile.is-placeholder,
+.ei-proc-box.is-placeholder {
+  background: var(--card-2);
+  color: var(--text-3);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+
+/* ==========================================================================
+   Surge / Sparkle Update Sheet & Collapsible Release Notes
+   ========================================================================== */
+.nav-update-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  margin-left: auto;
+  flex: none;
+}
+
+.update-row-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.update-row-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.update-arrow-ver {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.update-pkg-size {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--card-2);
+  color: var(--text-3);
+}
+
+.update-notes-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.14s ease;
+}
+
+.update-notes-toggle:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.update-inline-notes {
+  margin: 0 0 10px;
+  padding: 12px 14px;
+  border-radius: var(--r-tray);
+  background: var(--card-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+/* Sparkle Classic Modal Sheet */
+.sparkle-update-modal .modal {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.sparkle-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sparkle-app-icon {
+  width: 44px;
+  height: 44px;
+  flex: none;
+}
+
+.sparkle-hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.sparkle-hero-copy h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.sparkle-hero-copy p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.sparkle-notes-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-top: 2px;
+  margin-bottom: -4px;
+}
+
+.sparkle-notes-box {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--card-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.sparkle-notes-box.is-compact {
+  max-height: 170px;
+}
+
+.sparkle-notes-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.58;
+  color: var(--text-2);
+}
+
+.sparkle-notes-h {
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.sparkle-notes-subh {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sparkle-notes-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.sparkle-notes-list li strong,
+.sparkle-notes-p strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.sparkle-notes-content code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--hover);
+  color: var(--text);
+}
+
+.sparkle-notes-p {
+  margin: 0;
+}
+
+.sparkle-notes-empty {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.sparkle-dl-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+
+/* ==========================================================================
+   Progressive Subtle Neutral Gray Hierarchy (Zero Blue Tint) & Unified DNS Settings
+   ========================================================================== */
+:root,
+:root[data-theme="dark"] {
+  --expand-lv1: rgba(0, 0, 0, 0.085);
+  --expand-lv2: rgba(0, 0, 0, 0.065);
+}
+
+:root[data-theme="light"] {
+  --expand-lv1: rgba(15, 23, 42, 0.018);
+  --expand-lv2: rgba(15, 23, 42, 0.016);
+}
+
+.conn-proc-bucket {
+  border-bottom: 1px solid var(--line);
+}
+
+.conn-proc-bucket:last-child {
+  border-bottom: 0;
+}
+
+/* Level 1: Process bucket expanded -> a whisper of neutral gray */
+.conn-proc-bucket.is-open > .conn-proc-group-row {
+  background: var(--expand-lv1);
+  border-bottom: 1px solid var(--line);
+}
+
+.conn-proc-bucket.is-open > .conn-proc-group-row:hover {
+  background: var(--hover);
+}
+
+.conn-proc-children {
+  margin: 0;
+  border-radius: 0;
+  background: var(--expand-lv1);
+  box-shadow: none;
+  overflow: visible;
+}
+
+.conn-sub-row {
+  padding: 0 14px 0 34px;
+}
+
+.conn-sub-head {
+  background: transparent;
+}
+
+/* Flat Mode Level 1: Selected row + inline detail get Lv1 whisper gray */
+.conn-item-row.is-selected,
+.conn-log-row.is-selected {
+  background: var(--expand-lv1);
+  border-bottom: 0;
+}
+
+.conn-inline-detail {
+  margin: 0;
+  padding: 10px 16px 12px 20px;
+  border-radius: 0;
+  background: var(--expand-lv1);
+  box-shadow: none;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+/* Process-Grouped Level 2: Sub-connection expanded inside Lv1 process gets Lv2 (+1 notch of gray!) */
+.conn-proc-children .conn-item-row.is-selected {
+  background: var(--expand-lv2);
+}
+
+.conn-proc-children .conn-inline-detail {
+  padding-left: 34px;
+  background: var(--expand-lv2);
+}
+
+.conn-entry:last-child .conn-inline-detail,
+.conn-log-entry:last-child .conn-inline-detail {
+  border-bottom: 0;
+}
+
+/* Single-Piece Unified DNS Settings (full-width flush rows inside the same table-card!) */
+.dns-toolbar-sub {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-left: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dns-settings-unified {
+  padding: 6px 20px 18px;
+}
+
+.dns-settings-unified .dns-bare-form {
+  width: 100%;
+}
+
+.dns-settings-unified .set-row {
+  padding-block: 12px;
+}
+
+.dns-settings-unified .set-block {
+  padding: 12px 14px;
+  border-radius: var(--r-tray);
+  background: var(--expand-lv1);
+  box-shadow: inset 0 0 0 1px var(--line);
+  margin-block: 4px 8px;
 }

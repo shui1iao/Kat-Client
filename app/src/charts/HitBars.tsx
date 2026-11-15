@@ -76,8 +76,8 @@ function categoryStyle(index: number, key: string, explicitColor?: string): CSSP
   if (explicitColor) {
     return { '--hit-light': explicitColor, '--hit-dark': explicitColor } as CSSProperties;
   }
-  const light = ['#8866E8', '#3B82F6', '#20A4B8', '#E06C96', '#4E9B85', '#6875DF', '#EA8538', '#3A94B8'];
-  const dark = ['#A184F5', '#60A5FA', '#42BDD0', '#EE86AC', '#66B59E', '#8590EB', '#F39C55', '#5AB0D2'];
+  const light = ['#4F67E8', '#3B82F6', '#20A4B8', '#E06C96', '#4E9B85', '#6875DF', '#EA8538', '#3A94B8'];
+  const dark = ['#6E85F7', '#60A5FA', '#42BDD0', '#EE86AC', '#66B59E', '#8590EB', '#F39C55', '#5AB0D2'];
   const h = (index * 137.508) % 360;
   return {
     '--hit-light': light[index] ?? `hsl(${h} 36% 52%)`,

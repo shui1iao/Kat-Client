@@ -243,6 +243,7 @@ func (k *core) prepareContext(ctx context.Context, c Config, prev *Server) (*Ser
 		}
 	}
 	dns.setDiagnostic(g.runtimeDiagnostic)
+	dns.setEventSink(g.core.dnsSink)
 	dns.configureIO(c.IPv6Disabled(), bootstrap, dial, physical, system)
 	g.dns = dns
 	if e := g.configureClientDNS(bootstrap, dial, physical, system); e != nil {

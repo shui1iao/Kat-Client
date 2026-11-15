@@ -322,7 +322,7 @@ func (h *Host) ServeTransport(ctx context.Context, in io.Reader, out io.Writer, 
 
 func isBackgroundIPCMethod(method string) bool {
 	switch method {
-	case "icon.get", "icon.cached", "probe.node", "probe.group", "probe.all", "diagnostics.network", "dns.query", "resources.refresh", "subscription.preview", "subscription.migrate", "import.parse", "connections.list", "status", "logs.get", "logs.connections", "logs.kernel":
+	case "icon.get", "icon.cached", "probe.node", "probe.group", "probe.all", "diagnostics.network", "dns.query", "resources.refresh", "subscription.preview", "subscription.migrate", "import.parse", "connections.list", "status", "logs.get", "logs.connections", "logs.dns", "dns.cache.list", "logs.kernel":
 		return true
 	default:
 		return false

@@ -5,7 +5,111 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/shui1iao/Kat/internal/kernel"
+	"sync"
 )
+
+type DNSEntry struct {
+	Seq uint64 `json:"seq"`
+	kernel.DNSEvent
+}
+
+type DNSLogsReply struct {
+	Instance uint64     `json:"instance"`
+	Entries  []DNSEntry `json:"entries"`
+	NextSeq  uint64     `json:"next_seq"`
+	Dropped  uint64     `json:"dropped"`
+}
+
+type DNSCacheListReply struct {
+	Capacity int                  `json:"capacity"`
+	Entries  []kernel.DNSCacheItem `json:"entries"`
+}
+
+type dnsRing struct {
+	mu           sync.Mutex
+	entries      [logCapacity]DNSEntry
+	seq, dropped uint64
+	size         int
+}
+
+func (r *dnsRing) record(e kernel.DNSEvent) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.seq == maxLogSeq {
+		return
+	}
+	r.seq++
+	e.Addresses = append([]string(nil), e.Addresses...)
+	r.entries[(r.seq-1)%logCapacity] = DNSEntry{r.seq, e}
+	if r.size < logCapacity {
+		r.size++
+	} else {
+		r.dropped++
+	}
+}
+
+func (r *dnsRing) read(after uint64, limit int) DNSLogsReply {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if after > r.seq {
+		after = 0
+	}
+	out := DNSLogsReply{Instance: logInstance, Entries: []DNSEntry{}, NextSeq: after, Dropped: r.dropped}
+	if after >= r.seq {
+		return out
+	}
+	first := r.seq - uint64(r.size) + 1
+	if after >= first {
+		first = after + 1
+	}
+	for seq := first; seq <= r.seq && len(out.Entries) < limit; seq++ {
+		e := r.entries[(seq-1)%logCapacity]
+		e.Addresses = append([]string(nil), e.Addresses...)
+		out.Entries = append(out.Entries, e)
+		out.NextSeq = seq
+	}
+	return out
+}
+
+func (h *Host) getDNSLogs(raw json.RawMessage) (any, *Error) {
+	var p struct {
+		Instance uint64          `json:"instance,omitempty"`
+		After    json.RawMessage `json:"after"`
+		Limit    json.RawMessage `json:"limit"`
+	}
+	if e := decodeParams(raw, &p); e != nil {
+		return nil, e
+	}
+	var after uint64
+	limit := 200
+	if p.After != nil && (string(p.After) == "null" || json.Unmarshal(p.After, &after) != nil || after > maxLogSeq) {
+		return nil, fail("invalid_params", "params.after", "Expected nonnegative safe integer")
+	}
+	if e := boundedLimit(p.Limit, &limit, "params.limit"); e != nil {
+		return nil, e
+	}
+	if p.Instance != 0 && p.Instance != logInstance {
+		after = 0
+	}
+	return h.dnsLogs.read(after, limit), nil
+}
+
+func (h *Host) listDNSCache(raw json.RawMessage) (any, *Error) {
+	if e := decodeParams(raw, &struct{}{}); e != nil {
+		return nil, e
+	}
+	h.mu.Lock()
+	s := h.server
+	h.mu.Unlock()
+	if s == nil {
+		return nil, fail("core_not_running", "runtime", "Core is stopped")
+	}
+	items, capVal, e := s.ListDNSCache()
+	if e != nil {
+		return nil, fail("core_not_running", "runtime", "Core is stopped")
+	}
+	return DNSCacheListReply{Capacity: capVal, Entries: items}, nil
+}
 
 func (h *Host) queryDNS(ctx context.Context, raw json.RawMessage) (any, *Error) {
 	var p struct {

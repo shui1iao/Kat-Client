@@ -138,7 +138,7 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
                   {x ? (
                     <span
                       className={'diagnostic-result ' + (x.result === 'unknown' || x.result === 'challenge' ? 'failed' : x.result)}
-                      {...tip(x.reason || `${x.duration_ms} ms`)}
+                      {...tip(x.reason || undefined)}
                     >
                       {labels[x.result]}
                       {x.reason && <span className="sr-only">{'，' + x.reason}</span>}

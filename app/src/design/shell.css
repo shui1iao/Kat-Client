@@ -36,8 +36,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 40px;
-  padding: 0 8px;
+  height: 46px;
+  padding: 0 6px 0 8px;
   margin-bottom: 10px;
   flex: none;
 }
@@ -45,24 +45,34 @@
 .side-brand {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   min-width: 0;
   flex: 1;
 }
 
 .brand-icon {
   display: block;
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
   flex: none;
   object-fit: contain;
   -webkit-user-drag: none;
 }
 
+.sidebar-collapsed .sidebar-toggle {
+  width: 34px;
+  height: 34px;
+}
+
+.sidebar-collapsed .brand-icon {
+  width: 26px;
+  height: 26px;
+}
+
 .brand-name {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
+  font-size: 19px;
+  font-weight: 680;
+  letter-spacing: -0.01em;
   color: var(--text);
   white-space: nowrap;
 }
@@ -257,12 +267,7 @@
   flex-direction: column;
   gap: 5px;
   text-align: left;
-  transition: background-color var(--t-fast) var(--ease);
-}
-
-.ss-capsule:hover,
-.side-status.is-current .ss-capsule {
-  background: var(--hover);
+  cursor: default;
 }
 
 .ss-l1 {

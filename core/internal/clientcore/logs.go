@@ -206,6 +206,7 @@ func (h *Host) runtimeConfig(c kernel.Config) kernel.Config {
 	c = h.withEgress(c)
 	c.SetClientLogSink(h.logs.record)
 	c.SetConnectionSink(h.connectionLogs.record)
+	c.SetDNSSink(h.dnsLogs.record)
 	c.SetKernelLogSink(h.kernelLogs.record)
 	return c
 }

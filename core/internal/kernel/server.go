@@ -53,6 +53,7 @@ type core struct {
 	closed                 [500]ClosedConn
 	closedNext, closedSize int
 	connectionSink         func(ConnectionEvent)
+	dnsSink                func(DNSEvent)
 	tcpFlows               atomic.Int64
 	statsMu                sync.Mutex // guards statsPath/statsRelease/lockedFile/selPath
 	statsPath              string     // persisted statistics file ("" = not persisted)
@@ -152,6 +153,7 @@ func newCore(c *Config) (*core, error) {
 	k.detailsOn.Store(c.connectionDetails())
 	k.flows = map[uint64]*flow{}
 	k.connectionSink = c.clientConnections
+	k.dnsSink = c.clientDNSSink
 	k.reg = stats.New(nil, nil, nil, nil, k.started)
 	k.nativeContext, k.nativeCancel = context.WithCancel(ctx)
 	k.tcpEntries = map[string]*tcpEntry{}

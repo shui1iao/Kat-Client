@@ -58,6 +58,7 @@ type Host struct {
 	fullFetch                func(context.Context, string, *clientegress.Policy, int64) ([]byte, error)
 	logs                     logRing
 	connectionLogs           connectionRing
+	dnsLogs                  dnsRing
 	kernelLogs               kernelLogRing
 	manualCtx                context.Context
 	manualCancel             context.CancelFunc

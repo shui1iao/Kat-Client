@@ -10,7 +10,15 @@ import type { Client } from '../client/useClient';
 import { core } from '../client/ipc';
 
 // Two cards share one draft model: 'ports' (HTTP/SOCKS) and 'dns' (servers/cache). Each saves only its own changed fields.
-export function NetworkSettings({ c, section = 'ports', children }: { c: Client; section?: 'ports' | 'dns'; children?: ReactNode }) {
+export function NetworkSettings({ c, section = 'ports', bare = false, children }: { c: Client; section?: 'ports' | 'dns'; bare?: boolean; children?: ReactNode }) {
+  if (bare) {
+    return (
+      <div className="dns-bare-form">
+        {c.source ? <NetworkForm c={c} section={section} /> : <div className="empty">未连接</div>}
+        {children}
+      </div>
+    );
+  }
   const [cleared, setCleared] = useState<{ count: number } | null>(null);
   useEffect(() => {
     if (cleared === null) return;

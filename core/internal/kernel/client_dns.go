@@ -59,7 +59,7 @@ func (s *Server) QueryDNS(ctx context.Context, name, typ string) (DNSQueryReply,
 	}
 	// Query exactly the ordinary dual-family chain, including its existing cache.
 	// Type only filters the returned view; it cannot change cache keys or TTLs.
-	ips, server, cached, err := g.dns.lookupAnswer(ctx, name)
+	ips, server, cached, err := g.dns.lookupAnswer(withDNSSource(ctx, "test"), name)
 	if err != nil {
 		return DNSQueryReply{}, err
 	}

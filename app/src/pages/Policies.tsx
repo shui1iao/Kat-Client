@@ -24,7 +24,7 @@ import type { Client } from '../client/useClient';
 
 const TYPES = ['select', 'smart', 'url-test', 'fallback'];
 const LABEL: Record<string, string> = { select: 'Select', smart: 'Smart', 'url-test': 'URL Test', fallback: 'Fallback' };
-const PROTOCOL: Record<string, string> = { shadowsocks: 'Shadowsocks', socks5: 'SOCKS5', trojan: 'Trojan', anytls: 'AnyTLS', direct: '直连', reject: '拒绝' };
+const PROTOCOL: Record<string, string> = { shadowsocks: 'Shadowsocks', socks5: 'SOCKS5', trojan: 'Trojan', anytls: 'AnyTLS', direct: 'direct', reject: '拒绝' };
 
 function activate(e: KeyboardEvent, fn: () => void) {
   if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {

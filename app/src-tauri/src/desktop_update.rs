@@ -6,10 +6,10 @@ use std::{sync::{Mutex,Arc,atomic::{AtomicBool,Ordering}},time::{Duration,Instan
 use serde::{Serialize,Deserialize};use tauri::{Manager,Emitter};
 fn now()->u64{SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()}
 fn err(e:crate::update_manifest::UpdateError)->Error{Error::new(e.code,&e.message)}
-#[derive(Clone,Serialize)]pub struct Row{pub kind:UpdateKind,pub current:String,pub latest:Option<String>,pub phase:String,pub message:String,pub offer:Option<String>,pub received:u64,pub total:Option<u64>,pub downloaded:bool}
-impl Row{fn new(kind:UpdateKind)->Self{Self{kind,current:"—".into(),latest:None,phase:"idle".into(),message:"尚未检查".into(),offer:None,received:0,total:None,downloaded:false}}}
+#[derive(Clone,Serialize)]pub struct Row{pub kind:UpdateKind,pub current:String,pub latest:Option<String>,pub phase:String,pub message:String,pub offer:Option<String>,pub received:u64,pub total:Option<u64>,pub downloaded:bool,pub notes:Option<String>,pub size_bytes:Option<u64>}
+impl Row{fn new(kind:UpdateKind)->Self{Self{kind,current:"—".into(),latest:None,phase:"idle".into(),message:"尚未检查".into(),offer:None,received:0,total:None,downloaded:false,notes:None,size_bytes:None}}}
 struct Item{row:Row,offer:Option<VerifiedOffer>,transport:Option<UpdateTransport>,cancel:Arc<AtomicBool>}
-#[derive(Default,Serialize,Deserialize)]#[serde(deny_unknown_fields)]struct Saved{#[serde(default="yes")]auto_check:bool,last_check:u64,notified:Vec<String>}
+#[derive(Default,Serialize,Deserialize)]#[serde(deny_unknown_fields)]struct Saved{#[serde(default="yes")]auto_check:bool,last_check:u64,notified:Vec<String>,#[serde(default)]icon_refreshed_version:String}
 fn yes()->bool{true}
 #[derive(Clone,Serialize)]pub struct Proposal{pub nonce:String,pub kind:String,pub version:String}
 struct Pending{view:Proposal,answer:std::sync::mpsc::Sender<bool>}
@@ -43,10 +43,10 @@ pub fn check(app:tauri::AppHandle)->Result<()>{let s=app.state::<State>();if s.c
   let publication=session.as_ref().map_err(Clone::clone).and_then(|checker|checker.publication_guard().map_err(err));
   let result=publication.as_ref().map_err(Clone::clone).and_then(|_|result);
   let mut notify=None;
-  match result{Ok(CheckOutcome::Available{offer,message})=>{let digest=offer.digest().to_owned();let same=i.row.offer.as_deref()==Some(&digest);i.row.latest=Some(offer.manifest().version.clone());i.row.phase="available".into();i.row.message=format!("{}（{}）",message,transport.as_ref().unwrap().description());i.row.offer=Some(digest.clone());if !same{i.row.downloaded=false;i.row.received=0;i.row.total=None;}i.offer=Some(offer);i.transport=transport.as_ref().ok().cloned();notify=Some(digest);},
-   Ok(CheckOutcome::Current{version})=>{i.row.latest=Some(version);i.row.phase="current".into();i.row.message="已是最新版本".into();i.row.offer=None;i.offer=None;i.transport=None;i.row.downloaded=false;},
-   Ok(CheckOutcome::Unavailable{reason})=>{i.row.phase="unavailable".into();i.row.message=reason;i.row.offer=None;i.offer=None;i.transport=None;i.row.latest=None;i.row.downloaded=false;},
-   Err(e)=>{i.row.phase="error".into();i.row.message=e.message;i.row.latest=None;i.row.offer=None;i.offer=None;i.transport=None;i.row.downloaded=false;}}
+  match result{Ok(CheckOutcome::Available{offer,message})=>{let digest=offer.digest().to_owned();let same=i.row.offer.as_deref()==Some(&digest);i.row.latest=Some(offer.manifest().version.clone());i.row.phase="available".into();i.row.message=format!("{}（{}）",message,transport.as_ref().unwrap().description());i.row.offer=Some(digest.clone());i.row.notes=offer.notes().map(str::to_owned);i.row.size_bytes=Some(offer.manifest().asset.bytes);if !same{i.row.downloaded=false;i.row.received=0;i.row.total=None;}i.offer=Some(offer);i.transport=transport.as_ref().ok().cloned();notify=Some(digest);},
+   Ok(CheckOutcome::Current{version,notes})=>{i.row.latest=Some(version);i.row.phase="current".into();i.row.message="已是最新版本".into();i.row.notes=notes;i.row.size_bytes=None;i.row.offer=None;i.offer=None;i.transport=None;i.row.downloaded=false;},
+   Ok(CheckOutcome::Unavailable{reason})=>{i.row.phase="unavailable".into();i.row.message=reason;i.row.notes=None;i.row.size_bytes=None;i.row.offer=None;i.offer=None;i.transport=None;i.row.latest=None;i.row.downloaded=false;},
+   Err(e)=>{i.row.phase="error".into();i.row.message=e.message;i.row.notes=None;i.row.size_bytes=None;i.row.latest=None;i.row.offer=None;i.offer=None;i.transport=None;i.row.downloaded=false;}}
   drop(publication);drop(items);
   // Notification bookkeeping can contend with disk persistence: outside publication.
   if let Some(digest)=notify{let mut saved=s.saved.lock().unwrap();if !saved.notified.contains(&digest){saved.notified.push(digest);if saved.notified.len()>32{saved.notified.remove(0);}s.notice.store(true,Ordering::SeqCst);}}
@@ -102,7 +102,13 @@ fn start_listener(app:tauri::AppHandle){std::thread::spawn(move||{let stop=Atomi
 async fn prepare_shutdown(app:&tauri::AppHandle)->Result<()>{let h=app.state::<Host>();if h.app_restarting.compare_exchange(false,true,Ordering::SeqCst,Ordering::SeqCst).is_err(){return Err(Error::new("UPDATE_BUSY","生命周期操作进行中"));}app.state::<State>().preparing.store(true,Ordering::SeqCst);emit(app);let result=async{let _control=h.control.try_lock().map_err(|_|Error::new("UPDATE_BUSY","原生操作尚未完成"))?;{let _settings=h.settings_lock.try_lock().map_err(|_|Error::new("UPDATE_BUSY","偏好保存尚未完成"))?;crate::preferences::intent(&h.store)?;}save_window_now(app);let c=h.core.as_ref().ok_or_else(||h.core_error.clone())?;let status=c.request("status",serde_json::Value::Null,Duration::from_secs(5)).await?;h.store.save("update-resume.json",&serde_json::json!({"schema":1,"at":now(),"core_running":status["runtime"]["state"]=="running"}),1024)?;h.network.prepare_update_shutdown().await}.await;if result.is_err(){recover_shutdown(app).await;}result}
 async fn recover_shutdown(app:&tauri::AppHandle){let h=app.state::<Host>();let recovered=if let Some(c)=&h.core{let previous=c.snapshot();let result=c.resume_after_update_failure().await;if result.is_ok()&&!previous.same_instance(&c.snapshot()){h.network.finish_recovered_epoch().await}else{result}}else{Err(Error::new("CORE_UPDATE_RECOVERY_PENDING","内核恢复未确认"))};if recovered.is_ok(){let keep_stopped=keep_core_stopped(&h.store).unwrap_or(true);if !keep_stopped{if let Ok(intent)=crate::preferences::intent(&h.store){if let Err(e)=crate::lifecycle::startup(h.network.as_ref(),crate::preferences::startup_plan(intent)).await{*app.state::<State>().error.lock().unwrap()=e.message;}}}h.app_restarting.store(false,Ordering::SeqCst);app.state::<State>().preparing.store(false,Ordering::SeqCst);}else{*app.state::<State>().error.lock().unwrap()="状态保存或退出尚未确认；程序未替换，保持安全断网。请勿强制退出，稍后重试恢复。".into();}emit(app);show_main(app);}
 
-pub fn start(app:tauri::AppHandle){start_listener(app.clone());tauri::async_runtime::spawn(async move{tokio::time::sleep(Duration::from_secs(8)).await;let mut startup=true;let mut readiness_retries=0;loop{let due={let s=app.state::<State>();let saved=s.saved.lock().unwrap();saved.auto_check&&(startup||now().saturating_sub(saved.last_check)>=86400)};startup=false;if due{let _=check(app.clone());}tokio::time::sleep(Duration::from_secs(60)).await;
+pub fn start(app:tauri::AppHandle){
+ {
+  let ver=env!("CARGO_PKG_VERSION").to_owned();
+  let need={let s=app.state::<State>();let mut saved=s.saved.lock().unwrap();if saved.icon_refreshed_version!=ver{saved.icon_refreshed_version=ver;true}else{false}};
+  if need{super::refresh_shell_icons();let _=persist(&app);}
+ }
+ start_listener(app.clone());tauri::async_runtime::spawn(async move{tokio::time::sleep(Duration::from_secs(8)).await;let mut startup=true;let mut readiness_retries=0;loop{let due={let s=app.state::<State>();let saved=s.saved.lock().unwrap();saved.auto_check&&(startup||now().saturating_sub(saved.last_check)>=86400)};startup=false;if due{let _=check(app.clone());}tokio::time::sleep(Duration::from_secs(60)).await;
  // Bounded startup-readiness retry on the existing scheduler, not a new daemon.
  if readiness_retries<3 {let s=app.state::<State>();if s.transport_wait.load(Ordering::SeqCst)&&!s.checking.load(Ordering::SeqCst){startup=true;readiness_retries+=1;}}
  }});}
@@ -116,7 +122,7 @@ pub async fn complete_pending(app:&tauri::AppHandle)->Result<()>{let pending=cra
  drop(_health_control);
  // Automatic successful finalization must not publish a transient user-action notice.
  super::prepare_uac_window(app);
- let tx=p.tx;let result=tauri::async_runtime::spawn_blocking(move||crate::windows::update_bridge::elevate("--update-finalize",&tx)).await.map_err(|_|Error::new("UPDATE_HEALTH","更新确认尚未完成，恢复材料已保留"))?;result?;let s=app.state::<State>();*s.error.lock().unwrap()=String::new();emit(app);Ok(())}
+ let tx=p.tx;let result=tauri::async_runtime::spawn_blocking(move||crate::windows::update_bridge::elevate("--update-finalize",&tx)).await.map_err(|_|Error::new("UPDATE_HEALTH","更新确认尚未完成，恢复材料已保留"))?;result?;super::refresh_shell_icons();let s=app.state::<State>();*s.error.lock().unwrap()=String::new();emit(app);Ok(())}
 fn confirmation(app:&tauri::AppHandle,pending:bool,running:bool,message:&str){*app.state::<State>().confirmation.lock().unwrap()=Confirmation{pending,running,message:message.into()};emit(app);}
 pub fn set_startup_tun_pending(app:&tauri::AppHandle,pending:bool){
  let s=app.state::<State>();s.startup_tun_pending.store(pending,Ordering::SeqCst);

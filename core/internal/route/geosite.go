@@ -300,3 +300,15 @@ func (a *asnDB) lookup(ip netip.Addr) (n uint32) {
 	}
 	return rec.ASN
 }
+
+// LookupASN returns the Autonomous System Number for ip if the ASN database is loaded.
+func (e *Engine) LookupASN(ip netip.Addr) uint32 {
+	if e == nil || e.asn == nil {
+		return 0
+	}
+	db := e.asn.db.Load()
+	if db == nil {
+		return 0
+	}
+	return db.lookup(ip.Unmap())
+}

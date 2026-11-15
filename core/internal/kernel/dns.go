@@ -27,6 +27,7 @@ type dnsDial func(context.Context, string, string) (net.Conn, error)
 
 type internalDNS struct {
 	diagnostic   func(context.Context, outbound.Diagnostic)
+	eventSink    func(DNSEvent)
 	protected    bool
 	endpointDial dnsDial
 	local        *internalDNS
@@ -178,10 +179,51 @@ func (r *internalDNS) lookupAnswer(ctx context.Context, name string) (answer []n
 	if len(r.upstreams) == 0 {
 		mode = "system"
 	}
+	delegated := false
 	defer func() {
 		category, native := outbound.Category(result)
 		hit := cached
-		r.observe(ctx, outbound.Diagnostic{Stage: "dns_lookup", Category: category, Protocol: mode, Native: native, ElapsedMS: outbound.Known(uint64(time.Since(start).Milliseconds())), CacheHit: &hit})
+		elapsed := time.Since(start).Milliseconds()
+		r.observe(ctx, outbound.Diagnostic{Stage: "dns_lookup", Category: category, Protocol: mode, Native: native, ElapsedMS: outbound.Known(uint64(elapsed)), CacheHit: &hit})
+		if !delegated && r.eventSink != nil && result != context.Canceled {
+			outcome := "ok"
+			if result != nil {
+				outcome = "error"
+			} else if len(answer) == 0 {
+				outcome = "nodata"
+			}
+			addrs := make([]string, 0, len(answer))
+			has4, has6 := false, false
+			for _, ip := range answer {
+				addrs = append(addrs, ip.String())
+				if ip.Is4() {
+					has4 = true
+				} else {
+					has6 = true
+				}
+			}
+			qt := "A+AAAA"
+			if r.disableIPv6 || (has4 && !has6) {
+				qt = "A"
+			} else if has6 && !has4 {
+				qt = "AAAA"
+			}
+			srv := server
+			if srv == "" && mode == "system" {
+				srv = "system"
+			}
+			r.eventSink(DNSEvent{
+				Time:       time.Now(),
+				Name:       strings.ToLower(strings.TrimSuffix(name, ".")),
+				QType:      qt,
+				Addresses:  addrs,
+				Server:     srv,
+				Cached:     cached,
+				DurationMS: elapsed,
+				Outcome:    outcome,
+				Source:     dnsSourceOf(ctx, "kernel"),
+			})
+		}
 	}()
 	ctx, cancel, epoch := r.dnsScope(ctx)
 	defer cancel()
@@ -196,9 +238,11 @@ func (r *internalDNS) lookupAnswer(ctx context.Context, name string) (answer []n
 		return ips, "hosts", false, nil
 	}
 	if p := r.policy(name); p != r {
+		delegated = true
 		return p.lookupAnswer(ctx, name)
 	}
 	if r.local != nil && localDNSName(name) {
+		delegated = true
 		return r.local.lookupAnswer(ctx, name)
 	}
 	if len(r.upstreams) == 0 {
