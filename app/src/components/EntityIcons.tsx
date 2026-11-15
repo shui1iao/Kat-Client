@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
-import { cachedIcon, requestDomainIcon, requestProcessIcon, validCachedImage } from '../client/iconCache';
+import {
+  cachedIcon,
+  domainIconKey,
+  processIconKey,
+  requestDomainIcon,
+  requestProcessIcon,
+  subscribeIcon,
+  validCachedImage,
+} from '../client/iconCache';
 import { GroupIcon } from './GroupIcon';
 import { Icon } from './Icon';
 
@@ -14,7 +22,6 @@ function normalizeHostOrIp(raw?: string): string {
   const firstColon = s.indexOf(':');
   const lastColon = s.lastIndexOf(':');
   if (firstColon > 0 && firstColon === lastColon) {
-    // host:port or ipv4:port
     s = s.slice(0, firstColon);
   }
   if (s.endsWith('.')) s = s.slice(0, -1);
@@ -25,32 +32,49 @@ function isIpLiteral(s: string): boolean {
   return /^\d{1,3}(\.\d{1,3}){3}$/.test(s) || s.includes(':');
 }
 
-export function DomainIcon({ domain, size = 'md' }: { domain: string; size?: 'sm' | 'md' }) {
+export function DomainIcon({
+  domain,
+  ip,
+  rule,
+  size = 'md',
+}: {
+  domain: string;
+  ip?: string;
+  rule?: string;
+  size?: 'sm' | 'md';
+}) {
   const clean = normalizeHostOrIp(domain);
-  const key = clean ? 'dom:' + clean : '';
+  const cleanIp = normalizeHostOrIp(ip);
+  const key = domainIconKey(clean, cleanIp, rule);
   const [src, setSrc] = useState(() => (key ? cachedIcon(key) : ''));
 
   useEffect(() => {
     let live = true;
-    if (!clean || !key) {
+    if (!key) {
       setSrc('');
       return;
     }
     const cached = cachedIcon(key);
     if (cached) {
       setSrc(cached);
-      return;
+      return subscribeIcon(key, (uri) => {
+        if (live && validCachedImage(uri)) setSrc(uri);
+      });
     }
     setSrc('');
-    void requestDomainIcon(clean)
+    const unsub = subscribeIcon(key, (uri) => {
+      if (live && validCachedImage(uri)) setSrc(uri);
+    });
+    void requestDomainIcon(clean, cleanIp, rule)
       .then((uri) => {
         if (live && validCachedImage(uri)) setSrc(uri);
       })
       .catch(() => {});
     return () => {
       live = false;
+      unsub();
     };
-  }, [clean, key]);
+  }, [clean, cleanIp, rule, key]);
 
   const cls = 'ei-domain-tile' + (size === 'sm' ? ' is-sm' : '');
 
@@ -62,7 +86,6 @@ export function DomainIcon({ domain, size = 'md' }: { domain: string; size?: 'sm
     );
   }
 
-  // Clean unified default icon placeholder (globe for domains, network node for unresolved raw IP)
   return (
     <span className={cls + ' is-placeholder'} aria-hidden="true">
       <Icon name={isIpLiteral(clean) ? 'target' : 'nodes'} size={size === 'sm' ? 13 : 15} stroke={1.65} />
@@ -92,58 +115,41 @@ export function PolicyMiniIcon({
 export function ProcessIcon({
   name,
   path,
-  fallbackDomain,
 }: {
   name?: string;
   path?: string;
-  fallbackDomain?: string;
 }) {
-  const pKey = path ? 'proc:' + path.trim().toLowerCase() : '';
-  const dClean = normalizeHostOrIp(fallbackDomain);
-  const dKey = dClean ? 'dom:' + dClean : '';
-
-  const [procSrc, setProcSrc] = useState(() => (pKey ? cachedIcon(pKey) : ''));
-  const [domSrc, setDomSrc] = useState(() => (dKey ? cachedIcon(dKey) : ''));
+  const key = processIconKey(path, name);
+  const nameFallbackKey = path && name ? processIconKey(undefined, name) : '';
+  const [procSrc, setProcSrc] = useState(() => (key ? cachedIcon(key) || (nameFallbackKey ? cachedIcon(nameFallbackKey) : '') : ''));
 
   useEffect(() => {
     let live = true;
-    if (!path || !pKey) {
+    if (!key) {
       setProcSrc('');
-    } else {
-      const c = cachedIcon(pKey);
-      if (c) {
-        setProcSrc(c);
-      } else {
-        setProcSrc('');
-        void requestProcessIcon(path)
-          .then((uri) => {
-            if (live && validCachedImage(uri)) setProcSrc(uri);
-          })
-          .catch(() => {});
-      }
-    }
-    return () => {
-      live = false;
-    };
-  }, [path, pKey]);
-
-  useEffect(() => {
-    let live = true;
-    if (procSrc || !dClean || !dKey) return;
-    const c = cachedIcon(dKey);
-    if (c) {
-      setDomSrc(c);
       return;
     }
-    void requestDomainIcon(dClean)
+    const c = cachedIcon(key) || (nameFallbackKey ? cachedIcon(nameFallbackKey) : '');
+    if (c) {
+      setProcSrc(c);
+      return subscribeIcon(key, (uri) => {
+        if (live && validCachedImage(uri)) setProcSrc(uri);
+      });
+    }
+    setProcSrc('');
+    const unsub = subscribeIcon(key, (uri) => {
+      if (live && validCachedImage(uri)) setProcSrc(uri);
+    });
+    void requestProcessIcon(path, name)
       .then((uri) => {
-        if (live && validCachedImage(uri)) setDomSrc(uri);
+        if (live && validCachedImage(uri)) setProcSrc(uri);
       })
       .catch(() => {});
     return () => {
       live = false;
+      unsub();
     };
-  }, [procSrc, dClean, dKey]);
+  }, [path, name, key, nameFallbackKey]);
 
   if (procSrc) {
     return (
@@ -153,15 +159,6 @@ export function ProcessIcon({
     );
   }
 
-  if (domSrc) {
-    return (
-      <span className="ei-proc-box has-img" aria-hidden="true">
-        <img className="ei-img" src={domSrc} alt="" onError={() => setDomSrc('')} />
-      </span>
-    );
-  }
-
-  // Always show a clean default app/terminal placeholder icon instead of returning null or random letters!
   return (
     <span className="ei-proc-box is-placeholder" aria-hidden="true">
       <Icon name="monitor" size={13} stroke={1.65} />

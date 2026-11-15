@@ -466,7 +466,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
                 {...tip(hoverDetail)}
               >
                 <span className="ac-main-cell">
-                  <DomainIcon domain={target} size="sm" />
+                  <DomainIcon domain={target} ip={x.dest_ip} rule={x.rule} size="sm" />
                   <span className="ac-target">{target || '—'}</span>
                 </span>
                 <span className="ac-exit" style={exitColor && exitColor !== '#64748B' ? { color: exitColor } : undefined}>

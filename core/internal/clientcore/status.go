@@ -130,7 +130,12 @@ func (h *Host) statusLocked() any {
 		details := h.server.ConnectionDetails()
 		if list, ok := details.([]kernel.ConnInfo); ok {
 			for i := range list {
-				rememberObservedProcessPath(list[i].ProcessPath)
+				rememberObservedProcess(list[i].ProcessName, list[i].ProcessPath)
+				if list[i].DestHost != "" {
+					rememberObservedIPHost(list[i].DestIP, list[i].DestHost)
+				} else if list[i].Host != "" {
+					rememberObservedIPHost(list[i].DestIP, list[i].Host)
+				}
 			}
 		}
 		items = details

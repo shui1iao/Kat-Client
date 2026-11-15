@@ -274,15 +274,34 @@ func (h *Host) fetchKernelAsset(ctx context.Context, raw string, limit int64) ([
 }
 func (h *Host) getIcon(ctx context.Context, raw json.RawMessage) (any, *Error) {
 	var p struct {
-		URL      string           `json:"url,omitempty"`
-		Group    string           `json:"group,omitempty"`
-		Domain   string           `json:"domain,omitempty"`
-		Process  string           `json:"process_path,omitempty"`
-		Proxy    *bootstrapProxy  `json:"_system_proxy,omitempty"`
-		Expected *bootstrapEgress `json:"_egress,omitempty"`
+		URL         string           `json:"url,omitempty"`
+		Group       string           `json:"group,omitempty"`
+		Domain      string           `json:"domain,omitempty"`
+		IP          string           `json:"ip,omitempty"`
+		Rule        string           `json:"rule,omitempty"`
+		Process     string           `json:"process_path,omitempty"`
+		ProcessName string           `json:"process_name,omitempty"`
+		Proxy       *bootstrapProxy  `json:"_system_proxy,omitempty"`
+		Expected    *bootstrapEgress `json:"_egress,omitempty"`
 	}
 	if e := decodeParams(raw, &p); e != nil {
 		return nil, e
+	}
+	empty := map[string]any{"data_uri": ""}
+	// Local process icon extraction uses zero network; handle immediately before any proxy/egress check.
+	if p.URL == "" && (p.Process != "" || p.ProcessName != "") {
+		verifiedPath := ""
+		if p.Process != "" && h.isObservedProcessPath(p.Process) {
+			verifiedPath = p.Process
+		}
+		verifiedName := ""
+		if p.ProcessName != "" && h.isObservedProcessName(p.ProcessName) {
+			verifiedName = p.ProcessName
+		}
+		if verifiedPath == "" && verifiedName == "" {
+			return empty, nil
+		}
+		return map[string]any{"data_uri": extractProcessIconDataURI(verifiedPath, verifiedName)}, nil
 	}
 	// Resolve group label from accepted source only; never log asserted WebView text.
 	var bootstrapLife context.Context
@@ -297,7 +316,7 @@ func (h *Host) getIcon(ctx context.Context, raw json.RawMessage) (any, *Error) {
 	}
 	if p.Proxy != nil && (p.Expected == nil || p.Expected.Generation != h.egressGeneration || p.Expected.Enabled != (h.egress != nil)) {
 		h.mu.Unlock()
-		return map[string]any{"data_uri": ""}, nil
+		return empty, nil
 	}
 	if p.Proxy != nil {
 		if h.bootstrapLife == nil {
@@ -310,15 +329,8 @@ func (h *Host) getIcon(ctx context.Context, raw json.RawMessage) (any, *Error) {
 	if p.Proxy != nil {
 		ctx = context.WithValue(ctx, bootstrapKey{}, p.Proxy)
 	}
-	empty := map[string]any{"data_uri": ""}
-	if p.URL == "" && p.Process != "" {
-		if !h.isObservedProcessPath(p.Process) {
-			return empty, nil
-		}
-		return map[string]any{"data_uri": extractProcessIconDataURI(p.Process)}, nil
-	}
-	if p.URL == "" && p.Domain != "" {
-		return h.getDomainIcon(ctx, p.Domain, p.Proxy, p.Expected, bootstrapLife), nil
+	if p.URL == "" && (p.Domain != "" || p.IP != "" || p.Rule != "") {
+		return h.getDomainIcon(ctx, p.Domain, p.IP, p.Rule, p.Proxy, p.Expected, bootstrapLife), nil
 	}
 	if strings.HasPrefix(strings.TrimSpace(p.URL), "<svg") {
 		if !group.ValidIcon(p.URL) {
@@ -427,6 +439,26 @@ func (h *Host) iconFailure(stage, category string) {
 
 // Disk-only startup hydration: configured icon URLs only, no caller-selected
 // paths, no network and a total <=1MiB data budget below the 2MiB IPC ceiling.
+func (h *Host) recordDomainIconIndex(dir, domain string) {
+	idxPath := filepath.Join(dir, "dom-index.json")
+	h.iconMu.Lock()
+	defer h.iconMu.Unlock()
+	var list []string
+	if raw, err := userio.ReadFile(idxPath); err == nil && len(raw) <= 128<<10 {
+		_ = json.Unmarshal(raw, &list)
+	}
+	next := make([]string, 0, min(len(list)+1, 250))
+	next = append(next, domain)
+	for _, d := range list {
+		if d != domain && len(next) < 250 {
+			next = append(next, d)
+		}
+	}
+	if b, err := json.Marshal(next); err == nil {
+		_ = atomicWriteContext(h.iconCtx, idxPath, b)
+	}
+}
+
 func (h *Host) cachedIcons() map[string]string {
 	h.mu.Lock()
 	groups := append([]kernel.GroupConfig(nil), h.doc.config.Groups...)
@@ -436,6 +468,7 @@ func (h *Host) cachedIcons() map[string]string {
 	if e != nil {
 		return out
 	}
+	const maxHydrateBytes = 1200 << 10
 	total := 0
 	for _, g := range groups {
 		if !iconURL(g.Icon) {
@@ -448,20 +481,64 @@ func (h *Host) cachedIcons() map[string]string {
 			total += len(data) + len(g.Icon)
 		}
 	}
+	// Preload cached domain icons (0 network calls; preserves exact empty state when dom-index.json doesn't exist)
+	idxPath := filepath.Join(dir, "dom-index.json")
+	if raw, err := userio.ReadFile(idxPath); err == nil && len(raw) > 0 && len(raw) <= 128<<10 {
+		var domains []string
+		if json.Unmarshal(raw, &domains) == nil {
+			for _, dom := range domains {
+				if _, ok := validIconDomain(dom); !ok {
+					continue
+				}
+				p := filepath.Join(dir, fmt.Sprintf("dom-%x.img", sha256.Sum256([]byte(dom))))
+				data, _ := readIcon(p)
+				key := "dom:" + dom
+				if data != "" && total+len(data)+len(key) < maxHydrateBytes {
+					out[key] = data
+					total += len(data) + len(key)
+				}
+			}
+		}
+	}
+	cachedProcessIconsInto(out, &total, maxHydrateBytes)
 	return out
 }
 
 var (
-	observedProcPaths sync.Map
-	htmlLinkTagRe     = regexp.MustCompile(`(?is)<link\b[^>]*>`)
-	htmlAttrRe        = regexp.MustCompile(`(?is)\b(rel|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))`)
+	observedProcPaths     sync.Map
+	observedProcNames     sync.Map
+	observedProcNamePaths sync.Map
+	domainIconMissCache   sync.Map
+	htmlLinkTagRe         = regexp.MustCompile(`(?is)<link\b[^>]*>`)
+	htmlAttrRe            = regexp.MustCompile(`(?is)\b(rel|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))`)
 )
 
-func rememberObservedProcessPath(p string) {
+func rememberObservedProcess(name, p string) {
+	n := strings.TrimSpace(name)
 	p = strings.TrimSpace(p)
-	if p != "" && len(p) <= 1024 && !strings.HasPrefix(p, `\`) && !strings.HasPrefix(p, "//") {
+	validPath := p != "" && len(p) <= 1024 && !strings.HasPrefix(p, `\`) && !strings.HasPrefix(p, "//")
+	if validPath {
 		observedProcPaths.Store(strings.ToLower(p), struct{}{})
 	}
+	if n != "" && len(n) <= 128 && !strings.ContainsAny(n, `/\:`) {
+		nl := strings.ToLower(n)
+		observedProcNames.Store(nl, struct{}{})
+		if validPath {
+			observedProcNamePaths.Store(nl, p)
+		}
+	}
+}
+
+func rememberObservedProcessPath(p string) {
+	rememberObservedProcess("", p)
+}
+
+func lookupObservedPathByName(lowerName string) (string, bool) {
+	v, ok := observedProcNamePaths.Load(lowerName)
+	if !ok {
+		return "", false
+	}
+	return v.(string), true
 }
 
 func validIconDomain(raw string) (string, bool) {
@@ -498,14 +575,45 @@ func (h *Host) isObservedProcessPath(targetPath string) bool {
 	active, closed := s.ClientConnections(500)
 	found := false
 	for i := range active {
-		rememberObservedProcessPath(active[i].ProcessPath)
+		rememberObservedProcess(active[i].ProcessName, active[i].ProcessPath)
 		if strings.EqualFold(active[i].ProcessPath, want) {
 			found = true
 		}
 	}
 	for i := range closed {
-		rememberObservedProcessPath(closed[i].ProcessPath)
+		rememberObservedProcess(closed[i].ProcessName, closed[i].ProcessPath)
 		if strings.EqualFold(closed[i].ProcessPath, want) {
+			found = true
+		}
+	}
+	return found
+}
+
+func (h *Host) isObservedProcessName(targetName string) bool {
+	want := strings.TrimSpace(targetName)
+	if want == "" || len(want) > 128 || strings.ContainsAny(want, `/\:`) {
+		return false
+	}
+	if _, ok := observedProcNames.Load(strings.ToLower(want)); ok {
+		return true
+	}
+	h.mu.Lock()
+	s := h.server
+	h.mu.Unlock()
+	if s == nil {
+		return false
+	}
+	active, closed := s.ClientConnections(500)
+	found := false
+	for i := range active {
+		rememberObservedProcess(active[i].ProcessName, active[i].ProcessPath)
+		if strings.EqualFold(active[i].ProcessName, want) {
+			found = true
+		}
+	}
+	for i := range closed {
+		rememberObservedProcess(closed[i].ProcessName, closed[i].ProcessPath)
+		if strings.EqualFold(closed[i].ProcessName, want) {
 			found = true
 		}
 	}
@@ -576,17 +684,60 @@ func (h *Host) fetchSiteBytes(ctx context.Context, rawURL string, limit int64) (
 	return b, resp.Request.URL, nil
 }
 
-func extractHTMLIconURLs(htmlBytes []byte, base *url.URL) []string {
-	if base == nil || len(htmlBytes) == 0 {
+type htmlHeadAssets struct {
+	inlineIcons [][]byte
+	iconURLs    []string
+	manifestURL string
+}
+
+func decodeInlineDataImage(href string) []byte {
+	if !strings.HasPrefix(strings.ToLower(href), "data:image/") || len(href) > maxIconBytes*2 {
 		return nil
 	}
-	// Inspect up to </head> or first 64 KiB
+	comma := strings.IndexByte(href, ',')
+	if comma <= 10 {
+		return nil
+	}
+	meta := strings.ToLower(href[:comma])
+	payload := href[comma+1:]
+	var raw []byte
+	if strings.Contains(meta, ";base64") {
+		b, err := base64.StdEncoding.DecodeString(strings.TrimSpace(payload))
+		if err != nil {
+			b, err = base64.RawStdEncoding.DecodeString(strings.TrimSpace(payload))
+			if err != nil {
+				return nil
+			}
+		}
+		raw = b
+	} else if strings.Contains(meta, "svg") {
+		unesc, err := url.PathUnescape(payload)
+		if err != nil {
+			unesc = payload
+		}
+		raw = []byte(strings.TrimSpace(unesc))
+	}
+	if len(raw) == 0 || len(raw) > maxIconBytes {
+		return nil
+	}
+	if _, err := iconData(raw); err != nil {
+		return nil
+	}
+	return raw
+}
+
+func extractHTMLHeadAssets(htmlBytes []byte, base *url.URL) htmlHeadAssets {
+	var res htmlHeadAssets
+	if base == nil || len(htmlBytes) == 0 {
+		return res
+	}
 	s := string(htmlBytes)
 	if idx := strings.Index(strings.ToLower(s), "</head>"); idx > 0 {
 		s = s[:idx]
 	}
 	var appleIcons, stdIcons []string
-	for _, tag := range htmlLinkTagRe.FindAllString(s, 32) {
+	seen := map[string]bool{}
+	for _, tag := range htmlLinkTagRe.FindAllString(s, 512) {
 		var rel, href string
 		for _, m := range htmlAttrRe.FindAllStringSubmatch(tag, -1) {
 			k := strings.ToLower(m[1])
@@ -603,19 +754,37 @@ func extractHTMLIconURLs(htmlBytes []byte, base *url.URL) []string {
 				href = strings.TrimSpace(v)
 			}
 		}
-		if href == "" || strings.HasPrefix(href, "data:") || strings.HasPrefix(href, "javascript:") {
+		if href == "" || strings.HasPrefix(strings.ToLower(href), "javascript:") {
 			continue
 		}
 		hasIcon := false
 		isApple := false
+		isManifest := false
 		for _, tok := range strings.Fields(rel) {
-			if tok == "apple-touch-icon" || tok == "apple-touch-icon-precomposed" {
+			switch tok {
+			case "apple-touch-icon", "apple-touch-icon-precomposed", "fluid-icon":
 				hasIcon, isApple = true, true
-			} else if tok == "icon" {
+			case "icon", "mask-icon":
 				hasIcon = true
+			case "manifest":
+				isManifest = true
 			}
 		}
+		if isManifest && res.manifestURL == "" {
+			if u, err := base.Parse(href); err == nil && (u.Scheme == "https" || u.Scheme == "http") && u.User == nil {
+				if _, ok := validIconDomain(u.Hostname()); ok {
+					res.manifestURL = u.String()
+				}
+			}
+			continue
+		}
 		if !hasIcon {
+			continue
+		}
+		if strings.HasPrefix(strings.ToLower(href), "data:image/") {
+			if inline := decodeInlineDataImage(href); len(inline) > 0 {
+				res.inlineIcons = append(res.inlineIcons, inline)
+			}
 			continue
 		}
 		u, err := base.Parse(href)
@@ -625,65 +794,133 @@ func extractHTMLIconURLs(htmlBytes []byte, base *url.URL) []string {
 		if _, ok := validIconDomain(u.Hostname()); !ok {
 			continue
 		}
+		us := u.String()
+		if seen[us] {
+			continue
+		}
+		seen[us] = true
 		if isApple {
-			appleIcons = append(appleIcons, u.String())
+			appleIcons = append(appleIcons, us)
 		} else {
-			stdIcons = append(stdIcons, u.String())
+			stdIcons = append(stdIcons, us)
 		}
 	}
-	return append(appleIcons, stdIcons...)
+	res.iconURLs = append(appleIcons, stdIcons...)
+	return res
 }
 
-func (h *Host) resolveDomainIconBytes(baseCtx context.Context, domain string) []byte {
-	hosts := []string{domain}
-	seen := map[string]bool{domain: true}
-	addHost := func(cand string) {
-		if d, ok := validIconDomain(cand); ok && !seen[d] {
-			seen[d] = true
-			hosts = append(hosts, d)
+func extractHTMLIconURLs(htmlBytes []byte, base *url.URL) []string {
+	return extractHTMLHeadAssets(htmlBytes, base).iconURLs
+}
+
+func (h *Host) tryWebManifestIcon(baseCtx context.Context, manifestHref string, timeout time.Duration) []byte {
+	c, cancel := context.WithTimeout(baseCtx, timeout)
+	raw, finalURL, err := h.fetchSiteBytes(c, manifestHref, 128<<10)
+	cancel()
+	if err != nil || finalURL == nil || len(raw) == 0 {
+		return nil
+	}
+	var mf struct {
+		Icons []struct {
+			Src   string `json:"src"`
+			Sizes string `json:"sizes"`
+		} `json:"icons"`
+	}
+	if json.Unmarshal(raw, &mf) != nil || len(mf.Icons) == 0 {
+		return nil
+	}
+	bestHref := ""
+	bestScore := -1
+	for _, ic := range mf.Icons {
+		src := strings.TrimSpace(ic.Src)
+		if src == "" {
+			continue
 		}
-	}
-	addHost(canonicalBrandForDomain(domain))
-	if etld1, err := publicsuffix.EffectiveTLDPlusOne(domain); err == nil && etld1 != "" {
-		addHost(etld1)
-		addHost(canonicalBrandForDomain(etld1))
-	}
-	// 1. Try direct website: HTML <link rel="icon" / "apple-touch-icon"> & /favicon.ico
-	for _, host := range hosts {
-		c1, cancel1 := context.WithTimeout(baseCtx, 4*time.Second)
-		favBytes, _, err := h.fetchSiteBytes(c1, "https://"+host+"/favicon.ico", maxIconBytes)
-		cancel1()
-		if err == nil {
-			if _, ierr := iconData(favBytes); ierr == nil {
-				return favBytes
+		if strings.HasPrefix(strings.ToLower(src), "data:image/") {
+			if inline := decodeInlineDataImage(src); len(inline) > 0 {
+				return inline
 			}
+			continue
 		}
-		c2, cancel2 := context.WithTimeout(baseCtx, 4*time.Second)
-		pageBytes, finalURL, err := h.fetchSiteBytes(c2, "https://"+host+"/", 64<<10)
-		cancel2()
-		if err == nil {
-			for _, iconHref := range extractHTMLIconURLs(pageBytes, finalURL) {
-				c3, cancel3 := context.WithTimeout(baseCtx, 4*time.Second)
-				ib, _, err := h.fetchSiteBytes(c3, iconHref, maxIconBytes)
-				cancel3()
-				if err == nil {
-					if _, ierr := iconData(ib); ierr == nil {
-						return ib
-					}
+		u, err := finalURL.Parse(src)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil {
+			continue
+		}
+		if _, ok := validIconDomain(u.Hostname()); !ok {
+			continue
+		}
+		score := 10
+		sz := strings.ToLower(ic.Sizes)
+		if strings.Contains(sz, "64x64") || strings.Contains(sz, "96x96") || strings.Contains(sz, "128x128") || strings.Contains(sz, "180x180") || strings.Contains(sz, "192x192") {
+			score = 100
+		} else if strings.Contains(sz, "48x48") || strings.Contains(sz, "256x256") {
+			score = 60
+		}
+		if score > bestScore {
+			bestScore = score
+			bestHref = u.String()
+		}
+	}
+	if bestHref == "" {
+		return nil
+	}
+	c2, cancel2 := context.WithTimeout(baseCtx, timeout)
+	ib, _, err := h.fetchSiteBytes(c2, bestHref, maxIconBytes)
+	cancel2()
+	if err == nil {
+		if _, ierr := iconData(ib); ierr == nil {
+			return ib
+		}
+	}
+	return nil
+}
+
+func (h *Host) tryDirectSiteIcon(baseCtx context.Context, host string, timeout time.Duration) []byte {
+	c1, cancel1 := context.WithTimeout(baseCtx, timeout)
+	favBytes, _, err := h.fetchSiteBytes(c1, "https://"+host+"/favicon.ico", maxIconBytes)
+	cancel1()
+	if err == nil {
+		if _, ierr := iconData(favBytes); ierr == nil {
+			return favBytes
+		}
+	}
+	c2, cancel2 := context.WithTimeout(baseCtx, timeout)
+	pageBytes, finalURL, err := h.fetchSiteBytes(c2, "https://"+host+"/", 256<<10)
+	cancel2()
+	if err == nil {
+		assets := extractHTMLHeadAssets(pageBytes, finalURL)
+		if len(assets.inlineIcons) > 0 {
+			return assets.inlineIcons[0]
+		}
+		for idx, iconHref := range assets.iconURLs {
+			if idx >= 4 {
+				break
+			}
+			c3, cancel3 := context.WithTimeout(baseCtx, timeout)
+			ib, _, err := h.fetchSiteBytes(c3, iconHref, maxIconBytes)
+			cancel3()
+			if err == nil {
+				if _, ierr := iconData(ib); ierr == nil {
+					return ib
 				}
 			}
 		}
+		if assets.manifestURL != "" {
+			if mb := h.tryWebManifestIcon(baseCtx, assets.manifestURL, timeout); len(mb) > 0 {
+				return mb
+			}
+		}
 	}
-	// 2. Fallback to high-res favicon services (handles pure CDN/API subdomains)
-	var fallbacks []string
-	for _, host := range hosts {
-		fallbacks = append(fallbacks,
-			"https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://"+host+"&size=64",
-			"https://icons.duckduckgo.com/ip3/"+host+".ico",
-		)
+	return nil
+}
+
+func (h *Host) tryFaviconServices(baseCtx context.Context, host string, timeout time.Duration) []byte {
+	urls := []string{
+		"https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://" + host + "&size=64",
+		"https://icons.duckduckgo.com/ip3/" + host + ".ico",
 	}
-	for _, u := range fallbacks {
-		c, cancel := context.WithTimeout(baseCtx, 5*time.Second)
+	for _, u := range urls {
+		c, cancel := context.WithTimeout(baseCtx, timeout)
 		b, _, err := h.fetchSiteBytes(c, u, maxIconBytes)
 		cancel()
 		if err == nil {
@@ -695,27 +932,96 @@ func (h *Host) resolveDomainIconBytes(baseCtx context.Context, domain string) []
 	return nil
 }
 
-func (h *Host) getDomainIcon(ctx context.Context, rawDomain string, proxyCfg *bootstrapProxy, expected *bootstrapEgress, _ context.Context) map[string]any {
+// raceHostIcon runs public high-res Favicon CDN and direct first-party HTTPS scraping in parallel.
+// In Proxy mode, gstatic wins in ~60ms (bypassing Cloudflare 403); in Direct CN mode (where gstatic
+// may be blocked), direct site wins in ~50ms without waiting for any GFW timeout!
+func (h *Host) raceHostIcon(baseCtx context.Context, host string, budget time.Duration) []byte {
+	raceCtx, cancel := context.WithTimeout(baseCtx, budget)
+	defer cancel()
+
+	ch := make(chan []byte, 2)
+	go func() {
+		ch <- h.tryFaviconServices(raceCtx, host, budget)
+	}()
+	go func() {
+		ch <- h.tryDirectSiteIcon(raceCtx, host, budget)
+	}()
+
+	for i := 0; i < 2; i++ {
+		select {
+		case b := <-ch:
+			if len(b) > 0 {
+				cancel()
+				return b
+			}
+		case <-raceCtx.Done():
+			return nil
+		}
+	}
+	return nil
+}
+
+func (h *Host) resolveDomainIconBytes(baseCtx context.Context, domain string) []byte {
+	etld1, _ := publicsuffix.EffectiveTLDPlusOne(domain)
+	isCustomSub := etld1 != "" && domain != etld1 && domain != "www."+etld1
+
+	// Phase 1: Distinct product/self-hosted subdomain (e.g. se.siaoz.si, mail.google.com, live.bilibili.com)
+	if isCustomSub {
+		if b := h.raceHostIcon(baseCtx, domain, 2400*time.Millisecond); len(b) > 0 {
+			return b
+		}
+	}
+
+	// Phase 2: Root / Brand / www.<etld1> candidates with concurrent dual-path race
+	var rootHosts []string
+	seen := map[string]bool{}
+	addHost := func(cand string) {
+		if d, ok := validIconDomain(cand); ok && !seen[d] {
+			seen[d] = true
+			rootHosts = append(rootHosts, d)
+		}
+	}
+	if !isCustomSub {
+		addHost(domain)
+	}
+	if brand := canonicalBrandForDomain(domain); brand != "" {
+		addHost(brand)
+	}
+	if etld1 != "" {
+		addHost(etld1)
+		addHost("www." + etld1)
+	}
+
+	for _, host := range rootHosts {
+		if b := h.raceHostIcon(baseCtx, host, 2600*time.Millisecond); len(b) > 0 {
+			return b
+		}
+	}
+	return nil
+}
+
+func (h *Host) getDomainIcon(ctx context.Context, rawDomain, rawIP, rawRule string, proxyCfg *bootstrapProxy, expected *bootstrapEgress, _ context.Context) map[string]any {
 	empty := map[string]any{"data_uri": ""}
 	cleaned := stripHostPort(rawDomain)
-	if ip, err := netip.ParseAddr(cleaned); err == nil {
-		mapped := h.resolveIPToDomain(ip)
-		if mapped == "" {
-			return empty
-		}
-		cleaned = mapped
-	} else if brand := canonicalBrandForDomain(cleaned); brand != "" && !strings.Contains(cleaned, ".") {
-		cleaned = brand
-	} else if strings.HasPrefix(cleaned, "raw.github") {
-		cleaned = "github.com"
-	}
-	// Cache by canonical brand when alias maps to a known brand (so raw.githubusercontent.com & api.github.com share 1 instant cached icon!)
-	if brand := canonicalBrandForDomain(cleaned); brand != "" && brand != cleaned {
-		if _, err := publicsuffix.EffectiveTLDPlusOne(cleaned); err != nil || brand != func() string { e, _ := publicsuffix.EffectiveTLDPlusOne(cleaned); return e }() {
-			cleaned = brand
+
+	var targetDomain string
+	if cleaned != "" {
+		if ip, err := netip.ParseAddr(cleaned); err == nil {
+			targetDomain = h.resolveIPToDomain(ip)
+		} else if !isMultiTenantCDN(cleaned) {
+			targetDomain = normalizeIconTargetDomain(cleaned)
 		}
 	}
-	domain, ok := validIconDomain(cleaned)
+	if targetDomain == "" && rawIP != "" {
+		if ip, err := netip.ParseAddr(stripHostPort(rawIP)); err == nil {
+			targetDomain = h.resolveIPToDomain(ip)
+		}
+	}
+	if targetDomain == "" && rawRule != "" {
+		targetDomain = resolveRuleHintToBrand(rawRule)
+	}
+
+	domain, ok := validIconDomain(targetDomain)
 	if !ok {
 		return empty
 	}
@@ -726,8 +1032,17 @@ func (h *Host) getDomainIcon(ctx context.Context, rawDomain string, proxyCfg *bo
 	path := filepath.Join(dir, fmt.Sprintf("dom-%x.img", sha256.Sum256([]byte(domain))))
 	data, at := readIcon(path)
 	if data != "" && time.Since(at) < 7*24*time.Hour {
-		return map[string]any{"data_uri": data}
+		return map[string]any{"data_uri": data, "resolved_domain": domain}
 	}
+	if data == "" {
+		if missAt, missed := domainIconMissCache.Load(domain); missed {
+			if time.Since(missAt.(time.Time)) < 10*time.Minute {
+				return empty
+			}
+			domainIconMissCache.Delete(domain)
+		}
+	}
+
 	h.iconMu.Lock()
 	if h.iconClosed {
 		h.iconMu.Unlock()
@@ -742,7 +1057,12 @@ func (h *Host) getDomainIcon(ctx context.Context, rawDomain string, proxyCfg *bo
 			defer h.iconWG.Done()
 			baseCtx := context.WithValue(context.WithValue(h.iconCtx, iconExpectedKey{}, expected), bootstrapKey{}, proxyCfg)
 			if b := h.resolveDomainIconBytes(baseCtx, domain); len(b) > 0 {
-				_ = atomicWriteContext(h.iconCtx, path, b)
+				domainIconMissCache.Delete(domain)
+				if atomicWriteContext(h.iconCtx, path, b) == nil {
+					h.recordDomainIconIndex(dir, domain)
+				}
+			} else {
+				domainIconMissCache.Store(domain, time.Now())
 			}
 			h.iconMu.Lock()
 			delete(h.iconPending, path)
@@ -752,7 +1072,7 @@ func (h *Host) getDomainIcon(ctx context.Context, rawDomain string, proxyCfg *bo
 	}
 	h.iconMu.Unlock()
 	if data != "" {
-		return map[string]any{"data_uri": data}
+		return map[string]any{"data_uri": data, "resolved_domain": domain}
 	}
 	select {
 	case <-ctx.Done():
@@ -760,5 +1080,5 @@ func (h *Host) getDomainIcon(ctx context.Context, rawDomain string, proxyCfg *bo
 	case <-done:
 	}
 	data, _ = readIcon(path)
-	return map[string]any{"data_uri": data}
+	return map[string]any{"data_uri": data, "resolved_domain": domain}
 }

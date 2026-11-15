@@ -310,7 +310,7 @@ export function Connections({
         >
           {!omitProcessCol && (
             <span className="conn-proc-cell ell" {...tip(x.process_path || x.process_name, true)}>
-              <ProcessIcon name={x.process_name} path={x.process_path} fallbackDomain={x.dest_host || x.host || x.dest_ip || x.target} />
+              <ProcessIcon name={x.process_name} path={x.process_path} />
               <span className="ell">{x.process_name || '未知'}</span>
             </span>
           )}
@@ -320,6 +320,8 @@ export function Connections({
           <ConnectionTarget
             showIcon
             name={name}
+            ip={x.dest_ip}
+            rule={x.rule}
             title={name && name !== x.target ? `${name} · ${x.target}` : x.target}
             sniffed={x.sniffed && !!(x.dest_host || x.host)}
           />
@@ -592,7 +594,7 @@ export function Connections({
                         <span className={'conn-proc-chev' + (isOpen ? ' is-open' : '')}>
                           <Icon name="chevRight" size={14} />
                         </span>
-                        <ProcessIcon name={b.name} path={b.path} fallbackDomain={b.sampleHost} />
+                        <ProcessIcon name={b.name} path={b.path} />
                         <b className="ell">{b.name}</b>
                         <span className="conn-proc-count num">{b.items.length}</span>
                       </span>

@@ -255,7 +255,7 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
                     {clockStr(e.time)}
                   </time>
                   <span className="conn-proc-cell ell" {...tip(e.process_path || e.process_name, true)}>
-                    <ProcessIcon name={e.process_name} path={e.process_path} fallbackDomain={e.dest_host || e.host || e.dest_ip || e.target} />
+                    <ProcessIcon name={e.process_name} path={e.process_path} />
                     <span className="ell">{e.process_name || '未知'}</span>
                   </span>
                   <span className="proto-cell">
@@ -264,6 +264,8 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
                   <ConnectionTarget
                     showIcon
                     name={e.dest_host || e.host || e.target || '—'}
+                    ip={e.dest_ip}
+                    rule={e.rule}
                     title={e.target}
                     sniffed={e.sniffed && !!(e.dest_host || e.host)}
                   />

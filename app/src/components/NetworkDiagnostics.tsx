@@ -92,12 +92,12 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
   }
 
   const r = cache[kind];
-  const connectivityItems = cache.connectivity?.items.filter(
+  const connectivityItems = (cache.connectivity?.items ?? []).filter(
     (x) => !(x.name === 'YouTube' && x.url === 'https://www.youtube.com/'),
   );
   const services = ['ChatGPT', 'Gemini', 'Google', 'Netflix'].map((name) => ({
     name,
-    row: cache.unlock?.items.find((x) => x.name === name),
+    row: (cache.unlock?.items ?? []).find((x) => x.name === name),
   }));
 
   const lastAt = r?.at
@@ -131,7 +131,7 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
                     <ServiceIcon name={name} size={16} />
                     <span className="service-name">{name}</span>
                   </span>
-                  <span className="unlock-node" {...tip(x?.chain.map(c.label).join(' → '), true)}>
+                  <span className="unlock-node" {...tip((x?.chain ?? []).map(c.label).join(' → '), true)}>
                     {x?.chain?.length ? x.chain.map(c.label).join(' → ') : x?.node ? c.label(x.node) : '—'}
                   </span>
                   <span className="unlock-region">{regionLabel(x?.region)}</span>
@@ -171,7 +171,7 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
                         </button>
                       )}
                     </div>
-                    <span className="diagnostic-chain">{x.chain.map(c.label).join(' → ') || '—'}</span>
+                    <span className="diagnostic-chain">{(x.chain ?? []).map(c.label).join(' → ') || '—'}</span>
                     <span className={'diagnostic-result num ' + (x.result === 'failed' ? 'failed' : 'ok')}>
                       {x.result === 'failed' ? x.reason || '失败' : `${x.duration_ms} ms`}
                     </span>
@@ -183,9 +183,9 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
           {kind === 'exit' &&
             (!cache.exit ? (
               <div className="empty">点击下方刷新查看出口 IP</div>
-            ) : cache.exit.items.length ? (
+            ) : (cache.exit.items ?? []).length ? (
               <div className="diag-list" role="list" aria-label="出口 IP">
-                {cache.exit.items.map((x) => {
+                {(cache.exit.items ?? []).map((x) => {
                   const failed = x.result === 'failed';
                   return (
                     <div className="exit-row" role="listitem" key={x.name}>

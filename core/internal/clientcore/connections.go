@@ -28,14 +28,19 @@ type connectionRing struct {
 }
 
 func (r *connectionRing) record(e kernel.ConnectionEvent) {
-	rememberObservedProcessPath(e.ProcessPath)
+	rememberObservedProcess(e.ProcessName, e.ProcessPath)
+	if e.DestHost != "" {
+		rememberObservedIPHost(e.DestIP, e.DestHost)
+	} else if e.Host != "" {
+		rememberObservedIPHost(e.DestIP, e.Host)
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.seq == maxLogSeq {
 		return
 	}
 	r.seq++
-	e.DestIPs = append([]string(nil), e.DestIPs...)
+	e.DestIPs = append([]string{}, e.DestIPs...)
 	e.Chain = append([]string{}, e.Chain...)
 	r.entries[(r.seq-1)%logCapacity] = ConnectionEntry{r.seq, e}
 	if r.size < logCapacity {
@@ -60,7 +65,7 @@ func (r *connectionRing) read(after uint64, limit int) ConnectionLogsReply {
 	}
 	for seq := first; seq <= r.seq && len(out.Entries) < limit; seq++ {
 		e := r.entries[(seq-1)%logCapacity]
-		e.DestIPs = append([]string(nil), e.DestIPs...)
+		e.DestIPs = append([]string{}, e.DestIPs...)
 		e.Chain = append([]string{}, e.Chain...)
 		out.Entries = append(out.Entries, e)
 		out.NextSeq = seq
@@ -231,6 +236,22 @@ func (h *Host) listConnections(raw json.RawMessage) (any, *Error) {
 	var total any
 	if h.server != nil {
 		active, closed = h.server.ClientConnections(limit)
+		for i := range active {
+			rememberObservedProcess(active[i].ProcessName, active[i].ProcessPath)
+			if active[i].DestHost != "" {
+				rememberObservedIPHost(active[i].DestIP, active[i].DestHost)
+			} else if active[i].Host != "" {
+				rememberObservedIPHost(active[i].DestIP, active[i].Host)
+			}
+		}
+		for i := range closed {
+			rememberObservedProcess(closed[i].ProcessName, closed[i].ProcessPath)
+			if closed[i].DestHost != "" {
+				rememberObservedIPHost(closed[i].DestIP, closed[i].DestHost)
+			} else if closed[i].Host != "" {
+				rememberObservedIPHost(closed[i].DestIP, closed[i].Host)
+			}
+		}
 		active = mergeActiveConns(active)
 		closed = mergeClosedConns(closed)
 		total = h.server.TotalConnections()
