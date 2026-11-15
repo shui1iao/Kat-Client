@@ -1,1 +1,89 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#5E93E6"/><stop offset="1" stop-color="#3A5FBF"/></linearGradient><mask id="m" maskUnits="userSpaceOnUse" x="-500" y="-500" width="2000" height="2000"><rect x="-500" y="-500" width="2000" height="2000" fill="#fff"/><path transform="rotate(-9 366 399)" d="M212.6 343.54L213.78 253.86Q213.78 229.08 236.2 242.06L295.2 278.64Q368.36 253.86 441.52 279.82L499.34 245.6Q521.76 232.62 521.76 258.58L521.76 344.72Q543 387.2 527.66 436.76Q511.14 488.68 468.66 518.18Q422.64 550.04 366 552.4Q304.64 548.86 257.44 518.18Q214.96 489.86 198.44 440.3Q183.1 390.74 212.6 343.54Z" fill="#000" stroke="#000" stroke-width="87" stroke-linejoin="round"/></mask></defs><g transform="translate(-154.7 -201.6) scale(1.42)"><path mask="url(#m)" d="M327 786V500M418 548L746 300M418 548Q572 670 748 786" fill="none" stroke="url(#g)" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/><path transform="rotate(-9 366 399)" d="M212.6 343.54L213.78 253.86Q213.78 229.08 236.2 242.06L295.2 278.64Q368.36 253.86 441.52 279.82L499.34 245.6Q521.76 232.62 521.76 258.58L521.76 344.72Q543 387.2 527.66 436.76Q511.14 488.68 468.66 518.18Q422.64 550.04 366 552.4Q304.64 548.86 257.44 518.18Q214.96 489.86 198.44 440.3Q183.1 390.74 212.6 343.54Z" fill="url(#g)" stroke="url(#g)" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/><path d="M761 533.8Q763.4 550.6 778.6 553Q763.4 555.4 761 572.2Q758.6 555.4 743.4 553Q758.6 550.6 761 533.8Z" transform="translate(761 553) scale(1.8) translate(-761 -553)" fill="url(#g)"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+    <defs>
+      
+    <linearGradient id="k1_main" x1="0.18" y1="0.08" x2="0.82" y2="0.92">
+      <stop offset="0%" stop-color="#7CC2FF"/>
+      <stop offset="48%" stop-color="#4386F8"/>
+      <stop offset="100%" stop-color="#1D51D8"/>
+    </linearGradient>
+    <linearGradient id="k1_bright" x1="0.15" y1="0.08" x2="0.85" y2="0.90">
+      <stop offset="0%" stop-color="#9AD3FF"/>
+      <stop offset="50%" stop-color="#4F93FF"/>
+      <stop offset="100%" stop-color="#235CE6"/>
+    </linearGradient>
+    <linearGradient id="k1_deep" x1="0.20" y1="0.15" x2="0.85" y2="0.92">
+      <stop offset="0%" stop-color="#468AF8"/>
+      <stop offset="100%" stop-color="#1741B4"/>
+    </linearGradient>
+    <linearGradient id="k1_ear" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#D0EAFF" stop-opacity="0.60"/>
+      <stop offset="100%" stop-color="#3B82F6" stop-opacity="0.04"/>
+    </linearGradient>
+    <filter id="k1_sh" x="-15%" y="-12%" width="130%" height="132%">
+      <feDropShadow dx="0" dy="16" stdDeviation="15" flood-color="#0D2A72" flood-opacity="0.24"/>
+    </filter>
+    <filter id="k1_ov" x="-18%" y="-18%" width="136%" height="136%">
+      <feDropShadow dx="-5" dy="8" stdDeviation="11" flood-color="#0B2260" flood-opacity="0.28"/>
+    </filter>
+  
+      <mask id="k1_halo" maskUnits="userSpaceOnUse" x="-200" y="-200" width="1424" height="1424">
+        <rect x="-200" y="-200" width="1424" height="1424" fill="#fff"/>
+        <g transform="rotate(-10 370 356)">
+          <path d="
+    M 370 184
+    C 404 184, 438 190, 466 202
+    L 546 124
+    C 570 100, 608 114, 610 148
+    L 618 294
+    C 626 394, 578 484, 490 530
+    C 452 550, 412 560, 370 560
+    C 328 560, 288 550, 250 530
+    C 162 484, 114 394, 122 294
+    L 130 148
+    C 132 114, 170 100, 194 124
+    L 274 202
+    C 302 190, 336 184, 370 184 Z
+  " fill="#000" stroke="#000" stroke-width="66" stroke-linejoin="round"/>
+        </g>
+      </mask>
+      <mask id="k1_eyes" maskUnits="userSpaceOnUse" x="-200" y="-200" width="1424" height="1424">
+        <rect x="-200" y="-200" width="1424" height="1424" fill="#fff"/>
+        <path d="M 218 338 C 250 326, 298 340, 322 378 C 286 394, 240 378, 218 338 Z" fill="#000"/>
+        <path d="M 522 338 C 490 326, 442 340, 418 378 C 454 394, 500 378, 522 338 Z" fill="#000"/>
+      </mask>
+    </defs>
+    <g transform="translate(22 10) scale(0.98)" filter="url(#k1_sh)">
+      <g mask="url(#k1_halo)">
+        <path d="
+    M 342 460 L 342 832
+    M 454 584 L 816 246
+    M 462 584 Q 640 710 824 836
+  " fill="none" stroke="url(#k1_deep)" stroke-width="132" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+      <g transform="rotate(-10 370 356)">
+        <path d="
+    M 370 184
+    C 404 184, 438 190, 466 202
+    L 546 124
+    C 570 100, 608 114, 610 148
+    L 618 294
+    C 626 394, 578 484, 490 530
+    C 452 550, 412 560, 370 560
+    C 328 560, 288 550, 250 530
+    C 162 484, 114 394, 122 294
+    L 130 148
+    C 132 114, 170 100, 194 124
+    L 274 202
+    C 302 190, 336 184, 370 184 Z
+  " fill="url(#k1_bright)" mask="url(#k1_eyes)"/>
+        <path d="M 176 184 L 262 258 C 228 282, 200 312, 180 348 L 166 196 C 165 186, 170 180, 176 184 Z" fill="url(#k1_ear)"/><path d="M 564 184 L 478 258 C 512 282, 540 312, 560 348 L 574 196 C 575 186, 570 180, 564 184 Z" fill="url(#k1_ear)"/>
+      </g>
+      <path d="
+    M 826 510
+    C 833 546, 844 557, 880 564
+    C 844 571, 833 582, 826 618
+    C 819 582, 808 571, 772 564
+    C 808 557, 819 546, 826 510 Z
+  " fill="url(#k1_main)"/>
+    </g>
+  </svg>
