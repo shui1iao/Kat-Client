@@ -38,6 +38,9 @@ func TestPolicyDefaultsByTypeAndDesktop(t *testing.T) {
 				wantTolerance, wantRelative, wantDwell := 50*time.Millisecond, .2, time.Minute
 				if kind == TypeURLTest || kind == TypeSmart {
 					wantTolerance, wantRelative, wantDwell = 20*time.Millisecond, .1, 30*time.Second
+					if kind == TypeSmart {
+						wantDwell = 20 * time.Second
+					}
 					if len(c.priority) != 1 || c.priority[0] != 1 {
 						t.Fatal("new member weight is not one", c.priority)
 					}
@@ -98,15 +101,16 @@ func TestPolicyDefaultGateRetainsConfirmationAndDwell(t *testing.T) {
 		if pair(since) || q.wins != 1 {
 			t.Fatal(kind, "one fluctuation promoted", q)
 		}
-		if pair(since.Add(29*time.Second)) || q.wins != 2 {
-			t.Fatal(kind, "confirmation bypassed 30s dwell", q)
+		dwell := g.cfg.dwell
+		if pair(since.Add(dwell-time.Second)) || q.wins != 2 {
+			t.Fatal(kind, "confirmation bypassed dwell", q)
 		}
 		for range 10 {
-			if g.gateLocked(&q, 0, 1, 300, 260, true, since, since.Add(29*time.Second), q.currentAt, q.bestAt) || q.wins != 2 {
+			if g.gateLocked(&q, 0, 1, 300, 260, true, since, since.Add(dwell-time.Second), q.currentAt, q.bestAt) || q.wins != 2 {
 				t.Fatal(kind, "duplicate evidence counted", q)
 			}
 		}
-		if !pair(since.Add(30 * time.Second)) {
+		if !pair(since.Add(dwell)) {
 			t.Fatal(kind, "approved default improvement did not pass after dwell", q)
 		}
 	}

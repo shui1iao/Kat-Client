@@ -82,14 +82,8 @@ func TestR10StartupRetryNotForServerOrSuccessOrManual(t *testing.T) {
 				waitRounds(t, g, 1)
 			}
 			if mode == "server" {
-				clk.Advance(5*time.Second - time.Nanosecond)
-				if g.roundsRun.Load() != 1 {
-					t.Fatal("confirmation before 5s")
-				}
-				clk.Advance(time.Nanosecond)
-				waitRounds(t, g, 2)
-				if !g.st[0].recovery.down {
-					t.Fatal("independent second failure not applied")
+				if g.st[0].probeOK || !g.st[0].probed {
+					t.Fatal("server fallback probe failure not recorded")
 				}
 			}
 			before := g.roundsRun.Load()

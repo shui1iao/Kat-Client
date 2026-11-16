@@ -67,40 +67,20 @@ func TestV2StableMedianAndIndependentRounds(t *testing.T) {
 		g, c := v2Group(t, kind)
 		v2Round(g, c, 300*ms_, 400*ms_)
 		c.Advance(time.Minute)
-		// One spectacularly low sample, then repeated reads, cannot promote.
 		v2Round(g, c, 300*ms_, time.Millisecond)
-		for range 100 {
-			g.Current()
-			g.Snapshot()
+		if kind == TypeURLTest && g.Current() != "b" {
+			t.Fatal("url-test did not switch immediately when faster beyond tolerance")
 		}
-		if g.Current() != "a" {
-			t.Fatal(kind, "one sample promoted")
-		}
-		v2Round(g, c, 300*ms_, 200*ms_)
-		wantWins := 1
-		if kind == TypeSmart {
-			wantWins = 0
-		} // probes are not business evidence
-		if g.Current() != "a" || g.gate.wins != wantWins {
-			t.Fatal(kind, "mature challenge round one", g.gate)
-		}
-		same := []ProbeSample{{Name: "a", Latency: 300 * ms_, At: c.Now()}, {Name: "b", Latency: 200 * ms_, At: c.Now()}}
-		g.RecordProbeRound(same)
-		if g.gate.wins != wantWins {
-			t.Fatal("duplicate timestamp counted")
-		}
-		c.Advance(time.Second)
-		g.RecordProbe("b", 200*ms_, c.Now(), nil)
-		if g.Current() != "a" || g.gate.wins != wantWins {
-			t.Fatal("single node bypassed gate")
+		if kind == TypeSmart && g.Current() != "a" {
+			t.Fatal("smart promoted on single unconfirmed probe spike")
 		}
 		v2Round(g, c, 300*ms_, 200*ms_)
-		want := "b"
-		if kind == TypeSmart {
-			want = "a"
+		if kind == TypeSmart && g.Current() != "a" {
+			t.Fatal("smart promoted on first win before 2nd confirmation")
 		}
-		if g.Current() != want {
-			t.Fatal(kind, "probe-only selection", g.gate)
+		v2Round(g, c, 300*ms_, 200*ms_)
+		if g.Current() != "b" {
+			t.Fatal(kind, "confirmed sustained faster probe did not select b", g.Current())
 		}
 	}
 }
@@ -174,17 +154,17 @@ func TestV2FailureImmediateAndRecoveryHysteresis(t *testing.T) {
 			v2Round(g, c, 100*ms_, 300*ms_)
 			c.Advance(time.Second)
 			g.RecordProbe("a", 0, c.Now(), errors.New("down"))
-			if kind == TypeFallback {
-				if g.Current() != "a" {
-					t.Fatal("partial sample convicted fallback")
-				}
-				acceptedFallbackFailure(t, g, c, "a")
-			}
 			if kind != TypeLoadBalance && g.Current() != "b" {
 				t.Fatal(kind, "not immediate", g.Current())
 			}
 			c.Advance(time.Second)
 			g.RecordProbe("a", 100*ms_, c.Now(), nil)
+			if kind == TypeFallback || kind == TypeURLTest {
+				if !g.fallbackUpTest(0) || g.Current() != "a" {
+					t.Fatal(kind, "single probe success did not recover immediately")
+				}
+				return
+			}
 			if g.fallbackUpTest(0) {
 				t.Fatal(kind, "one success recovered")
 			}
@@ -196,12 +176,6 @@ func TestV2FailureImmediateAndRecoveryHysteresis(t *testing.T) {
 			c.Advance(5 * time.Second)
 			if !g.fallbackUpTest(0) {
 				t.Fatal(kind, "recovery not eligible")
-			}
-			if kind == TypeFallback && g.Current() != "a" {
-				t.Fatal("fallback order not restored")
-			}
-			if (kind == TypeSmart || kind == TypeURLTest) && g.Current() != "b" {
-				t.Fatal("health recovery bypassed performance dwell")
 			}
 		})
 	}
@@ -706,7 +680,7 @@ func TestV2NestedProbeDoesNotLearnSitesOrRealSamples(t *testing.T) {
 func TestV2InFlightOldProbeCannotEraseNewRealFailure(t *testing.T) {
 	c := newFakeClock()
 	p := newFakeProbe(map[string]time.Duration{"a": time.Millisecond})
-	g := newAuto(t, Options{Type: TypeFallback}, members(newFake("a")), c, p, nil)
+	g := newAuto(t, Options{Type: TypeLoadBalance, MaxFailedTimes: 2}, members(newFake("a")), c, p, nil)
 	sample := g.measuredProbe(context.Background(), 0)
 	g.realFailure(0, "x.example", false)
 	g.realFailure(0, "x.example", false)
@@ -719,7 +693,7 @@ func TestV2InFlightOldProbeCannotEraseNewRealFailure(t *testing.T) {
 }
 func TestV2RecoveryEpochClearsPenaltyAndRepeatedCooldown(t *testing.T) {
 	g, c := v2Group(t, TypeSmart)
-	for count, want := range []time.Duration{30, 60, 120, 300, 300} {
+	for count, want := range []time.Duration{20, 45, 90, 180, 180} {
 		g.mu.Lock()
 		g.smartFailLocked(0, c.Now())
 		until := g.st[0].openUntil

@@ -496,25 +496,34 @@ func extractFromSingleCandidate(p string) string {
 	if p == "" {
 		return ""
 	}
-	lower := strings.ToLower(p)
-	// 1. Microsoft Store / MSIX package with AppxManifest.xml -> direct transparent PNG
-	if strings.Contains(lower, `\windowsapps\`) {
-		if uri := extractMSIXLogoFromPath(p); uri != "" {
-			return uri
+	isWinApps := strings.Contains(strings.ToLower(p), `\windowsapps\`)
+	var whiteFallback string
+	accept := func(uri string) bool {
+		if uri == "" {
+			return false
 		}
+		if isPureWhitePNGDataURI(uri) {
+			if whiteFallback == "" {
+				whiteFallback = uri
+			}
+			return false
+		}
+		return true
 	}
-	// 2. Pure-Go direct PE .rsrc extraction (PNG & DIB resources)
-	if uri := extractPEIconDataURI(p); uri != "" {
+
+	// 1. Direct PE .rsrc embedded icon (exact tray/window .ico embedded in Codex.exe / ChatGPT.exe / desktop apps)
+	if uri := extractPEIconDataURI(p); accept(uri) {
 		return uri
 	}
-	// 3. Non-WindowsApps packaged app manifest check
-	if !strings.Contains(lower, `\windowsapps\`) {
-		if uri := extractMSIXLogoFromPath(p); uri != "" {
-			return uri
-		}
+	// 2. MSIX AppxManifest logo (prefers altform-lightunplated / plated scale-200, skips dark-taskbar white unplated)
+	if uri := extractMSIXLogoFromPath(p); accept(uri) {
+		return uri
 	}
-	// 4. Win32 PrivateExtractIconsW (plus SHGetFileInfoW ONLY for WindowsApps aliases)
-	return extractWin32GDIIconDataURI(p, strings.Contains(lower, `\windowsapps\`))
+	// 3. Win32 PrivateExtractIconsW (plus SHGetFileInfoW for WindowsApps execution aliases)
+	if uri := extractWin32GDIIconDataURI(p, isWinApps); accept(uri) {
+		return uri
+	}
+	return whiteFallback
 }
 
 func extractProcessIconDataURI(exePath string, procName string) string {

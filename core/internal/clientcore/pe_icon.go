@@ -76,6 +76,9 @@ func downscaleImage64(src image.Image) image.Image {
 			}
 			// RGBA() is alpha-premultiplied in [0..65535]; unpremultiply back to NRGBA
 			avgA := sa / cnt
+			if avgA == 0 {
+				continue
+			}
 			r8 := uint8(min(255, ((sr/cnt)*255+(avgA/2))/avgA))
 			g8 := uint8(min(255, ((sg/cnt)*255+(avgA/2))/avgA))
 			b8 := uint8(min(255, ((sb/cnt)*255+(avgA/2))/avgA))
@@ -94,9 +97,6 @@ func decodeRTIconBlobToPNG(raw []byte) ([]byte, bool) {
 	if bytes.HasPrefix(raw, []byte("\x89PNG\r\n\x1a\n")) {
 		img, err := png.Decode(bytes.NewReader(raw))
 		if err != nil {
-			if len(raw) <= maxIconBytes {
-				return raw, true
-			}
 			return nil, false
 		}
 		if img.Bounds().Dx() <= 96 && img.Bounds().Dy() <= 96 && len(raw) <= maxIconBytes {
@@ -399,8 +399,122 @@ func extractPEIconDataURI(exePath string) string {
 	return ""
 }
 
+// isPureWhiteOnTransparentImage detects monochrome pure-white-on-transparent icons
+// (such as Windows 11 MSIX `altform-unplated` assets meant exclusively for dark taskbars)
+// that become invisible on light UI cards.
+func isPureWhiteOnTransparentImage(img image.Image) bool {
+	if img == nil {
+		return false
+	}
+	b := img.Bounds()
+	total := b.Dx() * b.Dy()
+	if total <= 0 {
+		return false
+	}
+	var transparent, visible, pureWhite int
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			r, g, bl, a := img.At(x, y).RGBA()
+			a8 := a >> 8
+			if a8 < 32 {
+				transparent++
+				continue
+			}
+			if a8 >= 64 {
+				visible++
+				// Unpremultiply RGBA [0..65535] -> [0..255]
+				r8 := (r * 255) / a
+				g8 := (g * 255) / a
+				b8 := (bl * 255) / a
+				if r8 >= 232 && g8 >= 232 && b8 >= 232 {
+					pureWhite++
+				}
+			}
+		}
+	}
+	if visible == 0 || transparent*10 < total { // solid opaque background (like white rounded tile with black logo) is NOT transparent-white!
+		return false
+	}
+	return pureWhite*100 >= visible*92
+}
+
+func isPureWhitePNGDataURI(uri string) bool {
+	const prefix = "data:image/png;base64,"
+	if !strings.HasPrefix(uri, prefix) {
+		return false
+	}
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(uri, prefix))
+	if err != nil || len(raw) == 0 {
+		return false
+	}
+	img, err := png.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return false
+	}
+	return isPureWhiteOnTransparentImage(img)
+}
+
+func scoreMSIXAssetFilename(stemLower, fileNameLower string) int {
+	ext := filepath.Ext(fileNameLower)
+	if ext != ".png" && ext != ".ico" && ext != ".jpg" && ext != ".jpeg" {
+		return -1
+	}
+	if fileNameLower != stemLower+ext && !strings.HasPrefix(fileNameLower, stemLower+".") {
+		return -1
+	}
+	qual := strings.TrimSuffix(strings.TrimPrefix(fileNameLower, stemLower), ext)
+	// Reject Windows High-Contrast accessibility overrides (black/white inverted blocks)
+	if strings.Contains(qual, "contrast-") {
+		return -1
+	}
+
+	isLightUnplated := strings.Contains(qual, "altform-lightunplated") || strings.Contains(qual, "theme-light")
+	isDarkUnplated := !isLightUnplated && (strings.Contains(qual, "altform-unplated") || strings.Contains(qual, "theme-dark"))
+
+	score := 0
+	switch {
+	case isLightUnplated:
+		// Explicit light-mode unplated glyph (e.g. black ChatGPT blossom on transparent background)
+		score = 40000
+	case !isDarkUnplated && (qual == "" || strings.Contains(qual, "scale-")):
+		// Standard plated / base app icon (matches Windows Start Menu / App Settings)
+		score = 30000
+	case !isDarkUnplated:
+		// Plain targetsize without dark-taskbar unplated override
+		score = 20000
+	default:
+		// Dark-taskbar unplated asset (often pure white on transparent) — lowest priority
+		score = 1000
+	}
+
+	// Prefer crisp mid-high resolutions (44..128 / scale-200)
+	for _, bonus := range []struct {
+		tok string
+		pts int
+	}{
+		{"targetsize-64", 600},
+		{"targetsize-48", 580},
+		{"targetsize-44", 560},
+		{"targetsize-96", 540},
+		{"targetsize-128", 520},
+		{"targetsize-256", 500},
+		{"targetsize-32", 450},
+		{"scale-200", 600},
+		{"scale-150", 550},
+		{"scale-125", 500},
+		{"scale-100", 450},
+	} {
+		if strings.Contains(qual, bonus.tok) {
+			score += bonus.pts
+			break
+		}
+	}
+	return score
+}
+
 // extractMSIXLogoFromPath locates AppxManifest.xml for Microsoft Store / MSIX / WindowsApps
-// binaries (or packaged apps) and extracts the highest-quality transparent PNG asset.
+// binaries (or packaged apps) and extracts the highest-quality visible PNG asset, avoiding
+// dark-taskbar-only pure-white `altform-unplated` variants.
 func extractMSIXLogoFromPath(exePath string) string {
 	dir := filepath.Dir(exePath)
 	var manifestPath, pkgRoot string
@@ -422,7 +536,6 @@ func extractMSIXLogoFromPath(exePath string) string {
 	}
 	xmlStr := string(rawXML)
 	var relLogos []string
-	// Extract Square44x44Logo, Square150x150Logo, and <Logo>...</Logo>
 	for _, attr := range []string{`Square44x44Logo="`, `Square150x150Logo="`, `Logo="`} {
 		if idx := strings.Index(xmlStr, attr); idx >= 0 {
 			rest := xmlStr[idx+len(attr):]
@@ -438,53 +551,92 @@ func extractMSIXLogoFromPath(exePath string) string {
 		}
 	}
 
-	seen := map[string]bool{}
-	var candidates []string
-	addCand := func(p string) {
-		clean := filepath.Clean(p)
-		if !strings.HasPrefix(strings.ToLower(clean), strings.ToLower(pkgRoot)) {
-			return
-		}
-		if !seen[clean] {
-			seen[clean] = true
-			candidates = append(candidates, clean)
-		}
+	type scoredFile struct {
+		path  string
+		score int
 	}
-	for _, rel := range relLogos {
+	seen := map[string]bool{}
+	var candidates []scoredFile
+	pkgRootLower := strings.ToLower(filepath.Clean(pkgRoot))
+	pkgRootPrefix := pkgRootLower
+	if !strings.HasSuffix(pkgRootPrefix, string(filepath.Separator)) {
+		pkgRootPrefix += string(filepath.Separator)
+	}
+
+	for orderIdx, rel := range relLogos {
 		relOS := filepath.FromSlash(strings.ReplaceAll(rel, `\`, "/"))
-		full := filepath.Join(pkgRoot, relOS)
-		ext := filepath.Ext(full)
-		stem := strings.TrimSuffix(full, ext)
-		for _, suffix := range []string{
-			".targetsize-64_altform-unplated.png",
-			".targetsize-48_altform-unplated.png",
-			".targetsize-256_altform-unplated.png",
-			".targetsize-64.png",
-			".targetsize-48.png",
-			".scale-200" + ext,
-			".scale-150" + ext,
-			".scale-125" + ext,
-			".scale-100" + ext,
-			ext,
-		} {
-			addCand(stem + suffix)
+		full := filepath.Clean(filepath.Join(pkgRoot, relOS))
+		if !strings.HasPrefix(strings.ToLower(full), pkgRootPrefix) {
+			continue
+		}
+		assetDir := filepath.Dir(full)
+		baseFile := filepath.Base(full)
+		stemLower := strings.ToLower(strings.TrimSuffix(baseFile, filepath.Ext(baseFile)))
+		orderBias := (10 - min(orderIdx, 9)) * 10
+
+		if entries, err := os.ReadDir(assetDir); err == nil {
+			for _, ent := range entries {
+				if ent.IsDir() {
+					continue
+				}
+				sc := scoreMSIXAssetFilename(stemLower, strings.ToLower(ent.Name()))
+				if sc < 0 {
+					continue
+				}
+				candPath := filepath.Join(assetDir, ent.Name())
+				if !seen[candPath] {
+					seen[candPath] = true
+					candidates = append(candidates, scoredFile{path: candPath, score: sc + orderBias})
+				}
+			}
+		}
+		if !seen[full] {
+			seen[full] = true
+			candidates = append(candidates, scoredFile{path: full, score: 25000 + orderBias})
 		}
 	}
 
-	for _, c := range candidates {
-		b, err := os.ReadFile(c)
-		if err != nil || len(b) == 0 || len(b) > 2<<20 {
-			continue
-		}
-		if pngBytes, ok := decodeRTIconBlobToPNG(b); ok {
-			return "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngBytes)
-		}
-		if img, _, err := image.Decode(bytes.NewReader(b)); err == nil {
-			var out bytes.Buffer
-			if err := png.Encode(&out, downscaleImage64(img)); err == nil && out.Len() > 0 && out.Len() <= maxIconBytes {
-				return "data:image/png;base64," + base64.StdEncoding.EncodeToString(out.Bytes())
+	for i := 0; i < len(candidates); i++ {
+		for j := i + 1; j < len(candidates); j++ {
+			if candidates[j].score > candidates[i].score {
+				candidates[i], candidates[j] = candidates[j], candidates[i]
 			}
 		}
 	}
-	return ""
+
+	var whiteFallback string
+	for _, c := range candidates {
+		b, err := os.ReadFile(c.path)
+		if err != nil || len(b) == 0 || len(b) > 2<<20 {
+			continue
+		}
+		var img image.Image
+		if decoded, _, derr := image.Decode(bytes.NewReader(b)); derr == nil {
+			img = decoded
+		}
+		var encoded []byte
+		if pngBytes, ok := decodeRTIconBlobToPNG(b); ok {
+			encoded = pngBytes
+			if img == nil {
+				img, _ = png.Decode(bytes.NewReader(pngBytes))
+			}
+		} else if img != nil {
+			var out bytes.Buffer
+			if err := png.Encode(&out, downscaleImage64(img)); err == nil && out.Len() > 0 && out.Len() <= maxIconBytes {
+				encoded = out.Bytes()
+			}
+		}
+		if len(encoded) == 0 {
+			continue
+		}
+		uri := "data:image/png;base64," + base64.StdEncoding.EncodeToString(encoded)
+		if img != nil && isPureWhiteOnTransparentImage(img) {
+			if whiteFallback == "" {
+				whiteFallback = uri
+			}
+			continue
+		}
+		return uri
+	}
+	return whiteFallback
 }

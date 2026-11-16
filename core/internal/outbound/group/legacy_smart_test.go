@@ -96,17 +96,11 @@ func TestNoSmartFallbackFixedRemainsHealthyFirst(t *testing.T) {
 	}
 	c.Advance(time.Second)
 	g.RecordProbe("b", 0, c.Now(), errors.New("down"))
-	if g.Current() != "b" {
-		t.Fatal("partial sample changed fixed preference")
-	}
-	acceptedFallbackFailure(t, g, c, "b")
 	if g.Current() != "a" || g.Snapshot().Fixed != "b" {
 		t.Fatal("soft fixed lost")
 	}
-	for _, d := range []time.Duration{time.Second, 5 * time.Second, 5 * time.Second} {
-		c.Advance(d)
-		g.RecordProbe("b", 30*time.Millisecond, c.Now(), nil)
-	}
+	c.Advance(time.Second)
+	g.RecordProbe("b", 30*time.Millisecond, c.Now(), nil)
 	if g.Current() != "b" {
 		t.Fatal("fixed did not recover")
 	}

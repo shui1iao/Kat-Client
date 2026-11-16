@@ -1,18 +1,21 @@
-# Kat-Client v0.2.17 / Windows Core v0.8.11
+# Kat-Client v0.2.18 / Windows Core v0.8.12
 
-本版为 Windows x64 客户端与内置 Windows Core 正式发布版（统一更新 sequence `1794754500`）。Linux Server v0.8.1 保持不变。
+本版为 Windows x64 客户端与内置 Windows Core 发布版（统一更新 sequence `1794849000`）。Linux Server v0.8.1 保持不变。
 
-## 本版更新（应用、网站与域名图标全覆盖增强）
-- **Windows 本地应用图标全链路修复与子进程/商店应用覆盖**：
-  - 新增**纯 Go PE `.rsrc` 图标直读引擎**（直接解析本地 `.exe / .dll` 内嵌 PNG 及 32/24/8/4/1 位 DIB 图标）与**标准 `40` 字节 `BITMAPINFOHEADER` Win32 GDI 内存 DC 提取器**，彻底修复本地应用（如 `Telegram.exe`、`chrome.exe` 等）无法提取原生图标的问题；
-  - 支持**微软商店 MSIX / `WindowsApps` 打包应用**直接解析 `AppxManifest.xml` 高清透明 PNG 图标，支持常见辅助子进程（如 `WeChatAppEx.exe`、`steamwebhelper.exe`、`msedgewebview2.exe` 等）自动归属主程序图标，支持系统服务进程（`System`、`svchost.exe`、`MsMpEng.exe` 等）现代图标映射与进程名自动补全路径，并对无图标纯命令行程序过滤老式白框默认图标；
-  - 彻底移除 `<ProcessIcon>` 的网站图标兜底，确保 `Chrome` 等进程列只展示真实应用图标而不再被网页图标冒充，并将本地进程图标与网络站点图标拆分为独立并发队列。
-- **网站 / 域名 / 子域 / 纯 IP 图标大幅扩充与并发竞速**：
-  - 内置品牌与 CDN 映射库扩充至 **220+ 项**，新增基础设施技术子域（`api.*`、`cdn.*`、`static.*`、`img.*`、`ws.*`、`gw.*` 等）自动归一主域名，同时保留独立业务子域（如自建子站）优先展示自身独立图标；
-  - 新增**「高清公共 Favicon 源 + 目标站直连」并发竞速**，在代理模式下毫秒级绕过 Cloudflare 403，在直连模式下零超时等待；HTML `<head>` 扫描提升至 512 个 `<link>`（256 KiB），并新增内联 `data:image`（SVG/PNG）与 PWA `manifest.webmanifest` 图标解析；
-  - 新增**浏览器内置加密 DoH 场景下的 `SNI 域名 ↔ 目标 IP` 实时反哺映射**，并对多租户共享 CDN（`akamaiedge.net`、`cloudfront.net`、`fastly.net` 等）联动目标 IP 与 `RULE-SET` 规则集精准识别真实服务图标；
-  - 新增已缓存域名与进程图标的**启动 0 帧预热（`icon.cached`）**与前端同域名请求合并去重，切换页面即刻显示零闪烁。
+## 本版更新（策略组选路优化：对齐 Sparkle / Mihomo 体验）
+- **Fallback 故障转移策略重构（对齐 Sparkle / Mihomo 语义）**：
+  - 选路严格遵循健康测速存活状态（`URLTest` 未超时即视为存活），移除因单连接读写波动直接将顺位靠前的高延迟节点判死切走的逻辑，高延迟节点只要连通正常便稳定保持第一顺位；
+  - 拨号异常采用带 `probe.timeout`（默认 5 秒）滑动窗口的计数机制（默认连续 5 次或代理端口拒绝连接），达到阈值时仅触发即时健康重测确认，不绕过测速直接切换；
+  - 移除切回多轮 10 秒冷却门槛，排在前面的优选节点或嵌套子组一旦测速恢复立即秒切回原顺位，并在降级期间自动执行退避恢复探测。
+- **URLTest 自动测速解锁（对齐 Mihomo 即时响应）**：
+  - 默认（未显式配置 `damping` 时）去除 3 轮中位数成熟度、双轮确认与 30 秒驻留限制：只要更快节点优于当前节点超过 `tolerance`（默认 `20ms` 或订阅设定值），单轮定时测速或手动点击一次测速即刻切换，同时保留 `tolerance` 过滤微小抖动。
+- **Smart 智能策略防锁死优化（稳态平衡调优）**：
+  - 保留真实业务响应主导权重（上限 `75%–80%`）与 3 轮测速中位数 + 双轮确认 + `20s` 最短驻留防抖，已积累真实访问样本的活跃站点不会被普通后台测速覆盖；
+  - 解开闲置候选节点参选死锁：完成至少 2 轮有效测速的健康闲置节点可参与比选，连续 2 轮确认领先当前节点超过 `35ms` 且幅度 `≥ 20%`（满 `20s` 驻留）时允许晋升切换；慢速自动试探阈值调为 `1.8x / +160ms`，故障退避调为 `20s / 45s / 90s / 180s`。
 
-## 既有能力与验证边界
-- 保留独立「DNS」监控与管理页、独立 Sparkle 风格更新说明弹窗、TUN 混合 ICMP 入口、托盘菜单预热秒弹、概览 `3×2` 流量面板及「连接」页按进程归类展开等全部既有能力。
-- 本轮离线 Go（8 包全过）、Rust（268+11）、Chromium 全页面实机渲染门禁、产品 `verify_package` 与在线升级 `verify` 门禁全部通过，详见 `VALIDATION.md`。Ed25519 签名为产品包身份验证，非 Windows Authenticode 证书签名。Kat 自研代码 source-available、保留所有权利，非 MIT；第三方原许可保留，见 `RIGHTS.md`。
+- **微软商店（MSIX / WindowsApps）本地进程图标修复**：
+  - 优先提取可执行文件自身内嵌图标（与系统托盘一致），并按微软资源限定符优先匹配 `altform-lightunplated` / 标准带底色 `scale-*` / `StoreLogo`，将深色任务栏专用的 `altform-unplated` 降为末位兜底；
+  - 新增透明底纯白图标像素检测（`isPureWhiteOnTransparentImage`），自动跳过浅色界面不可见的纯白透明变体，确保 ChatGPT / Codex 等商店版应用在「连接」页正常显示黑色/彩色原图标。
+
+## 既有能力与边界
+- 保留全场景本地应用/子进程/商店图标与网站/CDN/DoH-IP 图标引擎、独立「DNS」监控与管理页、Sparkle 风格更新说明弹窗、TUN 混合 ICMP 入口等全部既有能力。Ed25519 签名为产品包身份验证，非 Windows Authenticode 证书签名。Kat 自研代码 source-available、保留所有权利，非 MIT；第三方原许可保留，见 `RIGHTS.md`。

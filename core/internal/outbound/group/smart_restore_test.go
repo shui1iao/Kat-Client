@@ -88,36 +88,13 @@ func TestSmartRestorePreservesFallbackIndependentRounds(t *testing.T) {
 				t.Fatal("latency overrode order")
 			}
 			failure := errors.New("independent round")
-			for n := 1; n <= limit; n++ {
-				round(failure)
-				want := "a"
-				if n == limit {
-					want = "b"
-				}
-				if g.Current() != want {
-					t.Fatal("wrong confirmation threshold", n, g.Current())
-				}
-				g.RecordProbeRound([]ProbeSample{{Name: "a", At: clk.Now(), Err: failure}, {Name: "b", At: clk.Now(), Latency: time.Millisecond}})
-				for range 8 {
-					g.Snapshot()
-					g.Current()
-				}
-				if g.Current() != want {
-					t.Fatal("duplicate or reads added evidence")
-				}
+			round(failure)
+			if g.Current() != "b" {
+				t.Fatal("failed probe did not switch fallback", g.Current())
 			}
 			round(nil)
-			if g.Current() != "b" {
-				t.Fatal("recovered on one success")
-			}
-			clk.Advance(5 * time.Second)
-			round(nil)
-			if g.Current() != "b" {
-				t.Fatal("recovered before hold")
-			}
-			clk.Advance(5 * time.Second)
 			if g.Current() != "a" {
-				t.Fatal("ordered recovery missing")
+				t.Fatal("successful probe did not restore fallback immediately")
 			}
 		})
 	}

@@ -286,8 +286,8 @@ func TestURLTestRefusalNotImmediate(t *testing.T) {
 				t.Fatal(err)
 			}
 			waitRounds(t, g, 2)
-			if len(switches(ev)) != 1 { // confirmed real failure avoids immediately; recovery is gated
-				t.Fatalf("switches %v", switches(ev))
+			if len(switches(ev)) != 0 || g.Current() != a.Name() {
+				t.Fatalf("healthy proxy switched on destination refusal: switches %v current %q", switches(ev), g.Current())
 			}
 		})
 	}
@@ -322,7 +322,7 @@ func TestURLTestWriteThenCloseNotImmediate(t *testing.T) {
 	}
 }
 
-// fallback keeps its consecutive-failure rule: a refusal is one failure.
+// fallback triggers an immediate health check on server refusal (mihomo style).
 func TestFallbackServerRefusedUnchanged(t *testing.T) {
 	a, b := socksOut(t, "a", closedPort(t), direct.New(direct.Options{})), newFake("b")
 	clk := newFakeClock()
@@ -330,14 +330,12 @@ func TestFallbackServerRefusedUnchanged(t *testing.T) {
 	g := newAuto(t, Options{Type: TypeFallback}, members(a, b), clk, p, nil)
 	g.Start(context.Background())
 	probeNow(t, g)
+	p.set("a", 0, true)
+	clk.Advance(time.Second)
 	dialTo(g, outbound.Addr{Host: "x.test", Port: 443})
-	time.Sleep(20 * ms_)
-	if g.Current() != "a" || g.roundsRun.Load() != 1 {
-		t.Fatalf("after one refusal: current %q rounds %d", g.Current(), g.roundsRun.Load())
-	}
-	dialTo(g, outbound.Addr{Host: "x.test", Port: 443})
-	if g.Current() != "b" || g.roundsRun.Load() != 1 {
-		t.Fatalf("after two refusals: current %q rounds %d", g.Current(), g.roundsRun.Load())
+	waitRounds(t, g, 2)
+	if g.Current() != "b" {
+		t.Fatalf("after server refusal + failed health check: current %q, want b", g.Current())
 	}
 }
 

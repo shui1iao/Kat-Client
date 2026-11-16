@@ -73,6 +73,10 @@ func (g *autoGroup) scheduleRecoveryLocked(i int, now time.Time) {
 			}
 			// Do not convict a healthy member from a stale verification.
 			if r.Err != nil && !g.st[i].recovery.down && (g.cfg.kind != TypeSmart || g.suspectCountLocked(i, g.clk.Now()) < 2) {
+				if g.cfg.kind != TypeSmart && (!g.st[i].probed || g.st[i].probeOK) {
+					g.st[i].recoveryStep = 0
+					return
+				}
 				g.st[i].recoveryStep++
 				g.scheduleRecoveryLocked(i, g.clk.Now())
 				return

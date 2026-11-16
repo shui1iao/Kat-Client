@@ -32,25 +32,29 @@ func TestFallbackFirstFailsUsesSecond(t *testing.T) {
 	g.Start(context.Background())
 	dial(t, g, "x.test")
 	waitRounds(t, g, 1)
-	if g.Current() != "a" {
-		t.Fatal("single failure round changed selection")
-	}
-	clk.Advance(5 * time.Second)
-	waitRounds(t, g, 2)
 	if g.Current() != "b" || dial(t, g, "x.test") != "b" {
 		t.Fatalf("a failed its probe: current %q, want b", g.Current())
 	}
-	// real dial failures on b (probe still fine): after 2 in a row, c takes over
+	// Sparkle/mihomo semantics: transient dial failures while probe is still OK
+	// do NOT convict b; only when health check also fails does c take over.
 	b.setErr(errors.New("refused"))
-	if got := dial(t, g, "x.test"); got != "c" { // retried on c; one failure keeps b
-		t.Fatalf("retry via %q", got)
+	for range 5 {
+		if got := dial(t, g, "x.test"); got != "c" {
+			t.Fatalf("retry via %q", got)
+		}
 	}
+	waitRounds(t, g, 2)
 	if g.Current() != "b" {
-		t.Fatalf("one failure switched to %q", g.Current())
+		t.Fatalf("healthy probe was overridden by transient dial errors: %q", g.Current())
 	}
-	dial(t, g, "x.test")
+	p.set("b", 0, true)
+	clk.Advance(time.Second)
+	for range 5 {
+		dial(t, g, "x.test")
+	}
+	waitRounds(t, g, 3)
 	if g.Current() != "c" {
-		t.Fatalf("two consecutive real failures: current %q, want c", g.Current())
+		t.Fatalf("failed health check after dial failures: current %q, want c", g.Current())
 	}
 	if sw := switches(ev); len(sw) != 2 || sw[0] != "a>b" || sw[1] != "b>c" {
 		t.Fatalf("switches %v", sw)
@@ -67,51 +71,20 @@ func TestFallbackSwitchesBackWhenFirstRecovers(t *testing.T) {
 	g.Start(context.Background())
 	dial(t, g, "x.test")
 	waitRounds(t, g, 1)
-	if g.Current() != "a" {
-		t.Fatal("single failure round changed selection")
-	}
-	clk.Advance(5 * time.Second)
-	waitRounds(t, g, 2)
 	if g.Current() != "b" {
 		t.Fatalf("current %q", g.Current())
 	}
-	p.set("a", 10*ms_, false) // a recovers; next (lazy) round notices
+	p.set("a", 10*ms_, false) // a recovers; a single probe immediately restores order
 	clk.Advance(11 * time.Minute)
 	if got := dial(t, g, "x.test"); got != "b" { // round runs in background
 		t.Fatalf("dial via %q", got)
 	}
-	waitRounds(t, g, 3)
-	if g.Current() != "b" {
-		t.Fatal("single success bypassed recovery")
-	}
-	clk.Advance(5 * time.Second)
-	probeNow(t, g)
-	clk.Advance(5 * time.Second)
+	waitRounds(t, g, 2)
 	if g.Current() != "a" || dial(t, g, "x.test") != "a" {
-		t.Fatalf("did not switch back to a: %q", g.Current())
+		t.Fatalf("did not switch back to a immediately on probe success: %q", g.Current())
 	}
 	if sw := switches(ev); len(sw) != 2 || sw[1] != "b>a" {
 		t.Fatalf("switches %v", sw)
-	}
-
-	// recovery after real failures: a probe success brings the member back
-	a.setErr(errors.New("refused"))
-	p.set("a", 0, true)
-	dial(t, g, "x.test")
-	dial(t, g, "x.test")
-	if g.Current() != "b" {
-		t.Fatalf("a failed twice: current %q", g.Current())
-	}
-	a.setErr(nil)
-	p.set("a", 10*ms_, false)
-	clk.Advance(11 * time.Minute)
-	dial(t, g, "x.test")
-	waitRounds(t, g, 5)
-	clk.Advance(5 * time.Second)
-	probeNow(t, g)
-	clk.Advance(5 * time.Second)
-	if g.Current() != "a" {
-		t.Fatalf("a probe-recovered but current %q", g.Current())
 	}
 }
 
@@ -126,5 +99,54 @@ func TestFallbackAllDownUsesFirst(t *testing.T) {
 	waitRounds(t, g, 1)
 	if g.Current() != "a" || dial(t, g, "x.test") != "a" {
 		t.Fatalf("all down: current %q, want first member a", g.Current())
+	}
+}
+
+func TestFallbackConcurrentFailuresDoNotInvalidateInFlightProbe(t *testing.T) {
+	for _, clientHead := range []bool{false, true} {
+		t.Run(map[bool]string{false: "server", true: "desktop"}[clientHead], func(t *testing.T) {
+			clk := newFakeClock()
+			a, b := newFake("a"), newFake("b")
+			p := newFakeProbe(map[string]time.Duration{"a": 10 * ms_, "b": 20 * ms_})
+			lazy := true
+			g := newAuto(t, Options{Type: TypeFallback, Lazy: &lazy, Probe: &ProbeOptions{URL: "http://probe.test/", ClientHead: clientHead}}, members(a, b), clk, p, nil)
+			g.Start(context.Background())
+			if clientHead {
+				waitRounds(t, g, 1)
+			} else {
+				probeNow(t, g)
+			}
+			if g.Current() != "a" {
+				t.Fatalf("initial current %q, want a", g.Current())
+			}
+			// Make A fail probes and block the probe round mid-flight.
+			p.set("a", 0, true)
+			p.block = make(chan struct{})
+			a.setErr(errors.New("dial timeout"))
+			clk.Advance(time.Second)
+			for range 5 {
+				dial(t, g, "x.test")
+			}
+			deadline := time.Now().Add(time.Second)
+			for !isProbing(g) {
+				if time.Now().After(deadline) {
+					t.Fatal("health check round was not started")
+				}
+				time.Sleep(time.Millisecond)
+			}
+			// While the probe round is in flight, additional business failures occur!
+			clk.Advance(50 * ms_)
+			dial(t, g, "x.test")
+			dial(t, g, "x.test")
+			clk.Advance(50 * ms_)
+			close(p.block)
+			waitRounds(t, g, 2)
+			g.mu.Lock()
+			probed, ok, recPending := g.st[0].probed, g.st[0].probeOK, g.st[0].recoveryStop != nil
+			g.mu.Unlock()
+			if g.Current() != "b" || !probed || ok || !recPending {
+				t.Fatalf("in-flight probe invalidated by concurrent failure: current=%q probed=%v probeOK=%v recoveryPending=%v", g.Current(), probed, ok, recPending)
+			}
+		})
 	}
 }

@@ -153,7 +153,7 @@ func (g *autoGroup) scorePartsLocked(i int, site *siteEntry, now time.Time) (Sco
 	}
 	if n > 0 {
 		p.RealMS = &r
-		p.RealShare = n / (n + 5)
+		p.RealShare = min(0.75, n/(n+5))
 	}
 	_, probeCount := g.medianLocked(i, now)
 	known := n >= 3 || probeCount >= 3
@@ -172,7 +172,7 @@ func (g *autoGroup) scorePartsLocked(i int, site *siteEntry, now time.Time) (Sco
 	if site != nil && g.cfg.scope == "site" {
 		if sr := site.recs[i]; sr != nil {
 			rr, nn, jj := sr.quality.response.value(now)
-			beta := nn / (nn + 5)
+			beta := min(0.80, nn/(nn+5))
 			if nn > 0 {
 				p.ResponseMS = beta*rr + (1-beta)*p.ResponseMS
 				j = beta*jj + (1-beta)*j
@@ -246,8 +246,14 @@ func (g *autoGroup) matureLocked(i int, e *siteEntry, now time.Time) bool {
 			_, n, _ = r.quality.response.value(now)
 		}
 	}
-	// Probe priors inform cost, never business-performance maturity.
-	return n >= 3
+	if g.cfg.hasDamping {
+		return n >= 3
+	}
+	if n >= 3 {
+		return true
+	}
+	_, probeCount := g.medianLocked(i, now)
+	return n == 0 && g.st[i].probed && g.st[i].probeOK && probeCount >= 2
 }
 
 // Only a newly accepted full round may bootstrap. An earlier all-down round
@@ -275,7 +281,19 @@ func (g *autoGroup) smartBootstrapLocked(now time.Time) {
 
 // business is true only while accepting a new real access observation.
 // Probes may bootstrap or change health, but cannot promote performance.
+func (g *autoGroup) smartProbeMarginOKLocked(curCost, bestCost float64) bool {
+	return curCost-bestCost > max(ms(g.cfg.tolerance), 35) && bestCost <= min(1-g.cfg.relative, 0.80)*curCost
+}
+
+func (g *autoGroup) smartProbeReevalLocked(now time.Time) {
+	g.smartReevalInternalLocked(now, false, true)
+}
+
 func (g *autoGroup) smartReevalLocked(now time.Time, business bool) {
+	g.smartReevalInternalLocked(now, business, false)
+}
+
+func (g *autoGroup) smartReevalInternalLocked(now time.Time, business, fromProbe bool) {
 	if g.cold {
 		return
 	}
@@ -289,8 +307,22 @@ func (g *autoGroup) smartReevalLocked(now time.Time, business bool) {
 		g.gate.reset()
 		return
 	}
-	if g.cold || !business || now.Before(g.freezeUntil) {
+	if g.cold || now.Before(g.freezeUntil) {
 		return
+	}
+	if g.cfg.hasDamping {
+		if !business {
+			return
+		}
+	} else {
+		if !business && !fromProbe {
+			return
+		}
+		if fromProbe && !g.smartProbeMarginOKLocked(score[g.cur], score[b]) {
+			g.gate.reset()
+			g.gate.evidence = g.evidence
+			return
+		}
 	}
 	if g.gateLocked(&g.gate, g.cur, b, score[g.cur], score[b], g.matureLocked(g.cur, nil, now) && g.matureLocked(b, nil, now), g.curSince, now, g.memberEvidenceLocked(g.cur, nil), g.memberEvidenceLocked(b, nil)) {
 		g.switchToLocked(b, now)
@@ -352,10 +384,11 @@ func (g *autoGroup) smartOrderLocked(key string, now time.Time) []int {
 			choice = trial
 			special = true
 		}
-		if !special && !e.stable && g.cfg.exploration > 0 && g.random() < g.cfg.exploration && g.exploring == "" {
+		canExplore := !g.cfg.hasDamping || !e.stable
+		if !special && canExplore && g.cfg.exploration > 0 && g.random() < g.cfg.exploration && g.exploring == "" {
 			best := g.siteScoreLocked(order[0], e, now)
 			for _, i := range order {
-				if i != choice && g.fallbackUpLocked(i) && g.siteScoreLocked(i, e, now) <= 1.15*best+30 {
+				if i != choice && g.fallbackUpLocked(i) && !e.failedRecently(i, now) && g.siteScoreLocked(i, e, now) <= 1.2*best+35 {
 					choice = i
 					g.exploring = key
 					special = true
@@ -428,16 +461,76 @@ func (g *autoGroup) siteReevalLocked(e *siteEntry, now time.Time, business bool)
 		e.gate.reset()
 		return
 	}
-	if business && !now.Before(g.freezeUntil) && g.gateLocked(&e.gate, e.current, best, g.siteScoreLocked(e.current, e, now), g.siteScoreLocked(best, e, now), g.matureLocked(e.current, e, now) && g.matureLocked(best, e, now), e.since, now, g.memberEvidenceLocked(e.current, e), g.memberEvidenceLocked(best, e)) {
+	g.siteFinishReevalLocked(e, best, now, business, false)
+}
+func (g *autoGroup) siteFinishReevalLocked(e *siteEntry, best int, now time.Time, business, fromProbe bool) {
+	if now.Before(g.freezeUntil) {
+		return
+	}
+	if g.cfg.hasDamping {
+		if !business {
+			return
+		}
+	} else {
+		if !business && !fromProbe {
+			return
+		}
+		if fromProbe {
+			// Never let generic probes overwrite a site that has active real-traffic learning.
+			if sr := e.recs[e.current]; sr != nil {
+				if _, nn, _ := sr.quality.response.value(now); nn >= 2 {
+					return
+				}
+			}
+			if !g.smartProbeMarginOKLocked(g.siteScoreLocked(e.current, e, now), g.siteScoreLocked(best, e, now)) {
+				e.gate.reset()
+				e.gate.evidence = g.evidence
+				return
+			}
+		}
+	}
+	if g.gateLocked(&e.gate, e.current, best, g.siteScoreLocked(e.current, e, now), g.siteScoreLocked(best, e, now), g.matureLocked(e.current, e, now) && g.matureLocked(best, e, now), e.since, now, g.memberEvidenceLocked(e.current, e), g.memberEvidenceLocked(best, e)) {
 		e.current = best
 		e.since = now
-		e.stable = true
+		if g.cfg.hasDamping {
+			e.stable = true
+		}
 		e.gate.reset()
 	}
 }
 func (g *autoGroup) reevaluateSitesLocked(now time.Time) {
 	for _, e := range g.sitesElementsLocked() {
 		g.siteReevalLocked(e, now, false)
+	}
+}
+func (g *autoGroup) reevaluateSitesProbeLocked(now time.Time) {
+	if g.cfg.hasDamping {
+		return
+	}
+	for _, e := range g.sitesElementsLocked() {
+		best := e.current
+		candidates := map[int]bool{e.current: true}
+		if order, _ := g.smartRankLocked(now); len(order) > 0 {
+			candidates[order[0]] = true
+		}
+		for i := range e.recs {
+			candidates[i] = true
+		}
+		for i := range candidates {
+			if !g.fallbackUpLocked(i) || e.failedRecently(i, now) {
+				continue
+			}
+			if !g.fallbackUpLocked(best) || e.failedRecently(best, now) || g.siteScoreLocked(i, e, now) < g.siteScoreLocked(best, e, now) {
+				best = i
+			}
+		}
+		if !g.fallbackUpLocked(e.current) || e.failedRecently(e.current, now) {
+			e.current = best
+			e.since = now
+			e.gate.reset()
+			continue
+		}
+		g.siteFinishReevalLocked(e, best, now, false, true)
 	}
 }
 func (g *autoGroup) sitesElementsLocked() []*siteEntry {
@@ -472,11 +565,12 @@ func (g *autoGroup) slowTrialLocked(e *siteEntry, now time.Time, order []int) in
 	} else if p, _, _ := g.scorePartsLocked(e.current, nil, now); p.ProbeMS != nil {
 		reference = *p.ProbeMS
 	}
-	if reference <= 0 || mean <= max(2.5*reference, reference+300) {
+	if reference <= 0 || mean <= max(1.8*reference, reference+160) {
 		return -1
 	}
 	if len(e.tried) >= 3 {
-		e.quietUntil = now.Add(10 * time.Minute)
+		e.tried = map[int]bool{}
+		e.quietUntil = now.Add(5 * time.Minute)
 		return -1
 	}
 	for _, i := range order {
@@ -625,10 +719,17 @@ func (g *autoGroup) memberEvidenceLocked(i int, e *siteEntry) time.Time {
 		return g.st[i].probeAt
 	}
 	if e != nil {
+		var at time.Time
 		if r := e.recs[i]; r != nil {
-			return r.quality.response.at
+			at = r.quality.response.at
 		}
-		return time.Time{}
+		if !g.cfg.hasDamping {
+			return maxTime(at, g.st[i].probeAt)
+		}
+		return at
+	}
+	if !g.cfg.hasDamping {
+		return maxTime(g.st[i].real.response.at, g.st[i].probeAt)
 	}
 	return g.st[i].real.response.at
 }
@@ -649,5 +750,5 @@ func (g *autoGroup) markOpenLocked(i int, now time.Time) {
 }
 
 func circuitBackoff(n int) time.Duration {
-	return []time.Duration{30, 60, 120, 300}[min(max(n-1, 0), 3)] * time.Second
+	return []time.Duration{20, 45, 90, 180}[min(max(n-1, 0), 3)] * time.Second
 }

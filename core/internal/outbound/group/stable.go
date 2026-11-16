@@ -130,7 +130,11 @@ func (g *autoGroup) addProbeLocked(i int, r ProbeSample) {
 		g.scheduleRecoveryLocked(i, r.At)
 	} else {
 		s.consec = 0
+		s.failTimes = nil
 		s.probeFailures = 0
+		if g.cfg.kind == TypeFallback || g.cfg.kind == TypeURLTest {
+			s.recovery = recovery{}
+		}
 		s.probeLat = r.Latency
 		cold := r.ColdLatency
 		if cold <= 0 {
@@ -195,29 +199,9 @@ func (g *autoGroup) acceptSamplesLocked(results []ProbeSample) {
 			if !r.Started.IsZero() && r.Started.Before(s.healthAt) {
 				break
 			}
-			// Fallback health failure requires the configured number of independent
-			// complete rounds. Preserve the last usable state on one-off noise; do
-			// not feed that tentative failure to recovery or the business counter.
-			if g.cfg.kind == TypeFallback {
-				if r.Err == nil {
-					s.probeFailures = 0
-				} else if !s.recovery.down && (!s.probed || s.probeOK) {
-					if !independentFallbackRound {
-						break
-					}
-					s.probeFailures++
-					if s.probeFailures < g.cfg.maxFailed {
-						// Do not fabricate a fresh successful RTT from tentative failure.
-						s.healthAt = r.At
-						s.observationEpoch++
-						accepted[i] = true
-						if r.At.After(now) {
-							now = r.At
-						}
-						g.scheduleFallbackConfirmationLocked()
-						break
-					}
-				}
+			_ = independentFallbackRound
+			if g.cfg.kind == TypeFallback && r.Err == nil {
+				s.probeFailures = 0
 			}
 			g.addProbeLocked(i, r)
 			accepted[i] = true
@@ -230,28 +214,37 @@ func (g *autoGroup) acceptSamplesLocked(results []ProbeSample) {
 	if len(accepted) == 0 {
 		return
 	}
+	bootstrapped := false
 	if len(accepted) == len(g.members) {
 		g.markCompleteLocked()
 		g.hasRound = true
 		if g.cfg.kind == TypeSmart && g.cold {
 			g.smartBootstrapLocked(now)
+			bootstrapped = !g.cold
 		}
 	}
 	g.lastRound = now
 	// A pair must include current and the best challenger. A one-node result
 	// must not manufacture evidence against an old value on the other side.
-	if g.cfg.kind != TypeSmart {
+	if g.cfg.kind != TypeSmart || !g.cfg.hasDamping {
 		g.evidence++
 	}
-	if g.cfg.kind != TypeSmart && len(accepted) < 2 {
+	if (g.cfg.kind != TypeSmart || !g.cfg.hasDamping) && len(accepted) < 2 {
 		g.gate.evidence = g.evidence
 		for _, el := range g.sitesElementsLocked() {
 			el.gate.evidence = g.evidence
 		}
 	}
-	g.reevaluateLocked(now)
-	if g.cfg.kind == TypeSmart {
-		g.reevaluateSitesLocked(now)
+	if !bootstrapped {
+		if g.cfg.kind == TypeSmart && len(accepted) >= 2 {
+			g.smartProbeReevalLocked(now)
+			g.reevaluateSitesProbeLocked(now)
+		} else {
+			g.reevaluateLocked(now)
+			if g.cfg.kind == TypeSmart {
+				g.reevaluateSitesLocked(now)
+			}
+		}
 	}
 	g.scheduleChallengeLocked(now)
 }
@@ -303,7 +296,7 @@ func (g *autoGroup) measuredProbe(ctx context.Context, i int) ProbeSample {
 	return sample
 }
 func (g *autoGroup) challengeCandidateLocked(now time.Time) int {
-	if g.cfg.kind != TypeURLTest {
+	if g.cfg.kind != TypeURLTest || !g.cfg.hasDamping {
 		return -1
 	}
 	cur, best := g.cur, -1

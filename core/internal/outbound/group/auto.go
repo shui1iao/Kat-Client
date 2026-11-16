@@ -399,10 +399,17 @@ func (g *autoGroup) reevaluateLocked(now time.Time) {
 // url-test: switch only when the current member failed its last probe, or the
 // best member is faster by more than the tolerance. If every probe failed the
 // current member is kept.
+func (g *autoGroup) urlTestCostLocked(i int, now time.Time) float64 {
+	if g.cfg.hasDamping {
+		return g.comparisonCostLocked(i, now)
+	}
+	return ms(g.st[i].probeLat) * g.cfg.priority[i]
+}
+
 func (g *autoGroup) urlTestReevalLocked(now time.Time) {
 	best := -1
 	for i, s := range g.st {
-		if s.probeOK && g.fallbackUpLocked(i) && (best < 0 || g.comparisonCostLocked(i, now) < g.comparisonCostLocked(best, now)) {
+		if s.probeOK && g.fallbackUpLocked(i) && (best < 0 || g.urlTestCostLocked(i, now) < g.urlTestCostLocked(best, now)) {
 			best = i
 		}
 	}
@@ -417,12 +424,18 @@ func (g *autoGroup) urlTestReevalLocked(now time.Time) {
 		g.switchToLocked(best, now)
 		return
 	}
-	if !g.fallbackUpLocked(g.cur) {
+	if !g.fallbackUpLocked(g.cur) || !g.st[g.cur].probeOK {
 		g.switchToLocked(best, now)
 		g.gate.reset()
 		return
 	}
 	if now.Before(g.freezeUntil) {
+		return
+	}
+	if !g.cfg.hasDamping {
+		if best != g.cur && g.urlTestCostLocked(g.cur, now)-g.urlTestCostLocked(best, now) > ms(g.cfg.tolerance) {
+			g.switchToLocked(best, now)
+		}
 		return
 	}
 	_, a := g.medianLocked(g.cur, now)
@@ -445,10 +458,17 @@ func (g *autoGroup) fallbackUpLocked(i int) bool {
 			known = true
 		}
 		if known && (!s.probed || !s.probeAt.After(at)) {
-			// An unknown empty child is not a usable member. Repeated Current /
-			// Snapshot reads never count the same child timestamp twice.
 			if at.IsZero() {
-				return alive && !s.recovery.down
+				if !alive {
+					return false
+				}
+				if g.cfg.kind == TypeFallback || g.cfg.kind == TypeURLTest {
+					return !s.probed || s.probeOK
+				}
+				return !s.recovery.down
+			}
+			if g.cfg.kind == TypeFallback || g.cfg.kind == TypeURLTest {
+				return alive
 			}
 			s.recovery.observe(alive, at)
 			if !alive {
@@ -456,16 +476,23 @@ func (g *autoGroup) fallbackUpLocked(i int) bool {
 			}
 		}
 	}
+	if g.cfg.kind == TypeFallback || g.cfg.kind == TypeURLTest {
+		return !s.probed || s.probeOK
+	}
 	limit := g.cfg.maxFailed
 	if limit == 0 {
 		limit = 1
 	}
+	now := g.clk.Now()
 	wasDown := s.recovery.down
-	ready := s.recovery.ready(g.clk.Now())
+	if g.cfg.kind == TypeSmart && wasDown && s.probed && s.probeOK && s.probeAt.After(s.recovery.observed) && !now.Before(s.openUntil) {
+		s.recovery = recovery{}
+	}
+	ready := s.recovery.ready(now)
 	if wasDown && ready && g.cfg.kind == TypeSmart {
 		s.real = quality{}
 		s.dial = decayMean{}
-		s.epoch = g.clk.Now()
+		s.epoch = now
 		s.openUntil = time.Time{}
 		g.hardDirty = true
 	}
@@ -734,7 +761,7 @@ func (g *autoGroup) DialTCP(ctx context.Context, dst outbound.Addr) (net.Conn, e
 		}
 		errs = append(errs, err)
 		if !isProbe(ctx) && !isCanceled(ctx) && !errors.Is(err, errProbeDependencyUnready) {
-			g.realFailure(i, dst.Host, g.cfg.kind == TypeURLTest && serverRefused(g.members[i], err))
+			g.realFailure(i, dst.Host, (g.cfg.kind == TypeURLTest || g.cfg.kind == TypeFallback) && serverRefused(g.members[i], err))
 		}
 	}
 	if len(cands) == 0 {
@@ -813,8 +840,6 @@ func (g *autoGroup) realFailure(i int, host string, refused bool) {
 	defer g.unlock()
 	now := g.clk.Now()
 	s := &g.st[i]
-	s.healthAt = now
-	s.observationEpoch++
 	switch g.cfg.kind {
 	case TypeURLTest:
 		if i != g.cur && (g.cfg.fixed == "" || i != g.cfg.fixedIndex) {
@@ -828,20 +853,40 @@ func (g *autoGroup) realFailure(i int, host string, refused bool) {
 		}
 		s.failTimes = append(kept, now)
 		if len(s.failTimes) >= g.cfg.maxFailed || refused {
-			s.probed = true
-			s.probeOK = false
-			s.recovery.observe(false, now)
-			g.reevaluateLocked(now)
+			if refused {
+				s.healthAt = now
+				s.observationEpoch++
+				s.probed = true
+				s.probeOK = false
+				g.reevaluateLocked(now)
+			}
 			s.failTimes = nil
 			g.triggerRoundLocked()
 		}
 	case TypeFallback:
-		s.consec++
-		if s.consec >= g.cfg.maxFailed || refused {
-			s.recovery.observe(false, now)
+		if i != g.cur && (g.cfg.fixed == "" || i != g.cfg.fixedIndex) {
+			return
 		}
-		g.reevaluateLocked(now)
+		window := g.cfg.timeout
+		if window <= 0 {
+			window = defaultTimeout
+		}
+		kept := s.failTimes[:0]
+		for _, t := range s.failTimes {
+			if now.Sub(t) < window {
+				kept = append(kept, t)
+			}
+		}
+		s.failTimes = append(kept, now)
+		s.consec = len(s.failTimes)
+		if len(s.failTimes) >= g.cfg.maxFailed || refused {
+			s.failTimes = nil
+			s.consec = 0
+			g.triggerRoundLocked()
+		}
 	case TypeLoadBalance:
+		s.healthAt = now
+		s.observationEpoch++
 		s.consec++
 		if s.consec >= g.cfg.maxFailed || refused {
 			s.recovery.observe(false, now)
@@ -852,6 +897,8 @@ func (g *autoGroup) realFailure(i int, host string, refused bool) {
 			g.triggerRoundLocked()
 		}
 	case TypeSmart:
+		s.healthAt = now
+		s.observationEpoch++
 		g.smartFailLocked(i, now)
 		if host != "" {
 			g.sites.record(host, i, false, now, g.cur)
@@ -867,18 +914,21 @@ func (g *autoGroup) realSuccess(i int, host string, ttfb time.Duration, hasTTFB 
 	g.mu.Lock()
 	defer g.unlock()
 	now := g.clk.Now()
-	g.st[i].healthAt = now
-	g.st[i].observationEpoch++
 	switch g.cfg.kind {
 	case TypeFallback:
 		g.st[i].consec = 0
-		g.st[i].recovery.observe(true, now)
+		g.st[i].failTimes = nil
 		g.reevaluateLocked(now)
+		return
 	case TypeLoadBalance:
+		g.st[i].healthAt = now
+		g.st[i].observationEpoch++
 		g.st[i].consec = 0
 		g.st[i].probeOK = true
 		g.st[i].recovery.observe(true, now)
 	case TypeSmart:
+		g.st[i].healthAt = now
+		g.st[i].observationEpoch++
 		g.smartSuccessLocked(i, ttfb, hasTTFB, now)
 		if host != "" {
 			g.sites.record(host, i, true, now, g.cur)

@@ -18,9 +18,7 @@ func acceptedFallbackFailure(t *testing.T, g *autoGroup, c *fakeClock, name stri
 			}
 		}
 		g.RecordProbeRound(samples)
-		if round < g.cfg.maxFailed && !g.fallbackUpTest(indexOfName(g.cfg.members, name)) {
-			t.Fatal("failure before independent threshold")
-		}
+
 	}
 }
 func indexOfName(a []string, n string) int {

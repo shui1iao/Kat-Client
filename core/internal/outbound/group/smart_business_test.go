@@ -127,17 +127,17 @@ func TestSmartOnlyNewBusinessPerformanceCanPromote(t *testing.T) {
 	for _, scope := range []string{"site", "group"} {
 		t.Run(scope, func(t *testing.T) {
 			c := newFakeClock()
-			g := newAuto(t, Options{Type: TypeSmart, Smart: &SmartOptions{Scope: scope}}, members(newFake("a"), newFake("b")), c, nil, nil)
+			dwell := outbound.Duration(30 * time.Second)
+			g := newAuto(t, Options{Type: TypeSmart, Damping: &DampingOptions{MinDwell: &dwell}, Smart: &SmartOptions{Scope: scope}}, members(newFake("a"), newFake("b")), c, nil, nil)
 			v2Round(g, c, 300*ms_, 400*ms_)
 			key := siteKey("business.test", 443, "tcp")
 			g.sites.ensure(key, c.Now(), 0)
-			// The default dwell applies independently to this site too.
 			c.Advance(time.Minute)
 			for range 5 {
 				v2Round(g, c, 300*ms_, 10*ms_)
 			}
 			if g.Current() != "a" || g.gate.wins != 0 || g.sites.get(key, c.Now()).gate.wins != 0 || g.challengeStop != nil || g.challengeRuns != 0 {
-				t.Fatal("probe-only performance promoted")
+				t.Fatal("probe-only performance promoted under explicit damping")
 			}
 			for range 6 {
 				for range 4 {
@@ -195,6 +195,13 @@ func TestSmartProbeOnlyNeverSchedulesPerformanceChallenge(t *testing.T) {
 	scheduled, runs := g.challengeStop != nil, g.challengeRuns
 	g.mu.Unlock()
 	if scheduled || runs != 0 || p.count("a") != 2 || p.count("b") != 2 || g.Current() != "a" {
-		t.Fatal("Smart probe scheduled active performance confirmation", scheduled, runs, p.count("a"), p.count("b"))
+		t.Fatal("Smart promoted on single probe or scheduled active challenge", scheduled, runs, p.count("a"), p.count("b"), g.Current())
+	}
+	c.Advance(20 * time.Second)
+	probeNow(t, g)
+	c.Advance(time.Second)
+	probeNow(t, g)
+	if g.Current() != "b" {
+		t.Fatal("Smart stayed locked despite sustained confirmed 300ms vs 100ms advantage", g.Current())
 	}
 }

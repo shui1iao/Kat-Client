@@ -32,7 +32,7 @@ func TestR11ClientLazyHasStartupAndTouchedPeriodicChecks(t *testing.T) {
 	clk.Advance(100 * time.Millisecond)
 	waitRounds(t, g, 3)
 	if snapMember(g, "a").ProbeLatency != time.Millisecond || g.Current() != "b" {
-		t.Fatal("touched lazy did not refresh sample or bypassed stable selection")
+		t.Fatal("touched lazy did not refresh sample or violated 20ms tolerance")
 	}
 }
 func TestR11ClientSameURLLatestSampleSelectsAndDifferentURLIgnored(t *testing.T) {
@@ -47,11 +47,11 @@ func TestR11ClientSameURLLatestSampleSelectsAndDifferentURLIgnored(t *testing.T)
 		t.Fatal("foreign URL used")
 	}
 	g.RecordURLProbe("http://probe.test/", sample)
-	if snapMember(g, "b").ProbeLatency != 20*time.Millisecond || g.Current() != "a" {
-		t.Fatal("same URL sample missing or single measurement bypassed gate")
+	if snapMember(g, "b").ProbeLatency != 20*time.Millisecond || g.Current() != "b" {
+		t.Fatal("same URL sample missing or did not select faster member")
 	}
 	g.RecordURLProbe("http://probe.test/", ProbeSample{Name: "b", Latency: 200 * time.Millisecond, At: clk.Now()})
-	if snapMember(g, "b").ProbeLatency != 20*time.Millisecond || g.Current() != "a" {
+	if snapMember(g, "b").ProbeLatency != 20*time.Millisecond || g.Current() != "b" {
 		t.Fatal("stale sample replaced newest")
 	}
 }
@@ -83,7 +83,7 @@ func TestR11NestedClientHealthEmptyFailedAndRecovery(t *testing.T) {
 		t.Fatal("failed inner group considered healthy")
 	}
 	inner.RecordURLProbe("http://probe.test/", ProbeSample{Name: "a", Latency: time.Millisecond, At: clk.Now().Add(2 * time.Second)})
-	if g.Current() != "last" {
-		t.Fatal("single nested recovery bypassed gate")
+	if g.Current() != "inner" {
+		t.Fatal("nested recovery did not restore fallback order")
 	}
 }

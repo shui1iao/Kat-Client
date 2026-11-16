@@ -146,12 +146,6 @@ func TestR11ControlledStableGroups(t *testing.T) {
 	await("F", "B", 3*time.Second)
 	a.down.Store(false)
 	a.delay.Store(1)
-	time.Sleep(1500 * time.Millisecond)
-	if current("F") != "B" {
-		t.Fatal("single recovery switched fallback")
-	}
-	await("F", "A", 12*time.Second)
-	if current("U") != "B" {
-		t.Fatal("recovery bypassed url-test min dwell")
-	}
+	await("F", "A", 4*time.Second)
+	await("U", "A", 4*time.Second)
 }

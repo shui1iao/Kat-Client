@@ -70,10 +70,11 @@ const (
 	defaultTolerance       = 20 * time.Millisecond
 	maxPriority            = 100
 
-	urlTestFailWindow = 60 * time.Second // url-test: N real failures within this window ...
-	urlTestFailCount  = 3                // ... trigger an immediate re-test
-	fallbackFailLimit = 2                // fallback: consecutive real failures that mark a member down
-	noReplyTimeout    = 3 * time.Second  // smart: data written / datagram sent but nothing came back
+	urlTestFailWindow       = 60 * time.Second // url-test: N real failures within this window ...
+	urlTestFailCount        = 3                // ... trigger an immediate re-test
+	fallbackFailLimit       = 5                // fallback: consecutive failures in probe.timeout window trigger health check (mihomo)
+	defaultSmartExploration = 0.05             // smart: natural sampling rate among close top candidates when unset
+	noReplyTimeout          = 3 * time.Second  // smart: data written / datagram sent but nothing came back
 )
 
 // ProbeOptions configures active HTTP(S) probing.
@@ -120,6 +121,22 @@ type SmartOptions struct {
 	Scope           string  `json:"scope,omitempty"`
 	ExplorationRate float64 `json:"exploration_rate,omitempty"`
 	AdaptiveDial    *bool   `json:"adaptive_dial,omitempty"`
+	explorationSet  bool
+}
+
+func (s *SmartOptions) UnmarshalJSON(b []byte) error {
+	type plain SmartOptions
+	var p plain
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if e := dec.Decode(&p); e != nil {
+		return e
+	}
+	var fields map[string]json.RawMessage
+	_ = json.Unmarshal(b, &fields)
+	_, p.explorationSet = fields["exploration_rate"]
+	*s = SmartOptions(p)
+	return nil
 }
 
 // All automatic groups use stable selection; there is deliberately no legacy
@@ -304,6 +321,7 @@ type config struct {
 	interval     time.Duration
 	timeout      time.Duration
 	tolerance    time.Duration
+	hasDamping   bool
 	relative     float64
 	confirms     int
 	dwell        time.Duration
@@ -517,10 +535,16 @@ func normalize(o Options) (config, error) {
 		c.tolerance = o.Tolerance.Value()
 	}
 	c.relative, c.confirms, c.dwell = 0.2, 2, 60*time.Second
-	if o.Type == TypeURLTest || o.Type == TypeSmart {
+	if o.Type == TypeURLTest {
 		c.relative, c.dwell = 0.1, 30*time.Second
+	} else if o.Type == TypeSmart {
+		c.relative, c.dwell = 0.1, 20*time.Second
 	}
 	if d := o.Damping; d != nil {
+		c.hasDamping = true
+		if o.Type == TypeSmart && d.MinDwell == nil {
+			c.dwell = 30 * time.Second
+		}
 		if d.RelativeImprovement != nil {
 			c.relative = *d.RelativeImprovement
 		}
@@ -538,6 +562,7 @@ func normalize(o Options) (config, error) {
 		}
 	}
 	c.scope, c.adaptiveDial = "site", true
+
 	if v := o.Smart; v != nil {
 		if o.Type != TypeSmart {
 			return fail("smart is only valid for smart groups")
@@ -545,7 +570,9 @@ func normalize(o Options) (config, error) {
 		if v.Scope != "" {
 			c.scope = v.Scope
 		}
-		c.exploration = v.ExplorationRate
+		if v.explorationSet || v.ExplorationRate != 0 {
+			c.exploration = v.ExplorationRate
+		}
 		if v.AdaptiveDial != nil {
 			c.adaptiveDial = *v.AdaptiveDial
 		}

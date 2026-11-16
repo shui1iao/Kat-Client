@@ -258,24 +258,20 @@ func waitRound(t *testing.T, g *autoGroup, n int64) {
 func TestGroupNewParameterThresholdMappings(t *testing.T) {
 	for _, typ := range []string{TypeFallback, TypeURLTest} {
 		p := newFakeProbe(map[string]time.Duration{"a": time.Millisecond, "b": time.Millisecond})
+		p.fail["a"] = true
 		g := newAuto(t, Options{Type: typ, MaxFailedTimes: 4}, members(newFake("a"), newFake("b")), newFakeClock(), p, nil)
 		g.Start(context.Background())
 		for i := 0; i < 3; i++ {
 			g.realFailure(0, "x", false)
 		}
-		if typ == TypeFallback && g.Current() != "a" {
-			t.Fatal("fallback switched before configured threshold")
-		}
-		if typ == TypeURLTest && isProbing(g) {
-			t.Fatal("url-test probed before threshold")
+		if isProbing(g) || g.Current() != "a" {
+			t.Fatalf("%s acted before configured threshold", typ)
 		}
 		g.realFailure(0, "x", false)
-		if typ == TypeFallback && g.Current() != "b" {
-			t.Fatal("fallback did not switch at configured threshold")
+		waitRounds(t, g, 1)
+		if g.Current() != "b" {
+			t.Fatalf("%s did not switch after health check at configured threshold", typ)
 		}
-		if typ == TypeURLTest {
-			waitRounds(t, g, 1)
-		}
-		t.Logf("%s max_failed_times=4: no action after 3 failures, action at 4", typ)
+		t.Logf("%s max_failed_times=4: no action after 3 failures, health-check switch at 4", typ)
 	}
 }

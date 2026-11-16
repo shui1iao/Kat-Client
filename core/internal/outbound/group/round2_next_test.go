@@ -28,12 +28,7 @@ func TestRound2NestedFallbackStates(t *testing.T) {
 	hk.RecordProbe("hk2", 0, at, errors.New("probe failure"))
 	check("all HK leaves latest probe failed, SG untested", "SG")
 	final.RecordProbe("HK", 20*time.Millisecond, at.Add(time.Second), nil)
-	check("parent once successful cannot bypass recovery", "SG")
-	clk.Advance(6 * time.Second)
-	final.RecordProbe("HK", 20*time.Millisecond, clk.Now(), nil)
-	check("two parent successes still need hold", "SG")
-	clk.Advance(5 * time.Second)
-	check("parent fresher stable health overrides old child failure", "HK")
+	check("parent fresher successful probe restores HK immediately", "HK")
 	hk.RecordProbe("hk2", 30*time.Millisecond, at.Add(2*time.Second), nil)
 	check("one HK child recovers", "HK")
 	single := newAuto(t, Options{Name: "singleHK", Type: TypeURLTest, Probe: &ProbeOptions{URL: "http://probe.test/", ClientHead: true}}, members(newFake("only")), clk, nil, nil)
@@ -72,22 +67,21 @@ func TestRound2SoftFixedLifecycle(t *testing.T) {
 			}
 			check("b")
 			g.RecordProbe("b", 0, at.Add(time.Second), errors.New("failed"))
-			if kind == TypeFallback {
-				check("b")
-				acceptedFallbackFailure(t, g, clk, "b")
-				at = clk.Now()
-			}
 			check("a")
 			if g.cfg.fixed != "b" {
 				t.Fatal("lost fixed on failure")
 			}
 			g.RecordProbe("b", 40*time.Millisecond, at.Add(2*time.Second), nil)
-			check("a")
-			clk.Advance(7 * time.Second)
-			g.RecordProbe("b", 40*time.Millisecond, clk.Now(), nil)
-			check("a")
-			clk.Advance(5 * time.Second)
-			check("b")
+			if kind == TypeFallback || kind == TypeURLTest {
+				check("b")
+			} else {
+				check("a")
+				clk.Advance(7 * time.Second)
+				g.RecordProbe("b", 40*time.Millisecond, clk.Now(), nil)
+				check("a")
+				clk.Advance(5 * time.Second)
+				check("b")
+			}
 			// Unpin is a document replacement, as desktop document.apply does.
 			unpinned := newAuto(t, Options{Type: kind, Probe: &ProbeOptions{URL: "http://probe.test/", ClientHead: true}}, members(newFake("a"), newFake("b")), clk, nil, nil)
 			if unpinned.Snapshot().Fixed != "" {
