@@ -34,64 +34,77 @@ const MaxStream = 16 << 10
 
 // Stream classifies the first bytes b of a TCP stream.
 func Stream(b []byte) (proto, host string, st Status) {
+	proto, host, _, st = StreamRaw(b)
+	return proto, host, st
+}
+
+// StreamRaw classifies b and returns both the validated DNS domain (host) and
+// the unstripped raw server name / Host header value (rawHost) so exclusion
+// lists such as "Mijia Cloud" can match before domain-character filtering.
+func StreamRaw(b []byte) (proto, host, rawHost string, st Status) {
 	if len(b) == 0 {
-		return "", "", NeedMore
+		return "", "", "", NeedMore
 	}
 	if b[0] == 0x16 {
-		host, st = TLSClientHello(b)
-		return ProtoTLS, host, st
+		host, rawHost, st = TLSClientHelloRaw(b)
+		return ProtoTLS, host, rawHost, st
 	}
-	host, st = HTTPHost(b)
-	return ProtoHTTP, host, st
+	host, rawHost, st = HTTPHostRaw(b)
+	return ProtoHTTP, host, rawHost, st
 }
 
 // TLSClientHello parses TLS records carrying a ClientHello (possibly spread
 // over several handshake records) and returns its server_name.
 func TLSClientHello(b []byte) (string, Status) {
+	host, _, st := TLSClientHelloRaw(b)
+	return host, st
+}
+
+func TLSClientHelloRaw(b []byte) (string, string, Status) {
 	var hs []byte
 	for {
 		if len(b) < 5 {
-			return "", NeedMore
+			return "", "", NeedMore
 		}
 		if b[0] != 0x16 || b[1] != 3 || b[2] > 4 {
-			return "", NotMatch
+			return "", "", NotMatch
 		}
 		n := int(b[3])<<8 | int(b[4])
 		if n == 0 || n > 1<<14+256 {
-			return "", NotMatch
+			return "", "", NotMatch
 		}
 		if len(b) < 5+n {
 			// Enough of the first record to reject a non-ClientHello early.
 			frag := b[5:]
 			if len(hs) == 0 && len(frag) > 0 && frag[0] != 1 {
-				return "", NotMatch
+				return "", "", NotMatch
 			}
-			return "", NeedMore
+			return "", "", NeedMore
 		}
 		if len(hs) == 0 && n >= 4 {
 			if b[5] != 1 {
-				return "", NotMatch
+				return "", "", NotMatch
 			}
 			total := 4 + (int(b[6])<<16 | int(b[7])<<8 | int(b[8]))
 			if total > MaxStream {
-				return "", NotMatch
+				return "", "", NotMatch
 			}
 			if n >= total {
-				return ClientHelloSNI(b[5 : 5+total])
+				return ClientHelloSNIRaw(b[5 : 5+total])
 			}
 		}
 		hs = append(hs, b[5:5+n]...)
 		b = b[5+n:]
 		if len(hs) >= 4 {
 			if hs[0] != 1 {
-				return "", NotMatch
+				return "", "", NotMatch
 			}
 			total := 4 + (int(hs[1])<<16 | int(hs[2])<<8 | int(hs[3]))
 			if total > MaxStream {
-				return "", NotMatch
+				return "", "", NotMatch
 			}
 			if len(hs) >= total {
-				return ClientHelloSNI(hs[:total])
+				return ClientHelloSNIRaw(hs[:total])
 			}
 		}
 	}
@@ -99,51 +112,57 @@ func TLSClientHello(b []byte) (string, Status) {
 
 // ClientHelloSNI parses a complete handshake message (type 1).
 func ClientHelloSNI(msg []byte) (string, Status) {
+	host, _, st := ClientHelloSNIRaw(msg)
+	return host, st
+}
+
+func ClientHelloSNIRaw(msg []byte) (string, string, Status) {
 	s := cryptobyte.String(msg)
 	var typ uint8
 	var body cryptobyte.String
 	if !s.ReadUint8(&typ) || typ != 1 || !s.ReadUint24LengthPrefixed(&body) {
-		return "", NotMatch
+		return "", "", NotMatch
 	}
 	var ver uint16
 	var random, sid, suites, comp cryptobyte.String
 	if !body.ReadUint16(&ver) || !body.ReadBytes((*[]byte)(&random), 32) ||
 		!body.ReadUint8LengthPrefixed(&sid) || !body.ReadUint16LengthPrefixed(&suites) ||
 		!body.ReadUint8LengthPrefixed(&comp) {
-		return "", NotMatch
+		return "", "", NotMatch
 	}
 	if body.Empty() {
-		return "", Done
+		return "", "", Done
 	}
 	var exts cryptobyte.String
 	if !body.ReadUint16LengthPrefixed(&exts) {
-		return "", NotMatch
+		return "", "", NotMatch
 	}
 	for !exts.Empty() {
 		var et uint16
 		var ed cryptobyte.String
 		if !exts.ReadUint16(&et) || !exts.ReadUint16LengthPrefixed(&ed) {
-			return "", NotMatch
+			return "", "", NotMatch
 		}
 		if et != 0 {
 			continue
 		}
 		var list cryptobyte.String
 		if !ed.ReadUint16LengthPrefixed(&list) {
-			return "", NotMatch
+			return "", "", NotMatch
 		}
 		for !list.Empty() {
 			var nt uint8
 			var name cryptobyte.String
 			if !list.ReadUint8(&nt) || !list.ReadUint16LengthPrefixed(&name) {
-				return "", NotMatch
+				return "", "", NotMatch
 			}
 			if nt == 0 {
-				return domainOnly(string(name)), Done
+				raw := string(name)
+				return domainOnly(raw), raw, Done
 			}
 		}
 	}
-	return "", Done
+	return "", "", Done
 }
 
 var methods = []string{"GET ", "POST ", "HEAD ", "PUT ", "DELETE ", "OPTIONS ", "PATCH ", "CONNECT ", "TRACE "}
@@ -152,37 +171,42 @@ const maxHTTPHead = 8 << 10
 
 // HTTPHost parses an HTTP/1.x request head and returns the Host header.
 func HTTPHost(b []byte) (string, Status) {
+	host, _, st := HTTPHostRaw(b)
+	return host, st
+}
+
+func HTTPHostRaw(b []byte) (string, string, Status) {
 	matched := false
 	for _, m := range methods {
 		n := min(len(b), len(m))
 		if string(b[:n]) == m[:n] {
 			if n < len(m) {
-				return "", NeedMore
+				return "", "", NeedMore
 			}
 			matched = true
 			break
 		}
 	}
 	if !matched {
-		return "", NotMatch
+		return "", "", NotMatch
 	}
 	end := bytes.Index(b, []byte("\r\n\r\n"))
 	head := b
 	if end >= 0 {
 		head = b[:end+2]
 	} else if len(b) > maxHTTPHead {
-		return "", NotMatch
+		return "", "", NotMatch
 	}
 	// Request line must be complete and name HTTP/1.x.
 	i := bytes.Index(head, []byte("\r\n"))
 	if i < 0 {
 		if end < 0 {
-			return "", NeedMore
+			return "", "", NeedMore
 		}
-		return "", NotMatch
+		return "", "", NotMatch
 	}
 	if !bytes.Contains(head[:i], []byte(" HTTP/1.")) {
-		return "", NotMatch
+		return "", "", NotMatch
 	}
 	for line := head[i+2:]; len(line) > 0; {
 		j := bytes.Index(line, []byte("\r\n"))
@@ -197,13 +221,14 @@ func HTTPHost(b []byte) (string, Status) {
 		}
 		if strings.EqualFold(strings.TrimSpace(string(h[:k])), "host") {
 			v := strings.TrimSpace(string(h[k+1:]))
-			return domainOnly(stripPort(v)), Done
+			raw := stripPort(v)
+			return domainOnly(raw), raw, Done
 		}
 	}
 	if end >= 0 {
-		return "", Done
+		return "", "", Done
 	}
-	return "", NeedMore
+	return "", "", NeedMore
 }
 
 func stripPort(v string) string {
@@ -217,6 +242,12 @@ func stripPort(v string) string {
 		return v[:i]
 	}
 	return v
+}
+
+// DomainOnly returns the lower-case plain DNS name without trailing dot, or ""
+// for IP literals and non-DNS strings.
+func DomainOnly(s string) string {
+	return domainOnly(s)
 }
 
 // domainOnly returns the lower-case name without trailing dot, or "" for IP

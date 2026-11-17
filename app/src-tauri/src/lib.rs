@@ -77,6 +77,7 @@ mod acrylic;
 pub mod update_key;
 pub mod update_manifest;
 pub mod update_check;
+pub mod update_handoff_protocol;
 
 pub mod elevated_protocol;
 pub mod elevation_launch;
@@ -88,3 +89,6 @@ pub use windows::core_tun_recovery::journal as core_tun_journal;
 #[cfg(not(windows))]
 #[path = "windows/core_tun_journal.rs"]
 pub mod core_tun_journal;
+
+#[cfg(test)]
+mod r1_r2_regression_tests;

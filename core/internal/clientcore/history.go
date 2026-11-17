@@ -44,22 +44,22 @@ type daily struct {
 }
 
 type history struct {
-	TotalUp                  uint64   `json:"total_up"`
-	TotalDown                uint64   `json:"total_down"`
-	TotalDirectUp            uint64   `json:"total_direct_up,omitempty"`
-	TotalDirectDown          uint64   `json:"total_direct_down,omitempty"`
-	TotalProxyUp             uint64   `json:"total_proxy_up,omitempty"`
-	TotalProxyDown           uint64   `json:"total_proxy_down,omitempty"`
-	HourlyDate               string   `json:"hourly_date,omitempty"`
-	Hourly                   []hourly `json:"hourly,omitempty"`
-	Daily                    []daily  `json:"daily"`
-	lastUp, lastDown         uint64
+	TotalUp                      uint64   `json:"total_up"`
+	TotalDown                    uint64   `json:"total_down"`
+	TotalDirectUp                uint64   `json:"total_direct_up,omitempty"`
+	TotalDirectDown              uint64   `json:"total_direct_down,omitempty"`
+	TotalProxyUp                 uint64   `json:"total_proxy_up,omitempty"`
+	TotalProxyDown               uint64   `json:"total_proxy_down,omitempty"`
+	HourlyDate                   string   `json:"hourly_date,omitempty"`
+	Hourly                       []hourly `json:"hourly,omitempty"`
+	Daily                        []daily  `json:"daily"`
+	lastUp, lastDown             uint64
 	lastDirectUp, lastDirectDown uint64
-	lastDomains              map[string]domainRecord
-	todayDomainMap           map[string]domainRecord
-	todayDomainDate          string
-	dirty                    bool
-	err                      bool
+	lastDomains                  map[string]domainRecord
+	todayDomainMap               map[string]domainRecord
+	todayDomainDate              string
+	dirty                        bool
+	err                          bool
 }
 
 const maxPersistedDomainsPerDay = 12

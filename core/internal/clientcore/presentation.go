@@ -24,10 +24,10 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
-	"regexp"
-	"sync"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )

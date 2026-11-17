@@ -1,12 +1,12 @@
 package kernel
 
 import (
-	"github.com/shui1iao/Kat/internal/outbound/group"
 	"context"
 	"encoding/json"
 	"errors"
 	"github.com/shui1iao/Kat/internal/outbound"
 	"github.com/shui1iao/Kat/internal/outbound/direct"
+	"github.com/shui1iao/Kat/internal/outbound/group"
 	"github.com/shui1iao/Kat/internal/procattr"
 	"github.com/shui1iao/Kat/internal/route"
 	"github.com/shui1iao/Kat/internal/stats"
@@ -26,6 +26,7 @@ type core struct {
 	clientDiagnostics sync.Map // private loopback socket tuple -> *ClientDiagnostic
 	domainStats       sync.Map // normalized domain -> *domainStat
 	domainCount       atomic.Int64
+	dnsHosts          *dnsHostMap
 
 	failures                                  *failureLog
 	events                                    *eventLog
@@ -140,7 +141,7 @@ func (s *Server) Stats() Snapshot {
 func newCore(c *Config) (*core, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	l := c.Limits
-	k := &core{ctx: ctx, cancel: cancel, active: map[net.Conn]*acceptedState{}, connSlots: newSlots(l.Connections), handSlots: newSlots(l.Handshakes), dialSlots: newSlots(l.Dials), udpSlots: newSlots(l.UDPAssociations), logicalSlots: newSlots(l.LogicalStreams)}
+	k := &core{ctx: ctx, cancel: cancel, active: map[net.Conn]*acceptedState{}, connSlots: newSlots(l.Connections), handSlots: newSlots(l.Handshakes), dialSlots: newSlots(l.Dials), udpSlots: newSlots(l.UDPAssociations), logicalSlots: newSlots(l.LogicalStreams), dnsHosts: newDNSHostMap()}
 	lg, logErr := newClientLogger(c.Log, c.clientLog)
 	if logErr != nil {
 		cancel()

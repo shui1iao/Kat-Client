@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { DomainIcon } from '../components/EntityIcons';
+import { SniffSettingsCard } from '../components/DnsTools';
+import { canClearDnsCache } from '../client/sniff';
 import { NetworkSettings } from '../components/NetworkSettings';
 import { Icon } from '../components/Icon';
 import { Segmented } from '../components/ui';
@@ -497,7 +499,7 @@ function DnsCacheView({ c, tabs }: { c: Client; tabs: ReactNode }) {
         <button
           type="button"
           className="btn sm danger"
-          disabled={!running || c.busy.has('dns-clear') || !items.length}
+          disabled={!canClearDnsCache(running, c.busy)}
           onClick={() => void clearAll()}
         >
           清除缓存
@@ -573,7 +575,7 @@ function DnsCacheView({ c, tabs }: { c: Client; tabs: ReactNode }) {
             {!running
               ? '内核未运行'
               : data?.capacity === 0
-                ? '当前为纯系统 DNS 模式（缓存容量为 0），切换为自定义 DNS 后将启用内核缓存'
+                ? 'DNS 缓存已关闭（容量设为 0），可在「DNS 设置」中调整缓存条数'
                 : items.length
                   ? '无匹配的缓存记录'
                   : '当前暂无存活的 DNS 缓存条目'}
@@ -633,7 +635,7 @@ function DnsSettingsView({ c, tabs }: { c: Client; tabs: ReactNode }) {
         <button
           type="button"
           className="btn sm"
-          disabled={!running || c.busy.has('dns-clear')}
+          disabled={!canClearDnsCache(running, c.busy)}
           onClick={() => void clearAll()}
         >
           清除缓存
@@ -642,6 +644,7 @@ function DnsSettingsView({ c, tabs }: { c: Client; tabs: ReactNode }) {
 
       <div className="log-scroll dns-settings-unified">
         <NetworkSettings c={c} section="dns" bare />
+        <SniffSettingsCard c={c} />
       </div>
     </section>
   );

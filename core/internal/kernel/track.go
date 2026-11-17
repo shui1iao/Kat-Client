@@ -370,13 +370,23 @@ func (s *Server) newFlow(ctx context.Context, network string, target Address) (*
 	} else if i := inboundOf(ctx); i >= 0 && i < len(s.keys.inbound) {
 		f.in, f.inKey = s.keys.inbound[i], s.keys.inKeys[i]
 	}
-	if sn := sniffOf(ctx); sn != nil {
+	sn := sniffOf(ctx)
+	if sn != nil {
 		f.host = sn.host
 		if s.connectionSink != nil {
 			f.details.Sniffed = sn.host != ""
 		}
 		if s.connectionSink != nil && sn.host != "" {
 			f.details.DestHost = sn.host
+		}
+	}
+	if f.host == "" && (sn == nil || !sn.skipFallback) {
+		if ip, e := netip.ParseAddr(target.Host); e == nil && !isLANTargetIP(ip) {
+			if mapped := s.lookupDNSHost(ip); mapped != "" {
+				f.host = mapped
+				f.details.DestHost = mapped
+				f.details.Sniffed = false
+			}
 		}
 	}
 	if s.detailsOn.Load() || s.connectionSink != nil {

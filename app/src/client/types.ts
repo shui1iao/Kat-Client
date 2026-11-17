@@ -28,7 +28,7 @@ export interface ConnectionInfo extends FlowDetails { process_name?:string; id:n
 export interface ClosedConnection extends ConnectionInfo { end:string }
 export interface ConnectionsReply { active:ConnectionInfo[]; closed:ClosedConnection[]; total:number|null }
 export interface RuleHits { name:string; hits:number; up:number; down:number }
-export interface SniffSettings { enabled:boolean; override_destination:boolean; tcp_ports?:string; udp_ports?:string; timeout?:string }
+export interface SniffSettings { enabled:boolean; override_destination:boolean; tcp_ports?:string; udp_ports?:string; timeout?:string; skip_domain?:string[] }
 export interface ConnLogEntry extends FlowDetails { start?:string;end?:string;up?:number;down?:number;duration_ms?:number;ended?:boolean; seq:number; time:string; network:string; source:string; target:string; host?:string; rule:string; chain:string[]; outcome:'ok'|'error'|'rejected'|'idle'; code?:string }
 export interface ConnLogsReply { instance:number; entries:ConnLogEntry[]; next_seq:number; dropped:number }
 export interface DNSQueryReply { name:string; addresses:{addr:string;type:string}[]; server:string; duration_ms:number; cached:boolean }

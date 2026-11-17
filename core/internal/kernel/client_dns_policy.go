@@ -104,11 +104,6 @@ func systemDNSOptions(source *DNSOptions) *DNSOptions {
 	}
 	o.Server = "system"
 	o.Servers = nil
-	// System replies have no known TTL. Keep the source's numeric cache setting
-	// untouched, but never cache un-TTL'd system answers in this role.
-	if o.CacheEntries != nil && *o.CacheEntries != 0 {
-		o.CacheEntries = nil
-	}
 	return o
 }
 func (s *Server) configureClientDNS(bootstrap func(context.Context, string, string) ([]netip.Addr, error), dial dnsDial, physical []netip.Addr, system ...func(context.Context, []byte) ([]byte, error)) error {
@@ -126,7 +121,8 @@ func (s *Server) configureClientDNS(bootstrap func(context.Context, string, stri
 				}
 			}
 			dns.setDiagnostic(s.runtimeDiagnostic)
-	dns.setEventSink(s.core.dnsSink)
+			dns.setEventSink(s.core.dnsSink)
+			dns.setOwner(s)
 			dns.configureIO(s.cfg.IPv6Disabled(), bootstrap, dial, physical, system...)
 			s.dns.close()
 			s.dns = dns
@@ -171,8 +167,10 @@ func (s *Server) configureClientDNS(bootstrap func(context.Context, string, stri
 	s.bootstrapDNS = bootDNS
 	s.directDNS.setDiagnostic(s.runtimeDiagnostic)
 	s.directDNS.setEventSink(s.core.dnsSink)
+	s.directDNS.setOwner(s)
 	s.bootstrapDNS.setDiagnostic(s.runtimeDiagnostic)
 	s.bootstrapDNS.setEventSink(s.core.dnsSink)
+	s.bootstrapDNS.setOwner(s)
 	s.directDNS.configureIO(s.cfg.IPv6Disabled(), bootstrap, dial, physical, system...)
 	s.bootstrapDNS.configureIO(s.cfg.IPv6Disabled(), bootstrap, dial, physical, system...)
 	options := cloneDNSOptions(p.Source)
@@ -199,6 +197,7 @@ func (s *Server) configureClientDNS(bootstrap func(context.Context, string, stri
 	}
 	dns.setDiagnostic(s.runtimeDiagnostic)
 	dns.setEventSink(s.core.dnsSink)
+	dns.setOwner(s)
 	dns.configureIO(s.cfg.IPv6Disabled(), bootstrap, dial, physical, system...)
 	dns.protected = protected
 	if protected {

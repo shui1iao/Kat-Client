@@ -29,7 +29,7 @@ fn install_common(uninstall:bool,gui_pid:u32,gui_stamp:u64,requested:Option<&str
  let _installation=InstallLock::acquire()?;
  let dir=security::journal_dir()?;
  let recovery_token=super::service_acl::ordinary_token(caller.0,&user.sid)?;
- if setup{super::update_install::clear_or_recover_before_setup(&dir,&recovery_token,gui_pid)?;}else{super::update_install::recover_before_new(&dir,&recovery_token)?;}
+ if setup{super::update_install::clear_or_recover_before_setup(&dir,&recovery_token,user.session,gui_pid)?;}else{super::update_install::recover_before_new(&dir,&recovery_token,user.session)?;}
  if !setup&&!uninstall{return Err(Error::new("INSTALL_USE_SETUP","Use the Kat Setup installer to install or update"));}
  let existing=super::install_location::discover()?;
  let root=if setup&&!uninstall{let chosen=requested.ok_or_else(||Error::new("INSTALL_LOCATION","Choose an installation directory"))?;crate::install_location::select(existing.as_ref().and_then(|p|p.to_str()),chosen)?.into()}else{existing.ok_or_else(||Error::new("INSTALL_DISCOVERY","No valid application installation was found"))?};
@@ -42,7 +42,7 @@ fn install_common(uninstall:bool,gui_pid:u32,gui_stamp:u64,requested:Option<&str
  if runtime_parent.exists(){pins.extend(super::install_location::pin_runtime_chain(runtime_parent,true).map_err(|_|runtime_failure())?);security::verify_protected(runtime_parent).map_err(|_|runtime_failure())?;}
  if runtime.exists(){pins.extend(super::install_location::pin_runtime_chain(&runtime,true).map_err(|_|runtime_failure())?);security::verify_protected(&runtime).map_err(|_|runtime_failure())?;}
 
- if setup&&uninstall{return uninstall_application(&source,&root,&runtime,&dir,&user.sid,pins);}
+ if setup&&uninstall{return uninstall_application(&source,&root,&runtime,&dir,&user.sid,user.session,gui_pid,gui_stamp,pins);}
  if uninstall{security::require_installed()?;return uninstall_service(&dir,&user.sid,&super::install_location::service_root()?);}
  if security::same_path(source,&root)||security::same_path(source,&runtime){return Err(crate::installer_update::gui_running());}
  let manager=scm::manager(SC_MANAGER_CREATE_SERVICE|SC_MANAGER_CONNECT)?;
@@ -53,7 +53,7 @@ fn install_common(uninstall:bool,gui_pid:u32,gui_stamp:u64,requested:Option<&str
  let old_running=if old.0.is_null(){false}else{match scm::state(&old)?.dwCurrentState{SERVICE_RUNNING=>true,SERVICE_STOPPED=>false,_=>return Err(Error::new("SERVICE_NOT_READY","Wait for the service operation to finish"))}};
  let old_display_name=if old.0.is_null(){None}else{Some(scm::display_name(&old)?)};
  let read_token=super::service_acl::ordinary_token(caller.0,&user.sid)?;
- let mut update=WindowsUpdate{journal:None,old_display_name,read_token,acl_update:None,source:source.into(),root,runtime,old_service_root,scm_changed:false,approved:None,runtime_files:None,runtime_work:None,dir,manager,service:old,old_running,new_service:false,start_attempted:false,binding_changed:false,old_binding:None,files:None,work:None,old_registration:None,registration_changed:false,directory_acl:Vec::new(),old_apps:super::installed_app::Snapshot(None),apps_changed:false,created_dirs:Vec::new(),prepare_pins:Vec::new(),_pins:pins};
+ let mut update=WindowsUpdate{gui_pid,gui_stamp,caller_session:user.session,journal:None,old_display_name,read_token,acl_update:None,source:source.into(),root,runtime,old_service_root,scm_changed:false,approved:None,runtime_files:None,runtime_work:None,dir,manager,service:old,old_running,new_service:false,start_attempted:false,binding_changed:false,old_binding:None,files:None,work:None,old_registration:None,registration_changed:false,directory_acl:Vec::new(),old_apps:super::installed_app::Snapshot(None),apps_changed:false,created_dirs:Vec::new(),prepare_pins:Vec::new(),_pins:pins};
  match crate::installer_update::run(&mut update){
   Ok(())=>{update.disarm_memory_rollback();Ok(())}, // Setup committed in elevated session
   Err(crate::installer_update::UpdateFailure::Operation(e))=>{
@@ -80,6 +80,7 @@ pub(super) fn secure_create(path:&std::path::Path,directory:bool,users_read:bool
 fn private_file(p:&std::path::Path)->Result<std::fs::File>{secure_create(p,false,false)?.ok_or_else(||Error::new("INSTALL_COPY","Cannot create staging file"))}
 fn sha256_file(path:&std::path::Path,code:&str)->Result<String>{use std::io::Read;use sha2::{Digest,Sha256};let mut f=std::fs::File::open(path).map_err(|e|Error::io(code,&e))?;let mut sha=Sha256::new();let mut buf=[0u8;65536];loop{let n=f.read(&mut buf).map_err(|e|Error::io(code,&e))?;if n==0{break;}sha.update(&buf[..n]);}Ok(hex::encode(sha.finalize()))}
 struct WindowsUpdate{
+ gui_pid:u32,gui_stamp:u64,caller_session:u32,
  journal:Option<super::update_install::Journal>,
  old_display_name:Option<String>,
  read_token:Handle,acl_update:Option<crate::service_read_acl::GrantUpdate>,
@@ -148,7 +149,16 @@ impl crate::installer_update::UpdateSteps for WindowsUpdate{
   if !self.service.0.is_null(){self.journal.as_mut().unwrap().snapshot_failure_actions(&self.dir,&self.service)?;}
   if self.old_binding.is_some(){let mut input=std::fs::File::open(&binding).map_err(|e|Error::io("INSTALL_BINDING",&e))?;let mut output=private_file(&work.join("binding.json"))?;std::io::copy(&mut input,&mut output).map_err(|e|Error::io("INSTALL_BINDING",&e))?;output.sync_all().map_err(|e|Error::io("INSTALL_BINDING",&e))?;}Ok(())
  }
- fn stop(&mut self)->Result<()>{self.journal.as_mut().unwrap().mark(&self.dir,super::update_install::Phase::Stopping)?;if !self.service.0.is_null(){self.journal.as_ref().unwrap().suppress_failure_actions(&self.service)?;super::update_install::stop_release(&self.service)?;}super::update_install::terminate_installed_processes(&self.root,&self.runtime,0);super::elevated::require_recovered()?;super::update_install::ensure_legacy_recovered(&self.dir,&identity::current()?.sid)?;Ok(())}
+ fn stop(&mut self)->Result<()>{
+  // Request authenticated smooth GUI/Core prepare-update shutdown BEFORE stopping the
+  // service or marking live_started; never force-terminate during normal install/update.
+  super::update_handoff::helper_request_gui_stop(self.gui_pid,self.gui_stamp,"client",None)?;
+  let sid=identity::current()?.sid;
+  self.journal.as_mut().unwrap().mark(&self.dir,super::update_install::Phase::Stopping)?;
+  if !self.service.0.is_null(){self.journal.as_ref().unwrap().suppress_failure_actions(&self.service)?;super::update_install::stop_release(&self.service)?;}
+  super::update_install::ensure_target_processes_stopped(&self.root,&self.dir,&sid,self.caller_session,self.gui_pid)?;
+  super::elevated::require_recovered()?;super::update_install::ensure_legacy_recovered(&self.dir,&sid)?;Ok(())
+ }
  fn replace(&mut self)->Result<()>{
   self.journal.as_mut().unwrap().mark(&self.dir,super::update_install::Phase::Replacing)?;
   self.runtime_files.as_mut().unwrap().activate(|p|security::protect(p,true))?;self.runtime_files.as_mut().unwrap().retire(crate::installer_files::RETIRED_TUN)?;security::verify_vendor(&self.runtime)?;
@@ -216,7 +226,8 @@ fn validate_owned_root(root:&std::path::Path,record:Option<&super::install_locat
  let v:serde_json::Value=serde_json::from_slice(&data).map_err(|_|Error::new("INSTALL_LOCATION","Existing directory is not a recognized Kat installation"))?;
  for n in ["kat-desktop.exe","kat-client-core.exe"]{let p=root.join(n);security::verify_protected(&p)?;let hash=hex::encode(Sha256::digest(std::fs::read(&p).map_err(|e|Error::io("INSTALL_LOCATION",&e))?));if v["executables"][n].as_str()!=Some(&hash){return Err(Error::new("INSTALL_LOCATION","Existing directory is not a recognized Kat installation"));}}Ok(())
 }
-fn uninstall_application(_source:&std::path::Path,root:&std::path::Path,runtime:&std::path::Path,dir:&std::path::Path,sid:&str,_pins:Vec<Handle>)->Result<()>{
+#[allow(clippy::too_many_arguments)]
+fn uninstall_application(_source:&std::path::Path,root:&std::path::Path,runtime:&std::path::Path,dir:&std::path::Path,sid:&str,caller_session:u32,gui_pid:u32,gui_stamp:u64,_pins:Vec<Handle>)->Result<()>{
  let registration=super::install_location::read()?;
  if registration.as_ref().is_some_and(|r|r.schema==2){security::verify_protected(root)?;}else{validate_owned_root(root,registration.as_ref())?;}
  let apps=super::installed_app::snapshot(root)?;
@@ -225,9 +236,11 @@ fn uninstall_application(_source:&std::path::Path,root:&std::path::Path,runtime:
  if service.0.is_null()&&unsafe{GetLastError()}!=ERROR_SERVICE_DOES_NOT_EXIST{return Err(Error::new("SCM_ACCESS","Cannot open installed service"));}
  let binding_path=dir.join("binding.json");if !service.0.is_null()||binding_path.exists(){security::verify_protected(dir)?;security::verify_protected(&binding_path)?;let b:Binding=ownership::load(&binding_path)?.ok_or_else(||Error::new("INSTALL_BINDING","Service binding missing"))?;if b.schema!=1||b.sid!=sid{return Err(Error::new("INSTALL_BINDING","Service belongs to a different user"));}}
  let running=if service.0.is_null(){false}else{scm::verify_configuration(&service,service_root)?;scm::verify_protection(&service)?;scm::state(&service)?.dwCurrentState==SERVICE_RUNNING};
+ // Smooth post-UAC handoff before stopping service or moving files; never force-terminate.
+ super::update_handoff::helper_request_gui_stop(gui_pid,gui_stamp,"uninstall",None)?;
  let mut work=Vec::new();let roots=if registration.as_ref().is_some_and(|r|r.schema==2){vec![(root,crate::installer_files::APP_FILES),(runtime,crate::installer_files::LEGACY_RUNTIME_FILES)]}else{vec![(root,crate::installer_files::LEGACY_FILES)]};
  for (i,(base,_)) in roots.iter().enumerate(){let p=base.join(format!(".kat-uninstall-{}-{}",std::process::id(),i));if let Err(e)=secure_create(&p,true,false).and_then(|_|{secure_create(&p.join("network"),true,false)?;Ok(())}){for w in &work{let _=std::fs::remove_dir_all(w);}return Err(e);}work.push(p);}
- let stopped=(||{if !service.0.is_null(){scm::stop(&service)?;}if ["core-tun-journal-v2.json","core-tun-journal-v2.next","core-tun-journal-v2.json.next"].iter().any(|n|dir.join(n).exists()){super::elevated::require_recovered()?;}if ["network-journal.json","network-journal.next","network-journal.json.next"].iter().any(|n|dir.join(n).exists()){return Err(Error::new("RECOVERY_PENDING","Restore network before uninstalling"));}Ok::<_,Error>(())})();
+ let stopped=(||{if !service.0.is_null(){scm::stop(&service)?;}super::update_install::ensure_target_processes_stopped(root,dir,sid,caller_session,gui_pid)?;if ["core-tun-journal-v2.json","core-tun-journal-v2.next","core-tun-journal-v2.json.next"].iter().any(|n|dir.join(n).exists()){super::elevated::require_recovered()?;}if ["network-journal.json","network-journal.next","network-journal.json.next"].iter().any(|n|dir.join(n).exists()){return Err(Error::new("RECOVERY_PENDING","Restore network before uninstalling"));}Ok::<_,Error>(())})();
  if let Err(e)=stopped{for w in work{let _=std::fs::remove_dir_all(w);}if running{if let Err(r)=scm::start(&service){return Err(crate::installer_update::rollback_errors(&crate::installer_update::at("uninstall_stop",e),&crate::installer_update::at("recover_restart",r)));}}return Err(e);}
  let mut moved=Vec::new();let mut registration_changed=false;let mut apps_changed=false;let mut operation_phase="uninstall_files";
  let operation=(||{
@@ -255,7 +268,7 @@ pub fn core_update(gui_pid:u32,gui_stamp:u64,offer_id:&str)->Result<()>{
  crate::installer_result::fw_error_clear();
  require_elevated()?;let _installation=InstallLock::acquire()?;
  let caller=super::update_install::installed_caller(gui_pid,gui_stamp)?;let dir=security::journal_dir()?;
- super::update_install::recover_before_new(&dir,&caller.token)?;
+ super::update_install::recover_before_new(&dir,&caller.token,caller.session)?;
  let r=super::update_install::run_core(&caller,offer_id,&dir);
  if r.is_ok(){if let Err(fw)=super::firewall::ensure_core_udp_inbound(std::path::Path::new(&caller.record.root)){crate::installer_result::fw_error_record(fw);}}
  r

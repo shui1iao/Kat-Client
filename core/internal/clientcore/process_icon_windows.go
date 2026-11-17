@@ -116,22 +116,22 @@ func cleanLocalWindowsFile(p string) string {
 
 // helperSubprocessParentName maps common iconless helper/webview subprocesses to their main parent app.
 var helperSubprocessParentName = map[string]string{
-	"wechatappex":             "WeChat.exe",
-	"wechatplayer":            "WeChat.exe",
-	"wechatutility":           "WeChat.exe",
-	"weixinappex":             "Weixin.exe",
-	"steamwebhelper":          "steam.exe",
-	"steamservice":            "steam.exe",
-	"gameoverlayui":           "steam.exe",
-	"msedgewebview2":          "msedge.exe",
-	"microsoftedgeupdate":     "msedge.exe",
-	"googleupdate":            "chrome.exe",
-	"software_reporter_tool":  "chrome.exe",
-	"epicwebhelper":           "EpicGamesLauncher.exe",
-	"unrealcefsubprocess":     "EpicGamesLauncher.exe",
-	"git-remote-https":        "git-cmd.exe",
-	"git-remote-http":         "git-cmd.exe",
-	"git-lfs":                 "git-cmd.exe",
+	"wechatappex":            "WeChat.exe",
+	"wechatplayer":           "WeChat.exe",
+	"wechatutility":          "WeChat.exe",
+	"weixinappex":            "Weixin.exe",
+	"steamwebhelper":         "steam.exe",
+	"steamservice":           "steam.exe",
+	"gameoverlayui":          "steam.exe",
+	"msedgewebview2":         "msedge.exe",
+	"microsoftedgeupdate":    "msedge.exe",
+	"googleupdate":           "chrome.exe",
+	"software_reporter_tool": "chrome.exe",
+	"epicwebhelper":          "EpicGamesLauncher.exe",
+	"unrealcefsubprocess":    "EpicGamesLauncher.exe",
+	"git-remote-https":       "git-cmd.exe",
+	"git-remote-http":        "git-cmd.exe",
+	"git-lfs":                "git-cmd.exe",
 }
 
 var windowsSystemHostProcs = map[string]bool{

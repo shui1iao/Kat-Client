@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,9 +14,10 @@ import (
 
 // sniffResult is what sniffing learned about one connection or UDP target.
 type sniffResult struct {
-	proto    string // tls | http | quic ("" = unknown)
-	host     string // sniffed domain ("" = none)
-	override bool   // replace an IP destination by host
+	proto        string // tls | http | quic ("" = unknown)
+	host         string // sniffed domain ("" = none)
+	override     bool   // replace an IP destination by host
+	skipFallback bool   // raw SNI/Host hit skip_domain: forbid override and DNS map fallback
 }
 
 type sniffKey struct{}
@@ -32,13 +34,54 @@ func sniffOf(ctx context.Context) *sniffResult {
 	return r
 }
 
+func isECHOuterSNI(host string) bool {
+	h := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
+	return h == "cloudflare-ech.com" || strings.HasSuffix(h, ".cloudflare-ech.com")
+}
+
+func (o *SniffOptions) applyResult(proto, rawHost string) *sniffResult {
+	res := &sniffResult{proto: proto}
+	if o != nil {
+		res.override = o.OverrideDestination
+	}
+	trimmed := strings.TrimSuffix(strings.TrimSpace(rawHost), ".")
+	h := strings.ToLower(trimmed)
+	if h == "" || isECHOuterSNI(h) {
+		res.override = false
+		return res
+	}
+	if o.skipDomain(h) {
+		res.override = false
+		res.skipFallback = true
+		if dom := sniff.DomainOnly(trimmed); dom != "" {
+			if _, e := dnsName(dom); e == nil {
+				res.host = dom
+			}
+		}
+		return res
+	}
+	dom := sniff.DomainOnly(trimmed)
+	if dom == "" {
+		res.override = false
+		return res
+	}
+	if _, e := dnsName(dom); e != nil {
+		res.override = false
+		return res
+	}
+	res.host = dom
+	return res
+}
+
 // target applies override_destination: an IP destination becomes the
-// sniffed domain (the server resolves it). A domain destination is kept.
+// sniffed domain (the server resolves it). A domain destination or a LAN /
+// private IP destination is kept.
 func (r *sniffResult) target(a Address) Address {
 	if r == nil || !r.override || r.host == "" {
 		return a
 	}
-	if _, e := netip.ParseAddr(a.Host); e != nil {
+	ip, e := netip.ParseAddr(a.Host)
+	if e != nil || isLANTargetIP(ip) {
 		return a
 	}
 	return Address{r.host, a.Port}
@@ -49,7 +92,7 @@ func (r *sniffResult) target(a Address) Address {
 // result could not change anything (no rules and no override).
 func (s *Server) sniffWanted(ctx context.Context, port uint16, udp bool) *SniffOptions {
 	im := inboundMetaOf(ctx)
-	if im == nil || im.sniff == nil {
+	if im == nil || im.sniff == nil || !im.sniff.Enabled {
 		return nil
 	}
 	o := im.sniff
@@ -96,9 +139,9 @@ func (s *Server) sniffStream(ctx context.Context, c net.Conn, target Address) (c
 		select {
 		case r := <-ch:
 			buf = append(buf, r.b...)
-			proto, host, st := sniff.Stream(buf)
+			proto, _, rawHost, st := sniff.StreamRaw(buf)
 			if st == sniff.Done {
-				res.proto, res.host = proto, host
+				res = o.applyResult(proto, rawHost)
 			}
 			if r.err != nil {
 				return withSniff(ctx, res), &sniffedConn{Conn: c, err: r.err}, buf
@@ -185,7 +228,7 @@ const (
 // newUDPSniffer returns nil when the association is not sniffed.
 func (a *udpAssociation) newUDPSniffer() *udpSniffer {
 	im := inboundMetaOf(a.ctx)
-	if im == nil || im.sniff == nil || len(im.sniff.udp) == 0 {
+	if im == nil || im.sniff == nil || !im.sniff.Enabled || len(im.sniff.udp) == 0 {
 		return nil
 	}
 	if !im.sniff.OverrideDestination && !a.server.networkPolicy() {
@@ -232,10 +275,10 @@ func (u *udpSniffer) packet(a *udpAssociation, p packet, idle time.Duration) {
 	}
 	st.last = now
 	if sniff.IsInitial(p.payload) {
-		host, status := st.q.Add(p.payload)
+		_, rawHost, status := st.q.AddRaw(p.payload)
 		switch status {
 		case sniff.Done:
-			u.decide(a, st, &sniffResult{proto: sniff.ProtoQUIC, host: host, override: u.opt.OverrideDestination}, p, idle)
+			u.decide(a, st, u.opt.applyResult(sniff.ProtoQUIC, rawHost), p, idle)
 			return
 		case sniff.NeedMore:
 			st.quic = true

@@ -21,7 +21,7 @@ type DNSLogsReply struct {
 }
 
 type DNSCacheListReply struct {
-	Capacity int                  `json:"capacity"`
+	Capacity int                   `json:"capacity"`
 	Entries  []kernel.DNSCacheItem `json:"entries"`
 }
 

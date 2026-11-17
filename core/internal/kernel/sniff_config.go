@@ -1,18 +1,113 @@
 package kernel
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/shui1iao/Kat/internal/procattr"
 	"net"
 	"net/netip"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/shui1iao/Kat/internal/route"
 )
+
+// DefaultSkipDomains is the built-in skip_domain exclusion list used when
+// SniffOptions.SkipDomain is nil (omitted in user configuration).
+var DefaultSkipDomains = []string{"+.push.apple.com", "Mijia Cloud", "+.io.mi.com", "+.cloudflare-ech.com"}
+
+var defaultSkipPatterns = func() []sniffSkipPattern {
+	p, _ := compileSkipDomains(DefaultSkipDomains)
+	return p
+}()
+
+type sniffSkipPattern struct {
+	suffix bool
+	value  string // lower-case normalized
+}
+
+func validateSkipSuffixBody(rest string) error {
+	body := strings.TrimSuffix(rest, ".")
+	if body == "" || strings.IndexFunc(body, unicode.IsSpace) >= 0 {
+		return errors.New("sniff skip_domain suffix must not be empty")
+	}
+	for _, label := range strings.Split(body, ".") {
+		if label == "" {
+			return errors.New("sniff skip_domain suffix must not contain empty labels")
+		}
+	}
+	return nil
+}
+
+func ValidateSkipDomains(list []string) error {
+	if len(list) > 128 {
+		return errors.New("sniff skip_domain allows at most 128 entries")
+	}
+	for _, raw := range list {
+		if !utf8.ValidString(raw) {
+			return errors.New("sniff skip_domain must be valid UTF-8")
+		}
+		for _, r := range raw {
+			if unicode.IsControl(r) {
+				return errors.New("sniff skip_domain must not contain control characters")
+			}
+		}
+		s := strings.TrimSpace(raw)
+		if len(s) < 1 || len(s) > 253 {
+			return errors.New("sniff skip_domain entry must be 1..253 bytes")
+		}
+		switch {
+		case strings.HasPrefix(s, "+."), strings.HasPrefix(s, "*."):
+			if err := validateSkipSuffixBody(s[2:]); err != nil {
+				return err
+			}
+		case strings.HasPrefix(s, "."):
+			if err := validateSkipSuffixBody(s[1:]); err != nil {
+				return err
+			}
+		default:
+			if strings.Trim(s, ". ") == "" {
+				return errors.New("sniff skip_domain entry must not be empty")
+			}
+		}
+	}
+	return nil
+}
+
+func compileSkipDomains(list []string) ([]sniffSkipPattern, error) {
+	if err := ValidateSkipDomains(list); err != nil {
+		return nil, err
+	}
+	out := make([]sniffSkipPattern, 0, len(list))
+	for _, raw := range list {
+		s := strings.ToLower(strings.TrimSpace(raw))
+		switch {
+		case strings.HasPrefix(s, "+."):
+			v := strings.TrimSuffix(s[2:], ".")
+			out = append(out, sniffSkipPattern{suffix: true, value: v})
+		case strings.HasPrefix(s, "*."):
+			v := strings.TrimSuffix(s[2:], ".")
+			out = append(out, sniffSkipPattern{suffix: true, value: v})
+		case strings.HasPrefix(s, "."):
+			v := strings.TrimSuffix(s[1:], ".")
+			out = append(out, sniffSkipPattern{suffix: true, value: v})
+		default:
+			v := strings.TrimSuffix(s, ".")
+			if v == "" {
+				v = s
+			}
+			out = append(out, sniffSkipPattern{suffix: false, value: v})
+		}
+	}
+	return out, nil
+}
 
 // SniffOptions enables traffic sniffing on one inbound (0.7.0). The sniffed
 // domain (TLS SNI, HTTP Host, QUIC SNI) and protocol are used by the rules;
@@ -24,8 +119,60 @@ type SniffOptions struct {
 	UDPPorts            string   `json:"udp_ports,omitempty"` // default 443; "none" disables
 	Timeout             Duration `json:"timeout,omitempty"`   // first-data wait, default 300ms
 	OverrideDestination bool     `json:"override_destination,omitempty"`
+	SkipDomain          []string `json:"skip_domain,omitempty"`
 
-	tcp, udp route.PortList
+	tcp, udp  route.PortList
+	skip      []sniffSkipPattern
+	skipReady bool
+}
+
+func (o SniffOptions) MarshalJSON() ([]byte, error) {
+	m := map[string]any{
+		"enabled": o.Enabled,
+	}
+	if o.TCPPorts != "" {
+		m["tcp_ports"] = o.TCPPorts
+	}
+	if o.UDPPorts != "" {
+		m["udp_ports"] = o.UDPPorts
+	}
+	if o.Timeout != 0 {
+		m["timeout"] = o.Timeout
+	}
+	if o.OverrideDestination {
+		m["override_destination"] = true
+	}
+	if o.SkipDomain != nil {
+		m["skip_domain"] = o.SkipDomain
+	}
+	return json.Marshal(m)
+}
+
+func (o *SniffOptions) UnmarshalJSON(b []byte) error {
+	type plain SniffOptions
+	var p plain
+	if e := strictNetworkJSON(b, &p); e != nil {
+		return e
+	}
+	var m map[string]json.RawMessage
+	_ = json.Unmarshal(b, &m)
+	if raw, ok := m["skip_domain"]; ok {
+		var items []json.RawMessage
+		if json.Unmarshal(raw, &items) != nil {
+			return errNetworkConfig
+		}
+		for _, item := range items {
+			it := bytes.TrimSpace(item)
+			if len(it) == 0 || it[0] != '"' {
+				return errNetworkConfig
+			}
+		}
+		if p.SkipDomain == nil {
+			p.SkipDomain = []string{}
+		}
+	}
+	*o = SniffOptions(p)
+	return nil
 }
 
 const (
@@ -63,7 +210,42 @@ func (o *SniffOptions) normalize() error {
 	if o.Timeout.value() < time.Millisecond || o.Timeout.value() > maxSniffTimeout {
 		return errors.New("sniff timeout must be between 1ms and 2s")
 	}
+	if o.SkipDomain == nil {
+		o.skip = defaultSkipPatterns
+	} else {
+		p, e := compileSkipDomains(o.SkipDomain)
+		if e != nil {
+			return e
+		}
+		o.skip = p
+	}
+	o.skipReady = true
 	return nil
+}
+
+func (o *SniffOptions) skipDomain(host string) bool {
+	h := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
+	if h == "" {
+		return false
+	}
+	patterns := defaultSkipPatterns
+	if o != nil {
+		if o.skipReady {
+			patterns = o.skip
+		} else if o.SkipDomain != nil {
+			patterns, _ = compileSkipDomains(o.SkipDomain)
+		}
+	}
+	for _, p := range patterns {
+		if p.suffix {
+			if h == p.value || (len(h) > len(p.value) && strings.HasSuffix(h, p.value) && h[len(h)-len(p.value)-1] == '.') {
+				return true
+			}
+		} else if h == p.value {
+			return true
+		}
+	}
+	return false
 }
 
 // sniffTCP reports whether a TCP stream to port is sniffed on this inbound.
@@ -126,7 +308,7 @@ func withInboundMeta(ctx context.Context, in *Inbound, local, remote net.Addr) c
 		n, _ := strconv.Atoi(p)
 		m.port = uint16(n)
 	}
-	if in.Sniff != nil && in.Sniff.Enabled {
+	if in.Sniff != nil {
 		m.sniff = in.Sniff
 	}
 	return context.WithValue(ctx, inMetaKey{}, m)
@@ -166,7 +348,7 @@ func (s *Server) currentInboundMeta(ctx context.Context, acc *Server) context.Co
 		}
 		n := *m
 		n.name, n.sniff = in.Name, nil
-		if in.Sniff != nil && in.Sniff.Enabled {
+		if in.Sniff != nil {
 			n.sniff = in.Sniff
 		}
 		return context.WithValue(ctx, inMetaKey{}, &n)

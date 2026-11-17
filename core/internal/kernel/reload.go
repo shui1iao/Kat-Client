@@ -244,6 +244,7 @@ func (k *core) prepareContext(ctx context.Context, c Config, prev *Server) (*Ser
 	}
 	dns.setDiagnostic(g.runtimeDiagnostic)
 	dns.setEventSink(g.core.dnsSink)
+	dns.setOwner(g)
 	dns.configureIO(c.IPv6Disabled(), bootstrap, dial, physical, system)
 	g.dns = dns
 	if e := g.configureClientDNS(bootstrap, dial, physical, system); e != nil {
@@ -382,6 +383,9 @@ func (k *core) commitContext(caller context.Context, g *Server, p *plan) error {
 		}
 	}
 	k.gen.Store(g)
+	if prev != nil && k.dnsHosts != nil {
+		k.dnsHosts.bump()
+	}
 	k.bindMu.Unlock()
 	k.selMu.Lock()
 	k.selections = p.sel

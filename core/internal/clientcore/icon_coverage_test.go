@@ -1,12 +1,12 @@
 package clientcore
 
 import (
-	"net/netip"
 	"bytes"
 	"encoding/base64"
 	"image"
 	"image/color"
 	"image/png"
+	"net/netip"
 	"net/url"
 	"os"
 	"strings"
@@ -32,10 +32,10 @@ func TestPEIconExtractionRealWindowsBinaries(t *testing.T) {
 	if tested == 0 {
 		// Deterministic synthetic DIB fallback check so test stays portable in any isolated environment
 		dib := make([]byte, 40+4*4*4+4*4)
-		dib[0] = 40 // biSize = 40
-		dib[4] = 4  // width = 4
-		dib[8] = 8  // height = 4*2
-		dib[12] = 1 // planes = 1
+		dib[0] = 40  // biSize = 40
+		dib[4] = 4   // width = 4
+		dib[8] = 8   // height = 4*2
+		dib[12] = 1  // planes = 1
 		dib[14] = 32 // 32bpp
 		for i := 0; i < 16; i++ {
 			off := 40 + i*4
@@ -50,27 +50,27 @@ func TestPEIconExtractionRealWindowsBinaries(t *testing.T) {
 
 func TestIconDomainAndRuleCoverage(t *testing.T) {
 	cases := map[string]string{
-		"raw.githubusercontent.com":          "github.com",
-		"collector.github.com":               "github.com",
-		"rr3---sn-i3b7kn7d.googlevideo.com":  "youtube.com",
-		"cdn4.telesco.pe":                    "telegram.org",
-		"upos-sz-mirrorcos.bilivideo.com":    "bilibili.com",
-		"i0.hdslb.com":                       "bilibili.com",
-		"p3-pc-sign.douyinpic.com":           "douyin.com",
-		"api.openai.com":                     "chatgpt.com",
-		"generativelanguage.googleapis.com":  "gemini.google.com",
-		"api.some-indie-app.io":              "some-indie-app.io",
-		"cdn-2.another-site.org":             "another-site.org",
-		"ws-gw.chat-service.net":             "chat-service.net",
-		"www.example.com":                    "example.com",
+		"raw.githubusercontent.com":         "github.com",
+		"collector.github.com":              "github.com",
+		"rr3---sn-i3b7kn7d.googlevideo.com": "youtube.com",
+		"cdn4.telesco.pe":                   "telegram.org",
+		"upos-sz-mirrorcos.bilivideo.com":   "bilibili.com",
+		"i0.hdslb.com":                      "bilibili.com",
+		"p3-pc-sign.douyinpic.com":          "douyin.com",
+		"api.openai.com":                    "chatgpt.com",
+		"generativelanguage.googleapis.com": "gemini.google.com",
+		"api.some-indie-app.io":             "some-indie-app.io",
+		"cdn-2.another-site.org":            "another-site.org",
+		"ws-gw.chat-service.net":            "chat-service.net",
+		"www.example.com":                   "example.com",
 		// Distinct product / self-hosted subdomains MUST preserve their own subdomain!
-		"se.siaoz.si":                        "se.siaoz.si",
-		"duanju.siaoz.si":                    "duanju.siaoz.si",
-		"mail.google.com":                    "mail.google.com",
-		"live.bilibili.com":                  "live.bilibili.com",
+		"se.siaoz.si":       "se.siaoz.si",
+		"duanju.siaoz.si":   "duanju.siaoz.si",
+		"mail.google.com":   "mail.google.com",
+		"live.bilibili.com": "live.bilibili.com",
 		// Multi-tenant shared CDNs return "" so IP / Rule hints take over instead of wrong company logo
-		"e13678.dscb.akamaiedge.net":         "",
-		"d111111abcdef8.cloudfront.net":      "",
+		"e13678.dscb.akamaiedge.net":    "",
+		"d111111abcdef8.cloudfront.net": "",
 	}
 	for input, want := range cases {
 		got := normalizeIconTargetDomain(input)
@@ -115,7 +115,6 @@ func TestHTMLIconParserBeyond32Links(t *testing.T) {
 		t.Fatalf("unexpected extracted icon URLs: %+v", urls)
 	}
 }
-
 
 func TestMSIXManifestInlineDataAndDoHIPFeedback(t *testing.T) {
 	// 1. MSIX AppxManifest.xml high-DPI scale-200 logo extraction

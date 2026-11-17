@@ -2465,6 +2465,16 @@
         "timeout": {
           "type": "string",
           "description": "Kernel Go duration: 1ms–2s, zero uses 300ms default; omitted uses default."
+        },
+        "skip_domain": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253
+          },
+          "description": "Domains or SNI literals (+./*./. non-empty, non-whitespace suffix body after stripping prefix and trailing dots, or exact literal match such as Mijia Cloud) excluded from destination override; each trimmed entry must be valid UTF-8 of 1–253 UTF-8 bytes with no C0/C1 control characters. Omitted uses built-in defaults (+.push.apple.com, Mijia Cloud, +.io.mi.com, +.cloudflare-ech.com); explicit [] clears the list so no domains are skipped."
         }
       },
       "required": [
@@ -4795,7 +4805,7 @@
   },
   "x-client-sniff": {
     "$ref": "#/$defs/clientSniff",
-    "description": "Optional client.sniff. Omitted is disabled; exact source bytes retained. Applies to generated kat-client inbound, including system proxy and TUN."
+    "description": "Optional client.sniff. Omitted defaults to enabled (enabled: true, override_destination: true, built-in skip_domain defaults); exact source bytes retained. Applies to generated kat-client inbound, including system proxy and TUN."
   },
   "x-client-network": {
     "$ref": "#/$defs/clientNetworkSettings"

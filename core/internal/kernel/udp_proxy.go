@@ -50,6 +50,7 @@ func (a *udpAssociation) sendProxy(name string, dst Address, payload []byte, tar
 			chain = append(append([]string(nil), chain...), memberName)
 		}
 	}
+	a.flow.setRemoteDNS(chain, dst.Host)
 	rt := a.flow.udpDecided(target, rule, chain)
 	if memberName != "" {
 		ses.members.Store(memberName, rt)
@@ -80,6 +81,7 @@ func (a *udpAssociation) sendProxy(name string, dst Address, payload []byte, tar
 	if pc, ok := ses.pc.(interface{ MemberFor(outbound.Addr) string }); ok {
 		if actual := pc.MemberFor(outbound.Addr{Host: dst.Host, Port: dst.Port}); actual != "" && actual != memberName {
 			chain = append(append([]string(nil), ses.chain...), actual)
+			a.flow.setRemoteDNS(chain, dst.Host)
 			rt = a.flow.udpDecided(target, rule, chain)
 			ses.members.Store(actual, rt)
 		}

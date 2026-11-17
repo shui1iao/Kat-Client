@@ -386,9 +386,10 @@ func (c *Config) validateNetwork() error {
 	if e != nil {
 		return e
 	}
+	_ = eps
 	if c.DNS != nil && c.DNS.CacheEntries != nil {
 		n := *c.DNS.CacheEntries
-		if n < 0 || n > 4096 || len(eps) == 0 && n != 0 {
+		if n < 0 || n > 4096 {
 			return errNetworkConfig
 		}
 	}

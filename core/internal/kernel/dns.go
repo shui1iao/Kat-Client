@@ -41,13 +41,15 @@ type internalDNS struct {
 	wireCache    map[string]dnsWireEntry
 	upstreams    []*dnsUpstream
 	// Instance-local I/O seam; production always uses the ordinary direct dialer.
-	dial      func(context.Context, string, string) (net.Conn, error)
-	capacity  int
-	slots     chan struct{}
+	dial         func(context.Context, string, string) (net.Conn, error)
+	capacity     int
+	slots        chan struct{}
 	mu        sync.Mutex
+	clearSeq  uint64
 	cache     map[string]dnsCacheEntry
 	now       func() time.Time
 	bootstrap func(context.Context, string, string) ([]netip.Addr, error)
+	owner     *Server
 }
 
 type dnsUpstream struct {
@@ -63,13 +65,10 @@ func newInternalDNS(o *DNSOptions) (*internalDNS, error) {
 		return nil, e
 	}
 	r := &internalDNS{capacity: 256, slots: make(chan struct{}, 64), cache: make(map[string]dnsCacheEntry), now: time.Now, bootstrap: net.DefaultResolver.LookupNetIP, dial: (&net.Dialer{}).DialContext}
-	if len(eps) == 0 {
-		r.capacity = 0
-	}
 	if o != nil && o.CacheEntries != nil {
 		r.capacity = *o.CacheEntries
 	}
-	if r.capacity < 0 || r.capacity > 4096 || len(eps) == 0 && r.capacity != 0 {
+	if r.capacity < 0 || r.capacity > 4096 {
 		return nil, errNetworkConfig
 	}
 	r.wireCache = map[string]dnsWireEntry{}
@@ -107,39 +106,70 @@ func newInternalDNS(o *DNSOptions) (*internalDNS, error) {
 	}
 	return r, nil
 }
-func (r *internalDNS) close() {
-	if r != nil {
-		for _, p := range r.rules {
-			p.resolver.close()
-		}
-		for _, u := range r.upstreams {
-			if u.transport != nil {
-				u.transport.CloseIdleConnections()
-			}
-		}
+func (r *internalDNS) beginHostScope(epoch uint64) dnsHostScope {
+	if r == nil || r.owner == nil {
+		return dnsHostScope{}
 	}
+	return r.owner.beginDNSHostScopeWithEpoch(epoch)
+}
+
+func (r *internalDNS) recordHosts(name string, ips []netip.Addr, ttl time.Duration, fromCache bool, scope dnsHostScope) {
+	if r == nil || r.owner == nil || len(ips) == 0 {
+		return
+	}
+	r.owner.recordDNSResolved(name, ips, ttl, fromCache, scope)
+}
+
+func (r *internalDNS) recordHostWire(wire []byte, rem time.Duration, fromCache bool, scope dnsHostScope) {
+	if r == nil || r.owner == nil || len(wire) < 12 {
+		return
+	}
+	r.owner.recordDNSWire(wire, rem, fromCache, scope)
+}
+
+func (r *internalDNS) close() {
+	r.closeVisited(map[*internalDNS]bool{})
 }
 func (r *internalDNS) cached(name string) ([]netip.Addr, bool) {
 	ips, _, ok := r.cachedAnswer(name)
 	return ips, ok
 }
 func (r *internalDNS) cachedAnswer(name string) ([]netip.Addr, string, bool) {
+	ips, srv, _, ok := r.cachedAnswerRem(name)
+	return ips, srv, ok
+}
+func (r *internalDNS) cachedAnswerRem(name string) ([]netip.Addr, string, time.Duration, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	e, ok := r.cache[name]
 	if !ok {
-		return nil, "", false
+		return nil, "", 0, false
 	}
-	if e.epoch != r.dnsEpoch() || !e.expires.After(r.now()) {
+	now := r.now()
+	if e.epoch != r.dnsEpoch() || !e.expires.After(now) {
 		delete(r.cache, name)
-		return nil, "", false
+		return nil, "", 0, false
 	}
-	return append([]netip.Addr(nil), e.ips...), e.server, true
+	return append([]netip.Addr(nil), e.ips...), e.server, e.expires.Sub(now), true
 }
 func (r *internalDNS) cachePut(name string, ips []netip.Addr, ttl time.Duration) {
 	r.cachePutFrom(name, ips, ttl, "")
 }
+func (r *internalDNS) currentClearSeq() uint64 {
+	if r == nil {
+		return 0
+	}
+	r.mu.Lock()
+	seq := r.clearSeq
+	r.mu.Unlock()
+	return seq
+}
+
 func (r *internalDNS) cachePutFrom(name string, ips []netip.Addr, ttl time.Duration, server string, epoch ...uint64) {
+	r.cachePutScoped(name, ips, ttl, server, r.currentClearSeq(), epoch...)
+}
+
+func (r *internalDNS) cachePutScoped(name string, ips []netip.Addr, ttl time.Duration, server string, expectedSeq uint64, epoch ...uint64) {
 	wanted := r.dnsEpoch()
 	if len(epoch) > 0 {
 		wanted = epoch[0]
@@ -149,7 +179,7 @@ func (r *internalDNS) cachePutFrom(name string, ips []netip.Addr, ttl time.Durat
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if wanted != r.dnsEpoch() {
+	if wanted != r.dnsEpoch() || r.clearSeq != expectedSeq {
 		return
 	}
 	now := r.now()
@@ -227,6 +257,8 @@ func (r *internalDNS) lookupAnswer(ctx context.Context, name string) (answer []n
 	}()
 	ctx, cancel, epoch := r.dnsScope(ctx)
 	defer cancel()
+	hostScope := r.beginHostScope(epoch)
+	startSeq := r.currentClearSeq()
 	name, e := dnsName(name)
 	if e != nil {
 		return nil, "", false, errDNS
@@ -235,6 +267,7 @@ func (r *internalDNS) lookupAnswer(ctx context.Context, name string) (answer []n
 		return nil, "", false, ctx.Err()
 	}
 	if ips, ok := r.host(name); ok {
+		r.recordHosts(name, ips, time.Hour, false, hostScope)
 		return ips, "hosts", false, nil
 	}
 	if p := r.policy(name); p != r {
@@ -245,20 +278,25 @@ func (r *internalDNS) lookupAnswer(ctx context.Context, name string) (answer []n
 		delegated = true
 		return r.local.lookupAnswer(ctx, name)
 	}
+	if r.capacity > 0 {
+		if ips, server, rem, ok := r.cachedAnswerRem(name); ok {
+			if epoch != r.dnsEpoch() {
+				return nil, "", false, context.Canceled
+			}
+			r.recordHosts(name, ips, rem, true, hostScope)
+			return ips, server, true, nil
+		}
+	}
 	if len(r.upstreams) == 0 {
 		ips, err := r.bootstrap(ctx, "ip", name)
 		if epoch != r.dnsEpoch() {
 			return nil, "", false, context.Canceled
 		}
-		return ips, "system", false, err
-	}
-	if r.capacity > 0 {
-		if ips, server, ok := r.cachedAnswer(name); ok {
-			if epoch != r.dnsEpoch() {
-				return nil, "", false, context.Canceled
-			}
-			return ips, server, true, nil
+		if err == nil && len(ips) > 0 {
+			r.cachePutScoped(name, ips, 45*time.Second, "system", startSeq, epoch)
+			r.recordHosts(name, ips, 45*time.Second, false, hostScope)
 		}
+		return ips, "system", false, err
 	}
 	// Acquire BEFORE spawning the two family workers. No unbounded per-query workers.
 	select {
@@ -305,8 +343,9 @@ func (r *internalDNS) lookupAnswer(ctx context.Context, name string) (answer []n
 		}
 		if len(ips) > 0 {
 			if complete {
-				r.cachePutFrom(name, ips, ttl, u.ep.label(), epoch)
+				r.cachePutScoped(name, ips, ttl, u.ep.label(), startSeq, epoch)
 			}
+			r.recordHosts(name, ips, ttl, false, hostScope)
 			return ips, u.ep.label(), false, nil
 		}
 		if terminal {
@@ -336,6 +375,7 @@ func (r *internalDNS) lookupAnswer(ctx context.Context, name string) (answer []n
 	if epoch != r.dnsEpoch() {
 		return nil, "", false, context.Canceled
 	}
+	r.recordHosts(name, ips, 45*time.Second, false, hostScope)
 	return ips, "system", false, nil
 }
 

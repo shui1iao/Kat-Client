@@ -154,8 +154,8 @@ func configuredDNS(t *testing.T, server string, cache int) *internalDNS {
 
 func TestDNSRoutingStrictSchema(t *testing.T) {
 	base := `{"inbounds":[{"protocol":"socks5","listen":"127.0.0.1:0"}]}`
-	good := []string{``, `,"dns":{}`, `,"dns":{"server":"system","cache_entries":0}`, `,"dns":{"server":"8.8.8.8"}`, `,"dns":{"server":"dns.google:53"}`, `,"dns":{"server":"tcp://dns.google:53"}`, `,"dns":{"server":"udp://[::1]:53"}`, `,"dns":{"server":"https://dns.google/dns-query"}`, `,"routing":{"rules":[{"domain_suffix":"Example.COM.","action":"reject"},{"ip_cidr":"192.0.2.8/24","action":"direct"}]}`}
-	bad := []string{`,"dns":null`, `,"routing":null`, `,"dns":[]`, `,"dns":{"server":""}`, `,"dns":{"server":null}`, `,"dns":{"server":"system","cache_entries":1}`, `,"dns":{"cache_entries":null}`, `,"dns":{"cache_entries":1.5}`, `,"dns":{"cache_entries":4097}`, `,"dns":{"server":"udp://a:0"}`, `,"dns":{"server":"tls://dns.google"}`, `,"dns":{"server":"udp://a/path"}`, `,"dns":{"server":"https://user@host/query"}`, `,"dns":{"server":"https://host"}`, `,"dns":{"server":"https://host/query?x=y"}`, `,"dns":{"unknown":1}`, `,"routing":{"rules":null}`, `,"routing":{"rules":{}}`, `,"routing":{"rules":[{"domain":"x","action":"proxy"}]}`, `,"routing":{"rules":[{"domain":"x","ip_cidr":"::/0","action":"reject"}]}`, `,"routing":{"rules":[{"domain":"","action":"direct"}]}`, `,"routing":{"rules":[{"domain":"*.x","action":"direct"}]}`, `,"routing":{"rules":[{"domain":"x..y","action":"direct"}]}`, `,"routing":{"rules":[{"ip_cidr":"bad","action":"direct"}]}`, `,"routing":{"rules":[{"domain":"x","action":"direct","other":1}]}`}
+	good := []string{``, `,"dns":{}`, `,"dns":{"server":"system","cache_entries":0}`, `,"dns":{"server":"system","cache_entries":1}`, `,"dns":{"server":"8.8.8.8"}`, `,"dns":{"server":"dns.google:53"}`, `,"dns":{"server":"tcp://dns.google:53"}`, `,"dns":{"server":"udp://[::1]:53"}`, `,"dns":{"server":"https://dns.google/dns-query"}`, `,"routing":{"rules":[{"domain_suffix":"Example.COM.","action":"reject"},{"ip_cidr":"192.0.2.8/24","action":"direct"}]}`}
+	bad := []string{`,"dns":null`, `,"routing":null`, `,"dns":[]`, `,"dns":{"server":""}`, `,"dns":{"server":null}`, `,"dns":{"cache_entries":null}`, `,"dns":{"cache_entries":1.5}`, `,"dns":{"cache_entries":4097}`, `,"dns":{"server":"udp://a:0"}`, `,"dns":{"server":"tls://dns.google"}`, `,"dns":{"server":"udp://a/path"}`, `,"dns":{"server":"https://user@host/query"}`, `,"dns":{"server":"https://host"}`, `,"dns":{"server":"https://host/query?x=y"}`, `,"dns":{"unknown":1}`, `,"routing":{"rules":null}`, `,"routing":{"rules":{}}`, `,"routing":{"rules":[{"domain":"x","action":"proxy"}]}`, `,"routing":{"rules":[{"domain":"x","ip_cidr":"::/0","action":"reject"}]}`, `,"routing":{"rules":[{"domain":"","action":"direct"}]}`, `,"routing":{"rules":[{"domain":"*.x","action":"direct"}]}`, `,"routing":{"rules":[{"domain":"x..y","action":"direct"}]}`, `,"routing":{"rules":[{"ip_cidr":"bad","action":"direct"}]}`, `,"routing":{"rules":[{"domain":"x","action":"direct","other":1}]}`}
 	for _, tc := range append(good, bad...) {
 		p := filepath.Join(t.TempDir(), "c.json")
 		s := strings.TrimSuffix(base, "}") + tc + "}"
@@ -227,8 +227,8 @@ func TestDNSRoutingTransportsBootstrapCache(t *testing.T) {
 		t.Fatal("domain upstream bootstrap", e, bootstrap.Load())
 	}
 	system, _ := newInternalDNS(&DNSOptions{Server: "system"})
-	if system.capacity != 0 {
-		t.Fatal("system cache changed")
+	if system.capacity != 256 {
+		t.Fatal("system cache changed", system.capacity)
 	}
 	t.Logf("isolated upstream queries=%d tcp=%d; no public DNS", f.count.Load(), f.tcpCount.Load())
 }
@@ -406,4 +406,3 @@ func TestDNSRoutingConcurrentCancelAndPartialCache(t *testing.T) {
 		t.Fatal("zero TTL cached or slots leaked")
 	}
 }
-

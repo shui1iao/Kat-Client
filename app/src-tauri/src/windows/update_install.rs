@@ -1,5 +1,12 @@
 //! Fixed protected install/core journal. Every mutation caller holds InstallLock.
-use crate::{error::{Error,Result},install_location::Record};
+use crate::{
+    error::{Error, Result},
+    install_location::Record,
+    update_handoff_protocol::{
+        evaluate_process_ownership, evaluate_residual_kill, ResidualCandidate,
+        ResidualTargetPolicy, ServiceCoreOwnership, MANAGED_CLIENT_ROLES,
+    },
+};
 use super::{identity::{self,wide,Handle},installer::{secure_create,Binding},security,scm::{self,ScHandle}};
 use std::{collections::BTreeMap,path::{Path,PathBuf},io::{Read,Write}};
 use windows_sys::Win32::{Foundation::*,Storage::FileSystem::*,System::{Services::*,Threading::*}};
@@ -157,22 +164,102 @@ fn load(dir:&Path)->Result<Option<Journal>>{
  if !p.exists()&&next.exists(){let j:Journal=read_protected(&next,4*1024*1024)?.ok_or_else(bad)?;j.validate(dir)?;move_replace(&next,&p)?;}
  let j:Option<Journal>=read_protected(&p,4*1024*1024)?;if let Some(j)=&j{j.validate(dir)?;}Ok(j)
 }
-pub(super) fn terminate_installed_processes(root:&Path,runtime:&Path,skip_pid:u32){unsafe{
+
+fn service_core_ownership(dir:&Path)->Option<ServiceCoreOwnership>{
+ let path=if dir.join("core-tun-journal-v2.json").exists(){dir.join("core-tun-journal-v2.json")}else{dir.join("core-tun-journal-v2.next")};
+ let cj:super::core_tun_recovery::journal::Journal=read_protected(&path,65536).ok()??;
+ if cj.validate().is_err(){return None;}
+ Some(ServiceCoreOwnership{
+  core_pid:cj.launch.core_pid,
+  core_created:cj.launch.core_created,
+  owner_sid:cj.launch.owner_sid,
+  session:cj.launch.session,
+ })
+}
+
+fn journal_approved_hashes(j:&Journal)->BTreeMap<String,Vec<String>>{
+ let mut map:BTreeMap<String,Vec<String>>=BTreeMap::new();
+ let mut push=|role:&str,hash:&str|{
+  if lower_hex(hash,64){
+   let list=map.entry(role.to_ascii_lowercase()).or_default();
+   if !list.iter().any(|h|h==hash){list.push(hash.to_owned());}
+  }
+ };
+ for r in [&j.old_record,&j.new_record].into_iter().flatten(){
+  if let Some(hashes)=&r.hashes{
+   for &role in MANAGED_CLIENT_ROLES{if let Some(h)=hashes.get(role){push(role,h);}}
+  }
+ }
+ for f in &j.files{
+  if f.area==Area::App&&MANAGED_CLIENT_ROLES.contains(&f.name.as_str()){
+   if let Some(h)=&f.old{push(&f.name,h);}
+   if let Some(h)=&f.new{push(&f.name,h);}
+  }
+ }
+ map
+}
+
+fn inspect_candidate(pid:u32,self_pid:u32,skip_pid:u32,exe_name:&str,root:&Path,need_hash:bool)->Option<(Handle,ResidualCandidate)>{
+ unsafe{
+  let p=Handle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION|SYNCHRONIZE,0,pid));
+  if p.0.is_null(){return None;}
+  let role=exe_name.to_ascii_lowercase();
+  let img_path=security::image(p.0).ok();
+  let expected_file=root.join(&role);
+  // Require real NTFS volume+file-index match against target_root\<role>; never name-only OR.
+  let canonical_img=match &img_path{
+   Some(actual)if security::same_path(actual,&expected_file)=>Some(expected_file.to_string_lossy().into_owned()),
+   _=>None,
+  };
+  let image_protected=canonical_img.is_some()&&img_path.as_ref().is_some_and(|ip|security::verify_protected(ip).is_ok());
+  let image_sha256=if need_hash&&image_protected{
+   img_path.as_ref().and_then(|ip|read_regular(ip,MAX_ASSET).ok().map(|b|digest(&b)))
+  }else{None};
+  let id=identity::process_identity(p.0).ok();
+  let stamp=identity::process_stamp(p.0).ok();
+  Some((p,ResidualCandidate{
+   pid,
+   self_pid,
+   skip_pid,
+   exe_name:role,
+   image_path:canonical_img,
+   image_protected,
+   image_sha256,
+   proc_sid:id.as_ref().map(|v|v.sid.clone()),
+   proc_session:id.as_ref().map(|v|v.session),
+   proc_stamp:stamp,
+  }))
+ }
+}
+
+/// Strictly bounded residual recovery termination ONLY when a dirty `install-transaction.json`
+/// exists. Simultaneously verifies target install directory, protected approved image identity,
+/// and user/session ownership (including `LaunchIdentity` for SYSTEM-hosted core).
+fn terminate_residual_processes(j:&Journal,dir:&Path,caller_session:u32,skip_pid:u32){unsafe{
  use windows_sys::Win32::System::Diagnostics::ToolHelp::*;
+ let root=Path::new(&j.root);
+ let policy=ResidualTargetPolicy{
+  target_root:j.root.clone(),
+  target_sid:j.sid.clone(),
+  caller_session,
+  approved_role_hashes:journal_approved_hashes(j),
+  service_core:service_core_ownership(dir),
+ };
  let self_pid=std::process::id();
  let snap=Handle(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0));if snap.0==INVALID_HANDLE_VALUE{return;}
  let mut e=PROCESSENTRY32W{dwSize:std::mem::size_of::<PROCESSENTRY32W>()as u32,..Default::default()};
  let mut more=Process32FirstW(snap.0,&mut e);let mut handles=Vec::new();
  while more!=0{
   let pid=e.th32ProcessID;
-  if pid!=0&&pid!=self_pid&&pid!=skip_pid{
-   let n=identity::string(e.szExeFile.as_ptr()).to_ascii_lowercase();
-   if matches!(n.as_str(),"kat-client-core.exe"|"kat-desktop.exe"|"kat-proxy-watchdog.exe"|"kat-elevate-helper.exe"){
-    let p=Handle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION|PROCESS_TERMINATE|SYNCHRONIZE,0,pid));
-    if !p.0.is_null(){
-     let in_target=security::image(p.0).ok().is_some_and(|img|img.parent().is_some_and(|d|security::same_path(d,root)||security::same_path(d,runtime)));
-     if in_target||n=="kat-client-core.exe"||n=="kat-proxy-watchdog.exe"||n=="kat-elevate-helper.exe"{
-      let _=TerminateProcess(p.0,0);handles.push(p);
+  let n=identity::string(e.szExeFile.as_ptr()).to_ascii_lowercase();
+  if pid!=0&&pid!=self_pid&&pid!=skip_pid&&MANAGED_CLIENT_ROLES.contains(&n.as_str()){
+   if let Some((_query,cand))=inspect_candidate(pid,self_pid,skip_pid,&n,root,true){
+    if evaluate_residual_kill(&cand,&policy){
+     if let Some(expected_stamp)=cand.proc_stamp{
+      let term=Handle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION|PROCESS_TERMINATE|SYNCHRONIZE,0,pid));
+      if !term.0.is_null()&&identity::process_stamp(term.0).ok()==Some(expected_stamp){
+       let _=TerminateProcess(term.0,0);handles.push(term);
+      }
      }
     }
    }
@@ -181,18 +268,57 @@ pub(super) fn terminate_installed_processes(root:&Path,runtime:&Path,skip_pid:u3
  }
  for h in handles{let _=WaitForSingleObject(h.0,5000);}
 }}
+
+/// Non-destructive verification used by normal install/update/uninstall AFTER smooth handoff.
+/// Never opens `PROCESS_TERMINATE` or calls `TerminateProcess`; fails closed if any owned
+/// target process has not exited cleanly within the bounded grace window.
+pub(super) fn ensure_target_processes_stopped(root:&Path,dir:&Path,sid:&str,caller_session:u32,skip_pid:u32)->Result<()>{unsafe{
+ use windows_sys::Win32::System::Diagnostics::ToolHelp::*;
+ if !root.exists(){return Ok(());}
+ let policy=ResidualTargetPolicy{
+  target_root:root.to_string_lossy().into_owned(),
+  target_sid:sid.to_owned(),
+  caller_session,
+  approved_role_hashes:BTreeMap::new(),
+  service_core:service_core_ownership(dir),
+ };
+ let self_pid=std::process::id();
+ let snap=Handle(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0));if snap.0==INVALID_HANDLE_VALUE{return Ok(());}
+ let mut e=PROCESSENTRY32W{dwSize:std::mem::size_of::<PROCESSENTRY32W>()as u32,..Default::default()};
+ let mut more=Process32FirstW(snap.0,&mut e);
+ let mut waiting=Vec::new();
+ while more!=0{
+  let pid=e.th32ProcessID;
+  let n=identity::string(e.szExeFile.as_ptr()).to_ascii_lowercase();
+  if pid!=0&&pid!=self_pid&&pid!=skip_pid&&MANAGED_CLIENT_ROLES.contains(&n.as_str()){
+   if let Some((query,cand))=inspect_candidate(pid,self_pid,skip_pid,&n,root,false){
+    if evaluate_process_ownership(&cand,&policy,false){
+     waiting.push(query);
+    }
+   }
+  }
+  more=Process32NextW(snap.0,&mut e);
+ }
+ for h in waiting{
+  if WaitForSingleObject(h.0,5000)!=WAIT_OBJECT_0{
+   return Err(crate::installer_update::gui_running());
+  }
+ }
+ Ok(())
+}}
+
 /// Recovered request terminates; never automatically continue with a new transaction.
-pub(super) fn recover_before_new(dir:&Path,token:&Handle)->Result<()>{
+pub(super) fn recover_before_new(dir:&Path,token:&Handle,caller_session:u32)->Result<()>{
  if !dir.exists(){return Ok(());}security::verify_protected(dir)?;let Some(mut j)=load(dir)?else{return Ok(())};
- terminate_installed_processes(Path::new(&j.root),Path::new(&j.runtime),0);
+ terminate_residual_processes(&j,dir,caller_session,0);
  let _app=super::install_location::validate_target(Path::new(&j.root))?;
  let _runtime=if Path::new(&j.runtime).exists(){super::install_location::pin_runtime_chain(Path::new(&j.runtime),true)?}else{vec![]};
  if matches!(j.phase,Phase::Committed|Phase::Finalizing|Phase::AwaitingHealth){j.mark(dir,Phase::Committed)?;j.cleanup(dir,true)?;}else if j.phase==Phase::RolledBack{j.cleanup(dir,false)?;}else{j.rollback(dir,token)?;}
  Err(Error::new("UPDATE_RECOVERY_COMPLETED","Previous transaction recovered; restart the ordinary-user handshake"))
 }
-pub(super) fn clear_or_recover_before_setup(dir:&Path,token:&Handle,skip_pid:u32)->Result<()>{
+pub(super) fn clear_or_recover_before_setup(dir:&Path,token:&Handle,caller_session:u32,skip_pid:u32)->Result<()>{
  if !dir.exists(){return Ok(());}security::verify_protected(dir)?;let Some(mut j)=load(dir)?else{return Ok(())};
- terminate_installed_processes(Path::new(&j.root),Path::new(&j.runtime),skip_pid);
+ terminate_residual_processes(&j,dir,caller_session,skip_pid);
  let _app=super::install_location::validate_target(Path::new(&j.root))?;
  let _runtime=if Path::new(&j.runtime).exists(){super::install_location::pin_runtime_chain(Path::new(&j.runtime),true)?}else{vec![]};
  if matches!(j.phase,Phase::Committed|Phase::Finalizing|Phase::AwaitingHealth){j.mark(dir,Phase::Committed)?;j.cleanup(dir,true)?;}else if j.phase==Phase::RolledBack{j.cleanup(dir,false)?;}else{j.rollback(dir,token)?;}
@@ -200,7 +326,7 @@ pub(super) fn clear_or_recover_before_setup(dir:&Path,token:&Handle,skip_pid:u32
 }
 // All privileged fixed modes require the approved installed helper AND approved GUI,
 // not merely another process with the same SID. Never accepts another admin account.
-pub(super) struct ApprovedCaller{pub(super) token:Handle,pub(super) record:Record,_process:Handle,_pins:Vec<Handle>}
+pub(super) struct ApprovedCaller{pub(super) pid:u32,pub(super) stamp:u64,pub(super) session:u32,pub(super) token:Handle,pub(super) record:Record,_process:Handle,_pins:Vec<Handle>}
 pub(super) fn installed_caller(pid:u32,stamp:u64)->Result<ApprovedCaller>{
  let user=identity::current()?;if user.session==0||!user.sid.starts_with("S-1-5-21-"){return Err(bad());}
  let process=identity::open_verified(pid,stamp,&user)?;
@@ -211,7 +337,7 @@ pub(super) fn installed_caller(pid:u32,stamp:u64)->Result<ApprovedCaller>{
  let exe=std::env::current_exe().map_err(io)?;
  if !security::same_path(&exe,&root.join("kat-install-helper.exe"))||!security::same_path(&security::image(process.0)?,&root.join("kat-desktop.exe")){return Err(Error::new("INSTALL_IDENTITY","Fixed modes require the approved installed helper and ordinary GUI"));}
  for(name,p)in[("kat-install-helper.exe",exe),("kat-desktop.exe",security::image(process.0)?)]{security::verify_approved(&record,&p,name)?;}
- Ok(ApprovedCaller{token,record,_process:process,_pins:pins})
+ Ok(ApprovedCaller{pid,stamp,session:user.session,token,record,_process:process,_pins:pins})
 }
 fn cache_bytes(offer:&str,token:&Handle)->Result<(Vec<u8>,Vec<u8>,Vec<u8>)>{
  use windows_sys::Win32::Security::*;
@@ -237,7 +363,7 @@ pub(super) fn run_core(caller:&ApprovedCaller,offer:&str,dir:&Path)->Result<()>{
  for(n,p)in[("kat-desktop.exe",root.join("kat-desktop.exe")),(CORE,root.join(CORE)),("kat-network-service.exe",runtime.join("kat-network-service.exe"))]{security::verify_approved(old,&p,n)?;}
  security::verify_protected(dir)?;let binding:Binding=read_protected(&dir.join("binding.json"),8192)?.ok_or_else(bad)?;
  if binding.schema!=1||binding.sid!=old.sid{return Err(Error::new("INSTALL_BINDING","Core update requires the existing user binding"));}
- let m:Metadata=read_protected(&root.join(METADATA),256*1024)?.ok_or_else(||Error::new("UPDATE_UNSUPPORTED","Full Setup must establish protected component metadata"))?;
+ let m:Metadata=read_protected(&root.join(METADATA),256*1024)?.ok_or_else(||Error::new("UPDATE_UNSUPPORTED","Full Setup must establish protected version metadata"))?;
  m.validate()?;if old.hashes.as_ref().and_then(|h|h.get(CORE))!=Some(&m.core_sha256){return Err(bad());}
  let manager=scm::manager(SC_MANAGER_CONNECT)?;let service=ScHandle(unsafe{OpenServiceW(manager.0,wide(scm::NAME).as_ptr(),SERVICE_ALL_ACCESS)});
  if service.0.is_null(){return Err(bad());}scm::verify_configuration(&service,&runtime)?;scm::verify_protection(&service)?;
@@ -261,7 +387,10 @@ pub(super) fn run_core(caller:&ApprovedCaller,offer:&str,dir:&Path)->Result<()>{
   check_forward(&m,&metadata,true)?;
   j.files[0].new=Some(next.asset.sha256.clone());j.new_metadata=Some(metadata);j.new_record.as_mut().unwrap().hashes.as_mut().ok_or_else(bad)?.insert(CORE.into(),next.asset.sha256.clone());
   j.backup_files()?;j.mark(dir,Phase::Prepared)?;
+  // Request authenticated smooth GUI/Core prepare-update shutdown BEFORE stopping service.
+  super::update_handoff::helper_request_gui_stop(caller.pid,caller.stamp,"core",Some(offer))?;
   j.mark(dir,Phase::Stopping)?;stop_release(&service)?;
+  ensure_target_processes_stopped(root,dir,&old.sid,caller.session,caller.pid)?;
   super::elevated::require_recovered()?;ensure_legacy_recovered(dir,&old.sid)?;
   j.mark(dir,Phase::Replacing)?;
   let staged=work.join("stage/asset.exe");restore_security(&staged,j.files[0].sd.as_ref().ok_or_else(bad)?)?;move_replace(&staged,&root.join(CORE))?;
@@ -276,7 +405,12 @@ pub(super) fn finish(caller:&ApprovedCaller,stamp:u64,tx:&str,healthy:bool,dir:&
  if !lower_hex(tx,32){return Err(bad());}let mut j=load(dir)?.ok_or_else(bad)?;
  if j.tx!=tx{return Err(Error::new("UPDATE_TRANSACTION","Transaction nonce does not match"));}
  let _runtime=super::install_location::pin_runtime_chain(Path::new(&j.runtime),true)?;
- if !healthy{return j.rollback(dir,&caller.token);}
+ if !healthy{
+  let kind=if j.kind==Kind::Core{"rollback-core"}else{"rollback"};
+  super::update_handoff::helper_request_gui_stop(caller.pid,stamp,kind,None)?;
+  ensure_target_processes_stopped(Path::new(&j.root),dir,&j.sid,caller.session,caller.pid)?;
+  return j.rollback(dir,&caller.token);
+ }
  if j.phase!=Phase::AwaitingHealth||j.health_epoch==0||stamp<=j.health_epoch{return Err(Error::new("UPDATE_HEALTH","Only a post-service-repin GUI may finalize pending health"));}
  if serde_json::to_vec(&Some(&caller.record)).map_err(|_|bad())?!=serde_json::to_vec(&j.new_record).map_err(|_|bad())?{return Err(bad());}
  for f in &j.files{let p=j.file(f);match &f.new{Some(h)=>{security::verify_protected(&p)?;if digest(&read_regular(&p,MAX_ASSET)?)!=*h{return Err(bad());}},None=>if p.exists(){return Err(bad());}}}
@@ -291,7 +425,7 @@ pub(super) fn finish(caller:&ApprovedCaller,stamp:u64,tx:&str,healthy:bool,dir:&
 /// left files/Record between generations. This does NOT authorize a fresh update.
 pub(super) fn recover_installed(pid:u32,stamp:u64,dir:&Path)->Result<()>{
  let Some(j)=load(dir)?else{return Err(Error::new("UPDATE_NO_TRANSACTION","No protected transaction needs recovery"));};
- if j.kind==Kind::Setup{let caller=rollback_caller(pid,stamp,&j.tx,dir)?;return recover_before_new(dir,&caller.token);}
+ if j.kind==Kind::Setup{let caller=rollback_caller(pid,stamp,&j.tx,dir)?;return recover_before_new(dir,&caller.token,caller.session);}
  let user=identity::current()?;let process=identity::open_verified(pid,stamp,&user)?;let token=super::service_acl::ordinary_token(process.0,&user.sid)?;
  if unsafe{WaitForSingleObject(process.0,0)}!=WAIT_TIMEOUT{return Err(bad());}
  let _pins=super::install_location::validate_target(Path::new(&j.root))?;
@@ -301,7 +435,7 @@ pub(super) fn recover_installed(pid:u32,stamp:u64,dir:&Path)->Result<()>{
   let h=digest(&read_regular(&p,MAX_ASSET)?);
   if ![&j.old_record,&j.new_record].into_iter().flatten().any(|r|r.hashes.as_ref().and_then(|hs|hs.get(n))==Some(&h)){return Err(bad());}
  }
- recover_before_new(dir,&token)
+ recover_before_new(dir,&token,user.session)
 }
 /// Full-package rollback cannot execute either image that it is about to restore.
 /// The one exception is this fixed cache directory, with journal-bound exact images
@@ -329,7 +463,7 @@ pub(super) fn rollback_caller(pid:u32,stamp:u64,tx:&str,dir:&Path)->Result<Appro
   if record.hashes.as_ref().and_then(|h|h.get("kat-package-auth.json"))!=Some(&digest(&bytes))||record.hashes.as_ref().and_then(|h|h.get("kat-package-auth.sig"))!=Some(&digest(&sig)){return Err(bad());}Ok(())
  })();unsafe{if RevertToSelf()==0{std::process::abort();}}result?;
  let pins=super::install_location::validate_target(Path::new(&j.root))?;
- Ok(ApprovedCaller{token,record,_process:process,_pins:pins})
+ Ok(ApprovedCaller{pid,stamp,session:user.session,token,record,_process:process,_pins:pins})
 }
 /// SCM STOPPED is not sufficient if the service process still holds client pins.
 pub(super) fn stop_release(service:&ScHandle)->Result<()>{

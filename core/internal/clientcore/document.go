@@ -40,11 +40,32 @@ func fail(code, path, message string) *Error {
 }
 
 type ClientSniff struct {
-	Enabled             bool   `json:"enabled"`
-	OverrideDestination bool   `json:"override_destination"`
-	TCPPorts            string `json:"tcp_ports,omitempty"`
-	UDPPorts            string `json:"udp_ports,omitempty"`
-	Timeout             string `json:"timeout,omitempty"`
+	Enabled             bool     `json:"enabled"`
+	OverrideDestination bool     `json:"override_destination"`
+	TCPPorts            string   `json:"tcp_ports,omitempty"`
+	UDPPorts            string   `json:"udp_ports,omitempty"`
+	Timeout             string   `json:"timeout,omitempty"`
+	SkipDomain          []string `json:"skip_domain,omitempty"`
+}
+
+func (s ClientSniff) MarshalJSON() ([]byte, error) {
+	m := map[string]any{
+		"enabled":              s.Enabled,
+		"override_destination": s.OverrideDestination,
+	}
+	if s.TCPPorts != "" {
+		m["tcp_ports"] = s.TCPPorts
+	}
+	if s.UDPPorts != "" {
+		m["udp_ports"] = s.UDPPorts
+	}
+	if s.Timeout != "" {
+		m["timeout"] = s.Timeout
+	}
+	if s.SkipDomain != nil {
+		m["skip_domain"] = s.SkipDomain
+	}
+	return json.Marshal(m)
 }
 type Client struct {
 	TunDNS            *kernel.ClientDNSOptions `json:"tun_dns,omitempty"`
@@ -554,7 +575,7 @@ func parseDocument(text, workspace string, formats ...DocumentFormat) (document,
 		if cl.Sniff.Timeout != "" {
 			_ = timeout.UnmarshalJSON([]byte(strconv.Quote(cl.Sniff.Timeout)))
 		} // validated by validateSniff
-		inbound.Sniff = &kernel.SniffOptions{Enabled: true, OverrideDestination: cl.Sniff.OverrideDestination, TCPPorts: cl.Sniff.TCPPorts, UDPPorts: cl.Sniff.UDPPorts, Timeout: timeout}
+		inbound.Sniff = &kernel.SniffOptions{Enabled: true, OverrideDestination: cl.Sniff.OverrideDestination, TCPPorts: cl.Sniff.TCPPorts, UDPPorts: cl.Sniff.UDPPorts, Timeout: timeout, SkipDomain: cl.Sniff.SkipDomain}
 	}
 	raw["inbounds"], _ = json.Marshal([]kernel.Inbound{inbound})
 	b, _ := json.Marshal(raw)

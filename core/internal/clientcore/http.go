@@ -58,16 +58,16 @@ type httpBridge struct {
 	transports   map[net.Conn]*http.Transport
 	socks        atomic.Value
 	directServer atomic.Pointer[kernel.Server]
-	ctx        context.Context
-	cancel     context.CancelFunc
-	mu         sync.Mutex
-	conns      int
-	inFlight   int
-	serveDone  bool
-	retired    bool
-	closed     bool
-	wg         sync.WaitGroup
-	log        func(kernel.ClientLogEvent)
+	ctx          context.Context
+	cancel       context.CancelFunc
+	mu           sync.Mutex
+	conns        int
+	inFlight     int
+	serveDone    bool
+	retired      bool
+	closed       bool
+	wg           sync.WaitGroup
+	log          func(kernel.ClientLogEvent)
 }
 
 func newHTTPBridge(hp, sp int, sinks ...func(kernel.ClientLogEvent)) (*httpBridge, error) {

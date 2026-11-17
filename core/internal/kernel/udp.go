@@ -337,7 +337,7 @@ func (a *udpAssociation) send(ctx context.Context, p packet, idle time.Duration)
 		return
 	}
 	a.flow.scheduleDetails(ctx, p.target)
-	a.flow.sniffHost(ctx)
+	a.flow.sniffHost(ctx, p.target)
 	candidates, proxy, host, rule, e := a.server.routeUDP(ctx, p.target, a.source)
 	if e != nil {
 		if errors.Is(e, errRouteReject) {
@@ -391,6 +391,7 @@ func (a *udpAssociation) send(ctx context.Context, p packet, idle time.Duration)
 		}
 		return
 	}
+	a.flow.setRemoteDNS([]string{"direct"}, "")
 	rt := a.flow.udpDecided(p.target, rule, []string{"direct"})
 	now := time.Now()
 	a.mu.Lock()

@@ -84,6 +84,7 @@ func isDecimalYAML(s string) bool {
 	}
 	return i == len(s)
 }
+
 var errYAML = errors.New("unsupported YAML")
 
 // Decode to a bounded syntax tree, never into interface{}: yaml's generic

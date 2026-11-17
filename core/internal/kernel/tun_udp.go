@@ -48,16 +48,16 @@ type tunNATSession struct {
 	metaPeer    netip.AddrPort
 	metaUnvis   bool
 	last        atomic.Int64
-	closed    atomic.Bool
-	closeOnce sync.Once
-	sendMu    sync.Mutex // terminal record waits for the one sender's accounting
-	endCode   string     // routeMu protects the first failure; later success cannot erase it
-	shared    bool
-	firstPeer netip.AddrPort
-	replyPeer netip.AddrPort
-	unvisited bool
-	routeMu   sync.Mutex
-	routes    map[netip.AddrPort]*udpRoute
+	closed      atomic.Bool
+	closeOnce   sync.Once
+	sendMu      sync.Mutex // terminal record waits for the one sender's accounting
+	endCode     string     // routeMu protects the first failure; later success cannot erase it
+	shared      bool
+	firstPeer   netip.AddrPort
+	replyPeer   netip.AddrPort
+	unvisited   bool
+	routeMu     sync.Mutex
+	routes      map[netip.AddrPort]*udpRoute
 }
 
 func (s *Server) tunUDP(ctx context.Context, t tunstack.Flow, c net.Conn) (result error) {
@@ -269,7 +269,7 @@ func (u *tunUDPState) send(ctx context.Context, p packet, idle time.Duration) {
 	if name == "direct" && len(candidates) > 0 {
 		dst = Address{candidates[0].Addr().String(), candidates[0].Port()}
 	}
-	if dst.Host == "" || name != "direct" && sniffOf(ctx).target(p.target) != p.target {
+	if dst.Host == "" || sniffOf(ctx).target(p.target) != p.target {
 		dst = p.target
 	}
 	key := tunNATKey{name, rule, epoch, binding}
@@ -289,13 +289,13 @@ func (u *tunUDPState) send(ctx context.Context, p packet, idle time.Duration) {
 		return
 	}
 	v.f.tunProcess(ctx, p.target)
-	v.f.sniffHost(ctx)
 	rt := v.defaultRt
 	if rt == nil {
 		rt = v.f.udpRouteFor(rule, v.chain)
 		v.defaultRt = rt
 	}
 	firstWrite := v.f.up.Load() == 0
+	isShared := false
 	// Install reply accounting BEFORE write: even an immediate peer cannot race it.
 	if ip, pe := netip.ParseAddr(dst.Host); pe == nil {
 		peer := netip.AddrPortFrom(ip.Unmap(), dst.Port)
@@ -311,7 +311,24 @@ func (u *tunUDPState) send(ctx context.Context, p packet, idle time.Duration) {
 		} else if peer != v.firstPeer {
 			v.shared = true
 		}
+		isShared = v.shared
 		v.routeMu.Unlock()
+	} else {
+		v.routeMu.Lock()
+		isShared = v.shared
+		v.routeMu.Unlock()
+	}
+	effectiveChain := v.chain
+	if pc, ok := v.pc.(interface{ MemberFor(outbound.Addr) string }); ok {
+		if mName := pc.MemberFor(outbound.Addr{Host: dst.Host, Port: dst.Port}); mName != "" {
+			effectiveChain = append(append([]string(nil), v.chain...), mName)
+		}
+	}
+	v.f.setRemoteDNS(effectiveChain, dst.Host)
+	if isShared {
+		v.f.clearSharedUDPTarget()
+	} else {
+		v.f.sniffHost(ctx, p.target)
 	}
 	if e = u.bindingCurrent(key); e != nil {
 		v.failure(p.target, "udp_setup_failed", e)
@@ -343,10 +360,15 @@ func (u *tunUDPState) send(ctx context.Context, p packet, idle time.Duration) {
 	maxActivity(a)
 	if v.lastDecided != p.target {
 		v.lastDecided = p.target
-		v.f.mu.Lock()
-		v.f.details.DestIP = p.target.Host
-		v.f.mu.Unlock()
+		if !isShared {
+			v.f.mu.Lock()
+			v.f.details.DestIP = p.target.Host
+			v.f.mu.Unlock()
+		}
 		v.f.udpDecided(p.target, rule, v.chain)
+		if isShared {
+			v.f.clearSharedUDPTarget()
+		}
 	}
 	if firstWrite {
 		v.metadataForce(true)
@@ -500,7 +522,9 @@ func (v *tunNATSession) metadataForce(force bool) {
 	if shared {
 		// Payload totals belong to this mapping, NOT the last visited target.
 		v.f.target = "udp-association"
+		v.f.host = ""
 		v.f.details.DestIP, v.f.details.DestHost = "", ""
+		v.f.details.Sniffed = false
 	}
 	v.f.mu.Unlock()
 }

@@ -99,3 +99,88 @@ func TestC15SniffErrorsAreFieldScopedAndAtomic(t *testing.T) {
 		})
 	}
 }
+
+func TestSniffSkipDomainProjectionAndValidation(t *testing.T) {
+	h := newHost(t)
+	old := fixture(t, map[string]any{})
+	if _, e := applyLegacyFixture(h, old); e != nil {
+		t.Fatal(e)
+	}
+	// Default omitted skip_domain keeps SkipDomain == nil on SniffOptions.
+	if h.doc.config.Inbounds[0].Sniff == nil || h.doc.config.Inbounds[0].Sniff.SkipDomain != nil {
+		t.Fatalf("expected nil SkipDomain when omitted, got %+v", h.doc.config.Inbounds[0].Sniff)
+	}
+	// Explicit empty skip_domain: [] is preserved as non-nil empty slice.
+	emptyText := strings.Replace(old, `"client":{`, `"client":{"sniff":{"enabled":true,"override_destination":true,"skip_domain":[]},`, 1)
+	if _, e := applyLegacyFixture(h, emptyText); e != nil {
+		t.Fatal(e)
+	}
+	if h.doc.config.Inbounds[0].Sniff.SkipDomain == nil || len(h.doc.config.Inbounds[0].Sniff.SkipDomain) != 0 {
+		t.Fatalf("expected non-nil empty SkipDomain, got %#v", h.doc.config.Inbounds[0].Sniff.SkipDomain)
+	}
+	// Custom skip_domain entries roundtrip and project cleanly.
+	customText := strings.Replace(old, `"client":{`, `"client":{"sniff":{"enabled":true,"override_destination":true,"skip_domain":["+.push.apple.com","Mijia Cloud"]},`, 1)
+	if _, e := applyLegacyFixture(h, customText); e != nil {
+		t.Fatal(e)
+	}
+	if len(h.doc.config.Inbounds[0].Sniff.SkipDomain) != 2 {
+		t.Fatalf("unexpected SkipDomain: %#v", h.doc.config.Inbounds[0].Sniff.SkipDomain)
+	}
+	// Invalid skip_domain values fail with path client.sniff.skip_domain.
+	tooMany := make([]string, 129)
+	for i := range tooMany {
+		tooMany[i] = `"+.a.example"`
+	}
+	for _, bad := range []string{
+		`null`,
+		`"string"`,
+		`123`,
+		`[null]`,
+		`[""]`,
+		`["   "]`,
+		`["+."]`,
+		`["+..."]`,
+		`["*..."]`,
+		`["..."]`,
+		`["+. ."]`,
+		`["+.a..b"]`,
+		`["bad\u0007ctrl"]`,
+		`["` + strings.Repeat("a", 254) + `"]`,
+		`[` + strings.Join(tooMany, ",") + `]`,
+	} {
+		e := validateSniff([]byte(`{"sniff":{"enabled":true,"override_destination":true,"skip_domain":` + bad + `}}`))
+		if e == nil || e.Path != "client.sniff.skip_domain" {
+			t.Fatalf("bad=%s expected client.sniff.skip_domain error, got %+v", bad, e)
+		}
+	}
+
+	// Disabled sniff preserves full configuration fields in JSON/YAML document & ClientSniff MarshalJSON while keeping runtime sniffing inactive.
+	disabledSkipText := strings.Replace(old, `"client":{`, `"client":{"sniff":{"enabled":false,"override_destination":true,"tcp_ports":"80,443","udp_ports":"443","timeout":"400ms","skip_domain":["+.push.apple.com","Mijia Cloud"]},`, 1)
+	if _, e := applyLegacyFixture(h, disabledSkipText); e != nil {
+		t.Fatal(e)
+	}
+	if h.doc.config.Inbounds[0].Sniff != nil {
+		t.Fatalf("expected runtime Inbounds[0].Sniff == nil when enabled=false, got %+v", h.doc.config.Inbounds[0].Sniff)
+	}
+	rawClientSniff, err := json.Marshal(ClientSniff{
+		Enabled:             false,
+		OverrideDestination: false,
+		TCPPorts:            "80,443",
+		UDPPorts:            "443",
+		Timeout:             "400ms",
+		SkipDomain:          []string{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var roundtrip map[string]any
+	if err := json.Unmarshal(rawClientSniff, &roundtrip); err != nil {
+		t.Fatal(err)
+	}
+	if roundtrip["enabled"] != false || roundtrip["override_destination"] != false {
+		t.Fatalf("ClientSniff MarshalJSON lost false booleans: %s", string(rawClientSniff))
+	}
+	if sk, ok := roundtrip["skip_domain"].([]any); !ok || len(sk) != 0 {
+		t.Fatalf("ClientSniff MarshalJSON lost empty skip_domain=[]: %s", string(rawClientSniff))
+	}
+}

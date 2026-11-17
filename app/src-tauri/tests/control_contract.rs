@@ -636,3 +636,66 @@ fn stage5_recover_after_exit_removes_only_kat_owned_residual_adapter_and_keeps_p
  let netapi = include_str!("../src/windows/netapi.rs");
  assert!(netapi.contains("let rc=unsafe{GetIpInterfaceEntry(&mut r)};if rc!=0{return Err(rc);}"));
 }
+
+#[test]
+fn r1_r2_display_version_production_wiring_contract() {
+ let handoff = include_str!("../src/windows/update_handoff.rs");
+ let ubridge = include_str!("../src/windows/update_bridge.rs");
+ let sbridge = include_str!("../src/windows/setup_bridge.rs");
+ let sclient = include_str!("../src/windows/service_client.rs");
+ let installer = include_str!("../src/windows/installer.rs");
+ let uinstall = include_str!("../src/windows/update_install.rs");
+ let iapp = include_str!("../src/windows/installed_app.rs");
+
+ // 1. R1: Normal handoff / bridge / installer paths never invoke TerminateProcess or pre-UAC takeover.
+ for (name, src) in [
+  ("update_handoff.rs", handoff),
+  ("update_bridge.rs", ubridge),
+  ("setup_bridge.rs", sbridge),
+  ("service_client.rs", sclient),
+  ("installer.rs", installer),
+ ] {
+  assert!(!src.contains("TerminateProcess"), "{name} must not call TerminateProcess");
+  assert!(!src.contains("terminate_running_user_processes"), "{name} must not have pre-UAC kill");
+  assert!(!src.contains("acquire_single_instance_with_takeover"), "{name} must not force-takeover singleton");
+  assert!(!src.contains("terminate_installed_processes"), "{name} must not call legacy terminate_installed_processes");
+ }
+
+ // 2. R1: Post-UAC helper->bridge->GUI smooth handoff is wired in all 4 mutation modes (Setup install,
+ //    Setup uninstall, Core update, and AwaitingHealth rollback) BEFORE Phase::Stopping / service stop.
+ let win_stop = installer.split("fn stop(&mut self)->Result<()>{").nth(1).unwrap().split("fn replace").next().unwrap();
+ assert!(win_stop.find("helper_request_gui_stop(self.gui_pid,self.gui_stamp,\"client\",None)?").unwrap()
+  < win_stop.find("Phase::Stopping").unwrap());
+ assert!(win_stop.contains("ensure_target_processes_stopped"));
+
+ let uninst = installer.split("fn uninstall_application").nth(1).unwrap().split("fn cleanup_warning").next().unwrap();
+ assert!(uninst.find("helper_request_gui_stop(gui_pid,gui_stamp,\"uninstall\",None)?").unwrap()
+  < uninst.find("scm::stop(&service)").unwrap());
+ assert!(uninst.contains("ensure_target_processes_stopped"));
+
+ let run_core = uinstall.split("pub(super) fn run_core").nth(1).unwrap().split("pub(super) fn finish").next().unwrap();
+ assert!(run_core.find("helper_request_gui_stop(caller.pid,caller.stamp,\"core\",Some(offer))?").unwrap()
+  < run_core.find("Phase::Stopping").unwrap());
+ assert!(run_core.contains("ensure_target_processes_stopped"));
+
+ let finish_fn = uinstall.split("pub(super) fn finish").nth(1).unwrap().split("pub(super) fn recover_installed").next().unwrap();
+ assert!(finish_fn.contains("helper_request_gui_stop(caller.pid,stamp,kind,None)?"));
+
+ // 3. R2: Legacy name-OR fallback (`in_target||n==`) is completely removed; TerminateProcess in
+ //    update_install.rs is restricted strictly to `terminate_residual_processes` gated by
+ //    `evaluate_residual_kill` + PID creation_stamp re-verification, called ONLY from dirty-journal recovery.
+ assert!(!uinstall.contains("in_target||"));
+ assert!(!uinstall.contains("||n==\"kat-client-core.exe\""));
+ assert_eq!(uinstall.matches("TerminateProcess(").count(), 1);
+ let res_fn = uinstall.split("fn terminate_residual_processes").nth(1).unwrap().split("pub(super) fn ensure_target_processes_stopped").next().unwrap();
+ assert!(res_fn.contains("evaluate_residual_kill(&cand,&policy)"));
+ assert!(res_fn.contains("TerminateProcess("));
+ let ensure_fn = uinstall.split("pub(super) fn ensure_target_processes_stopped").nth(1).unwrap().split("pub(super) fn recover_before_new").next().unwrap();
+ assert!(!ensure_fn.contains("TerminateProcess"));
+ assert!(!ensure_fn.contains("PROCESS_TERMINATE"));
+
+ // 4. DisplayVersion uses env!("CARGO_PKG_VERSION") == 0.2.20, never hardcoded "0.1.0".
+ assert!(!iapp.contains("\"0.1.0\""));
+ assert!(iapp.contains("(\"DisplayVersion\",env!(\"CARGO_PKG_VERSION\").into())"));
+ assert_eq!(kat_host::update_handoff_protocol::DISPLAY_VERSION, "0.2.20");
+}

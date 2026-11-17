@@ -139,13 +139,43 @@ func (r *internalDNS) configureIO(disabled bool, bootstrap func(context.Context,
 	}
 }
 func (r *internalDNS) clearCache() int {
+	return r.clearCacheVisited(map[*internalDNS]bool{})
+}
+
+func (r *internalDNS) clearCacheVisited(visited map[*internalDNS]bool) int {
+	if r == nil || visited[r] {
+		return 0
+	}
+	visited[r] = true
 	r.mu.Lock()
+	r.clearSeq++
 	n := len(r.cache) + len(r.wireCache)
 	clear(r.cache)
 	clear(r.wireCache)
 	r.mu.Unlock()
 	for _, p := range r.rules {
-		n += p.resolver.clearCache()
+		n += p.resolver.clearCacheVisited(visited)
+	}
+	if r.local != nil {
+		n += r.local.clearCacheVisited(visited)
 	}
 	return n
+}
+
+func (r *internalDNS) closeVisited(visited map[*internalDNS]bool) {
+	if r == nil || visited[r] {
+		return
+	}
+	visited[r] = true
+	for _, p := range r.rules {
+		p.resolver.closeVisited(visited)
+	}
+	if r.local != nil {
+		r.local.closeVisited(visited)
+	}
+	for _, u := range r.upstreams {
+		if u.transport != nil {
+			u.transport.CloseIdleConnections()
+		}
+	}
 }

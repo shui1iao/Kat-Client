@@ -82,7 +82,7 @@ func TestYAMLRunningConversionsKeepExistingFlowAndLifecycle(t *testing.T) {
 			t.Fatal(e)
 		}
 		assertNoDocumentTemps(t, h.workspace)
-		if result.(map[string]any)["applied"] != true || h.server != originalServer || h.bridge != originalBridge || (result.(map[string]any)["selection_only"]!=true && h.server.GenerationID() <= generation) || !h.localReady {
+		if result.(map[string]any)["applied"] != true || h.server != originalServer || h.bridge != originalBridge || (result.(map[string]any)["selection_only"] != true && h.server.GenerationID() <= generation) || !h.localReady {
 			t.Fatal("normal apply rebuilt lifecycle")
 		}
 		if h.egress != originalPolicy || h.egressOptions.Enabled != originalOptions.Enabled || h.egressGeneration != originalEgressGeneration {

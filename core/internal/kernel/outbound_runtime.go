@@ -337,7 +337,8 @@ func (s *Server) decide(ctx context.Context, network string, a Address, src neti
 	if im := inboundMetaOf(ctx); im != nil {
 		m.SrcPort, m.InPort, m.InName, m.InType = im.srcPort, im.port, im.name, im.typ
 	}
-	if sn := sniffOf(ctx); sn != nil {
+	var sn *sniffResult
+	if sn = sniffOf(ctx); sn != nil {
 		m.Protocol = sn.proto
 		a = sniffTarget(ctx, a)
 		if sn.host != "" {
@@ -350,6 +351,11 @@ func (s *Server) decide(ctx context.Context, network string, a Address, src neti
 			return d, "", direct.ErrIPv6Disabled
 		}
 		host = ip.Unmap().String()
+		if m.SniffHost == "" && (sn == nil || !sn.skipFallback) && !isLANTargetIP(m.IP) {
+			if mapped := s.lookupDNSHost(m.IP); mapped != "" {
+				m.SniffHost = mapped
+			}
+		}
 	} else {
 		name, e := dnsName(a.Host)
 		if e != nil {
@@ -421,8 +427,10 @@ func (s *Server) dialProxy(parent context.Context, start time.Time, name string,
 	ctx = withHops(ctx, h)
 	c, e := s.rt.nodes[name].DialTCP(ctx, outbound.Addr{Host: host, Port: port})
 	if f := flowOf(parent); f != nil {
+		chain := h.chain(name)
 		f.mu.Lock()
-		f.chain = h.chain(name)
+		f.chain = chain
+		f.details.RemoteDNS = isProxyRemoteDNSTarget(chain, host)
 		f.mu.Unlock()
 		if e == nil {
 			// Only the head was metered by route(); add the chosen members.

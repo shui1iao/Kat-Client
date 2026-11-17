@@ -307,3 +307,268 @@ async fn stage5_update_shutdown_ack_exact_exit_and_eof_not_healthy() {
  let err = core.prepare_update_shutdown(Duration::from_millis(250)).await.unwrap_err();
  assert_eq!(err.code, "CORE_UPDATE_EXIT_TIMEOUT");
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn r1_real_core_process_post_uac_handoff_v0219_upgrade_uac_cancel_timeout_and_recovery() {
+ use kat_host::{
+  core_process::CoreProcess,
+  error::{Error, Result},
+  preferences::{self, CloseAction, DesktopPreferences, NetworkIntent, StartupPlan},
+  supervisor::Life,
+  update_handoff_protocol::*,
+  user_store::Store,
+  window_geometry::{self, Rect, WindowState},
+ };
+ use std::collections::VecDeque;
+ use std::sync::{Arc, Mutex};
+
+ const SID: &str = "S-1-5-21-2222222222-3333333333-4444444444-1001";
+ const NONCE: &str = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+
+ async fn spawn_real_core(mode: &str) -> CoreProcess {
+  let mut cmd = tokio::process::Command::new(env!("CARGO_BIN_EXE_kat-ipc-test-peer"));
+  cmd.arg("stage5-update-fixture").arg(mode);
+  CoreProcess::spawn(cmd).await.unwrap()
+ }
+
+ struct RealCoreGuiResponder {
+  core: CoreProcess,
+  store: Store,
+  grace: Duration,
+  legacy_v0219: bool,
+  peer: GuiPeerFacts,
+  prepare_bytes: Vec<u8>,
+  ack_bytes: Vec<u8>,
+  replies: Vec<Vec<u8>>,
+  recovered: Arc<Mutex<bool>>,
+  exited_zero: bool,
+ }
+
+ impl GuiHandoffResponder for RealCoreGuiResponder {
+  fn read_prepare_frame(&mut self) -> Result<Vec<u8>> { Ok(self.prepare_bytes.clone()) }
+  fn inspect_peer(&mut self, _kind: &str) -> Result<GuiPeerFacts> { Ok(self.peer.clone()) }
+  fn is_awaiting_health_rollback(&self, _kind: &str) -> bool { false }
+  fn confirm_if_legacy_ui(&mut self, _prepare: &Prepare) -> Result<bool> { Ok(true) }
+  fn execute_rollback_shutdown(&mut self) -> Result<()> { unreachable!() }
+  fn execute_normal_shutdown(&mut self) -> Result<()> {
+   let _intent = preferences::intent(&self.store)?;
+   window_geometry::save(&self.store, &WindowState {
+    schema: 1,
+    normal: Rect { x: 80, y: 60, width: 1200, height: 800 },
+    work: Rect { x: 0, y: 40, width: 1920, height: 1040 },
+    dpi: 96,
+    maximized: true,
+   })?;
+   self.store.save("update-resume.json", &json!({"schema": 1, "at": 1794901000u64, "core_running": true}), 1024)?;
+   let core = self.core.clone();
+   let grace = self.grace;
+   let res = tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(core.prepare_update_shutdown(grace)));
+   if res.is_err() {
+    self.execute_recover_shutdown();
+   }
+   res
+  }
+  fn execute_recover_shutdown(&mut self) {
+   let core = self.core.clone();
+   let ok = tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(core.resume_after_update_failure())).is_ok();
+   *self.recovered.lock().unwrap() = ok;
+  }
+  fn write_reply_frame(&mut self, bytes: Vec<u8>) -> Result<()> {
+   self.replies.push(bytes);
+   Ok(())
+  }
+  fn read_ack_frame(&mut self) -> Result<Vec<u8>> { Ok(self.ack_bytes.clone()) }
+  fn commit_clean_exit(&mut self) -> Result<()> {
+   self.exited_zero = true;
+   Ok(())
+  }
+ }
+
+ struct RealProcessBridge {
+  uac_result: Result<(u32, u64)>,
+  helper_attempts: VecDeque<(HelperPeerFacts, Vec<u8>)>,
+  helper_exit: Result<()>,
+  gui: Option<RealCoreGuiResponder>,
+  rejected_bridge_peers: usize,
+ }
+
+ impl BridgeBoundary for RealProcessBridge {
+  type Listener = ();
+  type Helper = (u32, u64);
+  type Instance = &'static str;
+  fn open_bridge_listener(&mut self) -> Result<()> { Ok(()) }
+  fn spawn_uac_helper(&mut self) -> Result<((u32, u64), u32, u64)> {
+   let (p, s) = self.uac_result.clone()?;
+   Ok(((p, s), p, s))
+  }
+  fn poll_helper_or_bridge(&mut self, _h: &mut (u32, u64), _l: &mut ()) -> Result<BridgePoll> {
+   if self.helper_attempts.is_empty() { Ok(BridgePoll::HelperExited) } else { Ok(BridgePoll::BridgeConnected) }
+  }
+  fn authenticate_and_read_bridge(&mut self, _h: &(u32, u64), _l: &mut (), pid: u32, stamp: u64) -> Result<BridgeRequest> {
+   let (facts, raw) = self.helper_attempts.pop_front().unwrap();
+   verify_helper_peer_for_bridge(pid, stamp, SID, 1, &facts)?;
+   parse_bridge_request(&raw)
+  }
+  fn disconnect_rejected_bridge(&mut self, _l: &mut ()) { self.rejected_bridge_peers += 1; }
+  fn try_single_instance(&mut self) -> Result<Option<&'static str>> { Ok(None) }
+  fn handoff_running_gui(&mut self, prepare: &Prepare) -> Result<&'static str> {
+   let gui = self.gui.as_mut().unwrap();
+   gui.prepare_bytes = encode_prepare(&prepare.nonce, &prepare.kind, prepare.offer.as_deref())?;
+   gui.ack_bytes = encode_reply(&prepare.nonce, "ready", None)?;
+   let legacy = gui.legacy_v0219;
+   let exited = handle_gui_handoff_session(gui, SID, 1, legacy)?;
+   let last_reply = gui.replies.last().cloned().ok_or_else(handoff_denied)?;
+   parse_ready_or_abort(&last_reply, &prepare.nonce)?;
+   if !exited || !gui.exited_zero { return Err(handoff_denied()); }
+   Ok("real-core-and-gui-clean-exit0")
+  }
+  fn reply_bridge(&mut self, _l: &mut (), _bytes: Vec<u8>) -> Result<()> { Ok(()) }
+  fn finish_helper(&mut self, _h: (u32, u64)) -> Result<()> { self.helper_exit.clone() }
+ }
+
+ // Case A: UAC cancelled -> real CoreProcess child PID, active RPC, and unsaved state are 100% untouched!
+ let ws_a = std::env::temp_dir().join(format!("kat-e2e-uac-cancel-{}", std::process::id()));
+ let _ = std::fs::remove_dir_all(&ws_a);
+ std::fs::create_dir_all(&ws_a).unwrap();
+ let store_a = Store::new(ws_a.clone()).unwrap();
+ preferences::set_intent(&store_a, Some(true), Some(false)).unwrap();
+ let core_a = spawn_real_core("ok").await;
+ let pid_before = core_a.pid();
+ let mut bridge_cancel = RealProcessBridge {
+  uac_result: Err(Error::new("INSTALL_CANCELLED", "UAC cancelled by user").native(1223)),
+  helper_attempts: VecDeque::new(),
+  helper_exit: Ok(()),
+  gui: Some(RealCoreGuiResponder {
+   core: core_a.clone(),
+   store: Store::new(ws_a.clone()).unwrap(),
+   grace: Duration::from_secs(2),
+   legacy_v0219: true,
+   peer: GuiPeerFacts { sid: SID.into(), session: 1, impersonated_sid: Some(SID.into()), elevated: false, desktop_image_verified: true, approved_helper_event_verified: false },
+   prepare_bytes: vec![],
+   ack_bytes: vec![],
+   replies: vec![],
+   recovered: Arc::new(Mutex::new(false)),
+   exited_zero: false,
+  }),
+  rejected_bridge_peers: 0,
+ };
+ let out_cancel = run_bridge_elevation(&mut bridge_cancel, "client", None);
+ assert_eq!(out_cancel.result.unwrap_err().code, "INSTALL_CANCELLED");
+ assert!(!out_cancel.gui_stopped);
+ assert_eq!(core_a.pid(), pid_before, "UAC cancel must never terminate or restart original CoreProcess");
+ assert!(matches!(*core_a.life().borrow(), Life::Ready));
+ assert!(core_a.hello().await.is_ok(), "original CoreProcess connection remains live after UAC cancel");
+ assert!(store_a.load::<Value>("update-resume.json", 1024).unwrap().is_none());
+ core_a.shutdown().await;
+ let _ = std::fs::remove_dir_all(&ws_a);
+
+ // Case B: New v0.2.20 Setup upgrading running v0.2.19 GUI + real CoreProcess (plus malicious pre-helper peer rejected).
+ let ws_b = std::env::temp_dir().join(format!("kat-e2e-v0219-ok-{}", std::process::id()));
+ let _ = std::fs::remove_dir_all(&ws_b);
+ std::fs::create_dir_all(&ws_b).unwrap();
+ let store_b = Store::new(ws_b.clone()).unwrap();
+ preferences::save(&store_b, &DesktopPreferences { close_action: CloseAction::Tray, remember_window: true, ..Default::default() }).unwrap();
+ preferences::set_intent(&store_b, Some(true), Some(false)).unwrap();
+ let core_b = spawn_real_core("ok").await;
+ let req_frame = encode_bridge_request(NONCE, "client", None).unwrap();
+ let mut bridge_ok = RealProcessBridge {
+  uac_result: Ok((6100, 900001)),
+  helper_attempts: VecDeque::from([
+   // Unprivileged attacker hits bridge pipe first -> rejected without stopping Core!
+   (HelperPeerFacts { pid: 6100, stamp: 900001, sid: SID.into(), session: 1, elevated: false, integrity: 0x2000, expected_image_match: true, hash_verified: true }, req_frame.clone()),
+   // Real elevated helper connects -> accepted -> ordinary bridge hands off v0.2.19 GUI + real Core!
+   (HelperPeerFacts { pid: 6100, stamp: 900001, sid: SID.into(), session: 1, elevated: true, integrity: HIGH_INTEGRITY_RID, expected_image_match: true, hash_verified: true }, req_frame.clone()),
+  ]),
+  helper_exit: Ok(()),
+  gui: Some(RealCoreGuiResponder {
+   core: core_b.clone(),
+   store: Store::new(ws_b.clone()).unwrap(),
+   grace: Duration::from_secs(2),
+   legacy_v0219: true,
+   peer: GuiPeerFacts { sid: SID.into(), session: 1, impersonated_sid: Some(SID.into()), elevated: false, desktop_image_verified: true, approved_helper_event_verified: true },
+   prepare_bytes: vec![],
+   ack_bytes: vec![],
+   replies: vec![],
+   recovered: Arc::new(Mutex::new(false)),
+   exited_zero: false,
+  }),
+  rejected_bridge_peers: 0,
+ };
+ let out_ok = tokio::task::spawn_blocking(move || (run_bridge_elevation(&mut bridge_ok, "client", None), bridge_ok.rejected_bridge_peers)).await.unwrap();
+ assert!(out_ok.0.result.is_ok());
+ assert_eq!(out_ok.1, 1);
+ assert!(out_ok.0.gui_stopped);
+ assert!(matches!(*core_b.life().borrow(), Life::Exited(_)), "real CoreProcess confirmed clean exit0 via host.prepare-update");
+ assert_eq!(preferences::startup_plan(preferences::intent(&store_b).unwrap()), StartupPlan::Restore(NetworkIntent { system_proxy: true, tun: false }));
+ assert!(window_geometry::load(&store_b).unwrap().unwrap().maximized);
+ assert_eq!(store_b.load::<Value>("update-resume.json", 1024).unwrap().unwrap()["core_running"], json!(true));
+ let _ = std::fs::remove_dir_all(&ws_b);
+
+ // Case C: Real CoreProcess history save failure (`save-failed`) -> aborts handoff AND resumes SAME live CoreProcess PID!
+ let ws_c = std::env::temp_dir().join(format!("kat-e2e-hist-fail-{}", std::process::id()));
+ let _ = std::fs::remove_dir_all(&ws_c);
+ std::fs::create_dir_all(&ws_c).unwrap();
+ let store_c = Store::new(ws_c.clone()).unwrap();
+ let core_c = spawn_real_core("save-failed").await;
+ let pid_c = core_c.pid();
+ let recovered_c = Arc::new(Mutex::new(false));
+ let mut bridge_hist_fail = RealProcessBridge {
+  uac_result: Ok((6200, 900002)),
+  helper_attempts: VecDeque::from([
+   (HelperPeerFacts { pid: 6200, stamp: 900002, sid: SID.into(), session: 1, elevated: true, integrity: HIGH_INTEGRITY_RID, expected_image_match: true, hash_verified: true }, req_frame.clone()),
+  ]),
+  helper_exit: Err(Error::new("CORE_UPDATE_HISTORY_FAILED", "helper aborted before stopping service")),
+  gui: Some(RealCoreGuiResponder {
+   core: core_c.clone(),
+   store: store_c,
+   grace: Duration::from_secs(2),
+   legacy_v0219: false,
+   peer: GuiPeerFacts { sid: SID.into(), session: 1, impersonated_sid: Some(SID.into()), elevated: false, desktop_image_verified: true, approved_helper_event_verified: true },
+   prepare_bytes: vec![],
+   ack_bytes: vec![],
+   replies: vec![],
+   recovered: recovered_c.clone(),
+   exited_zero: false,
+  }),
+  rejected_bridge_peers: 0,
+ };
+ let out_hist = tokio::task::spawn_blocking(move || run_bridge_elevation(&mut bridge_hist_fail, "client", None)).await.unwrap();
+ assert_eq!(out_hist.result.unwrap_err().code, "CORE_UPDATE_HISTORY_FAILED");
+ assert!(!out_hist.gui_stopped);
+ assert!(*recovered_c.lock().unwrap());
+ assert_eq!(core_c.pid(), pid_c, "failed history persistence must keep and resume exact same CoreProcess");
+ assert!(core_c.hello().await.is_ok());
+ core_c.shutdown().await;
+ let _ = std::fs::remove_dir_all(&ws_c);
+
+ // Case D: Real CoreProcess exit timeout (`hang-exit`) -> bounded timeout without TerminateProcess!
+ let ws_d = std::env::temp_dir().join(format!("kat-e2e-hang-timeout-{}", std::process::id()));
+ let _ = std::fs::remove_dir_all(&ws_d);
+ std::fs::create_dir_all(&ws_d).unwrap();
+ let store_d = Store::new(ws_d.clone()).unwrap();
+ let core_d = spawn_real_core("hang-exit").await;
+ let mut bridge_timeout = RealProcessBridge {
+  uac_result: Ok((6300, 900003)),
+  helper_attempts: VecDeque::from([
+   (HelperPeerFacts { pid: 6300, stamp: 900003, sid: SID.into(), session: 1, elevated: true, integrity: HIGH_INTEGRITY_RID, expected_image_match: true, hash_verified: true }, req_frame),
+  ]),
+  helper_exit: Err(Error::new("CORE_UPDATE_EXIT_TIMEOUT", "helper aborted on core exit timeout")),
+  gui: Some(RealCoreGuiResponder {
+   core: core_d,
+   store: store_d,
+   grace: Duration::from_millis(250),
+   legacy_v0219: false,
+   peer: GuiPeerFacts { sid: SID.into(), session: 1, impersonated_sid: Some(SID.into()), elevated: false, desktop_image_verified: true, approved_helper_event_verified: true },
+   prepare_bytes: vec![],
+   ack_bytes: vec![],
+   replies: vec![],
+   recovered: Arc::new(Mutex::new(false)),
+   exited_zero: false,
+  }),
+  rejected_bridge_peers: 0,
+ };
+ let out_timeout = tokio::task::spawn_blocking(move || run_bridge_elevation(&mut bridge_timeout, "client", None)).await.unwrap();
+ assert_eq!(out_timeout.result.unwrap_err().code, "CORE_UPDATE_EXIT_TIMEOUT");
+ assert!(!out_timeout.gui_stopped);
+ let _ = std::fs::remove_dir_all(&ws_d);
+}

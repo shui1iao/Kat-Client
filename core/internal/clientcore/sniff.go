@@ -21,7 +21,7 @@ func validateSniff(cb []byte) *Error {
 	}
 	for name := range fields {
 		switch name {
-		case "enabled", "override_destination", "tcp_ports", "udp_ports", "timeout":
+		case "enabled", "override_destination", "tcp_ports", "udp_ports", "timeout", "skip_domain":
 		default:
 			return fail("invalid_document", "client.sniff."+name, "Unknown sniff field")
 		}
@@ -53,6 +53,26 @@ func validateSniff(cb []byte) *Error {
 			if timeout.UnmarshalJSON(raw) != nil || (timeout != 0 && (time.Duration(timeout) < time.Millisecond || time.Duration(timeout) > 2*time.Second)) {
 				return fail("invalid_document", "client.sniff.timeout", "Expected duration 1ms–2s (0 uses default)")
 			}
+		}
+	}
+	if rawSkip, present := fields["skip_domain"]; present {
+		trimmed := bytes.TrimSpace(rawSkip)
+		if len(trimmed) == 0 || trimmed[0] != '[' {
+			return fail("invalid_document", "client.sniff.skip_domain", "Expected string array")
+		}
+		var items []json.RawMessage
+		if json.Unmarshal(trimmed, &items) != nil {
+			return fail("invalid_document", "client.sniff.skip_domain", "Expected string array")
+		}
+		values := make([]string, len(items))
+		for i, item := range items {
+			it := bytes.TrimSpace(item)
+			if len(it) == 0 || it[0] != '"' || json.Unmarshal(it, &values[i]) != nil {
+				return fail("invalid_document", "client.sniff.skip_domain", "Expected string array")
+			}
+		}
+		if err := kernel.ValidateSkipDomains(values); err != nil {
+			return fail("invalid_document", "client.sniff.skip_domain", err.Error())
 		}
 	}
 	return nil

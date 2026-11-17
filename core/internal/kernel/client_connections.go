@@ -3,6 +3,8 @@ package kernel
 import (
 	"context"
 	"golang.org/x/net/publicsuffix"
+	"net"
+	"net/netip"
 	"time"
 )
 
@@ -77,14 +79,48 @@ func (f *flow) emitConnection(target, rule string, chain []string, outcome, code
 	ci := f.info(time.Now())
 	f.s.connectionSink(ConnectionEvent{FlowDetails: ci.FlowDetails, Start: ci.Start, Up: ci.Up, Down: ci.Down, DurationMS: ci.DurationMS, Time: time.Now(), Network: f.network, Source: source, Target: target, Host: host, Rule: rule, Chain: append([]string{}, chain...), Outcome: outcome, Code: code})
 }
+func isProxyRemoteDNSTarget(chain []string, targetHost string) bool {
+	if len(chain) == 0 || targetHost == "" {
+		return false
+	}
+	leaf := chain[len(chain)-1]
+	if leaf == "direct" || leaf == "reject" || leaf == "dns" {
+		return false
+	}
+	_, err := netip.ParseAddr(targetHost)
+	return err != nil
+}
+
+func (f *flow) setRemoteDNS(chain []string, targetHost string) {
+	if f == nil {
+		return
+	}
+	f.mu.Lock()
+	f.details.RemoteDNS = isProxyRemoteDNSTarget(chain, targetHost)
+	f.mu.Unlock()
+}
+
+func (f *flow) clearSharedUDPTarget() {
+	if f == nil {
+		return
+	}
+	f.mu.Lock()
+	f.target = "udp-association"
+	f.host = ""
+	f.details.DestIP = ""
+	f.details.DestHost = ""
+	f.details.Sniffed = false
+	f.mu.Unlock()
+}
+
 func (f *flow) connectionOutcome(err error, establishedStage ...string) {
 	if f == nil {
 		return
 	}
 	f.setError(err)
 	f.mu.Lock()
-	if len(f.chain) > 0 && f.chain[len(f.chain)-1] != "direct" && f.details.DestHost != "" && f.details.DestIP == "" {
-		f.details.RemoteDNS = true
+	if len(f.chain) == 0 || f.chain[len(f.chain)-1] == "direct" || f.chain[len(f.chain)-1] == "reject" || f.chain[len(f.chain)-1] == "dns" {
+		f.details.RemoteDNS = false
 	}
 	f.mu.Unlock()
 	outcome, code := "ok", ""
@@ -107,17 +143,48 @@ func (f *flow) connectionOutcome(err error, establishedStage ...string) {
 	ci := f.info(time.Now())
 	f.emitConnection(ci.Target, ci.Rule, ci.Chain, outcome, code)
 }
-func (f *flow) sniffHost(ctx context.Context) {
+func (f *flow) sniffHost(ctx context.Context, targets ...Address) {
 	if f == nil {
 		return
 	}
 	f.mu.Lock()
+	if f.target == "udp-association" {
+		f.host = ""
+		f.details.DestIP = ""
+		f.details.DestHost = ""
+		f.details.Sniffed = false
+		f.mu.Unlock()
+		return
+	}
+	var hostStr string
+	if len(targets) > 0 && targets[0].Host != "" {
+		hostStr = targets[0].Host
+	} else if h, _, err := net.SplitHostPort(f.target); err == nil {
+		hostStr = h
+	}
 	f.host = ""
-	if sn := sniffOf(ctx); sn != nil {
+	f.details.Sniffed = false
+	if hostStr != "" {
+		if ip, err := netip.ParseAddr(hostStr); err == nil {
+			f.details.DestIP = ip.Unmap().String()
+			f.details.DestHost = ""
+		} else {
+			f.details.DestHost = hostStr
+		}
+	}
+	sn := sniffOf(ctx)
+	if sn != nil && sn.host != "" {
 		f.host = sn.host
-		f.details.Sniffed = sn.host != ""
-		if sn.host != "" {
-			f.details.DestHost = sn.host
+		f.details.Sniffed = true
+		f.details.DestHost = sn.host
+	}
+	if f.host == "" && (sn == nil || !sn.skipFallback) && f.s != nil && hostStr != "" {
+		if ip, ipErr := netip.ParseAddr(hostStr); ipErr == nil && !isLANTargetIP(ip) {
+			if mapped := f.s.lookupDNSHost(ip); mapped != "" {
+				f.host = mapped
+				f.details.DestHost = mapped
+				f.details.Sniffed = false
+			}
 		}
 	}
 	f.mu.Unlock()

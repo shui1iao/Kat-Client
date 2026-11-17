@@ -57,6 +57,24 @@ func (r *internalDNS) setEventSink(fn func(DNSEvent)) {
 	}
 }
 
+func (r *internalDNS) setOwner(s *Server) {
+	r.setOwnerVisited(s, map[*internalDNS]bool{})
+}
+
+func (r *internalDNS) setOwnerVisited(s *Server, visited map[*internalDNS]bool) {
+	if r == nil || visited[r] {
+		return
+	}
+	visited[r] = true
+	r.owner = s
+	for _, p := range r.rules {
+		p.resolver.setOwnerVisited(s, visited)
+	}
+	if r.local != nil {
+		r.local.setOwnerVisited(s, visited)
+	}
+}
+
 func dnsTypeString(t dnsmessage.Type) string {
 	switch t {
 	case dnsmessage.TypeA:
@@ -121,9 +139,14 @@ func extractWireAddresses(b []byte) ([]string, uint32, dnsmessage.RCode, bool) {
 }
 
 func (r *internalDNS) collectCache(out *[]DNSCacheItem, seen map[string]bool) {
-	if r == nil {
+	r.collectCacheVisited(out, seen, map[*internalDNS]bool{})
+}
+
+func (r *internalDNS) collectCacheVisited(out *[]DNSCacheItem, seen map[string]bool, visited map[*internalDNS]bool) {
+	if r == nil || visited[r] {
 		return
 	}
+	visited[r] = true
 	now := r.now()
 	epoch := r.dnsEpoch()
 	r.mu.Lock()
@@ -204,7 +227,10 @@ func (r *internalDNS) collectCache(out *[]DNSCacheItem, seen map[string]bool) {
 	}
 	r.mu.Unlock()
 	for _, p := range r.rules {
-		p.resolver.collectCache(out, seen)
+		p.resolver.collectCacheVisited(out, seen, visited)
+	}
+	if r.local != nil {
+		r.local.collectCacheVisited(out, seen, visited)
 	}
 }
 
@@ -219,10 +245,10 @@ func (s *Server) ListDNSCache() ([]DNSCacheItem, int, error) {
 	defer g.unref()
 	items := []DNSCacheItem{}
 	seen := map[string]bool{}
-	g.dns.collectCache(&items, seen)
-	if g.directDNS != nil && g.directDNS != g.dns {
-		g.directDNS.collectCache(&items, seen)
-	}
+	visited := map[*internalDNS]bool{}
+	g.dns.collectCacheVisited(&items, seen, visited)
+	g.directDNS.collectCacheVisited(&items, seen, visited)
+	g.bootstrapDNS.collectCacheVisited(&items, seen, visited)
 	sort.Slice(items, func(i, j int) bool {
 		if items[i].TTLSec != items[j].TTLSec {
 			return items[i].TTLSec > items[j].TTLSec

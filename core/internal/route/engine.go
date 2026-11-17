@@ -477,6 +477,100 @@ func (e *Engine) Decide(ctx context.Context, m Metadata, resolve Resolver) (Deci
 func (e *Engine) DecideClientDNS(ctx context.Context, m Metadata, resolve, directResolve Resolver, strict bool) (Decision, error) {
 	return e.decideDNS(ctx, m, resolve, directResolve, strict)
 }
+
+func (e *Engine) staticSetDomainTri(d *setData, q *query) int8 {
+	if d == nil {
+		return triFalse
+	}
+	if d.dom.match(q.host) {
+		return triTrue
+	}
+	unknown := d.hasIP() || len(d.ports) > 0
+	for _, c := range d.extra {
+		v := e.staticDomainTri(c, q)
+		if v == triTrue {
+			return triTrue
+		}
+		unknown = unknown || v == triUnknown
+	}
+	if unknown {
+		return triUnknown
+	}
+	return triFalse
+}
+
+func (e *Engine) staticDomainTri(c *cond, q *query) int8 {
+	if c == nil {
+		return triFalse
+	}
+	switch c.kind {
+	case kDomain, kSuffix, kKeyword, kRegex, kWildcard, kGeosite:
+		if e.match(c, q, nil) {
+			return triTrue
+		}
+		return triFalse
+	case kRuleSet:
+		return e.staticSetDomainTri(c.set.data.Load(), q)
+	case kInline:
+		return e.staticSetDomainTri(c.inline, q)
+	case kAnd, kOr:
+		result, decisive := triTrue, triFalse
+		if c.kind == kOr {
+			result, decisive = triFalse, triTrue
+		}
+		unknown := false
+		for _, sub := range c.subs {
+			v := e.staticDomainTri(sub, q)
+			if v == decisive {
+				return decisive
+			}
+			unknown = unknown || v == triUnknown
+		}
+		if unknown {
+			return triUnknown
+		}
+		return result
+	case kNot:
+		v := e.staticDomainTri(c.subs[0], q)
+		if v == triUnknown {
+			return triUnknown
+		}
+		return 1 - v
+	default:
+		return triUnknown
+	}
+}
+
+// MatchStaticDomain checks whether host explicitly matches a static domain
+// routing rule without any preceding unknown non-proxy rule that could change
+// a proxy decision to direct or reject (excluding Final and IP/port/process-only rules).
+func (e *Engine) MatchStaticDomain(host string) (Decision, bool) {
+	if e == nil {
+		return Decision{}, false
+	}
+	h, ok := normDomain(strings.TrimSuffix(strings.TrimSpace(host), "."))
+	if !ok || h == "" {
+		return Decision{}, false
+	}
+	q := query{host: h}
+	hasUnknownNonProxy := false
+	for i := range e.rules {
+		switch e.staticDomainTri(e.rules[i].c, &q) {
+		case triTrue:
+			d := toDecision(e.rules[i].v)
+			if d.Kind == Proxy && hasUnknownNonProxy {
+				return Decision{}, false
+			}
+			return d, true
+		case triUnknown:
+			d := toDecision(e.rules[i].v)
+			if d.Kind != Proxy || d.Outbound == "" || d.Outbound == "direct" || d.Outbound == "reject" {
+				hasUnknownNonProxy = true
+			}
+		}
+	}
+	return Decision{}, false
+}
 func (e *Engine) decideDNS(ctx context.Context, m Metadata, resolve, directResolve Resolver, strict bool) (Decision, error) {
 	q := query{port: m.Port, network: m.Network, srcPort: m.SrcPort, inPort: m.InPort, inName: m.InName, inType: m.InType, protocol: m.Protocol, processName: m.ProcessName, processStatus: m.ProcessStatus, processLookup: m.ProcessLookup, processCause: m.ProcessCause, skipUnavailableProcess: m.SkipUnavailableProcess, processSkipped: m.ProcessSkipped}
 	if m.Source.IsValid() {

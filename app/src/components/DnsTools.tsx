@@ -1,11 +1,20 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Icon } from './Icon';
 import { Card, Switch } from './ui';
 import { LocalError } from './Editors';
 import { core } from '../client/ipc';
 import { errorText } from '../lib/errors';
 import { KTag } from './labels';
-import { patchSniff, sniffInputError, sniffTimeoutInput, type SniffField } from '../client/sniff';
+import {
+  DEFAULT_SKIP_DOMAINS,
+  createSkipDomainController,
+  parseSkipDomainInput,
+  patchSniff,
+  sniffInputError,
+  sniffTimeoutInput,
+  type SkipDomainMode,
+  type SniffField,
+} from '../client/sniff';
 import type { DNSQueryReply, SniffSettings } from '../client/types';
 import type { Client } from '../client/useClient';
 
@@ -174,9 +183,105 @@ export function SniffSettingsCard({ c }: { c: Client }) {
             <Switch on={cur.override_destination} />
           </button>
         </div>
+        <SkipDomainInput
+          rawSkip={cur.skip_domain}
+          disabled={off || !cur.override_destination}
+          save={set}
+        />
       </div>
       {c.doc.dirty && <div className="form-error">原文有未保存草稿</div>}
     </Card>
+  );
+}
+
+function SkipDomainInput({
+  rawSkip,
+  disabled,
+  save,
+}: {
+  rawSkip: string[] | undefined;
+  disabled: boolean;
+  save: (patch: Partial<SniffSettings>) => Promise<boolean>;
+}) {
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  const [, redraw] = useState(0);
+  const ctrlRef = useRef<ReturnType<typeof createSkipDomainController> | null>(null);
+  if (!ctrlRef.current) {
+    ctrlRef.current = createSkipDomainController(
+      rawSkip,
+      (patch) => saveRef.current(patch),
+      () => redraw((n) => n + 1),
+    );
+  }
+  const ctrl = ctrlRef.current;
+  const id = useId();
+  const descId = id + '-desc';
+  const errId = id + '-error';
+  useEffect(() => {
+    ctrl.syncExternal(rawSkip);
+  }, [ctrl, rawSkip]);
+  const { mode, value, error } = ctrl.getState();
+  const customItems = mode === 'custom' ? (parseSkipDomainInput(value, 'custom') ?? []) : [];
+  const subText =
+    mode === 'default'
+      ? `默认跳过：${DEFAULT_SKIP_DOMAINS.join(', ')}（局域网 IP 始终保留原地址）`
+      : customItems.length === 0
+        ? '空列表，不跳过任何域名（局域网 IP 仍不替换目标地址）'
+        : '逗号分隔，支持 +.后缀；命中的域名与局域网 IP 不替换目标地址';
+  return (
+    <div className="sniff-row-wrap">
+      <div className="set-row">
+        <label className="set-row-copy" htmlFor={id}>
+          <b>跳过目标覆盖</b>
+          <small id={descId}>{subText}</small>
+        </label>
+        <div className="row-actions">
+          <select
+            id={mode === 'default' ? id : id + '-mode'}
+            className="inp set-inp-md"
+            aria-label="跳过目标覆盖模式"
+            aria-describedby={mode === 'default' ? descId : undefined}
+            disabled={disabled}
+            value={mode}
+            onChange={(e) => void ctrl.changeMode(e.target.value as SkipDomainMode, disabled)}
+          >
+            <option value="default">使用默认</option>
+            <option value="custom">自定义</option>
+          </select>
+          {mode === 'custom' && (
+            <div className="sniff-input">
+              <input
+                id={id}
+                className="inp mono set-inp-md"
+                aria-label="跳过目标覆盖"
+                placeholder="逗号分隔，留空不跳过"
+                disabled={disabled}
+                value={value}
+                aria-invalid={!!error}
+                aria-describedby={error ? `${descId} ${errId}` : descId}
+                onChange={(e) => ctrl.editInput(e.target.value)}
+                onBlur={() => void ctrl.commitBlur(disabled)}
+                onKeyDown={(e) =>
+                  ctrl.keyDown({
+                    key: e.key,
+                    isComposing: e.nativeEvent.isComposing,
+                    keyCode: e.keyCode,
+                    preventDefault: () => e.preventDefault(),
+                    blur: () => e.currentTarget.blur(),
+                  })
+                }
+              />
+            </div>
+          )}
+        </div>
+      </div>
+      {error && (
+        <p id={errId} className="field-error" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 

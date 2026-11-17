@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -13,7 +14,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"io"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -56,8 +56,8 @@ func TestDNSChainSchemaAndDefaults(t *testing.T) {
 		}
 		r.close()
 	}
-	good := []string{`{}`, `{"cache_entries":4096}`, `{"server":"system"}`, `{"server":"system","cache_entries":0}`, `{"server":"127.0.0.1:53"}`, `{"servers":["tcp://127.0.0.1:53","udp://[::1]:53","https://dns.google/dns-query"]}`, `{"servers":["1.1.1.1","1.1.1.1"]}`}
-	bad := []string{`null`, `{"servers":[]}`, `{"servers":null}`, `{"servers":[null]}`, `{"servers":[""]}`, `{"servers":["system"]}`, `{"servers":["udp://:53"]}`, `{"servers":["tls://x"]}`, `{"server":"system","servers":["1.1.1.1"]}`, `{"server":"","servers":["1.1.1.1"]}`, `{"servers":["1.1.1.1"],"unknown":true}`, `{"server":"system","cache_entries":1}`, `{"cache_entries":4097}`, `{"cache_entries":-1}`}
+	good := []string{`{}`, `{"cache_entries":4096}`, `{"server":"system"}`, `{"server":"system","cache_entries":0}`, `{"server":"system","cache_entries":1}`, `{"server":"127.0.0.1:53"}`, `{"servers":["tcp://127.0.0.1:53","udp://[::1]:53","https://dns.google/dns-query"]}`, `{"servers":["1.1.1.1","1.1.1.1"]}`}
+	bad := []string{`null`, `{"servers":[]}`, `{"servers":null}`, `{"servers":[null]}`, `{"servers":[""]}`, `{"servers":["system"]}`, `{"servers":["udp://:53"]}`, `{"servers":["tls://x"]}`, `{"server":"system","servers":["1.1.1.1"]}`, `{"server":"","servers":["1.1.1.1"]}`, `{"servers":["1.1.1.1"],"unknown":true}`, `{"cache_entries":4097}`, `{"cache_entries":-1}`}
 	for _, group := range []struct {
 		xs    []string
 		valid bool

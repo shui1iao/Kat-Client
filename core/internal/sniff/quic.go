@@ -57,15 +57,21 @@ func IsInitial(p []byte) bool {
 // ClientHello is complete, NeedMore while it is not, NotMatch when the
 // datagram is not a decryptable client Initial.
 func (q *QUIC) Add(p []byte) (string, Status) {
+	host, _, st := q.AddRaw(p)
+	return host, st
+}
+
+// AddRaw behaves like Add and additionally returns the raw unstripped SNI.
+func (q *QUIC) AddRaw(p []byte) (string, string, Status) {
 	if !IsInitial(p) {
-		return "", NotMatch
+		return "", "", NotMatch
 	}
 	frames, err := openInitial(p)
 	if err != nil {
-		return "", NotMatch
+		return "", "", NotMatch
 	}
 	if !q.frames(frames) {
-		return "", NotMatch
+		return "", "", NotMatch
 	}
 	// Contiguous prefix?
 	n := 0
@@ -73,23 +79,23 @@ func (q *QUIC) Add(p []byte) (string, Status) {
 		n++
 	}
 	if n < 4 {
-		return "", NeedMore
+		return "", "", NeedMore
 	}
 	if q.buf[0] != 1 {
-		return "", NotMatch
+		return "", "", NotMatch
 	}
 	total := 4 + (int(q.buf[1])<<16 | int(q.buf[2])<<8 | int(q.buf[3]))
 	if total > maxCrypto {
-		return "", NotMatch
+		return "", "", NotMatch
 	}
 	if n < total {
-		return "", NeedMore
+		return "", "", NeedMore
 	}
-	host, st := ClientHelloSNI(q.buf[:total])
+	host, rawHost, st := ClientHelloSNIRaw(q.buf[:total])
 	if st != Done {
-		return "", NotMatch
+		return "", "", NotMatch
 	}
-	return host, Done
+	return host, rawHost, Done
 }
 
 func readVarint(b []byte) (uint64, int, bool) {

@@ -1,5 +1,11 @@
-use crate::{error::{Error,Result},service_protocol::ServiceRequest};
-use super::{scm,pipe,identity::{self,Handle},security,network::{NetworkController,SwitchStatus,ServiceStatus,NetworkStatus}};
+use crate::{
+    error::{Error, Result},
+    service_protocol::ServiceRequest,
+    update_handoff_protocol::{
+        run_bridge_elevation, BridgeBoundary, BridgeOutcome, BridgePoll, BridgeRequest, Prepare,
+    },
+};
+use super::{scm,pipe,identity::{self,Handle},security,network::{NetworkController,SwitchStatus,ServiceStatus,NetworkStatus},update_handoff::{self,BridgeListener}};
 use crate::tun_diagnostics::{Stage,Change,Phase,Detail,Snapshot,Log};
 use std::{time::Duration,sync::atomic::Ordering};use serde_json::{json,Value};
 // This is only a local rejection of a known-untrusted GUI location, not an
@@ -132,29 +138,73 @@ impl NetworkController {
  }
 }
 async fn proxy_restore_and_tun(n:&NetworkController)->Result<()>{let p=super::proxy::restore();let t=n.tun_disable_unlocked().await;p?;t}
-pub fn setup_elevate(uninstall:bool,root:Option<&str>)->Result<()>{elevate_inner(uninstall,true,root)}
-fn elevate(uninstall:bool)->Result<()>{elevate_inner(uninstall,false,None)}
-fn elevate_inner(uninstall:bool,setup:bool,root:Option<&str>)->Result<()>{use windows_sys::Win32::{UI::{Shell::*,WindowsAndMessaging::*},System::Threading::*,Foundation::*};use std::os::windows::ffi::OsStrExt;
+
+fn spawn_elevated_installer(uninstall:bool,setup:bool,root:Option<&str>,report_path:&std::path::Path)->Result<Handle>{use windows_sys::Win32::{UI::{Shell::*,WindowsAndMessaging::*},System::Threading::*,Foundation::*};use std::os::windows::ffi::OsStrExt;
  let exe=std::env::current_exe().map_err(|e|Error::io("INSTALL_PATH",&e))?;let helper=if setup{exe.parent().ok_or_else(||Error::new("INSTALL_PATH","Invalid host path"))?.join(if uninstall{"kat-network-service.exe"}else{"kat-install-helper.exe"})}else{let r=super::install_location::read()?.ok_or_else(||Error::new("INSTALL_REGISTRATION","Use Kat Setup first"))?;let p=super::install_location::service_root()?.join("kat-network-service.exe");if r.schema==2{security::verify_approved(&r,&p,"kat-network-service.exe")?;}p};
  let path:Vec<u16>=helper.as_os_str().encode_wide().chain(Some(0)).collect();let verb=identity::wide("runas");let action=match(setup,uninstall){(true,true)=>"--setup-uninstall",(true,false)=>"--setup-install",(false,true)=>"--uninstall",(false,false)=>"--install"};
  let suffix=if let Some(root)=root{crate::install_location::validate(root)?;format!(" --root \"{root}\"")}else{String::new()};
  let args=identity::wide(&format!("{} --gui {} --stamp {}{}",action,std::process::id(),identity::process_stamp(unsafe{GetCurrentProcess()})?,suffix));
  let mut info=SHELLEXECUTEINFOW::default();info.cbSize=std::mem::size_of_val(&info)as u32;info.fMask=SEE_MASK_NOCLOSEPROCESS|SEE_MASK_NOASYNC;info.lpVerb=verb.as_ptr();info.lpFile=path.as_ptr();info.lpParameters=args.as_ptr();info.nShow=SW_SHOWNORMAL;info.hwnd=identity::uac_owner();
- let report_path=identity::workspace()?.join(crate::installer_result::RESULT_FILE);
- match std::fs::remove_file(&report_path){Ok(())=>{},Err(e)if e.kind()==std::io::ErrorKind::NotFound=>{},Err(e)=>return Err(Error::io("INSTALL_RESULT_PREPARE",&e))}
+ match std::fs::remove_file(report_path){Ok(())=>{},Err(e)if e.kind()==std::io::ErrorKind::NotFound=>{},Err(e)=>return Err(Error::io("INSTALL_RESULT_PREPARE",&e))}
  let shell_return=unsafe{ShellExecuteExW(&mut info)};
  let shell_error=unsafe{GetLastError()};
  let shell_hinst=info.hInstApp as isize;let shell_process=!info.hProcess.is_null();
  if shell_return==0{return Err(crate::installer_result::elevation_failure(shell_return,shell_error,shell_hinst,shell_process));}
  let p=Handle(info.hProcess);if p.0.is_null(){return Err(Error::new("INSTALL_TIMEOUT","无法确认安装程序状态；不要并发重试"));}
+ Ok(p)
+}
+
+fn finish_elevated_installer(p:Handle,report_path:&std::path::Path)->Result<()>{use windows_sys::Win32::{System::Threading::*,Foundation::*};
  // A deadline is not proof that the elevated transaction stopped. Retain the
  // bridge/gate and exact process handle until a terminal status is observed.
  loop{match unsafe{WaitForSingleObject(p.0,120000)}{WAIT_OBJECT_0=>break,WAIT_TIMEOUT=>continue,_=>return Err(Error::new("INSTALL_TIMEOUT","无法确认安装程序已结束，保留恢复材料，勿并发重试"))}}
  let mut code=0;if unsafe{GetExitCodeProcess(p.0,&mut code)}==0{return Err(Error::new("INSTALL_FAILED","Cannot read installer exit status; refresh service status"));}
  if code==crate::installer_result::EXIT_REPORT_FAILED||code==crate::installer_result::EXIT_REPORT_IDENTITY{return crate::installer_result::completion(code,None);}
- let report=crate::ownership::load::<crate::installer_result::InstallerOutcome>(&report_path).map_err(|_|Error::new("INSTALL_RESULT_READ","Cannot read installer result; refresh service status"))?;
+ let report=crate::ownership::load::<crate::installer_result::InstallerOutcome>(report_path).map_err(|_|Error::new("INSTALL_RESULT_READ","Cannot read installer result; refresh service status"))?;
  if let Some(fw)=report.as_ref().and_then(|r|r.firewall_error.as_ref()){crate::safe_log::component("host.service",crate::log_context::Component::Service,"service.start",crate::log_context::Phase::Complete,Some(&fw.code),None);}
  crate::installer_result::completion(code,report)
+}
+
+struct SetupBridgeBoundary<'a>{
+ uninstall:bool,
+ root:Option<&'a str>,
+ report_path:std::path::PathBuf,
+}
+
+impl BridgeBoundary for SetupBridgeBoundary<'_>{
+ type Listener=BridgeListener;
+ type Helper=Handle;
+ type Instance=Handle;
+
+ fn open_bridge_listener(&mut self)->Result<Self::Listener>{BridgeListener::open()}
+ fn spawn_uac_helper(&mut self)->Result<(Self::Helper,u32,u64)>{
+  use windows_sys::Win32::System::Threading::GetProcessId;
+  let p=spawn_elevated_installer(self.uninstall,true,self.root,&self.report_path)?;
+  let pid=unsafe{GetProcessId(p.0)};
+  let stamp=identity::process_stamp(p.0)?;
+  if pid==0||stamp==0{return Err(Error::new("INSTALL_IDENTITY","Cannot query elevated installer identity"));}
+  Ok((p,pid,stamp))
+ }
+ fn poll_helper_or_bridge(&mut self,helper:&mut Self::Helper,listener:&mut Self::Listener)->Result<BridgePoll>{listener.poll(helper.0)}
+ fn authenticate_and_read_bridge(&mut self,helper:&Self::Helper,listener:&mut Self::Listener,expected_pid:u32,expected_stamp:u64)->Result<BridgeRequest>{listener.authenticate_and_read(helper.0,expected_pid,expected_stamp,self.uninstall)}
+ fn disconnect_rejected_bridge(&mut self,listener:&mut Self::Listener){listener.disconnect_rejected();}
+ fn try_single_instance(&mut self)->Result<Option<Self::Instance>>{update_handoff::try_single_instance_nonblocking()}
+ fn handoff_running_gui(&mut self,prepare:&Prepare)->Result<Self::Instance>{update_handoff::handoff_running_gui_over_pipe(prepare)}
+ fn reply_bridge(&mut self,listener:&mut Self::Listener,bytes:Vec<u8>)->Result<()>{listener.reply_and_close(bytes)}
+ fn finish_helper(&mut self,helper:Self::Helper)->Result<()>{finish_elevated_installer(helper,&self.report_path)}
+}
+
+pub fn setup_elevate(uninstall:bool,root:Option<&str>)->Result<BridgeOutcome<Handle>>{
+ let report_path=identity::workspace()?.join(crate::installer_result::RESULT_FILE);
+ let mut boundary=SetupBridgeBoundary{uninstall,root,report_path};
+ Ok(run_bridge_elevation(&mut boundary,if uninstall{"uninstall"}else{"client"},None))
+}
+
+fn elevate(uninstall:bool)->Result<()>{elevate_inner(uninstall,false,None)}
+fn elevate_inner(uninstall:bool,setup:bool,root:Option<&str>)->Result<()>{
+ let report_path=identity::workspace()?.join(crate::installer_result::RESULT_FILE);
+ let p=spawn_elevated_installer(uninstall,setup,root,&report_path)?;
+ finish_elevated_installer(p,&report_path)
 }
 
 #[cfg(test)]mod tests {

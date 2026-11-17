@@ -279,7 +279,9 @@ func (s *Server) ProbeNodeWithPolicy(ctx context.Context, name, url string, poli
 			if targetProbeExpected(g.cfg.Groups, gr.Name()) != "" {
 				continue
 			}
-			if rec, ok := gr.(interface{ RecordURLProbe(string, group.ProbeSample) }); ok {
+			if rec, ok := gr.(interface {
+				RecordURLProbe(string, group.ProbeSample)
+			}); ok {
 				rec.RecordURLProbe(url, sample)
 			}
 		}

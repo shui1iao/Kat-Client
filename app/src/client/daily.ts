@@ -13,8 +13,7 @@ export function networkDraft(d:DocumentSource):NetworkDraft {
 export function dnsCacheError(v:NetworkDraft):string {
  const n=v.cache_entries===''?undefined:Number(v.cache_entries);
  if(n!==undefined&&(!Number.isInteger(n)||n<0||n>4096))return 'DNS 缓存须为 0–4096';
- const systemOnly=(v.dns_mode==='system')||(v.dns_mode==='custom'&&v.servers.length===1&&v.servers[0].trim()==='system');
- return systemOnly&&n!==undefined&&n!==0?'仅系统 DNS 缓存须为 0':'';
+ return '';
 }
 export function patchNetwork(d:DocumentSource,v:NetworkDraft,changed:ReadonlySet<keyof NetworkDraft>) {
  if(changed.has('cache_entries')||changed.has('dns_mode')||changed.has('servers')){const error=dnsCacheError(v);if(error)throw new Error(error);}
