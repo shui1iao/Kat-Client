@@ -1,12 +1,10 @@
 {
-  "client_version": "0.2.20",
-  "core_version": "0.8.14",
-  "sequence": 1794901000,
-  "client_sequence": 1794901000,
-  "core_sequence": 1794901000,
-  "platform": "windows",
-  "arch": "amd64",
-  "base_commit": "5a3469e9817404954a145a92a0a3c701b6d3203c",
-  "online_publication_performed": false,
-  "linux_server_changed": false
+  "client_version": "0.2.21",
+  "core_version": "0.8.15",
+  "sequence": 1794902000,
+  "client_sequence": 1794902000,
+  "core_sequence": 1794902000,
+  "previous_client_version": "0.2.20",
+  "previous_core_version": "0.8.14",
+  "previous_sequence": 1794901000
 }

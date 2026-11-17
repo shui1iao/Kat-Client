@@ -166,7 +166,6 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
             aria-label="搜索连接日志"
           />
         </label>
-        <span className="sp" />
         <div className="pill-bar" role="radiogroup" aria-label="结果筛选">
           {OUTCOME_PILLS.map((p) => (
             <button
@@ -181,8 +180,9 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
             </button>
           ))}
         </div>
-        <span className="muted num">{shown.length} 条</span>
-        <button type="button" className="btn sm" onClick={() => setPaused(!paused)} aria-pressed={paused}>
+        <span className="sp" />
+        <span className="muted num toolbar-count">{shown.length} 条</span>
+        <button type="button" className="btn sm btn-fixed-xs" onClick={() => setPaused(!paused)} aria-pressed={paused}>
           {paused ? '继续' : '暂停'}
         </button>
         <button
@@ -386,7 +386,6 @@ function KernelLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
             onChange={(e) => setQ(e.target.value)}
           />
         </label>
-        <span className="sp" />
         <div className="pill-bar" role="radiogroup" aria-label="内核日志等级">
           {LEVEL_PILLS.map((p) => (
             <button
@@ -401,11 +400,12 @@ function KernelLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
             </button>
           ))}
         </div>
-        <span className="muted num">{shown.length} 条</span>
-        <button type="button" className="btn sm" onClick={() => setPaused(!paused)} aria-pressed={paused}>
+        <span className="sp" />
+        <span className="muted num toolbar-count">{shown.length} 条</span>
+        <button type="button" className="btn sm btn-fixed-xs" onClick={() => setPaused(!paused)} aria-pressed={paused}>
           {paused ? '继续' : '暂停'}
         </button>
-        <button type="button" className="btn sm" disabled={!entries.length} onClick={() => setEntries([])}>
+        <button type="button" className="btn sm btn-fixed-xs" disabled={!entries.length} onClick={() => setEntries([])}>
           清空
         </button>
       </header>

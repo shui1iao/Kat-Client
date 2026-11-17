@@ -52,6 +52,8 @@ export function useClient() {
   useMainWindowHidden();
   const [, redraw] = useState(0);
   const [status, setStatus] = useState<CoreStatus | null>(null);
+  const statusRef = useRef<CoreStatus | null>(null);
+  statusRef.current = status;
   // Process reachability is separate from a healthy core's stopped engine.
   const coreReachable = useRef(false);
   const [desktop, setDesktop] = useState<DesktopSettingsReply | null>(null);
@@ -193,7 +195,38 @@ export function useClient() {
     }
     void connect();
     if (!hasHost()) return () => { mounted.current=false;lifetime.current++; };
-    let live = true, polling = false;
+    let live = true, polling = false, burstTimer = 0, burstTicks = 0;
+    const needsStartupBurst = (s: CoreStatus | null): boolean => {
+      if (!s) return burstTicks < 10;
+      if (s.runtime.state === 'starting') return burstTicks < 25;
+      if (s.runtime.state === 'stopped') return burstTicks < 4;
+      if (s.runtime.state !== 'running') return false;
+      const autoGroups = (s.groups ?? []).filter(
+        (g) => (g.type === 'url-test' || g.type === 'smart' || g.type === 'fallback') && (g.members?.length ?? 0) > 0,
+      );
+      return autoGroups.some(
+        (g) => !g.current || !g.members.some((m) => m.probe_ms != null || !!m.probe_error),
+      );
+    };
+    const scheduleBurst = () => {
+      if (!live || burstTicks >= 25) return;
+      burstTimer = window.setTimeout(async () => {
+        if (!live) return;
+        burstTicks++;
+        if (!needsStartupBurst(statusRef.current)) return;
+        if (!polling) {
+          polling = true;
+          try {
+            await Promise.allSettled([refreshStatus(), burstTicks <= 4 ? refreshNetwork() : Promise.resolve()]);
+            if (live && coreReachable.current && doc.saved === null && !jobs.current.has('connect')) void connect();
+          } finally {
+            polling = false;
+          }
+        }
+        if (live && needsStartupBurst(statusRef.current)) scheduleBurst();
+      }, 200);
+    };
+    scheduleBurst();
     const id = setInterval(async () => {
       if (!live || polling) return; polling = true;
       try {
@@ -204,7 +237,7 @@ export function useClient() {
         else if(live&&coreReachable.current&&doc.saved===null&&!jobs.current.has('connect'))void connect();
       } finally { polling = false; }
     }, 2000);
-    return () => { live = false;mounted.current=false;lifetime.current++;statusRequest.current++;networkRequest.current++;clearInterval(id); };
+    return () => { live = false;mounted.current=false;lifetime.current++;statusRequest.current++;networkRequest.current++;window.clearTimeout(burstTimer);clearInterval(id); };
   }, []);
   useEffect(()=> {
     if (!hasHost()) return;

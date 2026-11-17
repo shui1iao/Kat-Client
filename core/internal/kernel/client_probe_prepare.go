@@ -3,23 +3,25 @@ package kernel
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/shui1iao/Kat/internal/outbound/group"
 )
 
-// prepareManualProbe waits for the same full first URLTest/Smart round that a real
-// dial would await. It does not dial the target, choose a first-success member,
-// override fixed/selected members, or change any group's probe policy. The
-// caller owns a manual permit and the bounded parent round context throughout.
-// Resolve against the captured generation's expanded config/runtime (including
-// provider Via and relay clones), never against the next generation.
+// prepareManualProbe waits for the same first URLTest/Smart readiness that a real
+// dial would await. It does not dial the target, override fixed/selected members,
+// or change any group's probe policy.
 func (s *Server) prepareManualProbe(ctx context.Context, name string) error {
 	return s.prepareProbeDependencies(ctx, s.rt, name)
 }
 
+type depFlight struct {
+	done chan struct{}
+	err  error
+}
+
 // Both probe paths resolve the captured generation's expanded dependency graph.
-// Background callers run this BEFORE shared HTTP admission; manual callers keep
-// their existing bounded round/permit ownership and target-budget boundary.
+// Independent child dependencies warm concurrently with singleflight deduplication.
 func (s *Server) prepareProbeDependencies(ctx context.Context, rt *routingRuntime, name string) error {
 	outs := make(map[string]OutboundConfig, len(s.cfg.Outbounds))
 	groups := make(map[string]GroupConfig, len(s.cfg.Groups))
@@ -29,48 +31,91 @@ func (s *Server) prepareProbeDependencies(ctx context.Context, rt *routingRuntim
 	for _, g := range s.cfg.Groups {
 		groups[g.Name] = g
 	}
-	seen := map[string]bool{}
-	var prepare func(string) error
-	prepare = func(name string) error {
+
+	var mu sync.Mutex
+	flights := make(map[string]*depFlight)
+
+	var prepare func(string, map[string]bool) error
+	prepare = func(target string, stack map[string]bool) error {
 		if e := ctx.Err(); e != nil {
 			return e
 		}
 		if s.superseded.Load() {
 			return context.Canceled
 		}
-		if name == "" || name == "direct" || name == "reject" || seen[name] {
+		if target == "" || target == "direct" || target == "reject" || stack[target] {
 			return nil
 		}
-		seen[name] = true
-		if o, ok := outs[name]; ok {
-			return prepare(o.Via)
-		}
-		cfg, ok := groups[name]
-		if !ok {
-			return errors.New("probe dependency unavailable")
-		}
-		node := rt.nodes[name]
-		if node == nil {
-			return errors.New("probe dependency unavailable")
-		}
-		members := cfg.Members
-		// Explicit choices must remain explicit; unrelated alternatives are not
-		// warmed for a select/fixed group. Automatic groups need all candidates for
-		// their unchanged full-round health/weighted selection.
-		if cfg.Type == group.TypeSelect {
-			members = []string{node.(group.Group).Current()}
-		} else if cfg.Fixed != "" {
-			members = []string{cfg.Fixed}
-		}
-		for _, m := range members {
-			if e := prepare(m); e != nil {
-				return e
+
+		mu.Lock()
+		if f, ok := flights[target]; ok {
+			mu.Unlock()
+			select {
+			case <-f.done:
+				return f.err
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 		}
-		if ready, ok := node.(interface{ WaitReady(context.Context) error }); ok {
-			return ready.WaitReady(ctx)
+		f := &depFlight{done: make(chan struct{})}
+		flights[target] = f
+		mu.Unlock()
+
+		nextStack := make(map[string]bool, len(stack)+1)
+		for k := range stack {
+			nextStack[k] = true
 		}
-		return nil
+		nextStack[target] = true
+
+		err := func() error {
+			if o, ok := outs[target]; ok {
+				return prepare(o.Via, nextStack)
+			}
+			cfg, ok := groups[target]
+			if !ok {
+				return errors.New("probe dependency unavailable")
+			}
+			node := rt.nodes[target]
+			if node == nil {
+				return errors.New("probe dependency unavailable")
+			}
+			members := cfg.Members
+			if cfg.Type == group.TypeSelect {
+				members = []string{node.(group.Group).Current()}
+			} else if cfg.Fixed != "" {
+				members = []string{cfg.Fixed}
+			}
+			if len(members) == 1 {
+				if e := prepare(members[0], nextStack); e != nil {
+					return e
+				}
+			} else if len(members) > 1 {
+				errs := make([]error, len(members))
+				var wg sync.WaitGroup
+				wg.Add(len(members))
+				for idx, m := range members {
+					go func(i int, memberName string) {
+						defer wg.Done()
+						errs[i] = prepare(memberName, nextStack)
+					}(idx, m)
+				}
+				wg.Wait()
+				for _, e := range errs {
+					if e != nil {
+						return e
+					}
+				}
+			}
+			if ready, ok := node.(interface{ WaitReady(context.Context) error }); ok {
+				return ready.WaitReady(ctx)
+			}
+			return nil
+		}()
+
+		f.err = err
+		close(f.done)
+		return err
 	}
-	return prepare(name)
+
+	return prepare(name, nil)
 }

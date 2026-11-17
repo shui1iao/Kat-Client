@@ -52,7 +52,7 @@ impl NetworkController {
   if e.host!="127.0.0.1"||e.port==0||!e.ready{return Err(Error::new("CORE_NOT_READY","Core loopback entry is not ready"));}
   use tokio::io::{AsyncReadExt,AsyncWriteExt};
   let verify=async {
-   let mut stream=tokio::net::TcpStream::connect(("127.0.0.1",e.port)).await.map_err(|_|Error::new("CORE_NOT_READY","Core loopback entry is unavailable"))?;
+   let mut stream=tokio::net::TcpStream::connect(("127.0.0.1",e.port)).await.map_err(|_|Error::new("CORE_NOT_READY","Core loopback entry is unavailable"))?;let _=stream.set_nodelay(true);
    if kind=="socks"{stream.write_all(&[5,1,0]).await.map_err(|_|Error::new("CORE_NOT_READY","SOCKS handshake failed"))?;let mut reply=[0u8;2];stream.read_exact(&mut reply).await.map_err(|_|Error::new("CORE_NOT_READY","SOCKS handshake failed"))?;if reply!=[5,0]{return Err(Error::new("CORE_NOT_READY","SOCKS protocol is unavailable"));}}
    else {stream.write_all(b"OPTIONS * HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").await.map_err(|_|Error::new("CORE_NOT_READY","HTTP handshake failed"))?;let mut reply=[0u8;8];stream.read_exact(&mut reply).await.map_err(|_|Error::new("CORE_NOT_READY","HTTP handshake failed"))?;if &reply!=b"HTTP/1.1"&&&reply!=b"HTTP/1.0"{return Err(Error::new("CORE_NOT_READY","HTTP protocol is unavailable"));}}
    Ok(e.port)

@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -89,6 +90,32 @@ type Host struct {
 	done                     chan struct{}
 	localReady               bool
 	updatePrepared           bool // Final Close must recheck the accepted source after a strict prepare.
+	starting                 atomic.Bool
+	fastSnap                 atomic.Pointer[fastHostSnapshot]
+}
+
+type fastHostSnapshot struct {
+	text      string
+	path      string
+	format    DocumentFormat
+	mode      string
+	httpPort  int
+	socksPort int
+	totalUp   uint64
+	totalDown uint64
+}
+
+func (h *Host) publishFastSnapshotLocked() {
+	h.fastSnap.Store(&fastHostSnapshot{
+		text:      h.doc.text,
+		path:      h.path,
+		format:    h.doc.format,
+		mode:      h.doc.client.Mode,
+		httpPort:  h.doc.client.HTTPPort,
+		socksPort: h.doc.client.SOCKSPort,
+		totalUp:   h.history.TotalUp,
+		totalDown: h.history.TotalDown,
+	})
 }
 
 func Open(workspace string) (*Host, error) { return openWorkspace(workspace, nil) }
@@ -218,12 +245,22 @@ func openWorkspace(workspace string, expected *elevated.Checkpoint) (*Host, erro
 		release()
 		return nil, errors.New("cannot read traffic history")
 	}
+	h.publishFastSnapshotLocked()
 	ctx, cancel := context.WithCancel(context.Background())
 	h.cancel = cancel
 	go h.sampleLoop(ctx)
 	return h, nil
 }
 func (h *Host) Document() any {
+	if h.mu.TryLock() {
+		defer h.mu.Unlock()
+		return map[string]any{"text": h.doc.text, "path": h.path, "running": h.server != nil, "format": h.doc.format}
+	}
+	if h.starting.Load() {
+		if snap := h.fastSnap.Load(); snap != nil {
+			return map[string]any{"text": snap.text, "path": snap.path, "running": false, "format": snap.format}
+		}
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return map[string]any{"text": h.doc.text, "path": h.path, "running": h.server != nil, "format": h.doc.format}
@@ -415,6 +452,7 @@ func (h *Host) applyContext(ctx context.Context, text string, formats ...Documen
 		}
 		tx.accept()
 		h.doc = d
+	h.publishFastSnapshotLocked()
 		if len(ids) > 0 {
 			h.server.ClientCloseConnections(ids)
 		}
@@ -480,6 +518,7 @@ func (h *Host) applyContext(ctx context.Context, text string, formats ...Documen
 		acceptedDir = h.fullPending.Dir
 	}
 	h.doc = d
+	h.publishFastSnapshotLocked()
 	if previous.client.IPv6 != d.client.IPv6 {
 		h.setIPPolicy(!d.client.IPv6)
 		h.cancelBootstrapLocked()
@@ -547,6 +586,9 @@ func (h *Host) startLocked() *Error {
 		return nil
 	}
 	h.state = "starting"
+	h.publishFastSnapshotLocked()
+	h.starting.Store(true)
+	defer h.starting.Store(false)
 	b, e := newHTTPBridge(h.doc.client.HTTPPort, h.doc.client.SOCKSPort, h.logs.record)
 	if e != nil {
 		h.state = "error"

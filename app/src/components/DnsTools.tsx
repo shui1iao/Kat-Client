@@ -232,9 +232,9 @@ function SkipDomainInput({
   return (
     <div className="sniff-row-wrap">
       <div className="set-row">
-        <label className="set-row-copy" htmlFor={id}>
+        <label className="set-row-copy" htmlFor={mode === 'default' ? id : id + '-mode'}>
           <b>跳过目标覆盖</b>
-          <small id={descId}>{subText}</small>
+          <small id={descId} title={subText}>{subText}</small>
         </label>
         <div className="row-actions">
           <select
@@ -249,33 +249,33 @@ function SkipDomainInput({
             <option value="default">使用默认</option>
             <option value="custom">自定义</option>
           </select>
-          {mode === 'custom' && (
-            <div className="sniff-input">
-              <input
-                id={id}
-                className="inp mono set-inp-md"
-                aria-label="跳过目标覆盖"
-                placeholder="逗号分隔，留空不跳过"
-                disabled={disabled}
-                value={value}
-                aria-invalid={!!error}
-                aria-describedby={error ? `${descId} ${errId}` : descId}
-                onChange={(e) => ctrl.editInput(e.target.value)}
-                onBlur={() => void ctrl.commitBlur(disabled)}
-                onKeyDown={(e) =>
-                  ctrl.keyDown({
-                    key: e.key,
-                    isComposing: e.nativeEvent.isComposing,
-                    keyCode: e.keyCode,
-                    preventDefault: () => e.preventDefault(),
-                    blur: () => e.currentTarget.blur(),
-                  })
-                }
-              />
-            </div>
-          )}
         </div>
       </div>
+      {mode === 'custom' && (
+        <div className="set-block sniff-custom-block">
+          <input
+            id={id}
+            className="inp mono sniff-skip-full"
+            aria-label="跳过目标覆盖"
+            placeholder="逗号分隔，支持 +.后缀（留空表示不跳过任何域名）"
+            disabled={disabled}
+            value={value}
+            aria-invalid={!!error}
+            aria-describedby={error ? `${descId} ${errId}` : descId}
+            onChange={(e) => ctrl.editInput(e.target.value)}
+            onBlur={() => void ctrl.commitBlur(disabled)}
+            onKeyDown={(e) =>
+              ctrl.keyDown({
+                key: e.key,
+                isComposing: e.nativeEvent.isComposing,
+                keyCode: e.keyCode,
+                preventDefault: () => e.preventDefault(),
+                blur: () => e.currentTarget.blur(),
+              })
+            }
+          />
+        </div>
+      )}
       {error && (
         <p id={errId} className="field-error" role="alert">
           {error}

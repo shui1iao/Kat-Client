@@ -262,7 +262,7 @@ function NetworkForm({ c, section }: { c: Client; section: 'ports' | 'dns' }) {
         >
           取消更改
         </button>
-        <button className="btn sm primary" type="submit" disabled={!changed.size || c.doc.saving || c.doc.dirty}>
+        <button className="btn sm primary" style={{ minWidth: 88 }} type="submit" disabled={!changed.size || c.doc.saving || c.doc.dirty}>
           {c.doc.saving ? '保存中…' : section === 'dns' ? '保存 DNS' : '保存网络参数'}
         </button>
       </div>

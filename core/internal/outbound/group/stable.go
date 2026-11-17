@@ -263,7 +263,11 @@ func (g *autoGroup) measuredProbe(ctx context.Context, i int) ProbeSample {
 	if g.cfg.head && prepWait < 15*time.Second {
 		prepWait = 15 * time.Second
 	}
-	prep, stopPrep := context.WithTimeout(ctx, prepWait)
+	prepBase := ctx
+	if g.cfg.head {
+		prepBase = context.WithValue(ctx, bgPrepKey{}, true)
+	}
+	prep, stopPrep := context.WithTimeout(prepBase, prepWait)
 	defer stopPrep()
 	if g.cfg.prepare != nil {
 		if err := g.cfg.prepare(prep, sample.Name); err != nil {

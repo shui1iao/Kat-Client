@@ -121,6 +121,7 @@ fn tray_sync(window:tauri::WebviewWindow,state:tauri::State<'_,Host>,snapshot:Op
  if let Some(ready)=listener_ready{current.listener_ready=ready;}
  if let Some(snapshot)=snapshot{current.sync(snapshot);}
  drop(current);
+ if resend { let _ = window.emit("network-changed", ()); }
  sync_main_window_visibility(window.app_handle(),resend);
  Ok(())
 }
@@ -508,6 +509,7 @@ pub fn run() {
           let need_tun=matches!(result,Ok(true));
           if !need_tun{state.record(crate::safe_log::HostEvent::Startup,&result);}
           drop(_control);
+          let _ = a.emit("network-changed", ());
           let _ = window_ready_rx.await;
           if let Err(e)=&result{let _=a.emit("network-recovery-required",crate::tun_diagnostics::safe_event(e));show_main(&a);}
           let _=a.emit("network-changed",());

@@ -124,6 +124,7 @@ export function Policies({
             type="button"
             className="btn sm"
             onClick={() => setOpenSet(allOpen ? new Set() : new Set(visibleGroups.map((g) => g.name)))}
+            style={{ minWidth: 74 }}
           >
             {allOpen ? '全部收起' : '全部展开'}
           </button>

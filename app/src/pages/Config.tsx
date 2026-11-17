@@ -410,6 +410,7 @@ export function Config({ c }: { c: Client }) {
               className="btn sm primary"
               {...tip('快捷键 Ctrl+S')}
               disabled={!canSave}
+              style={{ minWidth: 68 }}
               onClick={() => void (advancedDNS ? resolveDNS() : c.save())}
             >
               {c.doc.saving ? '保存中…' : '保存'}

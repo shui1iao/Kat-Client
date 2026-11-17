@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "scope": "system/custom DNS cache 0..4096 acceptance and -1/4097 rejection; synthetic transport, not native peer or Windows",
+  "checks": [
+    "custom DNS: input max4096 and rangeOverflow4097; invalid value stays visible and unsaved",
+    "custom DNS: 4096 saves target cache field only, legacy dns.server untouched",
+    "system DNS: accepts 4096 cache entries without obsolete zero-only error",
+    "system DNS: accepts explicit 0 cache entries",
+    "system DNS: accepts mid-range 512 cache entries",
+    "system DNS: rejects -1 with visible range error and blocks apply",
+    "system DNS: rejects 4097 with visible range error and blocks apply",
+    "sniff skip_domain: mode switch to custom persists explicit [] and renders empty-list status",
+    "sniff skip_domain: malformed suffix alert + aria-invalid, edit clears error, Enter commits once via blur",
+    "sniff skip_domain: mode switch back to default omits skip_domain field",
+    "dns cache tab: clear button enabled and invokes dns.cache.clear even when entries list is empty"
+  ],
+  "consoleErrors": [],
+  "externalRequests": []
+}

@@ -1,19 +1,13 @@
-# Validation: Kat-Client v0.2.20 / Windows Core v0.8.14
+# Validation: Kat-Client v0.2.21 / Windows Core v0.8.15
 
-2026-11-17 发布前验证记录（统一 sequence `1794901000`，Windows Core 源码指纹 `c21abbdc92a68c535b0506936170d03da151cd149b3d73aac31fea8c5295a3ba`，`BuildCommit = c21abbdc92a68c535b0506936170d03da151cd14`）：
+2026-11-18 本地候选验证记录（统一 sequence `1794902000`，Windows Core 源码指纹 `04a81276f5f663a48f9cfb4fac548cf4950f207d0c9df3893e0069736d3f7a8e`，`BuildCommit = 04a81276f5f663a48f9cfb4fac548cf4950f207d`）：
 
-1. **Go 1.26.9 内核与客户端核心（`go test -race ./...` + Windows `desktop` 测试交叉编译）**：
-   - 22 个包通过（含 `cmd/kat-client-core`、`internal/clientcore`、`internal/kernel`、`internal/route`、`internal/sniff`、`internal/outbound/direct`、`internal/outbound/group`、`internal/tunstack`、`internal/clientegress` 等），**0 数据竞态（0 data race）**，无新增失败。
-   - `GOOS=windows GOARCH=amd64 -tags desktop` 测试二进制交叉编译检查通过。
-   - 其余 2 个包为与 v0.2.19 基线一致的既有测试桩/环境失败（`internal/outbound/anytls`、`internal/tunplatform`），2 个包无测试文件。
-2. **Rust 1.99.1 宿主、服务与安装器（`cargo test --offline --locked` + `verify-vendor.py`）**：
-   - 全量 **310 通过 / 0 失败 / 2 忽略**（`lib` 274、`control_contract` 12、`supervisor` 23 含真实 Core 子进程 UAC 后置平滑交接集成回归、`elevation_launch` 1）。
-   - 官方 Wintun vendor 哈希与 PE 证书表校验通过。
-3. **前端 TypeScript / Vite 与桌面交互契约**：
-   - `npm run typecheck` 与 `npm run build` 生产构建通过。
-   - 本版相关 4 组定向单测 **27 通过 / 0 失败**；全量 `tests-ui` **207 通过 / 61 既有快照失败**（与 v0.2.19 基线失败集合一致，无新增失败）。
-   - Headless Chromium `dns-cache-browser.mjs` 11 项交互检查通过（`consoleErrors = []`，`externalRequests = []`）。
-4. **六角色构建、NSIS 3.11 与原密钥签包验签**：
-   - NSIS 脚本回归 `test-setup-finish.py`（7/7）与 `test-setup-readlines.py`（8/8）全部通过。
-   - Windows Core v0.8.14 与五个 Rust Windows x64 角色离线编译，`kat-install-helper.exe` 精确绑定新服务与四客户端 SHA256；原 Ed25519 公钥 `0afa646ee76f17d8` 签包并通过产品 `update_manifest::verify_package` 校验。
-   - `Kat-Source.zip` 与 `Kat-Source.tar.gz` 与 Git 发布树逐路径、字节、权限位 100% 一致。
+1. **DNS 与全站按钮位置零跳动几何验证（Headless Chromium）**：
+   - `app/tests-ui/button-stability-browser.mjs` 在 `900×720`、`965×720`、`1000×720`、`1080×720`、`1280×720` 五档视口下逐像素校验：DNS 三标签切换、筛选胶囊计数跳变、「清除缓存」状态条弹出、设置与缓存页清除按钮对齐、「跳过目标覆盖」模式切换、连接页「按进程」与「活跃/已关闭」切换、日志页三标签与筛选切换均 `0.00px` 位移。
+   - `app/tests-ui/dns-cache-browser.mjs` 11/11 项全部通过；`tsc --noEmit` 与 Vite 生产构建通过。
+2. **Go 客户端内核 `-race` 与冷启动流式测速验证**：
+   - 客户端相关 22 个有测试包 `go test -race -tags desktop` 全数通过、0 数据竞态；新增 `TestDesktopStartupStreamingProbeUnblocksGroupsAndNestedDependenciesBeforeDeadNodeTimeout`（5s 死节点下三层策略组与真实 TCP 拨号 20ms 就绪）与 `TestHostStartingNonBlockingSnapshotAndNonNilJSONArrays`（启动期无锁快径与零 `:null` 数组）全部通过；Windows 测试二进制交叉编译通过。
+3. **Rust 桌面宿主与安装器校验**：
+   - `cargo test --offline --locked` 共 310 通过、0 失败、2 忽略；`verify-vendor.py`、`test-setup-finish.py`（7/7）、`test-setup-readlines.py`（8/8）全部通过。
+4. **交叉构建与产品原生包验签**：
+   - Windows Core v0.8.15 与五个 Rust Windows x64 角色离线编译，`kat-install-helper.exe` 绑定服务与客户端 SHA256；Ed25519 公钥 `0afa646ee76f17d8` 离线签包并通过产品原生 `kat-package-validator`（`update_manifest::verify_package`）门禁。

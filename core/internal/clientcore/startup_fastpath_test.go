@@ -1,9 +1,11 @@
 package clientcore
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestIsDecimalYAMLLexicalParity(t *testing.T) {
@@ -62,5 +64,60 @@ func TestFastUniqueJSONAndEscapedKeyFallback(t *testing.T) {
 	root, err := sourceJSON(d)
 	if err != nil || len(root["client"]) == 0 {
 		t.Fatalf("sourceJSON cached projection failed: %v", err)
+	}
+}
+
+
+func TestHostStartingNonBlockingSnapshotAndNonNilJSONArrays(t *testing.T) {
+	ws := t.TempDir()
+	h, err := Open(ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.Close()
+
+	// Simulate Start() holding h.mu while building kernel runtime:
+	h.mu.Lock()
+	h.publishFastSnapshotLocked()
+	h.starting.Store(true)
+
+	done := make(chan struct{})
+	var docBytes, statusBytes []byte
+	var encErr error
+	go func() {
+		defer close(done)
+		docVal := h.Document()
+		stVal := h.Status()
+		docBytes, encErr = json.Marshal(docVal)
+		if encErr == nil {
+			statusBytes, encErr = json.Marshal(stVal)
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(300 * time.Millisecond):
+		h.starting.Store(false)
+		h.mu.Unlock()
+		t.Fatal("Document()/Status() blocked on h.mu during starting fast-path!")
+	}
+
+	h.starting.Store(false)
+	h.mu.Unlock()
+
+	if encErr != nil {
+		t.Fatal(encErr)
+	}
+	if !strings.Contains(string(docBytes), `"running":false`) {
+		t.Fatalf("unexpected fast Document JSON: %s", docBytes)
+	}
+	stJSON := string(statusBytes)
+	if !strings.Contains(stJSON, `"state":"starting"`) {
+		t.Fatalf("expected starting state in fast Status JSON: %s", stJSON)
+	}
+	for _, arrayField := range []string{`"groups":null`, `"nodes":null`, `"hourly":null`, `"domains":null`, `"daily":null`, `"rules":null`, `"rule_targets":null`, `"items":null`, `"providers":null`} {
+		if strings.Contains(stJSON, arrayField) {
+			t.Fatalf("JSON slice safety violation (%s found) in fast Status JSON: %s", arrayField, stJSON)
+		}
 	}
 }

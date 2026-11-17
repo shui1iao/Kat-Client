@@ -323,6 +323,7 @@ export function Rules({
                 className={'btn sm primary' + (resUpdating ? ' spin' : '')}
                 disabled={resUnavailable || resBusy || !resItems?.length}
                 onClick={() => void refreshResources(resItems ?? [])}
+                style={{ minWidth: 112 }}
               >
                 <Icon name="refresh" size={13} />
                 {resUpdating ? '更新中…' : '更新全部资源'}
@@ -363,6 +364,7 @@ export function Rules({
                     type="submit"
                     className="btn sm primary"
                     disabled={judgeBusy || !judgeTarget.trim() || !c.hasHost || !c.connected}
+                    style={{ minWidth: 68 }}
                   >
                     {judgeBusy ? '判定中…' : '判定'}
                   </button>

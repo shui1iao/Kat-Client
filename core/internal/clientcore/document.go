@@ -636,13 +636,15 @@ func parseDocument(text, workspace string, formats ...DocumentFormat) (document,
 	case "direct":
 		c.Routing = &kernel.RoutingOptions{Final: "direct"}
 	}
-	b, e = json.Marshal(c)
-	if e != nil {
-		return out, fail("invalid_kernel", "kernel", "Cannot encode runtime")
-	}
-	c, e = kernel.DecodeConfig(b)
-	if e != nil {
-		return out, fail("invalid_kernel", "kernel", "Invalid runtime projection")
+	if cl.Mode != "rule" || len(c.Providers) > 0 {
+		b, e = json.Marshal(c)
+		if e != nil {
+			return out, fail("invalid_kernel", "kernel", "Cannot encode runtime")
+		}
+		c, e = kernel.DecodeConfig(b)
+		if e != nil {
+			return out, fail("invalid_kernel", "kernel", "Invalid runtime projection")
+		}
 	}
 	detour := ""
 	if out.ruleRouting != nil {

@@ -50,7 +50,68 @@ func (h *Host) checkLocal() bool {
 	}()
 	return <-socksDone && httpOK
 }
-func (h *Host) Status() any { h.mu.Lock(); defer h.mu.Unlock(); return h.statusLocked() }
+func (h *Host) Status() any {
+	if h.mu.TryLock() {
+		defer h.mu.Unlock()
+		return h.statusLocked()
+	}
+	if h.starting.Load() {
+		if snap := h.fastSnap.Load(); snap != nil {
+			return map[string]any{
+				"probe_round":        nil,
+				"probe_group_rounds": map[string]any{},
+				"probe_round_result": nil,
+				"probe_group_results": map[string]probeOutcome(nil),
+				"runtime": map[string]any{
+					"state":        "starting",
+					"core_version": kernel.Version,
+					"uptime_ms":    int64(0),
+					"pid":          nil,
+					"memory_bytes": nil,
+				},
+				"mode":   snap.mode,
+				"groups": []any{},
+				"nodes":  []any{},
+				"traffic": map[string]any{
+					"up_rate":           float64(0),
+					"down_rate":         float64(0),
+					"total_up":          snap.totalUp,
+					"total_down":        snap.totalDown,
+					"today_up":          uint64(0),
+					"today_down":        uint64(0),
+					"today_direct_up":   uint64(0),
+					"today_direct_down": uint64(0),
+					"today_proxy_up":    uint64(0),
+					"today_proxy_down":  uint64(0),
+					"direct_up":         uint64(0),
+					"direct_down":       uint64(0),
+					"hourly":            []hourly{},
+					"domains":           []kernel.DomainTrafficView{},
+					"daily":             []daily{},
+					"groups":            []any{},
+					"rules":             []any{},
+					"rule_targets":      []map[string]any{},
+					"rules_since":       nil,
+				},
+				"connections": map[string]any{
+					"active": int64(0),
+					"items":  []any{},
+					"total":  nil,
+					"tcp":    nil,
+					"udp":    nil,
+				},
+				"providers": []kernel.ProviderView{},
+				"local": map[string]any{
+					"http":  map[string]any{"host": "127.0.0.1", "port": snap.httpPort, "ready": false},
+					"socks": map[string]any{"host": "127.0.0.1", "port": snap.socksPort, "ready": false},
+				},
+			}
+		}
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.statusLocked()
+}
 func (h *Host) statusLocked() any {
 	h.sampleLocked(time.Now())
 	currentRound := h.allRound

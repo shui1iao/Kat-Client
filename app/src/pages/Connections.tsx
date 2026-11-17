@@ -419,7 +419,7 @@ export function Connections({
                 </button>
                 <button
                   type="button"
-                  className="btn sm"
+                  className="btn sm btn-fixed-md"
                   onClick={() => void copyTarget(x.id, name || x.target)}
                 >
                   {copiedId === x.id ? '已复制' : '复制目标'}
@@ -464,21 +464,20 @@ export function Connections({
               aria-label="搜索连接"
             />
           </label>
-          {!groupByProc && (
-            <select
-              className="inp sm"
-              aria-label="进程筛选"
-              value={process}
-              onChange={(e) => setProcess(e.target.value)}
-            >
-              <option value="*">全部进程</option>
-              {processCounts(list).map(([name, n]) => (
-                <option key={name} value={name}>
-                  {name || '未知'} ({n})
-                </option>
-              ))}
-            </select>
-          )}
+          <select
+            className="inp sm"
+            aria-label="进程筛选"
+            value={groupByProc ? '*' : process}
+            disabled={groupByProc}
+            onChange={(e) => setProcess(e.target.value)}
+          >
+            <option value="*">全部进程</option>
+            {processCounts(list).map(([name, n]) => (
+              <option key={name} value={name}>
+                {name || '未知'} ({n})
+              </option>
+            ))}
+          </select>
           <select
             className="inp sm"
             aria-label="连接排序"
@@ -505,19 +504,10 @@ export function Connections({
             按进程
           </button>
           <span className="sp" />
-          <button
-            type="button"
-            className="btn sm"
-            onClick={() => setPaused((p) => !p)}
-            disabled={!running}
-            aria-pressed={paused}
-          >
-            {paused ? '继续' : '暂停'}
-          </button>
           {tab === 'active' && (
             <button
               type="button"
-              className="btn sm danger"
+              className="btn sm danger conn-close-btn"
               disabled={!running || closing || !sorted.length}
               onClick={() =>
                 setConfirmation({
@@ -529,6 +519,15 @@ export function Connections({
               {needle || process !== '*' ? `关闭匹配 ${sorted.length}` : '关闭全部'}
             </button>
           )}
+          <button
+            type="button"
+            className="btn sm btn-fixed-xs"
+            onClick={() => setPaused((p) => !p)}
+            disabled={!running}
+            aria-pressed={paused}
+          >
+            {paused ? '继续' : '暂停'}
+          </button>
         </header>
 
         {error && (

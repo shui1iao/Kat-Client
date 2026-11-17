@@ -211,6 +211,7 @@ export function Nodes({ c }: { c: Client }) {
               type="submit"
               className="btn sm primary"
               disabled={!editable || !quickURL.trim() || c.busy.has('subscription:new')}
+              style={{ minWidth: 64 }}
             >
               {c.busy.has('subscription:new') ? '导入中…' : '导入'}
             </button>
@@ -259,6 +260,7 @@ export function Nodes({ c }: { c: Client }) {
               [...c.busy].some((k) => k.startsWith('probe.node:') || k.startsWith('probe.group:'))
             }
             onClick={() => void c.probeAll()}
+            style={{ minWidth: 104 }}
           >
             <Icon name="bolt" size={13} />
             {c.probeAllProgress ? `测速中 ${c.probeAllProgress.done}/${c.probeAllProgress.total}` : '全部测速'}

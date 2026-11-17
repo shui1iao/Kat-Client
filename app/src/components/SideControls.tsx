@@ -248,7 +248,6 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
             </span>
           )}
           <span className="ns-label">TUN</span>
-          {tunTransition && <span className="net-sub">{stateLabel(tunState)}</span>}
           <span className="ns-track" aria-hidden="true">
             <i className="ns-thumb" />
           </span>

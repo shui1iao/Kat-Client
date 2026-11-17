@@ -32,7 +32,8 @@ await mkdir(evidence, { recursive: true });
 for (const dir of ['tmp', 'daily/xdg', 'daily/chromium']) {
   await mkdir(resolve(app, 'tests-ui/.cache', dir), { recursive: true });
 }
-process.env.TMPDIR = resolve(app, 'tests-ui/.cache/tmp');
+await mkdir('/tmp/kat-pw-tmp', { recursive: true });
+process.env.TMPDIR = '/tmp/kat-pw-tmp';
 process.env.TEMP = process.env.TMPDIR;
 process.env.TMP = process.env.TMPDIR;
 process.env.XDG_CACHE_HOME = resolve(app, 'tests-ui/.cache/daily/xdg');

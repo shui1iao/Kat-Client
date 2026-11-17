@@ -1983,20 +1983,75 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 9px 10px 9px 12px;
+  height: 47px;
+  min-height: 47px;
+  padding: 0 10px 0 12px;
   border-bottom: 1px solid var(--line);
   flex: none;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .table-toolbar .search {
   width: auto;
   flex: 0 1 176px;
-  min-width: 116px;
+  min-width: 64px;
 }
 
 .table-toolbar .sp {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.table-toolbar > .num,
+.toolbar-count,
+.toolbar-status {
+  flex: none;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.toolbar-count {
+  min-width: 58px;
+  text-align: right;
+}
+
+.btn-fixed-xs {
+  min-width: 48px;
+}
+
+.btn-fixed-sm {
+  min-width: 64px;
+}
+
+.btn-fixed-md {
+  min-width: 72px;
+}
+
+.conn-close-btn {
+  min-width: 84px;
+}
+
+.conn-card .table-toolbar .seg > button:first-of-type {
+  width: 78px;
+}
+
+.conn-card .table-toolbar .seg > button:last-of-type {
+  width: 88px;
+}
+
+.rules-card .table-toolbar .seg > button:first-of-type {
+  width: 76px;
+}
+
+.rules-card .table-toolbar .seg > button:last-of-type {
+  width: 96px;
+}
+
+.dns-table-card .table-toolbar .search {
+  width: 176px;
+  flex: 0 1 176px;
+  min-width: 64px;
 }
 
 /* Nodes 5-Column Grid */
@@ -2004,6 +2059,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .live-node-head,
@@ -2281,6 +2337,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .res-row {
@@ -2359,9 +2416,9 @@
 }
 
 .conn-card .table-toolbar .search {
-  flex: 1 1 180px;
-  min-width: 140px;
-  max-width: 260px;
+  flex: 0 1 176px;
+  min-width: 68px;
+  max-width: 220px;
   width: auto;
 }
 
@@ -2826,6 +2883,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   font-family: var(--mono);
   font-size: 12px;
 }
@@ -2919,6 +2977,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 
 .safe-log {
@@ -3375,18 +3434,36 @@
   max-width: 52%;
 }
 
-/* Settings & DNS query selects: snug to label + visually centered */
+/* Settings & DNS query selects: fixed geometry so changing options never shifts controls */
 .set-row select.inp,
 .dq-form select.inp {
-  field-sizing: content;
-  width: auto;
-  min-width: 104px;
+  flex: none;
+  width: 148px;
+  min-width: 112px;
   max-width: 210px;
   height: 30px;
   padding: 0 26px 0 12px;
   background-position: right 8px center;
   text-align: center;
   text-align-last: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.set-row select.set-inp-sm,
+.dq-form select.set-inp-sm {
+  width: 112px;
+}
+
+.sniff-custom-block {
+  margin: 2px 0 8px;
+  padding: 8px 10px;
+}
+
+.sniff-skip-full {
+  width: 100%;
+  text-align: left !important;
 }
 
 .set-row select#log-retention {
@@ -4063,7 +4140,16 @@
 }
 .dns-table-card .table-toolbar .search {
   max-width: 196px;
-  min-width: 130px;
+  min-width: 84px;
+}
+.dns-quick-form .set-inp-sm {
+  flex: none;
+  width: 108px;
+  text-align: center;
+  text-align-last: center;
+}
+.dns-quick-submit {
+  min-width: 88px;
 }
 
 .ei-domain-tile.is-sm {
@@ -4384,4 +4470,18 @@
   background: var(--expand-lv1);
   box-shadow: inset 0 0 0 1px var(--line);
   margin-block: 4px 8px;
+}
+
+.logs-page > .card,
+.rules-page > .card {
+  flex: 1;
+  min-height: 0;
+}
+
+.dns-settings-unified .set-row-copy small,
+.sniff-card .set-row-copy small {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

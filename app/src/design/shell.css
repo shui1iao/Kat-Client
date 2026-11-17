@@ -566,6 +566,7 @@
 }
 
 .net-switch {
+  position: relative;
   height: 32px;
   padding: 0 8px 0 11px;
   border-radius: 9px;
@@ -574,7 +575,9 @@
   box-shadow: var(--shadow-card);
   display: inline-flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  flex: none;
   font-size: 12.5px;
   font-weight: 500;
   color: var(--text-2);
@@ -583,6 +586,14 @@
     background-color var(--t-fast) var(--ease),
     border-color var(--t-fast) var(--ease),
     color var(--t-fast) var(--ease);
+}
+
+.net-switch[data-toggle="sysproxy"] {
+  width: 104px;
+}
+
+.net-switch[data-toggle="tun"] {
+  width: 80px;
 }
 
 .net-switch .ns-label {
@@ -694,16 +705,29 @@
   border-color: color-mix(in srgb, var(--bad) 45%, transparent);
 }
 
-.net-switch .net-sub {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--warn);
+@keyframes kat-ns-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.62; }
+}
+
+.net-switch.is-transition .ns-track {
+  animation: kat-ns-pulse 1.1s ease-in-out infinite;
 }
 
 .net-switch .net-warning {
-  display: inline-flex;
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--pop);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  display: grid;
+  place-items: center;
   color: var(--bad);
-  margin-right: -2px;
+  margin: 0;
+  pointer-events: auto;
 }
 
 /* Window Buttons */

@@ -82,6 +82,7 @@ type autoGroup struct {
 
 	firstReady       chan struct{} // URLTest: full round; Smart: successful full bootstrap
 	firstReadyClosed bool
+	fastReady        chan struct{} // Desktop streaming first healthy member signal
 	roundDone       chan struct{} // current automatic round terminal, even if incomplete/down
 	completeRound   bool
 	hasRound        bool
@@ -105,7 +106,7 @@ type autoGroup struct {
 func newAutoGroup(c config, ms []outbound.Outbound, events outbound.EventSink, h hooks) *autoGroup {
 	g := &autoGroup{
 		cfg: c, members: ms, events: events, clk: h.clk, probe: h.probe,
-		st: make([]memberState, len(ms)), cold: true, firstReady: make(chan struct{}),
+		st: make([]memberState, len(ms)), cold: true, firstReady: make(chan struct{}), fastReady: make(chan struct{}),
 	}
 	g.curSince = g.clk.Now()
 	g.gate.reset()
@@ -337,10 +338,87 @@ func (g *autoGroup) useLocked(now time.Time) {
 	}
 }
 
+func (g *autoGroup) acceptStartupSuccessLocked(i int, r ProbeSample) {
+	if r.At.IsZero() || r.Err != nil || g.closed || g.startupDone || !g.cfg.head {
+		return
+	}
+	s := &g.st[i]
+	if !s.probeAt.IsZero() && !r.At.After(s.probeAt) {
+		return
+	}
+	if r.versioned && r.observationEpoch != s.observationEpoch {
+		return
+	}
+	if !r.Started.IsZero() && r.Started.Before(s.healthAt) {
+		return
+	}
+	if g.cfg.kind == TypeFallback {
+		s.probeFailures = 0
+	}
+	g.addProbeLocked(i, r)
+	if r.At.After(g.lastRound) {
+		g.lastRound = r.At
+	}
+	g.startupSelectBestLocked(r.At)
+}
+
+type bgPrepKey struct{}
+
+type fastTrafficKey struct{}
+
+func (g *autoGroup) notifyFastReadyLocked() {
+	if g.fastReady != nil {
+		close(g.fastReady)
+		g.fastReady = nil
+	}
+}
+
+func (g *autoGroup) startupSelectBestLocked(now time.Time) {
+	switch g.cfg.kind {
+	case TypeURLTest:
+		best := -1
+		for j, s := range g.st {
+			if s.probeOK && g.fallbackUpLocked(j) && (best < 0 || ms(s.probeLat)*g.cfg.priority[j] < ms(g.st[best].probeLat)*g.cfg.priority[best]) {
+				best = j
+			}
+		}
+		if best >= 0 {
+			g.cold = false
+			g.switchToLocked(best, now)
+			g.notifyFastReadyLocked()
+		}
+	case TypeSmart:
+		best := -1
+		for j, s := range g.st {
+			if s.probeOK && g.fallbackUpLocked(j) && (best < 0 || float64(s.probeLat)*g.cfg.priority[j] < float64(g.st[best].probeLat)*g.cfg.priority[best]) {
+				best = j
+			}
+		}
+		if best >= 0 {
+			g.switchToLocked(best, now)
+			g.cold = false
+			g.notifyFastReadyLocked()
+			for _, e := range g.sitesElementsLocked() {
+				if len(e.recs) == 0 {
+					e.current, e.since = best, now
+					e.gate.reset()
+				}
+			}
+		}
+	case TypeFallback:
+		g.switchToLocked(g.fallbackPickLocked(), now)
+	}
+}
+
 func (g *autoGroup) runRound(ctx context.Context, done chan struct{}) {
 	defer g.wg.Done()
 	defer close(done)
+	g.mu.Lock()
+	progressiveStartup := g.cfg.head && !g.startupDone
+	g.mu.Unlock()
+
 	res := make([]ProbeSample, len(g.members))
+	var streamed atomic.Bool
 	var wg sync.WaitGroup
 	jobs := make(chan int)
 	for range min(probeConcurrency, len(g.members)) {
@@ -348,7 +426,16 @@ func (g *autoGroup) runRound(ctx context.Context, done chan struct{}) {
 		go func() {
 			defer wg.Done()
 			for i := range jobs {
-				res[i] = g.measuredProbe(ctx, i)
+				r := g.measuredProbe(ctx, i)
+				res[i] = r
+				if progressiveStartup && r.Err == nil && !r.At.IsZero() && ctx.Err() == nil {
+					g.mu.Lock()
+					if ctx.Err() == nil && !g.closed && !g.startupDone {
+						g.acceptStartupSuccessLocked(i, r)
+						streamed.Store(true)
+					}
+					g.unlock()
+				}
 			}
 		}()
 	}
@@ -374,6 +461,22 @@ func (g *autoGroup) runRound(ctx context.Context, done chan struct{}) {
 			}
 		}
 		g.acceptSamplesLocked(res)
+		if first && g.cfg.head && streamed.Load() {
+			now := g.lastRound
+			if now.IsZero() {
+				now = g.clk.Now()
+			}
+			g.hasRound = true
+			g.startupSelectBestLocked(now)
+			g.markCompleteLocked()
+			g.closeFirstReadyLocked()
+			if g.cfg.kind != TypeSmart || !g.cfg.hasDamping {
+				g.gate.evidence = g.evidence
+				for _, el := range g.sitesElementsLocked() {
+					el.gate.evidence = g.evidence
+				}
+			}
+		}
 	}
 	g.unlock()
 	g.roundsRun.Add(1)
@@ -620,6 +723,7 @@ func (g *autoGroup) candidatesLocked(host string, udp bool, now time.Time) []int
 // Cold URL-test requests share the lifecycle-owned first full round. A
 // caller can leave without canceling other callers; no lock is held waiting.
 func (g *autoGroup) closeFirstReadyLocked() {
+	g.notifyFastReadyLocked()
 	if !g.firstReadyClosed {
 		g.firstReadyClosed = true
 		close(g.firstReady)
@@ -685,13 +789,17 @@ func (g *autoGroup) awaitFirst(ctx context.Context) error {
 		g.mu.Unlock()
 		return waitError(life.Err())
 	}
-	if (smart && !g.cold) || (!smart && g.completeRound) {
+	allowFast := g.cfg.head && (ctx.Value(bgPrepKey{}) != nil || ctx.Value(fastTrafficKey{}) != nil)
+	if (smart && !g.cold) || (!smart && (g.completeRound || (allowFast && !g.cold))) {
 		g.mu.Unlock()
 		return nil
 	}
 	g.lastUse = g.clk.Now()
 	g.triggerRoundLocked()
 	ready := g.firstReady
+	if allowFast && g.fastReady != nil {
+		ready = g.fastReady
+	}
 	var roundDone <-chan struct{}
 	if smart {
 		roundDone = g.roundDone
@@ -743,7 +851,11 @@ func (g *autoGroup) DialTCP(ctx context.Context, dst outbound.Addr) (net.Conn, e
 	if g.cfg.kind == TypeSmart {
 		return g.smartDialTCP(ctx, dst)
 	}
-	if e := g.awaitFirst(ctx); e != nil {
+	waitCtx := ctx
+	if g.cfg.head && !isProbe(ctx) {
+		waitCtx = context.WithValue(ctx, fastTrafficKey{}, true)
+	}
+	if e := g.awaitFirst(waitCtx); e != nil {
 		return nil, e
 	}
 	g.mu.Lock()
@@ -787,7 +899,11 @@ func (g *autoGroup) ListenPacket(ctx context.Context) (outbound.PacketConn, erro
 	if g.cfg.kind == TypeLoadBalance {
 		return g.lbListenPacket(ctx)
 	}
-	if e := g.awaitFirst(ctx); e != nil {
+	waitCtx := ctx
+	if g.cfg.head && !isProbe(ctx) {
+		waitCtx = context.WithValue(ctx, fastTrafficKey{}, true)
+	}
+	if e := g.awaitFirst(waitCtx); e != nil {
 		return nil, e
 	}
 	g.mu.Lock()

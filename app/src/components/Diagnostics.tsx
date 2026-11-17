@@ -100,7 +100,6 @@ export function Diagnostics({
           onChange={(e) => setSearch(e.target.value)}
         />
       </label>
-      <span className="sp" />
       <div className="pill-bar" role="radiogroup" aria-label="日志等级筛选">
         {(['all', 'info', 'warn', 'error', 'debug'] as const).map((l) => (
           <button
@@ -115,7 +114,8 @@ export function Diagnostics({
           </button>
         ))}
       </div>
-      <span className="muted num">{events.length} 条</span>
+      <span className="sp" />
+      <span className="muted num toolbar-count">{events.length} 条</span>
       <button
         type="button"
         className="btn sm"
@@ -183,6 +183,15 @@ export function Diagnostics({
               <small>仅保存精简诊断，最多 16 MiB</small>
             </span>
             <div className="row-actions">
+              {days !== (c.desktop?.preferences.log_retention_days ?? 7) && (
+                <button
+                  className="btn primary sm btn-fixed-xs"
+                  type="submit"
+                  disabled={!c.desktop || c.busy.has('preferences')}
+                >
+                  {c.busy.has('preferences') ? '保存中' : '保存'}
+                </button>
+              )}
               <select
                 id="log-retention"
                 className="inp sm"
@@ -194,15 +203,6 @@ export function Diagnostics({
                 <option value="7">7 天</option>
                 <option value="30">30 天</option>
               </select>
-              {days !== (c.desktop?.preferences.log_retention_days ?? 7) && (
-                <button
-                  className="btn primary sm"
-                  type="submit"
-                  disabled={!c.desktop || c.busy.has('preferences')}
-                >
-                  {c.busy.has('preferences') ? '保存中' : '保存'}
-                </button>
-              )}
             </div>
           </label>
           {retentionError && (
