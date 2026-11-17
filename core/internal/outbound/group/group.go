@@ -60,7 +60,7 @@ const (
 	maxFailedTimesLimit    = 100
 	lbDefaultMaxFailed     = 5
 	maxAttempts            = 3 // members tried per connection before giving up
-	probeConcurrency       = 4
+	probeConcurrency       = 100
 	defaultInterval        = 10 * time.Minute // server fallback / load-balance
 	defaultURLTestInterval = time.Minute
 	defaultSmartInterval   = 5 * time.Minute
@@ -336,7 +336,8 @@ type config struct {
 	maxFailed int
 	head      bool
 	unified   bool
-	expected  func(int) bool // nil: status < 500
+	expected     func(int) bool // nil: status < 500
+	expectedSpec string
 	prepare   func(context.Context, string) error
 }
 
@@ -501,6 +502,7 @@ func normalize(o Options) (config, error) {
 			return fail("probe.expected_status: %v", e)
 		}
 		c.expected = f
+		c.expectedSpec = strings.TrimSpace(o.Probe.ExpectedStatus)
 	}
 	// lazy: url-test, fallback and load-balance default to probing only
 	// while used (their previous behaviour); smart defaults to probing from
@@ -802,7 +804,7 @@ func newGroup(o Options, members []outbound.Outbound, events outbound.EventSink,
 		return &selectGroup{cfg: c, members: ms, events: events, sel: c.selected}, nil
 	}
 	if h.probe == nil {
-		h.probe = (&httpProber{url: c.url, target: c.target, tls: h.tls, clk: h.clk, expected: c.expected, head: c.head, unified: c.unified}).probe
+		h.probe = (&httpProber{url: c.url, target: c.target, tls: h.tls, clk: h.clk, expected: c.expected, expectedSpec: c.expectedSpec, head: c.head, unified: c.unified}).probe
 	}
 	return newAutoGroup(c, ms, events, h), nil
 }

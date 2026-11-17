@@ -213,6 +213,15 @@ func (b *setBuilder) finish() (*setData, error) {
 	if b.d.entries == 0 && b.bad > 0 {
 		return nil, errParse
 	}
+	if len(b.d.dom.exact) == 0 {
+		b.d.dom.exact = nil
+	}
+	if len(b.d.dom.suffix) == 0 {
+		b.d.dom.suffix = nil
+	}
+	if len(b.d.dom.sub) == 0 {
+		b.d.dom.sub = nil
+	}
 	b.d.ip.build()
 	b.d.ipNR.build()
 	return b.d, nil
@@ -302,12 +311,139 @@ func parseText(behavior string, dialect int, raw []byte, limit int, env parseEnv
 // parseLines handles every line-oriented behavior (text and YAML payload).
 func parseLines(behavior string, dialect int, lines []string, limit int, env parseEnv) (*setData, error) {
 	bld := newBuilder(limit)
+	if behavior == "domain" && len(lines) > 64 {
+		hint := min(len(lines)/2, limit)
+		if hint > 0 {
+			bld.d.dom.exact = make(map[string]struct{}, hint/2)
+			bld.d.dom.suffix = make(map[string]struct{}, hint/2)
+			if dialect == dialMihom {
+				bld.d.dom.sub = make(map[string]struct{}, hint/4)
+			}
+		}
+	}
 	for n, line := range lines {
 		if err := parseOneLine(bld, behavior, dialect, n, line, env); err != nil {
 			return nil, err
 		}
 	}
 	return bld.finish()
+}
+
+// fastClassicalLine handles high-frequency simple classical entries with zero
+// slice/struct intermediate allocations, falling back to parseClassical on any
+// complex rule type, extra comma option, or potential unsupported diagnostics.
+func fastClassicalLine(bld *setBuilder, line string) (handled bool, err error) {
+	typRaw, rest, found := strings.Cut(line, ",")
+	if !found {
+		return false, nil
+	}
+	typ := strings.TrimSpace(typRaw)
+	if len(typ) == 0 || len(typ) > 16 {
+		return false, nil
+	}
+	var typBuf [16]byte
+	hasLower := false
+	for i := 0; i < len(typ); i++ {
+		c := typ[i]
+		if c >= 'a' && c <= 'z' {
+			hasLower = true
+			typBuf[i] = c - ('a' - 'A')
+		} else {
+			typBuf[i] = c
+		}
+	}
+	if hasLower {
+		typ = string(typBuf[:len(typ)])
+	}
+	switch typ {
+	case "DOMAIN", "DOMAIN-SUFFIX", "DOMAIN-KEYWORD", "IP-CIDR", "IP-CIDR6", "GEOIP", "PROCESS-NAME":
+	default:
+		return false, nil
+	}
+	rest = strings.TrimSpace(rest)
+	val, optPart, hasOpt := strings.Cut(rest, ",")
+	noResolve := false
+	if hasOpt {
+		if strings.IndexByte(optPart, ',') >= 0 {
+			return false, nil
+		}
+		opt := strings.TrimSpace(optPart)
+		if !strings.EqualFold(opt, "no-resolve") {
+			return false, nil
+		}
+		noResolve = true
+	}
+	val = strings.TrimSpace(val)
+	if val == "" {
+		bld.skip()
+		return true, nil
+	}
+	switch typ {
+	case "DOMAIN":
+		d, ok := normDomain(val)
+		if !ok {
+			bld.skip()
+			return true, nil
+		}
+		put(&bld.d.dom.exact, d)
+		return true, bld.count()
+	case "DOMAIN-SUFFIX":
+		suf := strings.TrimPrefix(val, ".")
+		if suf == "" {
+			return false, nil
+		}
+		d, ok := normDomain(suf)
+		if !ok {
+			bld.skip()
+			return true, nil
+		}
+		put(&bld.d.dom.suffix, d)
+		return true, bld.count()
+	case "DOMAIN-KEYWORD":
+		k, ok := normKeyword(val)
+		if !ok {
+			bld.skip()
+			return true, nil
+		}
+		bld.d.dom.keywords = append(bld.d.dom.keywords, k)
+		return true, bld.count()
+	case "IP-CIDR", "IP-CIDR6":
+		p, ok := parseCIDR(val, true)
+		if !ok {
+			bld.skip()
+			return true, nil
+		}
+		if noResolve {
+			bld.d.ipNR.add(p)
+		} else {
+			bld.d.ip.add(p)
+		}
+		return true, bld.count()
+	case "GEOIP":
+		if strings.EqualFold(val, "lan") {
+			val = geoPrivate
+		}
+		c, ok := normGeo(val)
+		if !ok {
+			bld.skip()
+			return true, nil
+		}
+		if noResolve {
+			bld.d.geoNR = append(bld.d.geoNR, c)
+		} else {
+			bld.d.geo = append(bld.d.geo, c)
+		}
+		return true, bld.count()
+	case "PROCESS-NAME":
+		pn, ok := normProcessName(val)
+		if !ok {
+			bld.skip()
+			return true, nil
+		}
+		bld.d.extra = append(bld.d.extra, &cond{kind: kProcessName, s: pn})
+		return true, bld.count()
+	}
+	return false, nil
 }
 
 func parseOneLine(bld *setBuilder, behavior string, dialect int, n int, line string, env parseEnv) error {
@@ -331,6 +467,10 @@ func parseOneLine(bld *setBuilder, behavior string, dialect int, n int, line str
 			bld.skip()
 		}
 	case "classical":
+		if handled, ferr := fastClassicalLine(bld, line); handled {
+			err = ferr
+			break
+		}
 		var c *cond
 		c, err = parseClassical(line, dialect, env, 0)
 		switch {

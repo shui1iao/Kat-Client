@@ -539,13 +539,21 @@ func normKeyword(s string) (string, bool) {
 	if len(s) < 1 || len(s) > 253 {
 		return "", false
 	}
+	lower := true
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '.' || c == '_') {
+		if c >= 'A' && c <= 'Z' {
+			lower = false
+			continue
+		}
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '.' || c == '_') {
 			return "", false
 		}
 	}
-	return strings.ToLower(s), true
+	if !lower {
+		return strings.ToLower(s), true
+	}
+	return s, true
 }
 
 const geoPrivate = "private"

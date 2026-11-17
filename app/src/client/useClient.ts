@@ -176,17 +176,20 @@ export function useClient() {
       if(active(life)){
        setErrorState('');
        for(const p of [...(doc.source?.kernel.providers??[])]){if(!active(life))break;await migrateOne(p.name);}
-       await refreshStatus();
-       await refreshSubscriptionResults();
+       await Promise.all([refreshStatus(), refreshSubscriptionResults()]);
       }
-    },e=>{if(active(life))setErrorState(errorText(e));});
+    },e=>{
+      if(active(life)){
+        setErrorState(errorText(e));
+        if(hasHost())void refreshStatus().catch(()=>{});
+      }
+    });
   }
   useEffect(() => {
     mounted.current=true;
     if (hasHost()) {
       void refreshDesktop().catch(e=>{if(mounted.current)setErrorState(errorText(e));});
       void refreshNetwork().catch(e=>{if(mounted.current)setErrorState(errorText(e));});
-      void refreshStatus().catch(()=>{/* connect() owns startup error reporting */});
     }
     void connect();
     if (!hasHost()) return () => { mounted.current=false;lifetime.current++; };

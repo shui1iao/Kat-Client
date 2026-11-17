@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"math/big"
-	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -39,7 +38,52 @@ func (d document) validation() any {
 
 const maxYAMLNodes = 65536
 
-var decimalYAML = regexp.MustCompile(`^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$`)
+func isDecimalYAML(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	i := 0
+	if s[0] == '+' || s[0] == '-' {
+		i++
+		if i >= len(s) {
+			return false
+		}
+	}
+	if s[i] >= '0' && s[i] <= '9' {
+		for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+			i++
+		}
+		if i < len(s) && s[i] == '.' {
+			i++
+			for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+				i++
+			}
+		}
+	} else if s[i] == '.' {
+		i++
+		if i >= len(s) || s[i] < '0' || s[i] > '9' {
+			return false
+		}
+		for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+			i++
+		}
+	} else {
+		return false
+	}
+	if i < len(s) && (s[i] == 'e' || s[i] == 'E') {
+		i++
+		if i < len(s) && (s[i] == '+' || s[i] == '-') {
+			i++
+		}
+		if i >= len(s) || s[i] < '0' || s[i] > '9' {
+			return false
+		}
+		for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+			i++
+		}
+	}
+	return i == len(s)
+}
 var errYAML = errors.New("unsupported YAML")
 
 // Decode to a bounded syntax tree, never into interface{}: yaml's generic
@@ -123,23 +167,27 @@ func yamlValue(n *yaml.Node, depth int, budget *int) (any, error) {
 			// yaml.v3's resolver falls back to !!str on machine-number overflow.
 			// Recover only unquoted numeric lexemes, without any float64 round trip.
 			// Explicit !!str and quoted/block strings must remain strings.
-			if n.Style == 0 {
-				s := strings.ReplaceAll(n.Value, "_", "")
-				if decimalYAML.MatchString(s) {
-					u := strings.TrimLeft(s, "+-")
-					if !strings.ContainsAny(s, ".eE") && len(u) > 1 && u[0] == '0' {
-						// Only legacy octal needs radix conversion; decimal overflow
-						// can stay a lexeme, with no large-integer arithmetic.
+			if n.Style == 0 && len(n.Value) > 0 {
+				c0 := n.Value[0]
+				if (c0 >= '0' && c0 <= '9') || c0 == '+' || c0 == '-' || c0 == '.' || c0 == '_' {
+					s := n.Value
+					if strings.IndexByte(s, '_') >= 0 {
+						s = strings.ReplaceAll(s, "_", "")
+					}
+					if isDecimalYAML(s) {
+						u := strings.TrimLeft(s, "+-")
+						if !strings.ContainsAny(s, ".eE") && len(u) > 1 && u[0] == '0' {
+							if v, ok := new(big.Int).SetString(s, 0); ok {
+								return json.Number(v.String()), nil
+							}
+						}
+						return yamlDecimal(s)
+					}
+					u := strings.TrimPrefix(strings.TrimPrefix(s, "+"), "-")
+					if strings.HasPrefix(u, "0x") || strings.HasPrefix(u, "0o") || strings.HasPrefix(u, "0b") {
 						if v, ok := new(big.Int).SetString(s, 0); ok {
 							return json.Number(v.String()), nil
 						}
-					}
-					return yamlDecimal(s)
-				}
-				u := strings.TrimPrefix(strings.TrimPrefix(s, "+"), "-")
-				if strings.HasPrefix(u, "0x") || strings.HasPrefix(u, "0o") || strings.HasPrefix(u, "0b") {
-					if v, ok := new(big.Int).SetString(s, 0); ok {
-						return json.Number(v.String()), nil
 					}
 				}
 			}
@@ -156,7 +204,10 @@ func yamlValue(n *yaml.Node, depth int, budget *int) (any, error) {
 				return false, nil
 			}
 		case "!!int":
-			s := strings.ReplaceAll(n.Value, "_", "")
+			s := n.Value
+			if strings.IndexByte(s, '_') >= 0 {
+				s = strings.ReplaceAll(s, "_", "")
+			}
 			// yaml.v3 resolves legacy leading-zero octal as well as 0o/0x/0b.
 			v, ok := new(big.Int).SetString(s, 0)
 			if ok {
@@ -172,8 +223,11 @@ func yamlValue(n *yaml.Node, depth int, budget *int) (any, error) {
 
 // Normalize only the JSON number spelling, never its precision or source text.
 func yamlDecimal(value string) (any, error) {
-	s := strings.ReplaceAll(value, "_", "")
-	if !decimalYAML.MatchString(s) {
+	s := value
+	if strings.IndexByte(s, '_') >= 0 {
+		s = strings.ReplaceAll(s, "_", "")
+	}
+	if !isDecimalYAML(s) {
 		return nil, errYAML
 	}
 	sign := ""

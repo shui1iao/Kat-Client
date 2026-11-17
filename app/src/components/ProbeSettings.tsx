@@ -135,15 +135,15 @@ function ProbeForm({ c }: { c: Client }) {
       <label className="set-row">
         <span className="set-row-copy">
           <b>测速并发数</b>
-          <small>批量测速时同时发起探测的最大节点数（1–50）</small>
+          <small>批量测速时同时发起探测的最大节点数（1–100）</small>
         </span>
         <input
           className="inp num set-inp-xs"
           aria-label="手动测速并发"
           type="number"
           min="1"
-          max="50"
-          placeholder="8"
+          max="100"
+          placeholder="100"
           value={value.probe_concurrency}
           onChange={(e) => set('probe_concurrency', e.target.value)}
         />

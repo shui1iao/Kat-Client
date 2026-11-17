@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"github.com/shui1iao/Kat/internal/outbound/group"
 	"context"
 	"encoding/json"
 	"errors"
@@ -192,6 +193,15 @@ func Start(c Config) (*Server, error) {
 	// that persisted selections apply to it.
 	k.openState(&c)
 	k.reloadMu.Lock()
+	hasDynamic := len(c.Providers) > 0
+	if !hasDynamic {
+		for _, g := range c.Groups {
+			if group.Options(g).Dynamic() {
+				hasDynamic = true
+				break
+			}
+		}
+	}
 	prov := k.syncProviders(&c, true)
 	notes, expandErr := expandProviders(&c, prov.next)
 	if expandErr == nil {
@@ -203,10 +213,12 @@ func Start(c Config) (*Server, error) {
 		return nil, expandErr
 	}
 	prov.notes = append(prov.notes, notes...)
-	if e := c.Validate(); e != nil {
-		k.reloadMu.Unlock()
-		k.shutdownCore()
-		return nil, e
+	if hasDynamic {
+		if e := c.Validate(); e != nil {
+			k.reloadMu.Unlock()
+			k.shutdownCore()
+			return nil, e
+		}
 	}
 	s, plan, e := k.prepare(c, nil)
 	if e != nil {

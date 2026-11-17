@@ -80,7 +80,7 @@ type manualProbeFlight struct {
 }
 
 func NewManualProbePolicy(timeout time.Duration, concurrency int) (*ManualProbePolicy, error) {
-	if timeout < 100*time.Millisecond || timeout > 60*time.Second || concurrency < 1 || concurrency > 50 {
+	if timeout < 100*time.Millisecond || timeout > 60*time.Second || concurrency < 1 || concurrency > 100 {
 		return nil, errors.New("invalid manual probe policy")
 	}
 	return &ManualProbePolicy{timeout: timeout, slots: make(chan struct{}, concurrency)}, nil
@@ -274,14 +274,13 @@ func (s *Server) ProbeNodeWithPolicy(ctx context.Context, name, url string, poli
 		if r.ColdMS != nil {
 			cold = time.Duration(*r.ColdMS * float64(time.Millisecond))
 		}
+		sample := group.ProbeSample{Name: m.Name(), Latency: lat, ColdLatency: cold, At: r.At, Started: r.started, Err: err}
 		for _, gr := range g.rt.groups {
 			if targetProbeExpected(g.cfg.Groups, gr.Name()) != "" {
 				continue
 			}
-			if rec, ok := gr.(interface {
-				RecordURLProbe(string, group.ProbeSample)
-			}); ok {
-				rec.RecordURLProbe(url, group.ProbeSample{Name: m.Name(), Latency: lat, ColdLatency: cold, At: r.At, Started: r.started, Err: err})
+			if rec, ok := gr.(interface{ RecordURLProbe(string, group.ProbeSample) }); ok {
+				rec.RecordURLProbe(url, sample)
 			}
 		}
 	}
@@ -375,9 +374,39 @@ dispatch:
 			break
 		}
 	}
-	if measured && ctx.Err() == nil && s.core.ctx.Err() == nil && s.current() == g {
-		if rec, ok := target.(interface{ RecordProbeRound([]group.ProbeSample) }); ok && targetProbeURL(g.cfg.Groups, name) == url && (policy != nil || expected == "") {
-			rec.RecordProbeRound(samples)
+	if ctx.Err() == nil && s.core.ctx.Err() == nil && s.current() == g {
+		if measured {
+			if rec, ok := target.(interface{ RecordProbeRound([]group.ProbeSample) }); ok && targetProbeURL(g.cfg.Groups, name) == url && (policy != nil || expected == "") {
+				rec.RecordProbeRound(samples)
+			}
+		}
+		if policy != nil && expected == "" {
+			validByName := make(map[string]group.ProbeSample, len(res))
+			for i, r := range res {
+				if !r.At.IsZero() && r.ErrorStage != "queue" && r.ErrorStage != "dependency" && r.ErrorCode != "PROBE_CANCELED" {
+					validByName[samples[i].Name] = samples[i]
+				}
+			}
+			if len(validByName) > 0 {
+				for _, gr := range g.rt.groups {
+					if gr.Name() == name || targetProbeURL(g.cfg.Groups, gr.Name()) != url || targetProbeExpected(g.cfg.Groups, gr.Name()) != "" {
+						continue
+					}
+					rec, ok := gr.(interface{ RecordProbeRound([]group.ProbeSample) })
+					if !ok {
+						continue
+					}
+					var groupSamples []group.ProbeSample
+					for _, memberName := range gr.Members() {
+						if smp, ok := validByName[memberName]; ok {
+							groupSamples = append(groupSamples, smp)
+						}
+					}
+					if len(groupSamples) > 0 {
+						rec.RecordProbeRound(groupSamples)
+					}
+				}
+			}
 		}
 	}
 	return res, nil
@@ -421,7 +450,7 @@ func (s *Server) ProbeNodesWithPolicy(ctx context.Context, names []string, url s
 	res := make([]ProbeResult, len(names))
 	jobs := make(chan int)
 	var wg sync.WaitGroup
-	for range min(max(workers, 1), 50, len(names)) {
+	for range min(max(workers, 1), 100, len(names)) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -456,12 +485,10 @@ func (s *Server) ProbeNodesWithPolicy(ctx context.Context, names []string, url s
 				continue
 			}
 			samples := []group.ProbeSample{}
-			complete := true
 			for _, name := range gr.Members() {
 				r, ok := byName[name]
 				if !ok || r.At.IsZero() || r.ErrorStage == "queue" || r.ErrorStage == "dependency" || r.ErrorCode == "PROBE_CANCELED" {
-					complete = false
-					break
+					continue
 				}
 				sample := group.ProbeSample{Name: name, At: r.At, Started: r.started}
 				if r.ProbeMS != nil {
@@ -475,7 +502,7 @@ func (s *Server) ProbeNodesWithPolicy(ctx context.Context, names []string, url s
 				}
 				samples = append(samples, sample)
 			}
-			if complete && len(samples) > 0 {
+			if len(samples) > 0 {
 				if rec, ok := gr.(interface{ RecordProbeRound([]group.ProbeSample) }); ok {
 					rec.RecordProbeRound(samples)
 				}

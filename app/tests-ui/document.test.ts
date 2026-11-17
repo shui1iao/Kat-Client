@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { editDocument, formatDocument, parseDocument } from '../src/client/document.ts';
+import { readDocument } from '../src/client/document.ts';
 import { DocumentSession } from '../src/client/session.ts';
 const text = '  {"schema_version":1,"client":{"mode":"rule"},"kernel":{"outbounds":[{"name":"A","type":"socks5","server":"127.0.0.1","port":1234,"extra":9007199254740993}],"providers":[{"name":"provider","type":"file","path":"/loopback"}],"routing":{"rules":[{"and":[{"domain":"test.invalid"}],"action":"direct"}]},"limits": { "connections": 12 }}}\n';
 test('mode patch preserves all other text byte for byte', () => {
@@ -36,3 +37,10 @@ test('successful raw save updates source; draft typed during save is not overwri
 
 test('format preserves large integer tokens and valid-JSON invalid-schema drafts reject safely',()=>{assert.ok(formatDocument(text).includes('9007199254740993'));for(const invalid of ['{"schema_version":1,"client":{"mode":"rule"},"kernel":{"groups":"bad"}}','{"schema_version":1,"client":{"mode":"rule"},"kernel":{"groups":[null]}}'])assert.throws(()=>parseDocument(invalid));});
 test('named array reorder preserves exact unknown numeric tokens with their object',()=>{const src=text.replace('"port":1234,"extra":9007199254740993','"port":1234,"extra":9007199254740993').replace('}],"providers"','},{"name":"B","type":"socks5","server":"127.0.0.1","port":2345,"extra":9007199254740992}],"providers"');const next=editDocument(src,d=>{d.kernel.outbounds!.reverse();});assert.ok(next.indexOf('9007199254740992')<next.indexOf('9007199254740993'));});
+
+test('streaming readDocument enforces 64-depth and duplicate key line numbers including escaped keys', () => {
+  assert.doesNotThrow(() => readDocument('{"a":' + '['.repeat(63) + '0' + ']'.repeat(63) + '}'));
+  assert.throws(() => readDocument('['.repeat(65) + '0' + ']'.repeat(65)), /配置嵌套超过 64 层/);
+  assert.throws(() => readDocument('{\n  "alpha": 1,\n  "beta": 2,\n  "alpha": 3\n}'), /JSON 重复键: alpha \(line 4\)/);
+  assert.throws(() => readDocument('{\n  "\\u0061": 1,\n  "a": 2\n}'), /JSON 重复键: a \(line 3\)/);
+});

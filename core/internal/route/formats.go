@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/klauspost/compress/zstd"
 	"gopkg.in/yaml.v3"
@@ -27,48 +28,61 @@ func fastYAMLPayload(b []byte) ([]string, bool) {
 	if len(b) >= 3 && b[0] == 0xef && b[1] == 0xbb && b[2] == 0xbf {
 		return nil, false
 	}
-	s := string(b)
-	estCap := strings.Count(s, "\n")
+	estCap := bytes.Count(b, []byte{'\n'})
 	if estCap > 64 {
 		estCap = estCap * 9 / 10
 	}
-	var out []string
+	var spans [][2]int
+	var arenaBuf []byte
+	sawDocStart := false
 	sawHeader := false
 	itemIndent := -1
-	for off := 0; off < len(s); {
-		end := strings.IndexByte(s[off:], '\n')
-		var line string
+	for off := 0; off < len(b); {
+		end := bytes.IndexByte(b[off:], '\n')
+		var line []byte
 		if end < 0 {
-			line = s[off:]
-			off = len(s)
+			line = b[off:]
+			off = len(b)
 		} else {
-			line = s[off : off+end]
+			line = b[off : off+end]
 			off += end + 1
 		}
 		if len(line) > 0 && line[len(line)-1] == '\r' {
 			line = line[:len(line)-1]
 		}
-		if strings.IndexByte(line, '\t') >= 0 {
+		// Pure '#' comment lines may contain tabs.
+		if commentCheck := bytes.TrimLeft(line, " \t"); len(commentCheck) > 0 && commentCheck[0] == '#' {
+			continue
+		}
+		if bytes.IndexByte(line, '\t') >= 0 {
 			return nil, false
 		}
 		indent := 0
 		for indent < len(line) && line[indent] == ' ' {
 			indent++
 		}
-		trimmed := strings.TrimRight(line[indent:], " ")
-		if trimmed == "" || trimmed[0] == '#' {
+		trimmed := bytes.TrimRight(line[indent:], " ")
+		if len(trimmed) == 0 || trimmed[0] == '#' {
 			continue
 		}
 		if !sawHeader {
-			if indent != 0 || !strings.HasPrefix(trimmed, "payload:") {
+			if !sawDocStart && indent == 0 && len(trimmed) >= 3 && trimmed[0] == '-' && trimmed[1] == '-' && trimmed[2] == '-' && (len(trimmed) == 3 || trimmed[3] == ' ') {
+				rest := bytes.TrimLeft(trimmed[3:], " ")
+				if len(rest) == 0 || rest[0] == '#' {
+					sawDocStart = true
+					continue
+				}
+			}
+			if indent != 0 || !bytes.HasPrefix(trimmed, []byte("payload:")) {
 				return nil, false
 			}
-			rest := strings.TrimLeft(trimmed[len("payload:"):], " ")
-			if rest != "" && rest[0] != '#' {
+			rest := bytes.TrimLeft(trimmed[len("payload:"):], " ")
+			if len(rest) > 0 && rest[0] != '#' {
 				return nil, false
 			}
 			sawHeader = true
-			out = make([]string, 0, estCap)
+			spans = make([][2]int, 0, estCap)
+			arenaBuf = make([]byte, 0, len(b)*3/4+64)
 			continue
 		}
 		if itemIndent < 0 {
@@ -79,13 +93,14 @@ func fastYAMLPayload(b []byte) ([]string, bool) {
 		if len(trimmed) < 2 || trimmed[0] != '-' || trimmed[1] != ' ' {
 			return nil, false
 		}
-		rest := strings.TrimLeft(trimmed[2:], " ")
-		if rest == "" {
+		rest := bytes.TrimLeft(trimmed[2:], " ")
+		if len(rest) == 0 {
 			return nil, false
 		}
+		var item []byte
 		switch rest[0] {
 		case '\'':
-			closeIdx := strings.IndexByte(rest[1:], '\'')
+			closeIdx := bytes.IndexByte(rest[1:], '\'')
 			if closeIdx < 0 {
 				return nil, false
 			}
@@ -93,11 +108,11 @@ func fastYAMLPayload(b []byte) ([]string, bool) {
 			if closeIdx+1 < len(rest) && rest[closeIdx+1] == '\'' {
 				return nil, false
 			}
-			tail := strings.TrimLeft(rest[closeIdx+1:], " ")
-			if tail != "" && tail[0] != '#' {
+			tail := bytes.TrimLeft(rest[closeIdx+1:], " ")
+			if len(tail) > 0 && tail[0] != '#' {
 				return nil, false
 			}
-			out = append(out, rest[1:closeIdx])
+			item = rest[1:closeIdx]
 		case '"':
 			closeIdx := -1
 			for i := 1; i < len(rest); i++ {
@@ -112,36 +127,52 @@ func fastYAMLPayload(b []byte) ([]string, bool) {
 			if closeIdx < 0 {
 				return nil, false
 			}
-			tail := strings.TrimLeft(rest[closeIdx+1:], " ")
-			if tail != "" && tail[0] != '#' {
+			tail := bytes.TrimLeft(rest[closeIdx+1:], " ")
+			if len(tail) > 0 && tail[0] != '#' {
 				return nil, false
 			}
-			out = append(out, rest[1:closeIdx])
+			item = rest[1:closeIdx]
 		default:
 			if c := rest[0]; c == '-' || c == '?' || c == ':' || c == '[' || c == '{' || c == '#' || c == '&' || c == '*' || c == '!' || c == '|' || c == '>' || c == '%' || c == '@' || c == '`' || c == '~' {
 				return nil, false
 			}
 			val := rest
-			if idx := strings.Index(val, " #"); idx >= 0 {
-				val = strings.TrimRight(val[:idx], " ")
+			if idx := bytes.Index(val, []byte(" #")); idx >= 0 {
+				val = bytes.TrimRight(val[:idx], " ")
 			}
-			if val == "" || val[len(val)-1] == ':' || strings.Contains(val, ": ") || strings.ContainsAny(val, "\"'[]{}!*&") {
+			if len(val) == 0 || val[len(val)-1] == ':' || bytes.Contains(val, []byte(": ")) || bytes.ContainsAny(val, "\"'[]{}!*&") {
 				return nil, false
 			}
-			if (val[0] >= '0' && val[0] <= '9' || (val[0] == '+' && len(val) > 1 && val[1] >= '0' && val[1] <= '9')) && !strings.Contains(val, "/") && strings.Count(val, ".") < 2 {
+			if (val[0] >= '0' && val[0] <= '9' || (val[0] == '+' && len(val) > 1 && val[1] >= '0' && val[1] <= '9')) && bytes.IndexByte(val, '/') < 0 && bytes.Count(val, []byte{'.'}) < 2 {
 				return nil, false
 			}
 			if len(val) <= 5 {
-				switch strings.ToLower(val) {
+				var low [5]byte
+				for i := 0; i < len(val); i++ {
+					c := val[i]
+					if c >= 'A' && c <= 'Z' {
+						c += 'a' - 'A'
+					}
+					low[i] = c
+				}
+				switch string(low[:len(val)]) {
 				case "null", "true", "false", "nan", ".nan", ".inf", "-.inf", "+.inf":
 					return nil, false
 				}
 			}
-			out = append(out, val)
+			item = val
 		}
+		st := len(arenaBuf)
+		arenaBuf = append(arenaBuf, item...)
+		spans = append(spans, [2]int{st, len(arenaBuf)})
 	}
-	if !sawHeader || len(out) == 0 {
+	if !sawHeader || len(spans) == 0 {
 		return nil, false
+	}
+	arena := string(arenaBuf)
+	out := make([]string, len(spans))
+	for i, sp := range spans {
+		out[i] = arena[sp[0]:sp[1]]
 	}
 	return out, true
 }
@@ -188,12 +219,35 @@ func yamlPayload(b []byte) ([]string, error) {
 
 // ---- mihomo MRS ----
 
+var mrsZstdPool = sync.Pool{
+	New: func() any {
+		zr, err := zstd.NewReader(nil, zstd.WithDecoderMaxMemory(maxInflated), zstd.WithDecoderConcurrency(1))
+		if err != nil {
+			return nil
+		}
+		return zr
+	},
+}
+
 func parseMRS(behavior string, b []byte, limit int) (*setData, error) {
-	zr, err := zstd.NewReader(bytes.NewReader(b), zstd.WithDecoderMaxMemory(maxInflated), zstd.WithDecoderConcurrency(1))
-	if err != nil {
-		return nil, errParse
+	zr, _ := mrsZstdPool.Get().(*zstd.Decoder)
+	if zr == nil {
+		var err error
+		zr, err = zstd.NewReader(bytes.NewReader(b), zstd.WithDecoderMaxMemory(maxInflated), zstd.WithDecoderConcurrency(1))
+		if err != nil {
+			return nil, errParse
+		}
+		defer zr.Close()
+	} else {
+		if err := zr.Reset(bytes.NewReader(b)); err != nil {
+			zr.Close()
+			return nil, errParse
+		}
+		defer func() {
+			_ = zr.Reset(nil)
+			mrsZstdPool.Put(zr)
+		}()
 	}
-	defer zr.Close()
 	r := bufio.NewReader(io.LimitReader(zr, maxInflated))
 	var hdr [4]byte
 	if _, err := io.ReadFull(r, hdr[:]); err != nil || hdr != [4]byte{'M', 'R', 'S', 1} {
@@ -213,8 +267,13 @@ func parseMRS(behavior string, b []byte, limit int) (*setData, error) {
 		}
 		return nil, errParse
 	}
-	var count, extra int64
-	if binary.Read(r, binary.BigEndian, &count) != nil || binary.Read(r, binary.BigEndian, &extra) != nil || count < 0 || extra < 0 || extra > 1<<20 {
+	var hdr16 [16]byte
+	if _, err := io.ReadFull(r, hdr16[:]); err != nil {
+		return nil, errParse
+	}
+	count := int64(binary.BigEndian.Uint64(hdr16[:8]))
+	extra := int64(binary.BigEndian.Uint64(hdr16[8:]))
+	if count < 0 || extra < 0 || extra > 1<<20 {
 		return nil, errParse
 	}
 	if count > int64(limit) {
@@ -229,8 +288,12 @@ func parseMRS(behavior string, b []byte, limit int) (*setData, error) {
 	}
 	bld := newBuilder(limit)
 	readLen := func() (int, error) {
-		var n int64
-		if err := binary.Read(r, binary.BigEndian, &n); err != nil || n < 0 || n > maxInflated/8 {
+		var b8 [8]byte
+		if _, err := io.ReadFull(r, b8[:]); err != nil {
+			return 0, errParse
+		}
+		n := int64(binary.BigEndian.Uint64(b8[:]))
+		if n < 0 || n > maxInflated/8 {
 			return 0, errParse
 		}
 		return int(n), nil
@@ -263,8 +326,17 @@ func parseMRS(behavior string, b []byte, limit int) (*setData, error) {
 			return nil, err
 		}
 		out := make([]uint64, n)
-		if err := binary.Read(r, binary.BigEndian, out); err != nil {
-			return nil, errParse
+		var raw [4096]byte
+		for off := 0; off < n; {
+			chunk := min(n-off, len(raw)/8)
+			buf := raw[:chunk*8]
+			if _, err := io.ReadFull(r, buf); err != nil {
+				return nil, errParse
+			}
+			for i := 0; i < chunk; i++ {
+				out[off+i] = binary.BigEndian.Uint64(buf[i*8:])
+			}
+			off += chunk
 		}
 		return out, nil
 	}
@@ -285,6 +357,10 @@ func parseMRS(behavior string, b []byte, limit int) (*setData, error) {
 		return nil, errParse
 	}
 	d := &bld.d.dom
+	if capHint := min(int(count), len(labels)/2+8); capHint > 64 {
+		d.exact = make(map[string]struct{}, capHint/2)
+		d.sub = make(map[string]struct{}, capHint/2)
+	}
 	err = louds(leaves, bm, labels, limit, func(k []byte) error {
 		key := reverseRunes(k)
 		ok := false

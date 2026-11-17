@@ -11,6 +11,9 @@ import (
 // ordinary Go maps, so retain this one ordered object's source-node order in
 // the runtime projection. The authoritative YAML text is not rewritten.
 func preserveYAMLDNSPolicy(text string, kernel map[string]json.RawMessage) error {
+	if len(kernel["dns"]) == 0 || !bytes.Contains(kernel["dns"], []byte(`"nameserver-policy"`)) {
+		return nil
+	}
 	var tree yaml.Node
 	if yaml.Unmarshal([]byte(text), &tree) != nil || len(tree.Content) != 1 {
 		return errYAML

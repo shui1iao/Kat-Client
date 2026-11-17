@@ -123,7 +123,7 @@ publicly and consume the same safe entries for diagnostics.
 
 The optional source fields `client.probe_timeout` (Duration 100ms..60s,
 default5s), `client.probe_round_timeout` (100ms..300s, >=point timeout,
-default10s), and `client.probe_concurrency` (integer1..50, default50) now control
+default10s), and `client.probe_concurrency` (integer1..100, default100) now control
 this client's real manual node+group HTTP probes. Explicit null/type/range
 errors reject the document without replacing the file or running generation.
 Omitted fields stay omitted in the saved source. IPC url still overrides
@@ -259,7 +259,7 @@ No default drain budget is enlarged by this change.
 - HTTP沿用同URL完整订阅所有权匹配/升级路径（URL保留、interval对应秒数，符合完整订阅60秒至30天范围）；headers/User-Agent/timeout/filter/exclude等作为完整订阅source_options私有元数据保存，并在后续刷新复用。所有下载仍用现有安全公共HTTPS、TLS、受控出口、不重定向/不环境代理路径；不会为了迁移放宽下载安全边界。旧非direct via无法安全映射时保旧为待转换；不静默改为direct。旧HTTP/内网URL被现有安全下载规则拒绝时亦保旧。下载超时不放宽现有30秒上限，原更短timeout优先。
 - file内容使用现有有界、不跟随叶子链接/重解析点的只读资源读取器，转本地完整快照。节点格式使用原provider解析器和依赖物化；filter/exclude保留RE2和依赖支持节点语义。真正完整Clash保留规则/组/资源；若过滤后图引用不成立，失败保旧，不丢规则伪装成功。
 - 成功候选移除本provider，将引用它的use成员（含include-all-providers）按筛选和原组筛选写成成员，保留原显式成员顺序/去重；可确定的selected/fixed映射沿用。其它provider仍保留，逐项原子。失败卡只显示安全原因、重试转换和现有危险删除入口，无旧编辑/刷新/导入为完整订阅入口。
-- `probe.all {}`：立即返回`{started:true,total:N}`并在core内运行后台批次（非整批同步IPC）。捕获单代非direct/reject节点；worker数取client.probe_concurrency（1..50，默认50），每个节点由worker取出后才开始其独立probe_round_timeout（默认10s，含依赖准备）和原probe_timeout（默认5s目标HTTP）；与单节点测速同一实现、失败分类。**没有共享整批截止时间**，排队不判失败；总时间随节点数增长。status.probe_round={done,total,names}按实际完成数递增，结束为null且最终逐行结果仍在status.nodes。导航/重连读status可恢复进度。Stop/Apply/Close取消并排空旧epoch，迟到结果不能写回新代；重复整批及与其它手动测速重叠请求返回probe_busy，不重复并发同一节点。组/单节点原预算和内核背景测速不变；本方法的既有IPC时限只约束接纳，不约束后台批次。
+- `probe.all {}`：立即返回`{started:true,total:N}`并在core内运行后台批次（非整批同步IPC）。捕获单代非direct/reject节点；worker数取client.probe_concurrency（1..100，默认100），每个节点由worker取出后才开始其独立probe_round_timeout（默认10s，含依赖准备）和原probe_timeout（默认5s目标HTTP）；与单节点测速同一实现、失败分类。**没有共享整批截止时间**，排队不判失败；总时间随节点数增长。status.probe_round={done,total,names}按实际完成数递增，结束为null且最终逐行结果仍在status.nodes。导航/重连读status可恢复进度。Stop/Apply/Close取消并排空旧epoch，迟到结果不能写回新代；重复整批及与其它手动测速重叠请求返回probe_busy，不重复并发同一节点。组/单节点原预算和内核背景测速不变；本方法的既有IPC时限只约束接纳，不约束后台批次。
 - `connections.close {ids:[positive-safe-integer...]}`：关闭捕获的一批活跃逻辑流，单关传一个id；不存在、重复、已请求关闭id忽略，返回{closed:实际新关闭数}。复用TCP双端/UDP会话已有取消路径，TUN捕获后经同一逻辑流注册路径亦适用；不重载内核、不影响未选连接，结束时仍进入原内存closed环。原closed记录无reason字段，不加第二套历史字段。连接页只在活跃标签提供危险行关闭；批量确认捕获当前匹配id列表，确认后不受后续新连接/搜索变化扩大范围。
 
 新增方法仍走既有受限core_request，不增加文件/进程/网络服务权限；`subscription.migrate`及connections.close在supervisor未确认变更门后执行，document.apply所有提交/所有权/回滚判断保持原样。

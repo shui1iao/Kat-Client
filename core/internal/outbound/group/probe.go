@@ -9,6 +9,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptrace"
+	"reflect"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -35,6 +37,54 @@ type probeFunc func(ctx context.Context, m outbound.Outbound) (time.Duration, er
 
 var errProbeStatus = errors.New("probe: server error status")
 
+type probeFlightKey struct {
+	underlying   any
+	url          string
+	expectedSpec string
+	head         bool
+	unified      bool
+	prepared     bool
+}
+
+type probeFlight struct {
+	done    chan struct{}
+	cancel  context.CancelFunc
+	waiters int
+	firstOK bool
+	lat     time.Duration
+	cold    time.Duration
+	coldSet bool
+	err     error
+}
+
+var (
+	probeFlightsMu sync.Mutex
+	probeFlights   = map[probeFlightKey]*probeFlight{}
+)
+
+func unwrapComparableOutbound(m outbound.Outbound) (any, bool) {
+	cur := m
+	for cur != nil {
+		u, ok := cur.(interface{ Underlying() outbound.Outbound })
+		if !ok {
+			break
+		}
+		next := u.Underlying()
+		if next == nil {
+			break
+		}
+		cur = next
+	}
+	if cur == nil {
+		return nil, false
+	}
+	v := reflect.ValueOf(cur)
+	if !v.IsValid() || !v.Comparable() {
+		return nil, false
+	}
+	return cur, true
+}
+
 // httpProber issues one HTTP(S) GET to the configured URL through a member.
 // Latency is measured from the start of the member dial to the arrival of the
 // response headers. Any status < 500 is success (the path works). Redirects
@@ -47,12 +97,118 @@ type httpProber struct {
 	clk    clock
 	// expected: statuses that count as success (probe.expected_status);
 	// nil = any status below 500.
-	unified  bool
-	head     bool
-	expected func(int) bool
+	unified      bool
+	head         bool
+	expected     func(int) bool
+	expectedSpec string
+}
+
+func (p *httpProber) statusOK(code int) bool {
+	if p.expected != nil {
+		return p.expected(code)
+	}
+	return code < 500
 }
 
 func (p *httpProber) probe(ctx context.Context, m outbound.Outbound) (time.Duration, error) {
+	_, isReal := p.clk.(realClock)
+	if p.head && p.tls == nil && isReal && (p.expected == nil || p.expectedSpec != "") {
+		if underlying, ok := unwrapComparableOutbound(m); ok {
+			return p.probeShared(ctx, m, probeFlightKey{
+				underlying:   underlying,
+				url:          p.url,
+				expectedSpec: p.expectedSpec,
+				head:         p.head,
+				unified:      p.unified,
+				prepared:     ctx.Value(preparedProbeKey{}) != nil,
+			})
+		}
+	}
+	return p.probeOnce(ctx, m, nil)
+}
+
+func (p *httpProber) probeShared(ctx context.Context, m outbound.Outbound, key probeFlightKey) (time.Duration, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	probeFlightsMu.Lock()
+	f, shared := probeFlights[key]
+	if !shared {
+		meas := &ProbeMeasurement{}
+		baseCtx := WithProbeMeasurement(context.WithoutCancel(ctx), meas)
+		flightCtx, cancel := context.WithCancel(baseCtx)
+		f = &probeFlight{
+			done:    make(chan struct{}),
+			cancel:  cancel,
+			waiters: 1,
+		}
+		probeFlights[key] = f
+		probeFlightsMu.Unlock()
+		go func() {
+			lat, err := p.probeOnce(flightCtx, m, func(cold time.Duration, code int) {
+				if p.statusOK(code) {
+					probeFlightsMu.Lock()
+					f.firstOK = true
+					f.cold = cold
+					probeFlightsMu.Unlock()
+				}
+			})
+			probeFlightsMu.Lock()
+			if probeFlights[key] == f {
+				delete(probeFlights, key)
+			}
+			f.lat = lat
+			if meas.Cold > 0 || (err == nil && lat == 0) {
+				f.cold = meas.Cold
+				f.coldSet = true
+			}
+			f.err = err
+			probeFlightsMu.Unlock()
+			close(f.done)
+			cancel()
+		}()
+	} else {
+		f.waiters++
+		probeFlightsMu.Unlock()
+	}
+
+	select {
+	case <-f.done:
+		if pm, ok := ctx.Value(probeContextKey{}).(*ProbeMeasurement); ok && f.coldSet {
+			pm.Cold = f.cold
+		}
+		return f.lat, f.err
+	case <-ctx.Done():
+		probeFlightsMu.Lock()
+		f.waiters--
+		last := f.waiters == 0
+		if last && probeFlights[key] == f {
+			delete(probeFlights, key)
+		}
+		firstOK, cold := f.firstOK, f.cold
+		probeFlightsMu.Unlock()
+		if last {
+			f.cancel()
+			if firstOK {
+				<-f.done
+				if f.err == nil {
+					if pm, ok := ctx.Value(probeContextKey{}).(*ProbeMeasurement); ok && f.coldSet {
+						pm.Cold = f.cold
+					}
+					return f.lat, nil
+				}
+			}
+		} else if firstOK && errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			if pm, ok := ctx.Value(probeContextKey{}).(*ProbeMeasurement); ok {
+				pm.Cold = cold
+			}
+			return cold, nil
+		}
+		return 0, ctx.Err()
+	}
+}
+
+func (p *httpProber) probeOnce(ctx context.Context, m outbound.Outbound, onFirst func(time.Duration, int)) (time.Duration, error) {
 	if !isProbe(ctx) {
 		ctx = WithProbeMeasurement(ctx, &ProbeMeasurement{})
 	}
@@ -110,6 +266,9 @@ func (p *httpProber) probe(ctx context.Context, m outbound.Outbound) (time.Durat
 	lat := p.clk.Now().Sub(start)
 	if m, ok := ctx.Value(probeContextKey{}).(*ProbeMeasurement); ok {
 		m.Cold = lat
+	}
+	if onFirst != nil {
+		onFirst(lat, resp.StatusCode)
 	}
 	// HEAD has no body. GET fallback is bounded/drained so only a reusable
 	// connection can supply the unified sample. Never redial for sample two.
@@ -169,5 +328,5 @@ func ProbeOutboundDelayWithStatus(ctx context.Context, m outbound.Outbound, rawU
 	if e != nil {
 		return 0, errors.New("invalid probe URL")
 	}
-	return (&httpProber{url: c.url, target: c.target, clk: realClock{}, head: true, unified: unified, expected: c.expected}).probe(ctx, m)
+	return (&httpProber{url: c.url, target: c.target, clk: realClock{}, head: true, unified: unified, expected: c.expected, expectedSpec: c.expectedSpec}).probe(ctx, m)
 }

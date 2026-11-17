@@ -1,6 +1,7 @@
 package clientcore
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -163,8 +164,13 @@ func openWorkspace(workspace string, expected *elevated.Checkpoint) (*Host, erro
 		release()
 		return nil, errors.New("cannot read client document")
 	}
+	histDone := make(chan error, 1)
+	go func() {
+		histDone <- h.loadHistory()
+	}()
 	var de *Error
 	h.doc, de = parseDocument(string(b), workspace, format)
+	histErr := <-histDone
 	if de != nil {
 		release()
 		return nil, de
@@ -179,11 +185,13 @@ func openWorkspace(workspace string, expected *elevated.Checkpoint) (*Host, erro
 		release()
 		return nil, e
 	}
-	root, _ := sourceJSON(h.doc)
-	owners, _ := subscriptionsOf(root)
 	needsUpgrade := false
-	for _, s := range owners {
-		needsUpgrade = needsUpgrade || s.Model < 2
+	if len(h.doc.projection) == 0 || bytes.Contains(h.doc.projection, []byte(`"subscriptions"`)) {
+		root, _ := sourceJSON(h.doc)
+		owners, _ := subscriptionsOf(root)
+		for _, s := range owners {
+			needsUpgrade = needsUpgrade || s.Model < 2
+		}
 	}
 	if needsUpgrade {
 		// Frozen v1 backup is not part of the rotating transaction backups. Candidate
@@ -204,8 +212,9 @@ func openWorkspace(workspace string, expected *elevated.Checkpoint) (*Host, erro
 			release()
 			return nil, err
 		}
+		histErr = h.loadHistory()
 	}
-	if e = h.loadHistory(); e != nil {
+	if histErr != nil {
 		release()
 		return nil, errors.New("cannot read traffic history")
 	}

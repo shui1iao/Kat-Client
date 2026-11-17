@@ -27,7 +27,7 @@ func validateProbeSettings(raw []byte, c *Client) *Error {
 		c.ProbeRoundTimeout = kernel.Duration(10 * time.Second)
 	}
 	if _, ok := fields["probe_concurrency"]; !ok {
-		c.ProbeConcurrency = 50
+		c.ProbeConcurrency = 100
 	}
 	timeout, round := time.Duration(c.ProbeTimeout), time.Duration(c.ProbeRoundTimeout)
 	if timeout < 100*time.Millisecond || timeout > 60*time.Second {
@@ -36,8 +36,8 @@ func validateProbeSettings(raw []byte, c *Client) *Error {
 	if round < 100*time.Millisecond || round > 300*time.Second || round < timeout {
 		return fail("invalid_document", "client.probe_round_timeout", "Expected duration in 100ms..300s and at least probe_timeout")
 	}
-	if c.ProbeConcurrency < 1 || c.ProbeConcurrency > 50 {
-		return fail("invalid_document", "client.probe_concurrency", "Expected integer in 1..50")
+	if c.ProbeConcurrency < 1 || c.ProbeConcurrency > 100 {
+		return fail("invalid_document", "client.probe_concurrency", "Expected integer in 1..100")
 	}
 	return nil
 }

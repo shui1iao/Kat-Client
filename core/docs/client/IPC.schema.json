@@ -2317,8 +2317,8 @@
         "probe_concurrency": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 50,
-          "default": 50,
+          "maximum": 100,
+          "default": 100,
           "description": "Per-client permits shared by all manual node/group requests, not a global server limit."
         },
         "sniff": {

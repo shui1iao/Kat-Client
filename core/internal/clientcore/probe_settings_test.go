@@ -94,7 +94,7 @@ func TestProbeSettingsValidationAndPreservation(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if d.text != text || d.client.ProbeTimeout != kernel.Duration(5*time.Second) || d.client.ProbeRoundTimeout != kernel.Duration(10*time.Second) || d.client.ProbeConcurrency != 50 {
+	if d.text != text || d.client.ProbeTimeout != kernel.Duration(5*time.Second) || d.client.ProbeRoundTimeout != kernel.Duration(10*time.Second) || d.client.ProbeConcurrency != 100 {
 		t.Fatal("omitted defaults changed")
 	}
 	if _, e := applyLegacyFixture(h, text); e != nil {
@@ -108,7 +108,7 @@ func TestProbeSettingsValidationAndPreservation(t *testing.T) {
 		{"probe_timeout": nil}, {"probe_round_timeout": nil}, {"probe_concurrency": nil},
 		{"probe_timeout": "0s"}, {"probe_timeout": "99ms"}, {"probe_timeout": "60.001s"}, {"probe_timeout": 5}, {"probe_timeout": "NaN"},
 		{"probe_round_timeout": "99ms"}, {"probe_round_timeout": "301s"}, {"probe_round_timeout": "4s"}, {"probe_round_timeout": true},
-		{"probe_concurrency": 0}, {"probe_concurrency": 51}, {"probe_concurrency": -1}, {"probe_concurrency": 1.5}, {"probe_concurrency": "2"},
+		{"probe_concurrency": 0}, {"probe_concurrency": 101}, {"probe_concurrency": -1}, {"probe_concurrency": 1.5}, {"probe_concurrency": "2"},
 	} {
 		if _, e := applyLegacyFixture(h, settingsText(t, text, patch)); e == nil {
 			t.Fatal("invalid probe setting accepted")

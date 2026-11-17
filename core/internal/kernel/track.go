@@ -151,6 +151,8 @@ func (u underlay) UDP() bool { return u.d.UDP() }
 // member wraps a group member so that the chosen member is recorded.
 type member struct{ outbound.Outbound }
 
+func (m member) Underlying() outbound.Outbound { return m.Outbound }
+
 // Keep nested health visible across the tracking wrapper without treating an
 // ordinary leaf as inherently healthy or changing its own probe record.
 func (m member) ClientGroupHealth() (bool, time.Time, bool) {

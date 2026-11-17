@@ -62,17 +62,299 @@ type Client struct {
 	ProbeConcurrency  int                      `json:"probe_concurrency,omitempty"`
 }
 type document struct {
-	advancedDNS bool
-	ruleRouting *kernel.RoutingOptions // accepted rule-mode projection; never the editor draft
-	text        string
-	format      DocumentFormat
-	counts      documentCounts
-	client      Client
-	config      kernel.Config
+	advancedDNS   bool
+	ruleRouting   *kernel.RoutingOptions // accepted rule-mode projection; never the editor draft
+	text          string
+	format        DocumentFormat
+	projection    []byte
+	projectedText string
+	counts        documentCounts
+	client        Client
+	config        kernel.Config
+}
+
+func encodedJSONStringLen(s string) int {
+	if len(s)*6+2 <= MaxFrame-2048-4096 {
+		return len(s) + 2
+	}
+	encoded, _ := json.Marshal(s)
+	return len(encoded)
+}
+
+func fastUniqueJSON(b []byte) (handled bool, err error) {
+	if !utf8.Valid(b) {
+		return true, errors.New("UTF-8 required")
+	}
+	n := len(b)
+	i := 0
+	skipWS := func() {
+		for i < n {
+			c := b[i]
+			if c == ' ' || c == '\n' || c == '\r' || c == '\t' {
+				i++
+			} else {
+				break
+			}
+		}
+	}
+	skipStringValue := func() bool {
+		i++
+		for i < n {
+			c := b[i]
+			if c == '"' {
+				i++
+				return true
+			}
+			if c < 0x20 {
+				return false
+			}
+			if c == '\\' {
+				i++
+				if i >= n {
+					return false
+				}
+				switch b[i] {
+				case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
+					i++
+				case 'u':
+					if i+4 >= n {
+						return false
+					}
+					var cp uint16
+					for k := 1; k <= 4; k++ {
+						hc := b[i+k]
+						cp <<= 4
+						switch {
+						case hc >= '0' && hc <= '9':
+							cp |= uint16(hc - '0')
+						case hc >= 'a' && hc <= 'f':
+							cp |= uint16(hc - 'a' + 10)
+						case hc >= 'A' && hc <= 'F':
+							cp |= uint16(hc - 'A' + 10)
+						default:
+							return false
+						}
+					}
+					if cp >= 0xD800 && cp <= 0xDFFF {
+						return false
+					}
+					i += 5
+				default:
+					return false
+				}
+				continue
+			}
+			i++
+		}
+		return false
+	}
+	skipNumber := func() bool {
+		if i < n && b[i] == '-' {
+			i++
+		}
+		if i >= n {
+			return false
+		}
+		if b[i] == '0' {
+			i++
+			if i < n && b[i] >= '0' && b[i] <= '9' {
+				return false
+			}
+		} else if b[i] >= '1' && b[i] <= '9' {
+			i++
+			for i < n && b[i] >= '0' && b[i] <= '9' {
+				i++
+			}
+		} else {
+			return false
+		}
+		if i < n && b[i] == '.' {
+			i++
+			if i >= n || b[i] < '0' || b[i] > '9' {
+				return false
+			}
+			for i < n && b[i] >= '0' && b[i] <= '9' {
+				i++
+			}
+		}
+		if i < n && (b[i] == 'e' || b[i] == 'E') {
+			i++
+			if i < n && (b[i] == '+' || b[i] == '-') {
+				i++
+			}
+			if i >= n || b[i] < '0' || b[i] > '9' {
+				return false
+			}
+			for i < n && b[i] >= '0' && b[i] <= '9' {
+				i++
+			}
+		}
+		return true
+	}
+
+	keyPool := make([][2]int, 0, 64)
+	var scanVal func(depth int) (bool, error)
+	scanVal = func(depth int) (bool, error) {
+		if depth > 64 {
+			return true, errors.New("nesting")
+		}
+		skipWS()
+		if i >= n {
+			return false, nil
+		}
+		switch b[i] {
+		case '{':
+			i++
+			skipWS()
+			if i < n && b[i] == '}' {
+				i++
+				return true, nil
+			}
+			frameBase := len(keyPool)
+			defer func() { keyPool = keyPool[:frameBase] }()
+			var seen map[string]struct{}
+			for {
+				skipWS()
+				if i >= n || b[i] != '"' {
+					return false, nil
+				}
+				i++
+				ks := i
+				for i < n {
+					c := b[i]
+					if c == '"' {
+						break
+					}
+					if c == '\\' || c < 0x20 {
+						return false, nil
+					}
+					i++
+				}
+				if i >= n {
+					return false, nil
+				}
+				ke := i
+				i++
+				kBytes := b[ks:ke]
+				if seen != nil {
+					if _, dup := seen[string(kBytes)]; dup {
+						return true, errors.New("duplicate key")
+					}
+					seen[string(kBytes)] = struct{}{}
+				} else {
+					curKeys := keyPool[frameBase:]
+					for _, sp := range curKeys {
+						if bytes.Equal(b[sp[0]:sp[1]], kBytes) {
+							return true, errors.New("duplicate key")
+						}
+					}
+					if len(curKeys) >= 16 {
+						seen = make(map[string]struct{}, 32)
+						for _, sp := range curKeys {
+							seen[string(b[sp[0]:sp[1]])] = struct{}{}
+						}
+						seen[string(kBytes)] = struct{}{}
+					} else {
+						keyPool = append(keyPool, [2]int{ks, ke})
+					}
+				}
+				skipWS()
+				if i >= n || b[i] != ':' {
+					return false, nil
+				}
+				i++
+				if ok, e := scanVal(depth + 1); !ok || e != nil {
+					return ok, e
+				}
+				skipWS()
+				if i >= n {
+					return false, nil
+				}
+				if b[i] == '}' {
+					i++
+					return true, nil
+				}
+				if b[i] != ',' {
+					return false, nil
+				}
+				i++
+			}
+		case '[':
+			i++
+			skipWS()
+			if i < n && b[i] == ']' {
+				i++
+				return true, nil
+			}
+			for {
+				if ok, e := scanVal(depth + 1); !ok || e != nil {
+					return ok, e
+				}
+				skipWS()
+				if i >= n {
+					return false, nil
+				}
+				if b[i] == ']' {
+					i++
+					return true, nil
+				}
+				if b[i] != ',' {
+					return false, nil
+				}
+				i++
+			}
+		case '"':
+			if !skipStringValue() {
+				return false, nil
+			}
+			return true, nil
+		case 't':
+			if i+4 <= n && string(b[i:i+4]) == "true" {
+				i += 4
+				return true, nil
+			}
+			return false, nil
+		case 'f':
+			if i+5 <= n && string(b[i:i+5]) == "false" {
+				i += 5
+				return true, nil
+			}
+			return false, nil
+		case 'n':
+			if i+4 <= n && string(b[i:i+4]) == "null" {
+				i += 4
+				return true, nil
+			}
+			return false, nil
+		default:
+			if b[i] == '-' || (b[i] >= '0' && b[i] <= '9') {
+				if !skipNumber() {
+					return false, nil
+				}
+				return true, nil
+			}
+			return false, nil
+		}
+	}
+	ok, err := scanVal(0)
+	if err != nil {
+		return true, err
+	}
+	if !ok {
+		return false, nil
+	}
+	skipWS()
+	if i != n {
+		return true, errors.New("trailing JSON")
+	}
+	return true, nil
 }
 
 // Reject duplicate keys before UI and kernel decoders can disagree.
 func uniqueJSON(b []byte) error {
+	if handled, err := fastUniqueJSON(b); handled {
+		return err
+	}
 	if !utf8.Valid(b) {
 		return errors.New("UTF-8 required")
 	}
@@ -140,8 +422,8 @@ func parseDocument(text, workspace string, formats ...DocumentFormat) (document,
 	if !format.valid() {
 		return out, fail("invalid_params", "params.format", "Expected json, yaml or yml")
 	}
-	encoded, _ := json.Marshal(text)
-	if len(encoded)+len(workspace) > MaxFrame-2048 {
+	encodedLen := encodedJSONStringLen(text)
+	if encodedLen+len(workspace) > MaxFrame-2048 {
 		return out, fail("document_too_large", "text", "Encoded document cannot fit a protocol response")
 	}
 
@@ -155,10 +437,10 @@ func parseDocument(text, workspace string, formats ...DocumentFormat) (document,
 		if err != nil {
 			return out, fail("invalid_document", "text", "Invalid, unsupported or ambiguous UTF-8 YAML")
 		}
-	}
-	if uniqueJSON(projection) != nil {
+	} else if uniqueJSON(projection) != nil {
 		return out, fail("invalid_document", "text", "Invalid or ambiguous UTF-8 JSON")
 	}
+	prevText := text
 	var legacyErr error
 	text, projection, legacyErr = normalizeLegacySmartSource(text, format, projection)
 	if legacyErr != nil {
@@ -168,8 +450,12 @@ func parseDocument(text, workspace string, formats ...DocumentFormat) (document,
 		return out, fail("invalid_document", "kernel.groups", "Invalid Smart or group declaration")
 	}
 	out.text = text
-	encoded, _ = json.Marshal(text)
-	if len(text) > maxDocument || len(encoded)+len(workspace) > MaxFrame-2048 {
+	out.projection = projection
+	out.projectedText = text
+	if text != prevText {
+		encodedLen = encodedJSONStringLen(text)
+	}
+	if len(text) > maxDocument || encodedLen+len(workspace) > MaxFrame-2048 {
 		return out, fail("document_too_large", "text", "Converted document exceeds source or protocol response limits")
 	}
 	var root struct {
@@ -355,19 +641,31 @@ func parseDocument(text, workspace string, formats ...DocumentFormat) (document,
 	c.SetClientIPv6(cl.IPv6)
 	c.SetClientUnifiedDelay(cl.UnifiedDelay == nil || *cl.UnifiedDelay)
 	ownedGroups := map[string]bool{}
+	customProbeURLGroups := map[string]bool{}
 	owners, _ := subscriptionsOf(map[string]json.RawMessage{"subscriptions": root.Subscriptions})
 	for _, s := range owners {
 		for _, g := range s.Snapshot.Groups {
-			ownedGroups[rawName(g)] = true
+			name := rawName(g)
+			ownedGroups[name] = true
+			if patch, ok := s.Overlay.Groups[name]; ok {
+				if pm := rawObject(patch["probe"]); pm["url"] != nil {
+					customProbeURLGroups[name] = true
+				}
+			}
 		}
 	}
 	for i := range c.Groups {
 		g := &c.Groups[i]
-		if ownedGroups[g.Name] && g.Probe != nil && g.Probe.Interval == 0 {
+		if ownedGroups[g.Name] && g.Probe != nil {
 			probe := *g.Probe
-			probe.Interval = outbound.Duration(300 * time.Second)
-			if g.Type == "url-test" {
-				probe.Interval = outbound.Duration(time.Minute)
+			if probe.Interval == 0 {
+				probe.Interval = outbound.Duration(300 * time.Second)
+				if g.Type == "url-test" {
+					probe.Interval = outbound.Duration(time.Minute)
+				}
+			}
+			if !customProbeURLGroups[g.Name] && probe.URL == "https://www.gstatic.com/generate_204" && cl.ProbeURL != "" {
+				probe.URL = cl.ProbeURL
 			}
 			g.Probe = &probe
 		}

@@ -270,7 +270,7 @@ func (g *autoGroup) smartBootstrapLocked(now time.Time) {
 	}
 	g.switchToLocked(best, now)
 	g.cold = false
-	close(g.firstReady)
+	g.closeFirstReadyLocked()
 	for _, e := range g.sitesElementsLocked() {
 		if len(e.recs) == 0 {
 			e.current, e.since = best, now

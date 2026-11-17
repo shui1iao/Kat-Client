@@ -31,16 +31,38 @@ func louds(leaves, labelBitmap []uint64, labels []byte, maxKeys int, f func(key 
 	first := make([]int32, nodes)
 	cnt := make([]int32, nodes)
 	node, child := 0, 1
-	for i := 0; i <= last; i++ {
-		if getBit(labelBitmap, i) {
-			node++
-			continue
+	lastWord := last >> 6
+	for wi := 0; wi <= lastWord; wi++ {
+		w := labelBitmap[wi]
+		rem := 64
+		if wi == lastWord {
+			rem = (last & 63) + 1
 		}
-		if cnt[node] == 0 {
-			first[node] = int32(child)
+		for rem > 0 {
+			if w == 0 {
+				if cnt[node] == 0 {
+					first[node] = int32(child)
+				}
+				cnt[node] += int32(rem)
+				child += rem
+				break
+			}
+			if w&1 != 0 {
+				run := min(bits.TrailingZeros64(^w), rem)
+				node += run
+				w >>= uint(run)
+				rem -= run
+			} else {
+				run := min(bits.TrailingZeros64(w), rem)
+				if cnt[node] == 0 {
+					first[node] = int32(child)
+				}
+				cnt[node] += int32(run)
+				child += run
+				w >>= uint(run)
+				rem -= run
+			}
 		}
-		cnt[node]++
-		child++
 	}
 	if node != nodes || child != nodes {
 		return errors.New("route: malformed succinct trie")
@@ -85,8 +107,32 @@ func louds(leaves, labelBitmap []uint64, labels []byte, maxKeys int, f func(key 
 	return nil
 }
 
-// reverseRunes reverses s rune-wise (keys are stored reversed per rune).
+// reverseRunes reverses b rune-wise (keys are stored reversed per rune).
 func reverseRunes(b []byte) string {
+	n := len(b)
+	if n == 0 {
+		return ""
+	}
+	ascii := true
+	for i := 0; i < n; i++ {
+		if b[i] >= 0x80 {
+			ascii = false
+			break
+		}
+	}
+	if ascii {
+		var stack [256]byte
+		var buf []byte
+		if n <= len(stack) {
+			buf = stack[:n]
+		} else {
+			buf = make([]byte, n)
+		}
+		for i := 0; i < n; i++ {
+			buf[i] = b[n-1-i]
+		}
+		return string(buf)
+	}
 	r := []rune(string(b))
 	for i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {
 		r[i], r[j] = r[j], r[i]

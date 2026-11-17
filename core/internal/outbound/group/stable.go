@@ -222,6 +222,9 @@ func (g *autoGroup) acceptSamplesLocked(results []ProbeSample) {
 			g.smartBootstrapLocked(now)
 			bootstrapped = !g.cold
 		}
+	} else if g.cfg.kind == TypeSmart && g.cold && g.cfg.head {
+		g.smartBootstrapLocked(now)
+		bootstrapped = !g.cold
 	}
 	g.lastRound = now
 	// A pair must include current and the best challenger. A one-node result
@@ -256,7 +259,11 @@ func (g *autoGroup) measuredProbe(ctx context.Context, i int) ProbeSample {
 	// One bounded preflight window: dependency readiness and admission share
 	// the configured timeout, independently of the real target HTTP window.
 	// In particular, NEVER hold a slot while waiting for a cold child's round.
-	prep, stopPrep := context.WithTimeout(ctx, g.cfg.timeout)
+	prepWait := g.cfg.timeout
+	if g.cfg.head && prepWait < 15*time.Second {
+		prepWait = 15 * time.Second
+	}
+	prep, stopPrep := context.WithTimeout(ctx, prepWait)
 	defer stopPrep()
 	if g.cfg.prepare != nil {
 		if err := g.cfg.prepare(prep, sample.Name); err != nil {

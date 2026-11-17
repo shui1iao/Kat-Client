@@ -18,7 +18,7 @@ export function patchProbe(d:DocumentSource,v:ProbeDraft,changed:ReadonlySet<key
  if(!Number.isFinite(timeout)||timeout<100||timeout>60000)throw Error('单节点超时须为 100ms–60s');
  if(!Number.isFinite(round)||round<100||round>300000)throw Error('整组总时限须为 100ms–300s');
  if(round<timeout)throw Error('整组总时限不得小于单节点超时');
- if(next.probe_concurrency!==undefined&&(!Number.isInteger(next.probe_concurrency)||next.probe_concurrency<1||next.probe_concurrency>50))throw Error('手动测速并发须为 1–50');
+ if(next.probe_concurrency!==undefined&&(!Number.isInteger(next.probe_concurrency)||next.probe_concurrency<1||next.probe_concurrency>100))throw Error('手动测速并发须为 1–100');
  if(next.probe_url!==undefined){try{if(typeof next.probe_url!=='string'||!/^https?:$/.test(new URL(next.probe_url).protocol))throw Error();}catch{throw Error('测速 URL 须为 HTTP(S)');}}
  for(const k of changed)setField(d.client,k,next[k]);
 }

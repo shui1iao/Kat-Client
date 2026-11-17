@@ -1,11 +1,84 @@
 import { readYAML, editYAML, formatYAML, yamlToJSON, jsonToYAML } from './yaml';
 import type { DocumentFormat, DocumentSource, SourceObject } from './types';
+const isJSONDelim = (c: number) => c === 32 || c === 10 || c === 13 || c === 9 || c === 44 || c === 125 || c === 93;
+
+function validateJSONStructure(text: string): void {
+  const len = text.length;
+  let p = 0;
+  let line = 1;
+  const ws = () => {
+    while (p < len) {
+      const c = text.charCodeAt(p);
+      if (c === 10) line++;
+      else if (c !== 32 && c !== 13 && c !== 9) break;
+      p++;
+    }
+  };
+  const readKey = (): string => {
+    const start = ++p;
+    let escaped = false;
+    while (p < len) {
+      const c = text.charCodeAt(p++);
+      if (c === 92) { escaped = true; p++; }
+      else if (c === 34) break;
+    }
+    return escaped ? JSON.parse(text.slice(start - 1, p)) : text.slice(start, p - 1);
+  };
+  const skipString = () => {
+    p++;
+    while (p < len) {
+      const c = text.charCodeAt(p++);
+      if (c === 92) p++;
+      else if (c === 34) break;
+    }
+  };
+  const scan = (depth: number): void => {
+    if (depth > 64) throw new Error('配置嵌套超过 64 层');
+    ws();
+    const ch = text.charCodeAt(p);
+    if (ch === 123) {
+      p++;
+      ws();
+      if (text.charCodeAt(p) === 125) { p++; return; }
+      const seen = new Set<string>();
+      while (text.charCodeAt(p) !== 125) {
+        const key = readKey();
+        ws();
+        p++; // ':'
+        if (seen.has(key)) throw new Error('JSON 重复键: ' + key + ' (line ' + line + ')');
+        seen.add(key);
+        scan(depth + 1);
+        ws();
+        if (text.charCodeAt(p) !== 44) break;
+        p++;
+        ws();
+      }
+      p++;
+    } else if (ch === 91) {
+      p++;
+      ws();
+      while (text.charCodeAt(p) !== 93) {
+        scan(depth + 1);
+        ws();
+        if (text.charCodeAt(p) !== 44) break;
+        p++;
+      }
+      p++;
+    } else if (ch === 34) {
+      skipString();
+    } else {
+      while (p < len && !isJSONDelim(text.charCodeAt(p))) p++;
+    }
+  };
+  scan(0);
+}
+
 export function readDocument(text: string, format: DocumentFormat = 'json'): any {
   documentBudget(text);
   if (format !== 'json') return readYAML(text).toJS({ maxAliasCount: 0 });
   let d: any;
   try { d = JSON.parse(text); } catch (e) { throw new Error('JSON 语法错误 · ' + (e as Error).message); }
-  spans(text); // Reject duplicate keys/depth before editing or formatting.
+  validateJSONStructure(text);
   return d;
 }
 export function parseDocument(text: string, format: DocumentFormat = 'json'): DocumentSource {
@@ -21,19 +94,38 @@ export function parseDocument(text: string, format: DocumentFormat = 'json'): Do
 type Span = { start: number; end: number; value: any; children?: Map<string, Span>; entries?: Span[] };
 // JSON is validated first. Unchanged token slices preserve layout and large integers.
 function spans(text: string): Span {
+  const len = text.length;
   let p = 0;
-  const ws = () => { while (p < text.length && /\s/.test(text[p])) p++; };
-  const string = () => { const s = p++; while (p < text.length) { const c = text[p++]; if (c === '\\') p++; else if (c === '"') break; } return JSON.parse(text.slice(s, p)); };
+  let line = 1;
+  const ws = () => {
+    while (p < len) {
+      const c = text.charCodeAt(p);
+      if (c === 10) line++;
+      else if (c !== 32 && c !== 13 && c !== 9) break;
+      p++;
+    }
+  };
+  const string = () => {
+    const s = ++p;
+    let escaped = false;
+    while (p < len) {
+      const c = text.charCodeAt(p++);
+      if (c === 92) { escaped = true; p++; }
+      else if (c === 34) break;
+    }
+    return escaped ? JSON.parse(text.slice(s - 1, p)) : text.slice(s, p - 1);
+  };
   const read = (depth = 0): Span => {
     if (depth > 64) throw new Error('配置嵌套超过 64 层');
     ws(); const start = p; let value: any; let children: Map<string, Span> | undefined; let entries: Span[] | undefined;
-    if (text[p] === '{') {
+    const ch = text.charCodeAt(p);
+    if (ch === 123) {
       p++; children = new Map(); value = {}; ws();
-      while (text[p] !== '}') { const key = string(); ws(); p++; if (children.has(key)) throw new Error('JSON 重复键: ' + key + ' (line ' + text.slice(0,p).split('\n').length + ')'); const n = read(depth + 1); Object.defineProperty(value, key, { value: n.value, enumerable: true, configurable: true, writable: true }); children.set(key, n); ws(); if (text[p] !== ',') break; p++; ws(); } p++;
-    } else if (text[p] === '[') {
-      p++; entries = []; ws(); while (text[p] !== ']') { entries.push(read(depth + 1)); ws(); if (text[p] !== ',') break; p++; } p++; value = entries.map(n => n.value);
-    } else if (text[p] === '"') value = string();
-    else { while (p < text.length && !/[\s,}\]]/.test(text[p])) p++; value = JSON.parse(text.slice(start, p)); }
+      while (text.charCodeAt(p) !== 125) { const key = string(); ws(); p++; if (children.has(key)) throw new Error('JSON 重复键: ' + key + ' (line ' + line + ')'); const n = read(depth + 1); Object.defineProperty(value, key, { value: n.value, enumerable: true, configurable: true, writable: true }); children.set(key, n); ws(); if (text.charCodeAt(p) !== 44) break; p++; ws(); } p++;
+    } else if (ch === 91) {
+      p++; entries = []; ws(); while (text.charCodeAt(p) !== 93) { entries.push(read(depth + 1)); ws(); if (text.charCodeAt(p) !== 44) break; p++; } p++; value = entries.map(n => n.value);
+    } else if (ch === 34) value = string();
+    else { while (p < len && !isJSONDelim(text.charCodeAt(p))) p++; value = JSON.parse(text.slice(start, p)); }
     return { start, end: p, value, children, entries };
   };
   return read();

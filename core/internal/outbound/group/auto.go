@@ -80,7 +80,8 @@ type autoGroup struct {
 	cold            bool        // no probe round has completed yet
 	pending         [][2]string // switch events to emit after unlocking
 
-	firstReady      chan struct{} // URLTest: full round; Smart: successful full bootstrap
+	firstReady       chan struct{} // URLTest: full round; Smart: successful full bootstrap
+	firstReadyClosed bool
 	roundDone       chan struct{} // current automatic round terminal, even if incomplete/down
 	completeRound   bool
 	hasRound        bool
@@ -140,6 +141,9 @@ func (g *autoGroup) Current() string {
 	}
 	if g.cfg.kind == TypeSmart && g.cold && g.cfg.fixed == "" {
 		return "" // no automatic selection before a valid full bootstrap
+	}
+	if g.cfg.kind == TypeURLTest && (g.cold || !g.fallbackUpLocked(g.cur)) {
+		g.urlTestReevalLocked(g.clk.Now())
 	}
 	if (g.cfg.kind == TypeFallback) || (g.cfg.kind == TypeLoadBalance && g.cfg.fixed != "" && !g.fallbackUpLocked(g.cur)) {
 		g.switchToLocked(g.fallbackPickLocked(), g.clk.Now())
@@ -296,7 +300,7 @@ func (g *autoGroup) tick() {
 		return
 	}
 	if g.cfg.kind != TypeSmart {
-		if g.cfg.head && g.cfg.lazy && g.clk.Now().Sub(g.lastUse) >= g.cfg.interval {
+		if g.cfg.head && g.cfg.lazy && g.hasRound && !g.cold && g.clk.Now().Sub(g.lastUse) >= g.cfg.interval {
 			g.scheduleTickLocked()
 			return
 		}
@@ -416,10 +420,7 @@ func (g *autoGroup) urlTestReevalLocked(now time.Time) {
 	if best < 0 {
 		return
 	}
-	if g.cold && !g.hasRound {
-		return
-	}
-	if g.cold && g.hasRound {
+	if g.cold {
 		g.cold = false
 		g.switchToLocked(best, now)
 		return
@@ -618,11 +619,18 @@ func (g *autoGroup) candidatesLocked(host string, udp bool, now time.Time) []int
 // returned are reported to the caller and never retried.
 // Cold URL-test requests share the lifecycle-owned first full round. A
 // caller can leave without canceling other callers; no lock is held waiting.
+func (g *autoGroup) closeFirstReadyLocked() {
+	if !g.firstReadyClosed {
+		g.firstReadyClosed = true
+		close(g.firstReady)
+	}
+}
+
 func (g *autoGroup) markCompleteLocked() {
 	if !g.completeRound {
 		g.completeRound = true
 		if g.cfg.kind != TypeSmart || !g.cold {
-			close(g.firstReady)
+			g.closeFirstReadyLocked()
 		}
 	}
 }
@@ -948,6 +956,9 @@ func (g *autoGroup) Snapshot() Snapshot {
 	g.mu.Lock()
 	defer g.unlock()
 	now := g.clk.Now()
+	if g.cfg.kind == TypeURLTest && (g.cold || !g.fallbackUpLocked(g.cur)) {
+		g.urlTestReevalLocked(now)
+	}
 	if (g.cfg.kind == TypeFallback) || (g.cfg.kind == TypeLoadBalance && g.cfg.fixed != "" && !g.fallbackUpLocked(g.cur)) {
 		g.switchToLocked(g.fallbackPickLocked(), now)
 	}
@@ -1076,6 +1087,7 @@ func (g *autoGroup) RecordURLProbe(url string, sample ProbeSample) {
 		g.RecordProbeRound([]ProbeSample{sample})
 	}
 }
+
 
 // Runtime group graph is acyclic (validated by the kernel). Unknown health is
 // optimistic for ordinary leaves, but an empty or wholly failed group is down.

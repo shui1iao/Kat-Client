@@ -1,43 +1,43 @@
 {
-  "candidate": "v0.2.18-windows-core-v0.8.12",
+  "candidate": "v0.2.19-windows-core-v0.8.13",
   "not_published": true,
-  "app_version": "0.2.18",
-  "windows_clientcore_version": "0.8.12",
-  "sequence": 1794849000,
-  "core_source_fingerprint": "f4982d02b2eea4d360ec6fb2dbe311025add0cffe5f8f6017cb5fd341d8b7e83",
-  "core_build_commit": "f4982d02b2eea4d360ec6fb2dbe311025add0cff",
+  "app_version": "0.2.19",
+  "windows_clientcore_version": "0.8.13",
+  "sequence": 1794891600,
+  "core_source_fingerprint": "1178de865e6175587c4259908c733f3c87f759d2669fcdeb5c231fc948b3af6d",
+  "core_build_commit": "1178de865e6175587c4259908c733f3c87f759d2",
   "core_build_commit_kind": "exact core source fingerprint first40, not a Git commit",
   "executables": {
     "kat-client-core.exe": {
-      "bytes": 17416704,
-      "sha256": "5106a0d7d6e09488fa6bdb4ee94220a44b34def5a0adcada698efd213ce30681"
+      "bytes": 17460224,
+      "sha256": "ea329f4991455fcbdc039bb6de10c02404981b581ed0cfee1689bb096a6590e0"
     },
     "kat-desktop.exe": {
       "bytes": 11853312,
-      "sha256": "206add9d2b15387d6d6903b687a70f434f4af7d673a83969b17e2325c124f019"
+      "sha256": "96355e273b7dc870dcf651090355acce049d5bf1ce16dbe378d9ebeb4d1b5cd0"
     },
     "kat-elevate-helper.exe": {
       "bytes": 569856,
-      "sha256": "8d23566d71ad91756f42dd0af553bfecabc9081c8f4b5a22e8b4ead6bd0dc8e8"
+      "sha256": "7410df662afdcd6ee179b027858715ca8c5c0698d9c854ca8e92a7cbc6918dc2"
     },
     "kat-install-helper.exe": {
       "bytes": 1306112,
-      "sha256": "840a4b5266a31f222eb80400d141a14761e7b0c21fe3d3421952bf70a41a49bc"
+      "sha256": "e394a17a98e213755b48e91a360ae9ee81163ee6a4ac6dca690b25537360c3c9"
     },
     "kat-network-service.exe": {
       "bytes": 1842176,
-      "sha256": "fb18259bae177bdf416b2c3e1bc04af456266e09b83dac83c0c0363dbdaabc54"
+      "sha256": "37362ef4ba518adc59fe427ff4859c7fb62ceaf2c713493a8a7b110c3d4830a5"
     },
     "kat-proxy-watchdog.exe": {
       "bytes": 465408,
-      "sha256": "b98e02498d3fb8fcd85a27c1e7d1617016d36ad4ee1ba5aaeb9277e2c1ee0369"
+      "sha256": "afd8f2a42a279e28f6df5e991266f74e14836db81fd02f63ea99f054bb96c9de"
     }
   },
   "signature_key_id": "0afa646ee76f17d8",
-  "package_auth_sha256": "20a6db82a2af06adddda04173a174a05915da1f77d20038e7fab8526fc3f0bdc",
-  "package_auth_signature_sha256": "fe7954148e4d61b57368984ff18ce1c9183b0755b569cd5febac688094e2e346",
-  "source_manifest_sha256": "17bc78a2c1e418dfefbf9683a8ab8ef2f227a01db4dde1a785d825f7010de2da",
-  "source_manifest_members": 2130,
+  "package_auth_sha256": "569f15cac485cce00965a00902acd60a35abbc9fa6f245db0306ebc4d4c43944",
+  "package_auth_signature_sha256": "a44517f10cbb8e60e23c5d41d02fabc6ece6625a1aba31b6efcab2e0e17811f8",
+  "source_manifest_sha256": "e83b64813984e91f9638118ea37f279dc4ed29889f992c325839d83443560489",
+  "source_manifest_members": 2133,
   "validation": {
     "go_packages_pass": 8,
     "rust_lib_pass": 268,
