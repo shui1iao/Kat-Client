@@ -1,6 +1,14 @@
-# Kat-Client v0.2.21 / Windows Core v0.8.15
+# Kat-Client v0.2.22 / Windows Core v0.8.15
 
-本版为 Windows x64 客户端与内置 Windows Core 同步正式发布版（统一更新 sequence `1794902000`）。Linux Server v0.8.1 保持不变。
+本版为 Windows x64 客户端更新（客户端 sequence `1794903000`，内置 Windows Core v0.8.15 sequence `1794902000`）。Linux Server v0.8.1 保持不变。
+
+## 本版更新（消除更新检查 403 限流 & 首页悬浮动效克制优化）
+- **首页（概览）卡片悬停交互克制优化**：
+  - 去除「流量去向（域名 / 策略）」与「规则命中」两张只读静态排行卡片在鼠标移过时的进度条垂直放大（`scaleY`）、兄弟行大面积变暗（`opacity: 0.38`）及 0ms 追随大浮窗，改用静默 600ms 驻留提示，日常滑过页面零放大、零闪烁；
+  - 将「活跃连接」可点击行由整卡兄弟行变暗优化为当前行轻柔圆角底色高亮，并修复窄视口容器查询下首列宽度错位；保留「实时速率」与「流量用量」两张真实柱状图的精确游标读数。
+- **零 API 配额更新发现与直链下载（彻底解决 `HTTP 403` 限流）**：
+  - 客户端更新发现改走不消耗 REST API 配额的 `github.com` 公开端点（`Kat-Client/releases/latest` 302 标签解析 + `Kat-Server/releases.atom` 条件 `ETag` 缓存），签名清单、签名文件、更新说明与 `.exe` 安装包统一经 `github.com/.../releases/download/` CDN 直链拉取，消除共享代理节点出口 IP 因 `api.github.com` 60 次/小时匿名限额触发 `HTTP 403` 的问题。
+  - Windows Core 更新检查自动跳过低于本机已安装版本的历史旧 tag，并在命中高版本兼容签名更新后跳过同版本重复请求，同时缓存不可变签名原始字节并每次重新执行 `update_manifest::verify` Ed25519 公钥签名、防降级 `sequence`、精确大小、`SHA-256` 与 `AMD64 PE` 强校验。
 
 ## 本版更新（DNS 与全站按钮位置固定化、内核冷启动与首次测速大幅提速）
 - **DNS 与全站界面按钮位置严格固定（零位移跳动）**：

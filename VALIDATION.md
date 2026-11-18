@@ -1,13 +1,9 @@
-# Validation: Kat-Client v0.2.21 / Windows Core v0.8.15
+# Validation: Kat-Client v0.2.22 / Windows Core v0.8.15
 
-2026-11-18 本地候选验证记录（统一 sequence `1794902000`，Windows Core 源码指纹 `04a81276f5f663a48f9cfb4fac548cf4950f207d0c9df3893e0069736d3f7a8e`，`BuildCommit = 04a81276f5f663a48f9cfb4fac548cf4950f207d`）：
+2026-11-18 本地候选验证记录（客户端 sequence `1794903000`，内置 Windows Core v0.8.15 sequence `1794902000`，Core 源码指纹 `04a81276f5f663a48f9cfb4fac548cf4950f207d0c9df3893e0069736d3f7a8e`）：
 
-1. **DNS 与全站按钮位置零跳动几何验证（Headless Chromium）**：
-   - `app/tests-ui/button-stability-browser.mjs` 在 `900×720`、`965×720`、`1000×720`、`1080×720`、`1280×720` 五档视口下逐像素校验：DNS 三标签切换、筛选胶囊计数跳变、「清除缓存」状态条弹出、设置与缓存页清除按钮对齐、「跳过目标覆盖」模式切换、连接页「按进程」与「活跃/已关闭」切换、日志页三标签与筛选切换均 `0.00px` 位移。
-   - `app/tests-ui/dns-cache-browser.mjs` 11/11 项全部通过；`tsc --noEmit` 与 Vite 生产构建通过。
-2. **Go 客户端内核 `-race` 与冷启动流式测速验证**：
-   - 客户端相关 22 个有测试包 `go test -race -tags desktop` 全数通过、0 数据竞态；新增 `TestDesktopStartupStreamingProbeUnblocksGroupsAndNestedDependenciesBeforeDeadNodeTimeout`（5s 死节点下三层策略组与真实 TCP 拨号 20ms 就绪）与 `TestHostStartingNonBlockingSnapshotAndNonNilJSONArrays`（启动期无锁快径与零 `:null` 数组）全部通过；Windows 测试二进制交叉编译通过。
-3. **Rust 桌面宿主与安装器校验**：
-   - `cargo test --offline --locked` 共 310 通过、0 失败、2 忽略；`verify-vendor.py`、`test-setup-finish.py`（7/7）、`test-setup-readlines.py`（8/8）全部通过。
-4. **交叉构建与产品原生包验签**：
-   - Windows Core v0.8.15 与五个 Rust Windows x64 角色离线编译，`kat-install-helper.exe` 绑定服务与客户端 SHA256；Ed25519 公钥 `0afa646ee76f17d8` 离线签包并通过产品原生 `kat-package-validator`（`update_manifest::verify_package`）门禁。
+1. **零 API 配额更新发现与防 403 限流验证**：
+   - `update_check::quota_free_update_tests` 实测模拟 `api.github.com` 全线返回 `HTTP 403` 且存在 15 个历史 `windows-core-v0.8.0..0.8.14` 标签：客户端连续 3 轮检查 `Client` 与 `Core` 全部成功识别新版并读取 `RELEASE_NOTES.md`，`api.github.com` 请求数为 `0`，低于本机版本的历史标签请求数为 `0`，第 2/3 轮命中 Atom `ETag 304` 缓存，且篡改签名或错配标签被严格拒绝。
+2. **Rust 全套单测、前端构建与原生包验签**：
+   - `cargo test --offline --locked` 共 312 通过、0 失败、2 忽略；前端 `tsc --noEmit` 与生产构建通过。
+   - 6 角色 Windows x64 二进制离线编译，内置 `kat-client-core.exe` 与正式已发布的 Windows Core v0.8.15（SHA256 `ce44c30e612c68d7c13bd379280f4e95c401f411ded85d1087eb9a5c7aed7699`）逐字节一致；原 Ed25519 公钥 `0afa646ee76f17d8` 签包并通过产品原生 `kat-package-validator`（`update_manifest::verify_package`）校验。

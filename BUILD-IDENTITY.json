@@ -1,8 +1,8 @@
 {
-  "candidate": "v0.2.21-windows-core-v0.8.15",
-  "app_version": "0.2.21",
+  "candidate": "v0.2.22-windows-core-v0.8.15",
+  "app_version": "0.2.22",
   "windows_clientcore_version": "0.8.15",
-  "sequence": 1794902000,
+  "sequence": 1794903000,
   "core_source_fingerprint": "04a81276f5f663a48f9cfb4fac548cf4950f207d0c9df3893e0069736d3f7a8e",
   "core_build_commit": "04a81276f5f663a48f9cfb4fac548cf4950f207d",
   "core_build_commit_kind": "exact core source fingerprint first40, not a Git commit",
@@ -12,77 +12,47 @@
       "sha256": "ce44c30e612c68d7c13bd379280f4e95c401f411ded85d1087eb9a5c7aed7699"
     },
     "kat-desktop.exe": {
-      "bytes": 11921920,
-      "sha256": "1e4897b4bf78edb7f7ecc1e5cfc336da95b470016c8120b57fe00027696082bf"
+      "bytes": 11964416,
+      "sha256": "c05766ff1a6707c37b73145fffe012d9919c681f97a658470c5707ae88c40053"
     },
     "kat-elevate-helper.exe": {
       "bytes": 569856,
-      "sha256": "851302eda44015ddb4e6464e16f9758a932cbe55bceccda0924b5226f0bca918"
+      "sha256": "a1939b3434ddd1a10f8fdc01ee145a4b65d6cef20934f30fafb713ca26bbc5b7"
     },
     "kat-install-helper.exe": {
       "bytes": 1359872,
-      "sha256": "5ffa9085d8d53915e796d1ab8837e93b1e3a86affec850eff688b71af7b05822"
+      "sha256": "4583d1e5b65520fe6dd5446c13f6819c9d6e2e208e14de88241f383e5d04919d"
     },
     "kat-network-service.exe": {
       "bytes": 1880064,
-      "sha256": "a66944b236f88d5fa02ee9c26375f7d878e3ec210260956b6f3d5f3657f5d3db"
+      "sha256": "e297c7b156aef38c258b3b393642dbc80d8f34dc3ed96ab121365629a70540d3"
     },
     "kat-proxy-watchdog.exe": {
       "bytes": 465408,
-      "sha256": "bb6ab68cc1e6177f2472e622a9f1b1d2b0f033d7bff55c4b9f6dbcc4e4140454"
+      "sha256": "260feff61fdf55973be454eafbf87f5702465f3cf43397b5966eed3e71441e55"
     }
   },
   "signature_key_id": "0afa646ee76f17d8",
-  "package_auth_sha256": "95d992c049f9fd4891dae518b0c9ca9a803e161a25a1f3191c0437c40156f6da",
-  "package_auth_signature_sha256": "76404dce9f9781074ed1ea80c24c2beb6bf4d10a0f587f805ef17dc08d8e645a",
-  "source_manifest_sha256": "20494ed670a22043d419844953e070e340ec9d0ac4fd50db7c925a2eb7f15e8d",
+  "package_auth_sha256": "6cdbd290747f95a42c8e09d88e112eee7fa9a7f662b58cd0f9287de0d2ea10d3",
+  "package_auth_signature_sha256": "f9eced23b4d6e28d16edcd9311e4046cc82ff993680bb7b57e6358b3e178dec0",
+  "source_manifest_sha256": "4da9eba697f3c7ff8a96acce3dd9f4cf2d29d7e591f7864be89d2ce4e8233923",
   "source_manifest_members": 2145,
   "validation": {
     "all_targeted_checks_passed": true,
     "new_failures": [],
     "core_source_fingerprint": "04a81276f5f663a48f9cfb4fac548cf4950f207d0c9df3893e0069736d3f7a8e",
     "core_build_commit": "04a81276f5f663a48f9cfb4fac548cf4950f207d",
-    "go_race": {
-      "packages_passed": 22,
-      "packages_failed_preexisting": [
-        "github.com/shui1iao/Kat/internal/outbound/anytls",
-        "github.com/shui1iao/Kat/internal/tunplatform"
-      ],
-      "packages_no_test_files": 2,
-      "data_races": 0,
-      "windows_desktop_test_compile": "passed"
-    },
     "rust": {
-      "passed": 310,
+      "passed": 312,
       "failed": 0,
       "ignored": 2,
-      "breakdown": {
-        "lib": 274,
-        "control_contract": 12,
-        "supervisor": 23,
-        "elevation_launch": 1
-      },
+      "quota_free_update_403_tests": "passed (0 API hits, 15 historical Core tags skipped, ETag 304 hit, tampered sig/tag rejected)",
       "vendor_wintun_verify": "passed"
     },
     "frontend": {
       "typecheck": "passed",
-      "production_build": "passed",
-      "chromium_headless_dns_cache_e2e_checks": 11,
-      "chromium_headless_button_stability_viewports": [
-        900,
-        965,
-        1000,
-        1080,
-        1280
-      ]
+      "production_build": "passed"
     },
-    "nsis_scripts": {
-      "test_setup_finish": "7/7 passed",
-      "test_setup_readlines": "8/8 passed"
-    },
-    "not_executed_on_linux_build_host": [
-      "Windows 10/11 real desktop UAC interactive wizard/TUN driver runtime execution"
-    ],
     "real_product_package_validator": "passed"
   }
 }

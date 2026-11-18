@@ -1,6 +1,6 @@
-import { useState, type CSSProperties } from 'react';
-import { ChartTip, type TipAnchor } from './ChartTip';
+import type { CSSProperties } from 'react';
 import { PolicyMiniIcon } from '../components/EntityIcons';
+import { tip } from '../components/Tooltip';
 import { countStr, trafficPercent } from '../client/display';
 
 export function HitBars({
@@ -10,10 +10,8 @@ export function HitBars({
   items: { key: string; label: string; value: number; colorIndex: number; color?: string; iconUrl?: string; groupType?: string }[];
   running?: boolean;
 }) {
-  const [hover, setHover] = useState<{ index: number; anchor: TipAnchor } | null>(null);
   const total = items.reduce((s, i) => s + i.value, 0);
   const maximum = Math.max(0, ...items.map((i) => i.value));
-  const active = hover ? items[hover.index] : undefined;
 
   if (!items.length) return <div className="empty hit-empty">暂无规则命中</div>;
 
@@ -21,48 +19,27 @@ export function HitBars({
   const containerStyle = { '--hit-count-cols': `${maxDigits + 0.5}ch` } as CSSProperties;
 
   return (
-    <>
-      <div className="hit-bars" role="list" aria-label="按策略组命中次数" style={containerStyle} onMouseLeave={() => setHover(null)}>
-        {items.map((it, index) => (
-          <div
-            key={it.key}
-            className={'hit-row' + (hover?.index === index ? ' is-active' : hover ? ' is-dimmed' : '')}
-            style={categoryStyle(it.colorIndex, it.key, it.color)}
-            role="listitem"
-            aria-label={`${it.label} 命中 ${countStr(it.value)} 次，占 ${trafficPercent(it.value, total)}`}
-            onMouseMove={(e) => setHover({ index, anchor: { target: e.currentTarget, x: e.clientX, y: e.clientY } })}
-          >
-            <span className="hit-label-cell">
-              <PolicyMiniIcon name={it.label} iconUrl={it.iconUrl} groupType={it.groupType} running={running} />
-              <span className="hit-name">{it.label}</span>
-            </span>
-            <span className="hit-track">
-              <i style={{ width: `${maximum > 0 ? (it.value / maximum) * 100 : 0}%`, minWidth: it.value > 0 ? 4 : 0 }} />
-            </span>
-            <b className="num">{countStr(it.value)}</b>
-          </div>
-        ))}
-      </div>
-      {active && (
-        <ChartTip
-          anchor={hover!.anchor}
-          title={
-            <span style={categoryStyle(active.colorIndex, active.key, active.color)} className="hit-tip-title">
-              <i style={categoryStyle(active.colorIndex, active.key, active.color)} className="hit-tip-color" />
-              {active.label}
-            </span>
-          }
+    <div className="hit-bars" role="list" aria-label="按策略组命中次数" style={containerStyle}>
+      {items.map((it) => (
+        <div
+          key={it.key}
+          className="hit-row"
+          style={categoryStyle(it.colorIndex, it.key, it.color)}
+          role="listitem"
+          aria-label={`${it.label} 命中 ${countStr(it.value)} 次，占 ${trafficPercent(it.value, total)}`}
+          {...tip(`${it.label} · 命中 ${countStr(it.value)} 次 (${trafficPercent(it.value, total)})`)}
         >
-          <div>
-            <span>命中次数</span>
-            <b>{countStr(active.value)} 次</b>
-          </div>
-          <div className="chart-tip-total">
-            占比<b>{trafficPercent(active.value, total)}</b>
-          </div>
-        </ChartTip>
-      )}
-    </>
+          <span className="hit-label-cell">
+            <PolicyMiniIcon name={it.label} iconUrl={it.iconUrl} groupType={it.groupType} running={running} />
+            <span className="hit-name">{it.label}</span>
+          </span>
+          <span className="hit-track">
+            <i style={{ width: `${maximum > 0 ? (it.value / maximum) * 100 : 0}%`, minWidth: it.value > 0 ? 4 : 0 }} />
+          </span>
+          <b className="num">{countStr(it.value)}</b>
+        </div>
+      ))}
+    </div>
   );
 }
 

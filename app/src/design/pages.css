@@ -570,24 +570,27 @@
   gap: 2px;
 }
 
-.ac-list:has(.ac-row:hover) .ac-row:not(:hover) {
-  opacity: 0.42;
-}
-
 .ac-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 86px 76px;
   align-items: center;
   gap: 10px;
   min-height: 28px;
-  padding: 0;
+  padding: 0 8px;
+  margin: 0 -8px;
+  border-radius: var(--r-ctl);
+  cursor: pointer;
   text-align: left;
   flex: none;
-  transition: opacity var(--t-fast) var(--ease);
+  transition: background-color var(--t-fast) var(--ease);
 }
 
-.ac-row:hover .ac-target {
-  color: var(--accent);
+.ac-row:hover {
+  background: var(--hover);
+}
+
+.ac-row:active {
+  background: var(--press);
 }
 
 .ac-main-cell {
@@ -858,35 +861,16 @@
   font-weight: 500;
 }
 
-/* Boxless interactive spotlight across Usage, Destination, Rule Hits & Diagnostics */
+/* Calm telemetry hover: chart bars transition smoothly; static ranking rows stay still */
 .wb-col {
   transition: opacity var(--t-fast) var(--ease);
   cursor: default;
 }
 
-.share-bar i,
 .share-row,
 .domain-rank-row,
-.domain-rank-track,
-.hit-row,
-.hit-track,
-/* Network diagnostics rows are static read-only items — no hover dimming */
-.noop-diag-placeholder {
-  transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
-}
-
-.share-row.is-dimmed,
-.domain-rank-row.is-dimmed,
-.hit-row.is-dimmed {
-  opacity: 0.38;
-}
-
-.domain-rank-row.is-active .domain-rank-track {
-  transform: scaleY(1.45);
-}
-
-.hit-row.is-active .hit-track {
-  transform: scaleY(1.35);
+.hit-row {
+  cursor: default;
 }
 
 .hit-tip-title {
@@ -1016,14 +1000,8 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .ac-head,
   .ac-row {
-    grid-template-columns: 42px minmax(0, 1.8fr) minmax(0, 0.9fr) minmax(0, 0.85fr) 82px;
-  }
-
-  .ac-head > span:nth-child(4),
-  .ac-row > .ac-rule {
-    display: none;
+    grid-template-columns: minmax(0, 1fr) 86px 76px;
   }
 }
 

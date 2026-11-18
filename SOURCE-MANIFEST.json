@@ -1,8 +1,8 @@
 {
   "schema": 1,
-  "app_version": "0.2.21",
+  "app_version": "0.2.22",
   "core_version": "0.8.15",
-  "sequence": 1794902000,
+  "sequence": 1794903000,
   "excludes": [
     "BUILD-IDENTITY.json",
     "SOURCE-MANIFEST.json"
@@ -13,19 +13,19 @@
       "path": "BUILDING.md",
       "bytes": 933,
       "mode": "0644",
-      "sha256": "df4b9592b0e383c2703a9f2f9b7d659ab2ef048944764916a51f096b903646ae"
+      "sha256": "85165b936efb56b7baff4adfe482e720ce74e93be77f97acce25f7b0ab36f9e9"
     },
     {
       "path": "README.md",
       "bytes": 500,
       "mode": "0644",
-      "sha256": "cf1a1d12f343f35d5d64eb0878d993bb2dfad3cefb08ded92b8e9d996d88abee"
+      "sha256": "dd7d6403ba163f5bb07d736c18553cea3c831dbfeff7109aa997ac2f7790fe17"
     },
     {
       "path": "RELEASE_NOTES.md",
-      "bytes": 5202,
+      "bytes": 6773,
       "mode": "0644",
-      "sha256": "9f219d45d7c0db1d640e50b9d9d299a2015940abbb4ab505fd948591d43ed2bb"
+      "sha256": "03469d299e02648156973662892b19341c771810c965c13b4bc5349453cb883e"
     },
     {
       "path": "RIGHTS.md",
@@ -35,9 +35,9 @@
     },
     {
       "path": "VALIDATION.md",
-      "bytes": 1956,
+      "bytes": 1317,
       "mode": "0644",
-      "sha256": "da24756e8352cd02f258722aacd777ea04dd0e8bf3f427426e456c5bca0b04ef"
+      "sha256": "1d80faf7dfb6ad1e8b063d18b123539bc3d6e116d44513e110eaed446c4d2b4b"
     },
     {
       "path": "app/build.mjs",
@@ -61,7 +61,7 @@
       "path": "app/package.json",
       "bytes": 527,
       "mode": "0644",
-      "sha256": "2ad124941518e5dded23cf229c090c11a86c53948cd9cc549ccaba1090ec2113"
+      "sha256": "b0710d4edaed41bdf81d202c4f1750045fa60d2f52dd6065ac22b55b5fc30e70"
     },
     {
       "path": "app/public/fonts/NOTICE.txt",
@@ -91,13 +91,13 @@
       "path": "app/src-tauri/Cargo.lock",
       "bytes": 116752,
       "mode": "0644",
-      "sha256": "48c6126b8c194b856a05ed1244695c52c9f608b51c39f70b21d76f42208228e9"
+      "sha256": "8fb8b720b029f70297358aa5b4b813eebc5fc36ff89789f6a4b6fbacb4f32762"
     },
     {
       "path": "app/src-tauri/Cargo.toml",
       "bytes": 2421,
       "mode": "0644",
-      "sha256": "e3b90c34bb5b648a1c645d0ec61378fdffc729a9817fc627e829d9e60d6eb5a5"
+      "sha256": "ae41bece3c91014adff17373e233df352a7295bae74917b7bae6fe4147657029"
     },
     {
       "path": "app/src-tauri/build.rs",
@@ -133,7 +133,7 @@
       "path": "app/src-tauri/distribution/README-WINDOWS.txt",
       "bytes": 483,
       "mode": "0644",
-      "sha256": "7d127f0f0ff4fb31f9b6de87e0e6755c7a6ae30e3cde4add56b3bac19622b5a8"
+      "sha256": "2459274a84c2123d324223cf10ceaa7a608fe17535c6be9411060d785dc6aa69"
     },
     {
       "path": "app/src-tauri/distribution/RUST-THIRD-PARTY-NOTICES.txt",
@@ -4951,7 +4951,7 @@
       "path": "app/src-tauri/src/r1_r2_regression_tests.rs",
       "bytes": 31123,
       "mode": "0644",
-      "sha256": "9639fed88cdfc48d7ad2a4fd87ac3d2a9549cfe5b6520d851f8b147bb9d95dd8"
+      "sha256": "a084709032a251b6f0e58bd69058c3d34d9570548866e41b2f0d2c37d772d975"
     },
     {
       "path": "app/src-tauri/src/safe_archive.rs",
@@ -5045,9 +5045,9 @@
     },
     {
       "path": "app/src-tauri/src/update_check.rs",
-      "bytes": 40281,
+      "bytes": 76257,
       "mode": "0644",
-      "sha256": "701d81f4f033db8fc5e7600a2648f30db7c08034f6b4d3796e20cbc33ec41fc9"
+      "sha256": "efd871eff75071f0258a08652b1b02d1b883e971304bf1b47a87eb925cdf944f"
     },
     {
       "path": "app/src-tauri/src/update_handoff_protocol.rs",
@@ -5311,13 +5311,13 @@
       "path": "app/src-tauri/tauri.conf.json",
       "bytes": 862,
       "mode": "0644",
-      "sha256": "5aaa20ecf53eda22eb99b89b847c7713c9cdb2307acd5ad3ad3ddd8cf410623c"
+      "sha256": "368c3296750d9a17226dc4cebece74f946940a2f2bb8c7578b1abc38e2e183ee"
     },
     {
       "path": "app/src-tauri/tests/control_contract.rs",
       "bytes": 38681,
       "mode": "0644",
-      "sha256": "985030889c179f91e22c568935595f240b4c30d8e1b6c13bfbff538f6f06ddd1"
+      "sha256": "5f0b62dc101df15ee5505beaa5a7e4ebe05ec40a8ab3a2f0715be366c3460314"
     },
     {
       "path": "app/src-tauri/tests/elevation_launch.rs",
@@ -5633,9 +5633,9 @@
     },
     {
       "path": "app/src/charts/HitBars.tsx",
-      "bytes": 3701,
+      "bytes": 2698,
       "mode": "0644",
-      "sha256": "c0be9de0bcc0e481e7d10187b9a7f0590f1c2ab41304cc0a530fb0c8cdeadc1c"
+      "sha256": "eeff3197ae2ad8ef9f06e14cd1de08c629edc05eb516a14c7b5fdccad7db44df"
     },
     {
       "path": "app/src/charts/Sparkline.tsx",
@@ -5651,15 +5651,15 @@
     },
     {
       "path": "app/src/charts/TrafficDistribution.tsx",
-      "bytes": 7166,
+      "bytes": 4652,
       "mode": "0644",
-      "sha256": "3bd673e55a56449c76bdcace7fdb771fc4d316c1c1ed17ddd1d95805aa47d2f6"
+      "sha256": "b44a20b1f74d493a6bbd1ad4b55498188b548defe1c86fd8588c2d56534800e9"
     },
     {
       "path": "app/src/charts/WeekBars.tsx",
       "bytes": 8322,
       "mode": "0644",
-      "sha256": "8c433cdb9c6ad7e294312ac126f66d60b65640e4678007a51f99a77bcf070ba4"
+      "sha256": "fb42a913c408a6b1b1610d8c72613aa10f59c073aded2d78db28342aa35ee730"
     },
     {
       "path": "app/src/charts/path.ts",
@@ -6065,15 +6065,15 @@
     },
     {
       "path": "app/src/design/components.css",
-      "bytes": 20602,
+      "bytes": 20526,
       "mode": "0644",
-      "sha256": "b62bf14783bd738cde6a1f86ef9007256019760a3810daf902a8b6ec280e4d78"
+      "sha256": "7325afb394dbd35228936b7e6ed2d91a97388ae1f123364ef2183963d5552df1"
     },
     {
       "path": "app/src/design/pages.css",
-      "bytes": 79676,
+      "bytes": 79157,
       "mode": "0644",
-      "sha256": "da99952313f997244734edf45dad40bf120fad128fee8fe7add6dfe0f4863e91"
+      "sha256": "5ea7a3811fb83ac7389b5f5b7205c5fdbf62800159f05c44e932f4c0e55bd258"
     },
     {
       "path": "app/src/design/shell.css",
@@ -12865,7 +12865,7 @@
       "path": "release-config.json",
       "bytes": 262,
       "mode": "0644",
-      "sha256": "95936463a1d6bb86c4bebe93a2aee18b0c251d6c1e0f64861085f3c108d64c84"
+      "sha256": "a5b993fba43fd0d48d04adfa9711cfff468a825d3a83bc14beb73fc4ea4df1b6"
     },
     {
       "path": "ui-evidence/dns-cache-browser-results.json",

@@ -110,7 +110,7 @@ export function WeekBars({
                 role="img"
                 aria-label={`${name} 代理 ${showBytes(proxyVal)}，直连 ${showBytes(directVal)}，下载 ${showBytes(d.down)}，上传 ${showBytes(d.up)}`}
                 onMouseMove={(e) => setHover({ index: i, anchor: { target: e.currentTarget, x: e.clientX, y: e.clientY } })}
-                opacity={hover && !isHovered ? 0.35 : 1}
+                opacity={hover && !isHovered ? 0.56 : 1}
               >
                 <rect className="week-hit" x={cx - slot / 2} y={PAD.t} width={slot} height={ih} fill="transparent" />
                 {totalVal > 0 ? (
