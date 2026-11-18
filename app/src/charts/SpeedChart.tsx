@@ -4,7 +4,7 @@ import { rateStr, clock } from '../lib/format';
 import { speedAxis, axisLabel, speedTimeTicks } from './scale';
 import { speedColumns, columnAt, speedBar, columnPath } from './speedColumns';
 
-const PAD = { l: 62, r: 2, t: 8, b: 20 };
+const PAD = { l: 72, r: 2, t: 8, b: 22 };
 const DENSITY = { default: { pitch: 4, fill: 0.7 }, relaxed: { pitch: 6, fill: 0.52 } } as const;
 
 export function SpeedChart({
@@ -23,7 +23,7 @@ export function SpeedChart({
   density?: keyof typeof DENSITY;
 }) {
   const [ref, { w, h }] = useSize<HTMLDivElement>();
-  const height = fixedH ?? Math.max(124, h);
+  const height = fixedH ?? Math.max(118, h);
   const n = down.length;
   const [hover, setHover] = useState<number | null>(null);
   const [tipWidth, setTipWidth] = useState(240);
@@ -51,8 +51,9 @@ export function SpeedChart({
 
   const onMove = (e: MouseEvent<SVGSVGElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
-    const y = e.clientY - r.top;
-    setHover(y < PAD.t || y > height - PAD.b ? null : columnAt(columns, e.clientX - r.left));
+    const z = Number((e.currentTarget as unknown as { currentCSSZoom?: number }).currentCSSZoom) || 1;
+    const y = (e.clientY - r.top) / z;
+    setHover(y < PAD.t || y > height - PAD.b ? null : columnAt(columns, (e.clientX - r.left) / z));
   };
   const rate = (v: number | null) => (v == null ? '—' : rateStr(v));
 

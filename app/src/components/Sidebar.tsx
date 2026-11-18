@@ -118,7 +118,7 @@ export function Sidebar({
                     aria-label={it.label}
                   >
                     <span className="ico">
-                      <Icon name={it.icon} size={17} />
+                      <Icon name={it.icon} size={19} />
                     </span>
                     <span className="nav-txt">{it.label}</span>
                     {showConnBadge && <span className="nav-badge num">{activeConnections}</span>}

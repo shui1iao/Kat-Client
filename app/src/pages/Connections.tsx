@@ -460,7 +460,7 @@ export function Connections({
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="搜索进程、目标、IP、规则、出口"
+              placeholder="搜索进程、目标或规则…"
               aria-label="搜索连接"
             />
           </label>

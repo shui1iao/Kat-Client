@@ -88,7 +88,7 @@ export function DomainIcon({
 
   return (
     <span className={cls + ' is-placeholder'} aria-hidden="true">
-      <Icon name={isIpLiteral(clean) ? 'target' : 'nodes'} size={size === 'sm' ? 13 : 15} stroke={1.65} />
+      <Icon name={isIpLiteral(clean) ? 'target' : 'nodes'} size={size === 'sm' ? 15 : 17} stroke={1.65} />
     </span>
   );
 }
@@ -161,7 +161,7 @@ export function ProcessIcon({
 
   return (
     <span className="ei-proc-box is-placeholder" aria-hidden="true">
-      <Icon name="monitor" size={13} stroke={1.65} />
+      <Icon name="monitor" size={15} stroke={1.65} />
     </span>
   );
 }

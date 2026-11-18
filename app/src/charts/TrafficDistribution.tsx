@@ -28,48 +28,45 @@ export function TrafficDistribution({ items, running = false }: { items: Traffic
     return <div className="empty distribution-empty">暂无流量记录</div>;
   }
 
-  const top = items.slice(0, 5);
-  const rest = items.slice(5);
-  const folded: TrafficSlice[] = rest.length
-    ? [
-        ...top,
-        {
-          label: '其他策略',
-          value: rest.reduce((s, x) => s + x.value, 0),
-          up: rest.reduce((s, x) => s + (x.up ?? 0), 0),
-          down: rest.reduce((s, x) => s + (x.down ?? 0), 0),
-          color: '#8A94A3',
-        },
-      ]
-    : top;
+  const folded: TrafficSlice[] =
+    items.length <= 5
+      ? items
+      : [
+          ...items.slice(0, 4),
+          {
+            label: '其他策略',
+            value: items.slice(4).reduce((s, x) => s + x.value, 0),
+            up: items.slice(4).reduce((s, x) => s + (x.up ?? 0), 0),
+            down: items.slice(4).reduce((s, x) => s + (x.down ?? 0), 0),
+            color: '#8A94A3',
+          },
+        ];
 
+  const maxVal = Math.max(1, ...folded.map((g) => g.value));
   const percent = (v: number) => trafficPercent(v, total);
 
   return (
     <div className="share-wrap">
-      <div className="share-bar" role="img" aria-label="策略组流量占比">
-        {folded.map((g) => (
-          <i
-            key={g.label}
-            style={{
-              background: g.color,
-              width: `${Math.max(1.5, (g.value / total) * 100)}%`,
-            }}
-            {...tip(`${g.label} · ${showBytes(g.value)} (${percent(g.value)})`)}
-          />
-        ))}
-      </div>
-      <ul className="share-list">
+      <ul className="share-list" role="list" aria-label="策略组流量占比">
         {folded.map((g) => (
           <li
             key={g.label}
             className="share-row"
             aria-label={`${g.label} 下载 ${showBytes(g.down)}，上传 ${showBytes(g.up)}，合计 ${showBytes(g.value)}，占 ${percent(g.value)}`}
-            {...tip(`↓ ${showBytes(g.down)} · ↑ ${showBytes(g.up)}`)}
+            {...tip(`${g.label} · ↓ ${showBytes(g.down)} · ↑ ${showBytes(g.up)} (${percent(g.value)})`)}
           >
-            <PolicyMiniIcon name={g.label} iconUrl={g.iconUrl} groupType={g.groupType} running={running} />
-            <span className="share-name" style={{ color: g.color }}>
-              {g.label}
+            <span className="share-label-cell">
+              <PolicyMiniIcon name={g.label} iconUrl={g.iconUrl} groupType={g.groupType} running={running} />
+              <span className="share-name">{g.label}</span>
+            </span>
+            <span className="share-track">
+              <i
+                style={{
+                  width: `${maxVal > 0 ? (g.value / maxVal) * 100 : 0}%`,
+                  minWidth: g.value > 0 ? 4 : 0,
+                  background: g.color,
+                }}
+              />
             </span>
             <span className="share-bytes num">{showBytes(g.value)}</span>
             <span className="share-pct num">{percent(g.value)}</span>
@@ -96,7 +93,6 @@ export function DomainRankList({ items }: { items: DomainRankItem[] }) {
           const widthPct = Math.max(4, (d.total / maxVal) * 100);
           const proxyRatio = d.total > 0 ? (d.proxy / d.total) * 100 : 100;
           const directRatio = Math.max(0, 100 - proxyRatio);
-          const mainColor = d.direct > d.proxy ? 'var(--direct)' : 'var(--proxy)';
           const detail = `代理 ${showBytes(d.proxy)} · 直连 ${showBytes(d.direct)} · ↓ ${showBytes(d.down)} · ↑ ${showBytes(d.up)} (${trafficPercent(d.total, totalAll)})`;
           return (
             <li
@@ -108,9 +104,7 @@ export function DomainRankList({ items }: { items: DomainRankItem[] }) {
               <DomainIcon domain={d.name} />
               <div className="domain-rank-body">
                 <div className="domain-rank-top">
-                  <span className="domain-rank-name" style={{ color: mainColor }}>
-                    {d.name}
-                  </span>
+                  <span className="domain-rank-name">{d.name}</span>
                   <b className="domain-rank-bytes num">{showBytes(d.total)}</b>
                 </div>
                 <div className="domain-rank-track">

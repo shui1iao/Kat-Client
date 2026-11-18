@@ -12,11 +12,11 @@ impl WindowState{pub fn valid(self)->bool{self.schema==1&&self.normal.valid()&&s
 fn overlap(a:Rect,b:Rect)->i64{let w=(i64::from(a.x)+i64::from(a.width)).min(i64::from(b.x)+i64::from(b.width))-i64::from(a.x.max(b.x));let h=(i64::from(a.y)+i64::from(a.height)).min(i64::from(b.y)+i64::from(b.height))-i64::from(a.y.max(b.y));w.max(0)*h.max(0)}
 fn scale(v:i64,to:u32,from:u32)->i64{v*i64::from(to)/i64::from(from)}
 fn default_size(w:Rect,dpi:u32)->(i64,i64){
- let max_w=(i64::from(w.width)*78/100).max(1);
- let max_h=(i64::from(w.height)*84/100).max(1);
- let mut width=scale(1080,dpi,96).min(max_w);
- let mut height=scale(720,dpi,96).min(max_h);
- if width*2>height*3{width=height*3/2;}else if height*3>width*2{height=width*2/3;}
+ let max_w=(i64::from(w.width)*80/100).max(1);
+ let max_h=(i64::from(w.height)*86/100).max(1);
+ let mut width=scale(1200,dpi,96).min(max_w);
+ let mut height=scale(860,dpi,96).min(max_h);
+ if width*43>height*60{width=height*60/43;}else if height*60>width*43{height=width*43/60;}
  (width,height)
 }
 pub fn placement(saved:Option<WindowState>,monitors:&[Monitor])->Option<Placement>{
@@ -42,7 +42,7 @@ impl Debounce{pub fn changed(&mut self,now:Instant)->bool{let start=!self.runnin
  fn state()->WindowState{WindowState{schema:1,normal:Rect{x:200,y:140,width:1000,height:700},work:monitor(0,96).work,dpi:96,maximized:true}}
  #[test]fn dpi_scale_and_clamp_to_current_work_area(){let p=placement(Some(state()),&[monitor(0,144)]).unwrap();assert_eq!(p.normal,Rect{x:300,y:40,width:1500,height:1040});assert!(p.maximized);}
  #[test]fn unplugged_negative_large_and_small_screens_remain_visible(){let mut s=state();s.work.x=-4000;s.normal.x=-3900;s.normal.width=50000;let tiny=Monitor{work:Rect{x:-800,y:-500,width:800,height:480},dpi:192,primary:true};let p=placement(Some(s),&[tiny]).unwrap();assert_eq!(p.normal,tiny.work);let p=placement(Some(state()),&[monitor(0,96)]).unwrap();assert!(p.normal.x>=0);assert!(placement(Some(state()),&[]).is_none());}
- #[test]fn corrupt_state_falls_back_and_no_minimized_field(){let mut s=state();s.dpi=0;let p=placement(Some(s),&[monitor(0,96)]).unwrap();assert!(!p.maximized);assert_eq!(p.normal.width,1080);assert_eq!(p.normal.height,720);let laptop=Monitor{work:Rect{x:0,y:0,width:1920,height:1032},dpi:120,primary:true};let lp=placement(None,&[laptop]).unwrap();assert!(lp.normal.height<=867&&lp.normal.width*2/3==lp.normal.height);let mut v=serde_json::to_value(state()).unwrap();v["minimized"]=serde_json::json!(true);assert!(serde_json::from_value::<WindowState>(v).is_err());}
+ #[test]fn corrupt_state_falls_back_and_no_minimized_field(){let mut s=state();s.dpi=0;let p=placement(Some(s),&[monitor(0,96)]).unwrap();assert!(!p.maximized);assert_eq!(p.normal.width,1200);assert_eq!(p.normal.height,860);let laptop=Monitor{work:Rect{x:0,y:0,width:1920,height:1032},dpi:120,primary:true};let lp=placement(None,&[laptop]).unwrap();assert!(lp.normal.height<=888&&(lp.normal.width*43/60-lp.normal.height).abs()<=1);let mut v=serde_json::to_value(state()).unwrap();v["minimized"]=serde_json::json!(true);assert!(serde_json::from_value::<WindowState>(v).is_err());}
  #[test]fn debounce_is_one_worker_and_close_cancels_pending(){let now=Instant::now();let mut d=Debounce::default();assert!(d.changed(now));assert!(!d.changed(now+Duration::from_millis(400)));assert!(matches!(d.poll(now+Duration::from_millis(501)),Poll::Wait(_)));assert_eq!(d.poll(now+Duration::from_millis(901)),Poll::Save);assert_eq!(d.poll(now+Duration::from_secs(2)),Poll::Idle);assert!(d.changed(now));d.cancel();assert_eq!(d.poll(now+Duration::from_secs(2)),Poll::Idle);}
  #[test]fn normal_user_store_roundtrip_and_reject_bad_state(){let p=std::env::temp_dir().join(format!("kat-window-{}",std::process::id()));let store=Store::new(p.clone()).unwrap();save(&store,&state()).unwrap();assert_eq!(load(&store).unwrap(),Some(state()));store.write(FILE,b"{",4096).unwrap();assert!(load(&store).is_err());std::fs::remove_dir_all(p).unwrap();}
 }

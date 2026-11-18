@@ -15,6 +15,7 @@ import { host } from '../client/ipc';
 import { stateLabel } from '../client/types';
 import type { Client } from '../client/useClient';
 import type { Theme } from '../lib/theme';
+import type { UiScale } from '../lib/scale';
 
 export type SettingsSection = 'general' | 'network' | 'dns' | 'kernel' | 'updates';
 
@@ -123,6 +124,8 @@ export function Settings({
   c,
   theme,
   onTheme,
+  uiScale,
+  onUiScale,
   updates,
   section,
   onSection,
@@ -131,6 +134,8 @@ export function Settings({
   updates: SoftwareUpdateController;
   theme: Theme;
   onTheme: (t: Theme) => void;
+  uiScale?: UiScale;
+  onUiScale?: (s: UiScale) => void;
   section?: SettingsSection;
   onSection?: (s: SettingsSection) => void;
 }) {
@@ -238,6 +243,26 @@ export function Settings({
                   ]}
                 />
               </div>
+
+              {uiScale != null && onUiScale && (
+                <div className="set-row">
+                  <span className="set-row-copy">
+                    <b>界面缩放</b>
+                    <small>整体调节文字、卡片与控件大小（支持快捷键 Ctrl + / - / 0）</small>
+                  </span>
+                  <Segmented
+                    size="sm"
+                    value={String(uiScale) as '100' | '110' | '115' | '125'}
+                    onChange={(v) => onUiScale(Number(v) as UiScale)}
+                    options={[
+                      { value: '100', label: '100%' },
+                      { value: '110', label: '110%' },
+                      { value: '115', label: '115%' },
+                      { value: '125', label: '125%' },
+                    ]}
+                  />
+                </div>
+              )}
 
               <div className="set-row">
                 <span className="set-row-copy">

@@ -1,8 +1,8 @@
 {
-  "candidate": "v0.2.22-windows-core-v0.8.15",
-  "app_version": "0.2.22",
+  "candidate": "v0.2.23-windows-core-v0.8.15",
+  "app_version": "0.2.23",
   "windows_clientcore_version": "0.8.15",
-  "sequence": 1794903000,
+  "sequence": 1794904000,
   "core_source_fingerprint": "04a81276f5f663a48f9cfb4fac548cf4950f207d0c9df3893e0069736d3f7a8e",
   "core_build_commit": "04a81276f5f663a48f9cfb4fac548cf4950f207d",
   "core_build_commit_kind": "exact core source fingerprint first40, not a Git commit",
@@ -12,31 +12,31 @@
       "sha256": "ce44c30e612c68d7c13bd379280f4e95c401f411ded85d1087eb9a5c7aed7699"
     },
     "kat-desktop.exe": {
-      "bytes": 11964416,
-      "sha256": "c05766ff1a6707c37b73145fffe012d9919c681f97a658470c5707ae88c40053"
+      "bytes": 11964928,
+      "sha256": "7f3014f470c623718291d392b0bba54016e350f7451ce8b762fef95bdacd5fd9"
     },
     "kat-elevate-helper.exe": {
       "bytes": 569856,
-      "sha256": "a1939b3434ddd1a10f8fdc01ee145a4b65d6cef20934f30fafb713ca26bbc5b7"
+      "sha256": "4ccbc9a3c6d3168bf5dd570b772d58fe2b36d6dedc099d51c959a0e9646ae5d1"
     },
     "kat-install-helper.exe": {
       "bytes": 1359872,
-      "sha256": "4583d1e5b65520fe6dd5446c13f6819c9d6e2e208e14de88241f383e5d04919d"
+      "sha256": "11613c3925b637fb70d7cff4c2e567d05b895d9d4903fa4945158b140a7625be"
     },
     "kat-network-service.exe": {
       "bytes": 1880064,
-      "sha256": "e297c7b156aef38c258b3b393642dbc80d8f34dc3ed96ab121365629a70540d3"
+      "sha256": "1ca829c4bbca35f40f7118142c439677cf6a4099523ed4f0f9e7705fd184898e"
     },
     "kat-proxy-watchdog.exe": {
       "bytes": 465408,
-      "sha256": "260feff61fdf55973be454eafbf87f5702465f3cf43397b5966eed3e71441e55"
+      "sha256": "0ebf180d377d1b13b92a71d31b52e9fa79192595d61796bb5023dc1656b1b8ed"
     }
   },
   "signature_key_id": "0afa646ee76f17d8",
-  "package_auth_sha256": "6cdbd290747f95a42c8e09d88e112eee7fa9a7f662b58cd0f9287de0d2ea10d3",
-  "package_auth_signature_sha256": "f9eced23b4d6e28d16edcd9311e4046cc82ff993680bb7b57e6358b3e178dec0",
-  "source_manifest_sha256": "4da9eba697f3c7ff8a96acce3dd9f4cf2d29d7e591f7864be89d2ce4e8233923",
-  "source_manifest_members": 2145,
+  "package_auth_sha256": "17d2d05518d7f7e33472833676d4579ad17282e269beef6cc6059f620d8284b9",
+  "package_auth_signature_sha256": "0552fc87ff1504c91f2e1aa4c5649e0e11efe610b0741b0dda146b29f21431b3",
+  "source_manifest_sha256": "df6dbaae8c2a3da4526a488ffafb18c15f7faae2c8ee8d17e0305830a617d4ae",
+  "source_manifest_members": 2146,
   "validation": {
     "all_targeted_checks_passed": true,
     "new_failures": [],
@@ -46,7 +46,6 @@
       "passed": 312,
       "failed": 0,
       "ignored": 2,
-      "quota_free_update_403_tests": "passed (0 API hits, 15 historical Core tags skipped, ETag 304 hit, tampered sig/tag rejected)",
       "vendor_wintun_verify": "passed"
     },
     "frontend": {

@@ -128,7 +128,7 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
               {services.map(({ name, row: x }) => (
                 <div className="unlock-row" role="listitem" key={name}>
                   <span className="service-cell">
-                    <ServiceIcon name={name} size={16} />
+                    <ServiceIcon name={name} size={18} />
                     <span className="service-name">{name}</span>
                   </span>
                   <span className="unlock-node" {...tip((x?.chain ?? []).map(c.label).join(' → '), true)}>

@@ -15,7 +15,7 @@ export interface Bar {
   elapsed?: boolean;
 }
 
-const PAD = { l: 0, r: 48, t: 8, b: 18 };
+const PAD = { l: 0, r: 58, t: 8, b: 22 };
 const known = (v: number | null | undefined): v is number => v != null && Number.isFinite(v) && v >= 0;
 const totalOf = (d: Bar) => {
   if (known(d.proxy) || known(d.direct)) return (known(d.proxy) ? d.proxy : 0) + (known(d.direct) ? d.direct : 0);
@@ -33,7 +33,7 @@ export function WeekBars({
 }) {
   const clipPrefix = 'wb-clip-' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const [ref, { w, h }] = useSize<HTMLDivElement>();
-  const height = fixed ?? Math.max(108, h);
+  const height = fixed ?? Math.max(98, h);
   const [hover, setHover] = useState<{ index: number; anchor: TipAnchor } | null>(null);
   const { unit, label, top, ticks } = byteAxis(data.map((d) => totalOf(d) ?? NaN));
   const yMax = Math.max(1, top * unit);

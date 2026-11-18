@@ -1,5 +1,5 @@
 import { NetworkDiagnostics } from '../components/NetworkDiagnostics';
-import { parseConnectionRule, policyColor, topConnections } from '../client/presentation';
+import { parseConnectionRule, topConnections } from '../client/presentation';
 import { useRef, useState } from 'react';
 import { Icon } from '../components/Icon';
 import { DomainIcon } from '../components/EntityIcons';
@@ -194,13 +194,16 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
   });
   const distTotal = distribution.reduce((sum, d) => sum + d.value, 0);
 
-  // Domain ranking aggregation synced with usageRange
+  // Domain ranking aggregation synced with usageRange (strict per-window isolation across midnight)
   const domainAgg = new Map<string, DomainRankItem>();
+  const sevenDaysStart = new Date(nowDate);
+  sevenDaysStart.setDate(nowDate.getDate() - 6);
+  const sevenDaysStartStr = sevenDaysStart.toLocaleDateString('en-CA');
   const relevantDays =
     usageRange === 'today'
       ? dailyList.filter((d) => d.date === todayStr)
       : usageRange === '7d'
-        ? dailyList.slice(-7)
+        ? dailyList.filter((d) => d.date >= sevenDaysStartStr && d.date <= todayStr)
         : dailyList.filter((d) => d.date.startsWith(currentMonthPrefix));
 
   let maxRecordedDomainCount = 0;
@@ -217,7 +220,8 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
       domainAgg.set(dom.name, prev);
     }
   }
-  if (domainAgg.size === 0 && (t?.domains?.length ?? 0) > 0) {
+  const useRuntimeDomainFallback = dailyList.length === 0 && (t?.domains?.length ?? 0) > 0;
+  if (useRuntimeDomainFallback) {
     for (const dom of t!.domains!) {
       const sp = splitDayTraffic(dom);
       if (sp.total > 0) {
@@ -226,7 +230,9 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
     }
   }
   const domainRankList = [...domainAgg.values()].sort((a, b) => b.total - a.total || (a.name < b.name ? -1 : 1));
-  const totalDomainCount = Math.max(maxRecordedDomainCount, domainRankList.length, t?.domains?.length ?? 0);
+  const totalDomainCount = useRuntimeDomainFallback
+    ? Math.max(domainRankList.length, t?.domains?.length ?? 0)
+    : Math.max(maxRecordedDomainCount, domainRankList.length);
 
   // Rule hits with real configured group icons & unified colors
   const groupColorMap = new Map(distribution.map((d) => [d.label, d.color]));
@@ -443,7 +449,6 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
             const chain = x.chain ?? [];
             const rawExit = chain.at(-1);
             const exit = chain.length ? (rawExit === 'direct' ? 'direct' : c.label(rawExit)) : null;
-            const exitColor = rawExit ? policyColor(rawExit, s, c.label) : undefined;
             const target = x.dest_host || x.host || x.target;
             const parsedRule = parseConnectionRule(x.rule);
             const hoverDetail = [
@@ -469,9 +474,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
                   <DomainIcon domain={target} ip={x.dest_ip} rule={x.rule} size="sm" />
                   <span className="ac-target">{target || '—'}</span>
                 </span>
-                <span className="ac-exit" style={exitColor && exitColor !== '#64748B' ? { color: exitColor } : undefined}>
-                  {exit || '—'}
-                </span>
+                <span className="ac-exit">{exit || '—'}</span>
                 <span className={'ac-rate num' + (!spd ? ' is-zero' : '')}>{spdText}</span>
               </button>
             );

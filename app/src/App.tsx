@@ -17,6 +17,7 @@ import { useClient } from './client/useClient';
 import { configurationMeta } from './client/daily';
 import { exitChain } from './client/display';
 import { useTheme } from './lib/theme';
+import { useUiScale } from './lib/scale';
 import { useSidebar } from './lib/sidebar';
 import { SelectPopover } from './components/SelectPopover';
 import { TooltipHost } from './components/Tooltip';
@@ -61,6 +62,7 @@ export default function App() {
   const [selectedGroupName, setSelectedGroupName] = useState<string | null>(null);
 
   const [theme, setTheme] = useTheme();
+  const [uiScale, setUiScale] = useUiScale();
   const c = useClient();
   const sidebar = useSidebar();
 
@@ -191,6 +193,8 @@ export default function App() {
                     updates={updates}
                     theme={theme}
                     onTheme={setTheme}
+                    uiScale={uiScale}
+                    onUiScale={setUiScale}
                     section={settingsSection}
                     onSection={setSettingsSection}
                   />

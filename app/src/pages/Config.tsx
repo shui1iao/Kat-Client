@@ -21,7 +21,7 @@ import { Icon } from '../components/Icon';
 import { convertDocument, editDocument, formatDocument, parseDocument, readDocument } from '../client/document';
 import type { Client } from '../client/useClient';
 
-const LINE = 20;
+const LINE = 22;
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 function highlight(src: string, format: DocumentFormat): string {
