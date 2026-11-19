@@ -136,6 +136,8 @@ func strip(ctx context.Context) context.Context {
 	ctx = outbound.WithEndpointIndependent(ctx, false)
 	// Carrier traffic is not the protected DNS target itself.
 	ctx = context.WithValue(ctx, protectedDNSKey{}, false)
+	// Carrier dials must never inherit a client target's sniff override fallback.
+	ctx = context.WithValue(ctx, sniffOrigTargetKey{}, sniffOrigTarget{})
 	ctx = context.WithValue(ctx, bootstrapDNSKey{}, true)
 	ctx = context.WithValue(context.WithValue(ctx, clientKey{}, false), hopsKey{}, (*hops)(nil))
 	return outbound.WithDialObserver(ctx, nil)

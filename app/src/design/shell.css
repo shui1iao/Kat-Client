@@ -4,7 +4,7 @@
    ========================================================================== */
 
 .app {
-  height: 100vh;
+  height: calc(100vh / var(--browser-zoom, 1));
   background: var(--window-material);
   display: flex;
   flex-direction: column;
@@ -83,7 +83,6 @@
 
 .sidebar-toggle:hover {
   background: var(--hover);
-  color: var(--text);
 }
 
 .sidebar-collapsed .sidebar-toggle {
@@ -179,7 +178,6 @@
 
 .navcard:hover {
   background: var(--hover);
-  color: var(--text);
 }
 
 .navcard.active,
@@ -387,7 +385,6 @@
 
 .ss-restart:hover:not(:disabled) {
   background: var(--press);
-  color: var(--text);
 }
 
 .ss-l2 {
@@ -524,10 +521,6 @@
   color: var(--text-3);
   transition: color var(--t-fast) var(--ease);
   white-space: nowrap;
-}
-
-.mode-seg > button:hover:not(.on):not(:disabled) {
-  color: var(--text);
 }
 
 .mode-seg > button.on {
@@ -670,11 +663,6 @@
   transition: transform var(--t) var(--ease);
 }
 
-.net-switch:hover:not(:disabled) {
-  color: var(--text);
-  background: transparent;
-}
-
 .net-switch:hover:not(:disabled):not(.on) .ns-track {
   background: color-mix(in srgb, var(--ns-track-off) 82%, var(--text) 18%);
 }
@@ -743,7 +731,6 @@
 
 .winbtns button:hover:not(:disabled) {
   background: var(--hover);
-  color: var(--text);
 }
 
 .winbtns button.close:hover:not(:disabled) {

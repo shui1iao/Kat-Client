@@ -27,6 +27,29 @@ import (
 
 var errUnknownOutbound = errors.New("routing selected an unknown outbound")
 
+type sniffOrigTargetKey struct{}
+
+type sniffOrigTarget struct {
+	overrideHost string
+	origAddr     outbound.Addr
+}
+
+func withSniffOrigTarget(ctx context.Context, overrideHost string, orig outbound.Addr) context.Context {
+	return context.WithValue(ctx, sniffOrigTargetKey{}, sniffOrigTarget{overrideHost: overrideHost, origAddr: orig})
+}
+
+// sniffDirectLeaf preserves the original resolved IP when a strategy group
+// selects the built-in direct leaf for a sniff-overridden TCP connection.
+type sniffDirectLeaf struct{ outbound.Outbound }
+
+func (d sniffDirectLeaf) DialTCP(ctx context.Context, a outbound.Addr) (net.Conn, error) {
+	if orig, ok := ctx.Value(sniffOrigTargetKey{}).(sniffOrigTarget); ok &&
+		orig.overrideHost != "" && a.Port == orig.origAddr.Port && strings.EqualFold(a.Host, orig.overrideHost) {
+		return d.Outbound.DialTCP(ctx, orig.origAddr)
+	}
+	return d.Outbound.DialTCP(ctx, a)
+}
+
 // rejectOutbound is the built-in "reject" member (select groups may use it).
 type rejectOutbound struct{}
 
@@ -117,7 +140,7 @@ func (s *Server) buildRouting() (*routingRuntime, error) {
 		// Policy.Control marks unsafe bind failures itself; a missing address
 		// family or ordinary UDP socket budget failure is not a global lease loss.
 	}
-	rt.nodes["direct"] = direct.New(do)
+	rt.nodes["direct"] = sniffDirectLeaf{Outbound: direct.New(do)}
 	if c.clientDNS != nil && c.clientEgress != nil {
 		boot := do
 		boot.Resolve = s.bootstrapLookup
@@ -338,11 +361,22 @@ func (s *Server) decide(ctx context.Context, network string, a Address, src neti
 		m.SrcPort, m.InPort, m.InName, m.InType = im.srcPort, im.port, im.name, im.typ
 	}
 	var sn *sniffResult
+	var proxyOverrideHost string
 	if sn = sniffOf(ctx); sn != nil {
 		m.Protocol = sn.proto
-		a = sniffTarget(ctx, a)
 		if sn.host != "" {
 			m.SniffHost = sn.host
+		}
+		overridden := sniffTarget(ctx, a)
+		if overridden != a {
+			if origIP, err := netip.ParseAddr(a.Host); err == nil && !origIP.Unmap().IsLoopback() {
+				// Preserve already-resolved public IPs during route evaluation and direct
+				// dialing to avoid redundant DNS queries and overseas DoH IP replacement;
+				// apply the sniffed domain when forwarding to a proxy outbound.
+				proxyOverrideHost = overridden.Host
+			} else {
+				a = overridden
+			}
 		}
 	}
 	if ip, e := netip.ParseAddr(a.Host); e == nil {
@@ -370,6 +404,11 @@ func (s *Server) decide(ctx context.Context, network string, a Address, src neti
 			if name := v.(*ClientDiagnostic).group; name != "" {
 				if s.rt == nil || s.rt.nodes[name] == nil {
 					return d, host, errUnknownOutbound
+				}
+				if proxyOverrideHost != "" {
+					if dn, err := dnsName(proxyOverrideHost); err == nil {
+						host = dn
+					}
 				}
 				return route.Decision{Kind: route.Proxy, Outbound: name}, host, nil
 			}
@@ -411,6 +450,11 @@ func (s *Server) decide(ctx context.Context, network string, a Address, src neti
 	case route.Proxy:
 		if s.rt == nil || s.rt.nodes[d.Outbound] == nil {
 			return d, host, errUnknownOutbound
+		}
+		if proxyOverrideHost != "" {
+			if name, err := dnsName(proxyOverrideHost); err == nil {
+				host = name
+			}
 		}
 	}
 	return d, host, nil

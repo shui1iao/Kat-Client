@@ -697,5 +697,5 @@ fn r1_r2_display_version_production_wiring_contract() {
  // 4. DisplayVersion uses env!("CARGO_PKG_VERSION") == 0.2.20, never hardcoded "0.1.0".
  assert!(!iapp.contains("\"0.1.0\""));
  assert!(iapp.contains("(\"DisplayVersion\",env!(\"CARGO_PKG_VERSION\").into())"));
- assert_eq!(kat_host::update_handoff_protocol::DISPLAY_VERSION, "0.2.24");
+ assert_eq!(kat_host::update_handoff_protocol::DISPLAY_VERSION, "0.2.25");
 }

@@ -143,7 +143,6 @@
 
 .btn.ghost:hover:not(:disabled) {
   background: var(--hover);
-  color: var(--text);
   box-shadow: none;
 }
 
@@ -180,7 +179,6 @@
 
 .ib:hover:not(:disabled) {
   background: var(--hover);
-  color: var(--text);
 }
 
 .ib.danger:hover:not(:disabled) {
@@ -219,11 +217,6 @@ input[type="number"]::-webkit-outer-spin-button {
   font-size: var(--fs-body);
   outline: none;
   transition: background-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
-}
-
-.inp:hover:not(:disabled):not(:focus) {
-  background-color: var(--hover);
-  box-shadow: inset 0 0 0 1px var(--line-2);
 }
 
 .inp:focus {
@@ -300,11 +293,6 @@ select.inp.display-sort {
   min-width: 112px;
   max-width: 300px;
   transition: background-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
-}
-
-.search:hover:not(:focus-within) {
-  background-color: var(--hover);
-  box-shadow: inset 0 0 0 1px var(--line-2);
 }
 
 .search:focus-within {
@@ -393,10 +381,6 @@ select.inp.display-sort {
   border-radius: 4px;
 }
 
-.seg > button:hover:not(.on):not(:disabled) {
-  color: var(--text-2);
-}
-
 .seg > button.on {
   color: var(--text);
 }
@@ -436,10 +420,6 @@ select.inp.display-sort {
   transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
-.pill-bar button:hover:not(.on):not(:disabled) {
-  color: var(--text-2);
-}
-
 .pill-bar button.on {
   background: var(--hig-thumb);
   box-shadow: var(--hig-thumb-shadow);
@@ -466,7 +446,6 @@ select.inp.display-sort {
 
 .pick:hover:not(.on) {
   background: var(--hover);
-  color: var(--text);
 }
 
 .pick.on {
@@ -1025,10 +1004,13 @@ select.inp.display-sort {
   transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
-.kat-opt.active,
-.kat-opt:hover:not(:disabled) {
+.kat-opt.active {
   background: var(--hover);
   color: var(--text);
+}
+
+.kat-opt:hover:not(:disabled) {
+  background: var(--hover);
 }
 
 .kat-opt.cur {

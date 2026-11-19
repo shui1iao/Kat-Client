@@ -231,6 +231,7 @@ export function Policies({
                   </span>
                   <span className="pc-summary" {...tip(groupSummary(g.type, routeSummary), true)}>
                     <span className={'pc-type t-' + g.type}>{groupTypeLabel(g.type)}</span>
+                    <i className="pc-type-sep" aria-hidden="true">·</i>
                     <span className="pc-current">
                       {routeHops.map((hop, i) => (
                         <span key={i} className={'pc-hop' + (i === routeHops.length - 1 ? ' is-leaf' : '')}>
@@ -251,7 +252,7 @@ export function Policies({
                         {...tip(`${healthy} / ${health.length} 个成员可用`)}
                       >
                         {health.slice(0, 12).map((h) => (
-                          <i key={h.name} className={'hd-' + h.tone + (h.on ? ' on' : '')} />
+                          <i key={h.name} className={'hd-' + h.tone} />
                         ))}
                         {health.length > 12 && <em>+{health.length - 12}</em>}
                       </span>

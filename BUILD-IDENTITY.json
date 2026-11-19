@@ -1,54 +1,56 @@
 {
-  "candidate": "v0.2.24-windows-core-v0.8.15",
-  "app_version": "0.2.24",
-  "windows_clientcore_version": "0.8.15",
-  "sequence": 1794905000,
-  "core_source_fingerprint": "04a81276f5f663a48f9cfb4fac548cf4950f207d0c9df3893e0069736d3f7a8e",
-  "core_build_commit": "04a81276f5f663a48f9cfb4fac548cf4950f207d",
+  "candidate": "v0.2.25-windows-core-v0.8.16",
+  "app_version": "0.2.25",
+  "windows_clientcore_version": "0.8.16",
+  "sequence": 1794906000,
+  "core_source_fingerprint": "1ddd03e186b08e6d094c7b512be745c94deb601f23f005f9d7ada26e78af7697",
+  "core_build_commit": "1ddd03e186b08e6d094c7b512be745c94deb601f",
   "core_build_commit_kind": "exact core source fingerprint first40, not a Git commit",
   "executables": {
     "kat-client-core.exe": {
-      "bytes": 17570304,
-      "sha256": "ce44c30e612c68d7c13bd379280f4e95c401f411ded85d1087eb9a5c7aed7699"
+      "bytes": 17577984,
+      "sha256": "8e39c373fdf0d511374fd35e9470ed8aaeca3bb310e38015a5182dac02c9cd2a"
     },
     "kat-desktop.exe": {
       "bytes": 11970048,
-      "sha256": "d702d6bbad2e989e0e6c3696a0dcf6f0a5da6f24971b0b550ea03ef5058a82fa"
+      "sha256": "361b061d7a93d6870c3f29bfb7a29055f253248ef1612d473f783a37145e4569"
     },
     "kat-elevate-helper.exe": {
       "bytes": 569856,
-      "sha256": "fb8d6f3a970a9db2d32813e19f3f979f7af893c01a22336b91064742204dcd90"
+      "sha256": "1c0f089af0e5e97d428b7703878bca8dfcaaefe5e77296af16ec6846a5eba3d2"
     },
     "kat-install-helper.exe": {
       "bytes": 1359872,
-      "sha256": "6a4661c6f715c9db18cce4cb909a8a56879144562866a82b075b188879799d34"
+      "sha256": "2a9430be33f3148cea247277a7061154ef1a9884bdd489fd9f3397dfdaa44147"
     },
     "kat-network-service.exe": {
       "bytes": 1880064,
-      "sha256": "0c2a8b3400d869eb1b8dc5e36abcfe5e17d7434dd65929087a71ea03d72eff32"
+      "sha256": "a1e269a5a3ac42ddcedca2fb8d3e02419d7b6742ee982afed2f19d5a0bd3928a"
     },
     "kat-proxy-watchdog.exe": {
       "bytes": 465408,
-      "sha256": "c21309a2998db05fb2f77f71a893f591d3fc7a784154e39cd112ad9c00a67382"
+      "sha256": "17994cd84fb9731f1bce4616e65265cdc92b429fbe652e79acc9e62a9c914fe0"
     }
   },
   "signature_key_id": "0afa646ee76f17d8",
-  "package_auth_sha256": "981771031097556b32c1fa822350d2dbc0654f9e03bd0be93ee5f903ab01a914",
-  "package_auth_signature_sha256": "a1ee346ebc31375477361211f359ed9f966045af600eef349db123f11e2c0e67",
-  "source_manifest_sha256": "9f87977409d2b5b74b5c65a80878c642ed4da791bc5748941ba9c0bc94c25366",
-  "source_manifest_members": 2146,
+  "package_auth_sha256": "26e2ca8f59ec1f30101d196b8c27f2aa08b358615ec42662b5a2b9773374eca5",
+  "package_auth_signature_sha256": "8dba5e2a5f5f2886dd013dca18215cd95f49e517f73123cdf62b31c3ce2dd07d",
+  "source_manifest_sha256": "e6ac906f48bc7fae35364bb29cd6d21a72fd95c75ac3e0dfccb32a8d0a2e5a54",
+  "source_manifest_members": 2147,
   "validation": {
-    "client_version": "0.2.24",
-    "core_version": "0.8.15",
-    "sequence": 1794905000,
-    "core_source_fingerprint": "04a81276f5f663a48f9cfb4fac548cf4950f207d0c9df3893e0069736d3f7a8e",
-    "frontend_typecheck": "passed",
-    "frontend_build": "passed",
-    "rust_lib_tests": "276 passed; 0 failed; 1 ignored",
-    "rust_control_contract_tests": "12 passed; 0 failed",
-    "playwright_preview_checks": "passed (1040x680 & 1180x800 light/dark, 0 console/page errors)",
+    "client_version": "0.2.25",
+    "core_version": "0.8.16",
+    "sequence": 1794906000,
+    "core_source_fingerprint": "1ddd03e186b08e6d094c7b512be745c94deb601f23f005f9d7ada26e78af7697",
     "all_targeted_checks_passed": true,
     "new_failures": [],
+    "checks": {
+      "gpt_6_2_sol_independent_review": "passed (round 2 after P0/P1/P2 fixes)",
+      "go_core_tests": "go test ./internal/kernel/... ./internal/route/... ./internal/clientcore/... passed (including TestSniffOverridePublicIPDirectGroupAndProxyZeroExtraDNS)",
+      "rust_host_tests": "cargo test --offline --locked --lib r1_r2_regression_tests & --test control-contract passed",
+      "frontend_build": "npm run build (tsc --noEmit -p . && node build.mjs) passed",
+      "windows_x64_cross_build": "all 6 Windows amd64 roles built cleanly"
+    },
     "real_product_package_validator": "passed"
   }
 }

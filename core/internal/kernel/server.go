@@ -500,9 +500,9 @@ func (s *Server) dial(ctx context.Context, a Address) (conn net.Conn, err error)
 	s.counters.Dials.Add(1)
 	defer func() { s.dialSlots.release(); s.counters.Dials.Add(-1) }()
 	f := flowOf(parent)
-	// override_destination: an IP target becomes the sniffed domain.
-	a = sniffTarget(parent, a)
 	if !s.networkPolicy() {
+		// override_destination: an IP target becomes the sniffed domain.
+		a = sniffTarget(parent, a)
 		f.route(0, []string{"direct"})
 		c, e := s.directDialer().DialContext(ctx, "tcp", a.String())
 		if e == nil {
@@ -524,7 +524,12 @@ func (s *Server) dial(ctx context.Context, a Address) (conn net.Conn, err error)
 		return nil, e
 	}
 	if d.Kind == route.Proxy {
-		return s.dialProxy(parent, start, d.Outbound, host, a.Port)
+		proxyCtx := parent
+		orig := originalTarget(parent, a)
+		if origIP, err := netip.ParseAddr(orig.Host); err == nil && !origIP.Unmap().IsLoopback() && host != origIP.Unmap().String() {
+			proxyCtx = withSniffOrigTarget(parent, host, outbound.Addr{Host: origIP.Unmap().String(), Port: a.Port})
+		}
+		return s.dialProxy(proxyCtx, start, d.Outbound, host, a.Port)
 	}
 	blocked := 0
 	var lastDial error

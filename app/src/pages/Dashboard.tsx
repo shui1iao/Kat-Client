@@ -1,6 +1,6 @@
 import { NetworkDiagnostics } from '../components/NetworkDiagnostics';
 import { parseConnectionRule, topConnections } from '../client/presentation';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Icon } from '../components/Icon';
 import { DomainIcon } from '../components/EntityIcons';
 import { tip } from '../components/Tooltip';
@@ -8,8 +8,7 @@ import { Card, Segmented, useSize } from '../components/ui';
 import { SpeedChart } from '../charts/SpeedChart';
 import { WeekBars, type Bar } from '../charts/WeekBars';
 import { DomainRankList, TrafficDistribution, type DomainRankItem } from '../charts/TrafficDistribution';
-import { HitBars } from '../charts/HitBars';
-import { countStr, policySlices, showBytes, showRate, trafficSlices } from '../client/display';
+import { countStr, showBytes, showRate, trafficSlices } from '../client/display';
 import type { Client } from '../client/useClient';
 
 export type ConnTab = 'active' | 'closed';
@@ -159,9 +158,6 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
   }
 
   const rangeTotal = rangeDown + rangeUp;
-  const splitSum = rangeProxy + rangeDirect;
-  const proxyBarPct = splitSum > 0 ? (rangeProxy / splitSum) * 100 : 50;
-  const directBarPct = splitSum > 0 ? Math.max(0, 100 - proxyBarPct) : 50;
 
   // Policy distribution slices (reusing real configured group icons & types)
   const groupMeta = new Map<string, { icon?: string; type: string }>();
@@ -233,26 +229,6 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
   const totalDomainCount = useRuntimeDomainFallback
     ? Math.max(domainRankList.length, t?.domains?.length ?? 0)
     : Math.max(maxRecordedDomainCount, domainRankList.length);
-
-  // Rule hits with real configured group icons & unified colors
-  const groupColorMap = new Map(distribution.map((d) => [d.label, d.color]));
-  const ruleColors = useRef(new Map<string, number>());
-  for (const name of (t?.rule_targets ?? []).map((g) => g.name).sort()) {
-    if (!ruleColors.current.has(name)) ruleColors.current.set(name, ruleColors.current.size);
-  }
-  const rules = policySlices(t?.rule_targets).map((g) => {
-    const lbl = g.key === 'direct' ? 'direct' : c.label(g.key);
-    const meta = groupMeta.get(g.key) ?? groupMeta.get(lbl);
-    return {
-      ...g,
-      label: lbl,
-      iconUrl: meta?.icon,
-      groupType: g.key === 'direct' ? 'direct' : g.key === 'reject' ? 'reject' : (meta?.type ?? 'select'),
-      colorIndex: ruleColors.current.get(g.key)!,
-      color: groupColorMap.get(lbl) ?? groupColorMap.get(c.label(g.key)),
-    };
-  });
-  const rulesTotal = rules.reduce((sum, r) => sum + r.value, 0);
 
   const total = t?.total_down == null || t.total_up == null ? null : t.total_down + t.total_up;
   const items = s?.connections.items ?? [];
@@ -342,34 +318,18 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
             <div className="usage-big-total">
               <RateValue value={showBytes(t ? rangeTotal : null)} />
             </div>
-            <div className="usage-dir-pair">
-              <span className="usage-dl">↓ {showBytes(t ? rangeDown : null)}</span>
-              <span className="usage-ul">↑ {showBytes(t ? rangeUp : null)}</span>
+            <div className="usage-split-legend">
+              <span className="us-leg-item">
+                <i className="dot-proxy" />
+                <em className="txt-proxy">代理</em>
+                <b>{showBytes(t ? rangeProxy : null)}</b>
+              </span>
+              <span className="us-leg-item">
+                <i className="dot-direct" />
+                <em className="txt-direct">直连</em>
+                <b>{showBytes(t ? rangeDirect : null)}</b>
+              </span>
             </div>
-          </div>
-
-          <div className="usage-split-bar" role="img" aria-label={`代理 ${showBytes(rangeProxy)}，直连 ${showBytes(rangeDirect)}`}>
-            {splitSum > 0 ? (
-              <>
-                {rangeProxy > 0 && <i className="bar-proxy" style={{ width: `${proxyBarPct}%` }} />}
-                {rangeDirect > 0 && <i className="bar-direct" style={{ width: `${directBarPct}%` }} />}
-              </>
-            ) : (
-              <i className="bar-empty" />
-            )}
-          </div>
-
-          <div className="usage-split-legend num">
-            <span className="us-leg-item">
-              <i className="dot-proxy" />
-              <em className="txt-proxy">代理</em>
-              <b>{showBytes(t ? rangeProxy : null)}</b>
-            </span>
-            <span className="us-leg-item">
-              <i className="dot-direct" />
-              <em className="txt-direct">直连</em>
-              <b>{showBytes(t ? rangeDirect : null)}</b>
-            </span>
           </div>
         </div>
 
@@ -415,19 +375,6 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
               </span>
             </>
           )}
-        </footer>
-      </Card>
-
-      {/* Row 2 Right (Span 6): Rule Hits */}
-      <Card className="rule-hits-card ov-hits" title="规则命中" extra={<span className="card-note">本次运行</span>}>
-        <HitBars items={rules} running={!!running} />
-        <footer className="analytics-foot num">
-          <span>
-            共<b>{countStr(t?.rule_targets ? rulesTotal : null)}</b> 次
-          </span>
-          <span>
-            <b>{t?.rule_targets ? rules.length : '—'}</b> 个策略
-          </span>
         </footer>
       </Card>
 

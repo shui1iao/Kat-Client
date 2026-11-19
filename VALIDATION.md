@@ -1,8 +1,10 @@
-# Validation: Kat-Client v0.2.24 / Windows Core v0.8.15
+# Validation: Kat-Client 0.2.25 / Windows Core 0.8.16
 
-- Sequence: `1794905000` (client) / `1794902000` (core)
-- Core source fingerprint: `04a81276f5f663a48f9cfb4fac548cf4950f207d0c9df3893e0069736d3f7a8e` (matches Windows Core v0.8.15 byte-for-byte)
-- Frontend: `npx tsc --noEmit` & `npm run build` passed (0 errors)
-- Rust host tests: `cargo test --offline --locked --lib` (`276 passed; 0 failed; 1 ignored`) and `--test control-contract` (`12 passed; 0 failed`)
-- Offline UI visual & layout checks: Chromium Playwright verified `1040×680` & `1180×800` (light/dark) with 0 runtime errors, 0 vertical overflow on overview, `0.00px` label shift on top-bar switches, and equal-height subscription cards
-- Offline package gate: `kat-package-validator` (`update_manifest::verify_package`, key `0afa646ee76f17d8`) passed prior to NSIS 3.11 packaging
+- Sequence: `1794906000` (client `1794906000`, core `1794906000`)
+- Core source fingerprint: `1ddd03e186b08e6d094c7b512be745c94deb601f23f005f9d7ada26e78af7697`
+- Independent review: GPT-6.2 Sol two-round independent review passed with zero release blockers.
+- Go Core tests: `go test ./internal/kernel/... ./internal/route/... ./internal/clientcore/... -count=1` passed (including `TestSniffOverridePublicIPDirectGroupAndProxyZeroExtraDNS` verifying 0 extra DNS on direct rule, strategy group -> `direct` leaf, and proxy outbound with sniff override).
+- Rust Host tests: `r1_r2_regression_tests` (6 passed) and `control-contract` (`DISPLAY_VERSION == "0.2.25"`) passed.
+- Frontend build: `tsc --noEmit -p . && node build.mjs` passed.
+- Package gate: offline Ed25519 signature (`0afa646ee76f17d8`) verified by product `update_manifest::verify_package` before NSIS packaging.
+- Real-machine Windows WebView2 runtime check was not executed on this Linux build host.

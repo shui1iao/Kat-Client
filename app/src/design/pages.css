@@ -17,11 +17,10 @@
   height: 100%;
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-template-rows: minmax(216px, 1.25fr) minmax(230px, 1fr) minmax(110px, auto);
+  grid-template-rows: minmax(228px, 1.08fr) minmax(228px, 1fr);
   grid-template-areas:
-    "speed speed speed speed speed speed speed live live live live live"
-    "usage usage usage usage dest dest dest dest hits hits hits hits"
-    "diag diag diag diag diag diag diag diag diag diag diag diag";
+    "speed speed speed speed speed speed usage usage usage usage usage usage"
+    "dest dest dest dest live live live live diag diag diag diag";
   gap: var(--ov-gap);
   padding: 4px 22px 16px 14px;
   scrollbar-gutter: stable;
@@ -33,7 +32,6 @@
 .ov-live  { grid-area: live; }
 .ov-usage { grid-area: usage; }
 .ov-dest  { grid-area: dest; }
-.ov-hits  { grid-area: hits; }
 .ov-diag  { grid-area: diag; }
 
 .c12 { grid-column: span 12; }
@@ -178,18 +176,16 @@
 
 /* ---------- Usage ---------- */
 .usage-overview {
-  padding: 0 var(--ov-inset) 2px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  padding: 0 var(--ov-inset) 6px;
   flex: none;
 }
 
 .usage-top-row {
   display: flex;
-  align-items: flex-end;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 6px 16px;
 }
 
 .usage-big-total {
@@ -201,47 +197,10 @@
   white-space: nowrap;
 }
 
-.usage-dir-pair {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding-bottom: 2px;
-  font-size: var(--fs-meta);
-  color: var(--text-2);
-  line-height: 1.3;
-  white-space: nowrap;
-}
-
-.usage-dl::first-letter { color: var(--down); font-weight: 600; }
-.usage-ul::first-letter { color: var(--up); font-weight: 600; }
-.usage-dl,
-.usage-ul { display: block; }
-
-.usage-split-bar {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--track);
-  overflow: hidden;
-  display: flex;
-  gap: 2px;
-}
-
-.usage-split-bar i {
-  display: block;
-  height: 100%;
-  min-width: 3px;
-  border-radius: 2px;
-}
-
-.usage-split-bar .bar-proxy { background: var(--proxy); }
-.usage-split-bar .bar-direct { background: var(--direct); }
-.usage-split-bar .bar-empty { width: 100%; background: var(--track); }
-
 .usage-split-legend {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 14px;
   font-size: var(--fs-meta);
 }
 
@@ -449,7 +408,6 @@
 }
 
 .ac-extra-link:hover {
-  color: var(--text);
   background: var(--hover);
 }
 
@@ -534,18 +492,23 @@
   flex: none;
 }
 
+.diag-foot {
+  min-height: 38px;
+}
+
 .diagnostic-last {
   font-size: var(--fs-meta);
   color: var(--text-3);
   white-space: nowrap;
-  margin-right: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .diag-run-btn,
 .diag-add-btn {
-  height: 26px !important;
-  padding: 0 10px !important;
-  font-size: var(--fs-meta) !important;
+  height: 24px !important;
+  padding: 0 8px !important;
+  font-size: var(--fs-micro) !important;
 }
 
 .diag-body {
@@ -554,7 +517,7 @@
   min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 0 var(--ov-inset) 10px;
+  padding: 0 var(--ov-inset) 6px;
   display: flex;
   flex-direction: column;
 }
@@ -568,18 +531,6 @@
   gap: 2px;
 }
 
-.diag-list.diag-grid-2 {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-content: space-evenly;
-  column-gap: 34px;
-  row-gap: 0;
-  background-image: linear-gradient(var(--line), var(--line));
-  background-size: 1px calc(100% - 8px);
-  background-position: center center;
-  background-repeat: no-repeat;
-}
-
 .unlock-row,
 .conn-diag-row,
 .exit-row {
@@ -591,18 +542,13 @@
   border-bottom: 1px solid var(--line);
 }
 
-.diag-list:not(.diag-grid-2) > :last-child {
+.diag-list > :last-child {
   border-bottom: 0;
 }
 
-.diag-list.diag-grid-2 > :nth-last-child(1),
-.diag-list.diag-grid-2 > :nth-last-child(2):nth-child(odd) {
-  border-bottom: 0;
-}
-
-.unlock-row { grid-template-columns: 96px minmax(0, 1fr) 56px 60px; }
-.conn-diag-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 64px; }
-.exit-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 60px; }
+.unlock-row { grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 8px; }
+.conn-diag-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; }
+.exit-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; }
 
 .service-cell {
   display: inline-flex;
@@ -642,7 +588,17 @@
   white-space: nowrap;
 }
 
+.diagnostic-card > .card-h {
+  gap: 6px;
+  padding: 0 10px 0 14px;
+}
+
+.diagnostic-card > .card-h .seg.sm > button {
+  padding: 0 7px;
+}
+
 .diagnostic-result {
+  max-width: 108px;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: var(--fs-data);
@@ -687,6 +643,10 @@
 }
 
 .exit-group {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--text);
   font-weight: 500;
 }
@@ -799,21 +759,28 @@
 }
 
 /* Narrow workspace: stack the bands, keep pairs side by side where they fit */
-@container kat-workspace (max-width: 720px) {
+@container kat-workspace (max-width: 820px) {
   .overview-bento {
     grid-template-rows: none;
     grid-auto-rows: auto;
     grid-template-areas:
-      "speed speed speed speed speed speed speed speed speed speed speed speed"
-      "live live live live live live live live live live live live"
-      "usage usage usage usage usage usage dest dest dest dest dest dest"
-      "hits hits hits hits hits hits hits hits hits hits hits hits"
+      "speed speed speed speed speed speed usage usage usage usage usage usage"
+      "dest dest dest dest dest dest live live live live live live"
       "diag diag diag diag diag diag diag diag diag diag diag diag";
   }
-  .ov-speed { height: 236px; }
-  .ov-live, .ov-usage, .ov-dest, .ov-hits { height: 232px; }
-  .diag-list.diag-grid-2 { grid-template-columns: minmax(0, 1fr); background-image: none; }
-  .diag-list.diag-grid-2 > :nth-last-child(2):nth-child(odd) { border-bottom: 1px solid var(--line); }
+  .ov-speed, .ov-usage { height: 236px; }
+  .ov-live, .ov-dest, .ov-diag { height: 232px; }
+}
+
+@container kat-workspace (max-width: 560px) {
+  .overview-bento {
+    grid-template-areas:
+      "speed speed speed speed speed speed speed speed speed speed speed speed"
+      "usage usage usage usage usage usage usage usage usage usage usage usage"
+      "dest dest dest dest dest dest dest dest dest dest dest dest"
+      "live live live live live live live live live live live live"
+      "diag diag diag diag diag diag diag diag diag diag diag diag";
+  }
 }
 
 /* ==========================================================================
@@ -848,8 +815,7 @@
   max-width: 280px;
 }
 
-.pol-topbar .btn:not(.primary):hover:not(:disabled),
-.pol-topbar select.inp:hover:not(:disabled) {
+.pol-topbar .btn:not(.primary):hover:not(:disabled) {
   background-color: var(--hover);
 }
 
@@ -875,19 +841,6 @@
   flex: none;
   overflow: hidden;
   transition: box-shadow var(--t) var(--ease), border-color var(--t) var(--ease);
-}
-
-.pcard:hover {
-  border-color: var(--line-2);
-}
-
-.pcard.open {
-  border-color: var(--line-2);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.07), var(--shadow-card);
-}
-
-:root[data-theme="dark"] .pcard.open {
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32), var(--shadow-card);
 }
 
 .pc-head {
@@ -987,32 +940,31 @@
 .pc-summary {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
   font-size: var(--fs-meta);
   color: var(--text-3);
   min-width: 0;
   white-space: nowrap;
 }
 
-/* Type as a quiet capsule; only Smart gets a hint of colour (it decides by itself) */
+/* Flush-left plain text type label so line 2 aligns cleanly with the group title above */
 .pc-type {
   flex: none;
-  height: 18px;
-  padding: 0 7px;
-  border-radius: var(--r-pill);
-  display: inline-flex;
-  align-items: center;
-  font-size: var(--fs-micro);
+  font-size: var(--fs-meta);
   font-weight: 500;
-  color: var(--text-2);
-  background: var(--card-2);
-  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text-3);
+  line-height: 1.3;
 }
 
 .pc-type.t-smart {
   color: color-mix(in srgb, var(--proxy) 82%, var(--text));
-  background: color-mix(in srgb, var(--proxy) 11%, transparent);
-  box-shadow: none;
+}
+
+.pc-type-sep {
+  flex: none;
+  font-style: normal;
+  color: var(--text-3);
+  opacity: 0.55;
 }
 
 .pc-pinned {
@@ -1082,11 +1034,6 @@
 .pc-health i.hd-bad { background: var(--bad); }
 .pc-health i.hd-off { background: var(--line-3); }
 
-.pc-health i.on {
-  box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--accent);
-  margin: 0 2.5px;
-}
-
 .pc-health em {
   font-style: normal;
   font-size: var(--fs-micro);
@@ -1140,7 +1087,6 @@
 
 .pc-head:hover .pc-chev {
   background: var(--hover);
-  color: var(--text-2);
 }
 
 .pc-chev.open {
@@ -1179,8 +1125,8 @@
    Radii are concentric with the 14px card: 9px cells inside 16px padding. */
 .node-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+  gap: 10px;
   align-content: start;
 }
 
@@ -1189,9 +1135,9 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  column-gap: 8px;
-  height: 50px;
-  padding: 0 9px 0 13px;
+  column-gap: 10px;
+  height: 58px;
+  padding: 0 11px 0 15px;
   border-radius: var(--r-ctl);
   background: var(--card-2);
   cursor: pointer;
@@ -1199,7 +1145,7 @@
   transition: background-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
 
-.ntile:hover {
+.ntile:hover:not([aria-disabled="true"]) {
   background: var(--hover);
 }
 
@@ -1214,7 +1160,7 @@
 .nt-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 
@@ -1223,9 +1169,9 @@
   align-items: center;
   gap: 5px;
   min-width: 0;
-  font-size: var(--fs-body);
+  font-size: var(--fs-item);
   font-weight: 500;
-  line-height: 17px;
+  line-height: 18px;
   color: var(--text);
 }
 
@@ -1320,18 +1266,24 @@
   font-weight: 600;
 }
 
-/* Latency doubles as the per-member test button */
+/* Latency doubles as the per-member test button; hug actual text width (e.g. 失败 / — / 128 ms) */
 .nt-test {
   height: 24px;
-  min-width: 48px;
+  min-width: 0;
+  width: auto;
   padding: 0 6px;
   border-radius: 6px;
   font-size: var(--fs-meta);
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
+  white-space: nowrap;
   transition: background-color var(--t-fast) var(--ease);
+}
+
+.nt-test.spin {
+  min-width: 24px;
 }
 
 .nt-test:hover:not(:disabled) {
@@ -1615,10 +1567,6 @@
   box-shadow: inset 0 0 0 1px var(--line-2);
 }
 
-.policy-editor-v2 :is(.pe-details, .pe-members) .inp:hover:not(:disabled):not(:focus) {
-  background-color: rgba(255, 255, 255, 0.10);
-}
-
 .policy-editor-v2 :is(.pe-details, .pe-members) .inp:focus {
   background-color: rgba(255, 255, 255, 0.08);
   box-shadow: inset 0 0 0 1.5px var(--accent-line);
@@ -1642,7 +1590,6 @@
 
 .policy-editor-v2 .pe-details .pick:not(.on):hover {
   background: rgba(255, 255, 255, 0.11);
-  color: var(--text);
 }
 
 .policy-editor-v2 .pe-details .pick.on {
@@ -1655,11 +1602,6 @@
 :root[data-theme="light"] .policy-editor-v2 :is(.pe-details, .pe-members) .inp {
   background-color: rgba(255, 255, 255, 0.82);
   box-shadow: inset 0 0 0 1px var(--line-2);
-}
-
-:root[data-theme="light"] .policy-editor-v2 :is(.pe-details, .pe-members) .inp:hover:not(:disabled):not(:focus) {
-  background-color: rgba(255, 255, 255, 0.82);
-  box-shadow: inset 0 0 0 1px var(--line-3);
 }
 
 :root[data-theme="light"] .policy-editor-v2 :is(.pe-details, .pe-members) .inp:focus {
@@ -1685,7 +1627,6 @@
 
 :root[data-theme="light"] .policy-editor-v2 .pe-details .pick:not(.on):hover {
   background: var(--hover);
-  color: var(--text);
 }
 
 /* ==========================================================================
@@ -1860,8 +1801,7 @@
   transition: border-color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease);
 }
 
-.quick-import-card:focus-within,
-.quick-import-card:hover {
+.quick-import-card:focus-within {
   border-color: var(--line-2);
 }
 
@@ -2358,10 +2298,6 @@
   background: color-mix(in srgb, var(--card-2) 55%, transparent);
   font-size: var(--fs-meta);
   color: var(--text-3);
-}
-
-.res-row:not(.res-th):hover {
-  background: var(--hover);
 }
 
 .res-name {
@@ -2917,10 +2853,6 @@
   border-bottom: 1px solid var(--line);
 }
 
-.kernel-log-row:hover {
-  background: var(--hover);
-}
-
 .kernel-log-row time {
   color: var(--text-3);
   font-size: var(--fs-body);
@@ -2988,10 +2920,6 @@
   height: 39px;
   border-bottom: 1px solid var(--line);
   font-size: var(--fs-body);
-}
-
-.safe-log:hover {
-  background: var(--hover);
 }
 
 .safe-log time {
@@ -3107,7 +3035,6 @@
 
 .vsec:hover {
   background: var(--hover);
-  color: var(--text);
 }
 
 .vsec.is-active {
@@ -3198,7 +3125,6 @@
 
 .cfg-file-btns .btn:hover:not(:disabled) {
   background: var(--hover);
-  color: var(--text);
 }
 
 .cfg-file-btns .btn svg { color: var(--text-3); }
@@ -4053,10 +3979,6 @@
   font-size: var(--fs-body);
   border-bottom: 1px solid var(--line);
   transition: background 0.12s ease;
-}
-
-.dns-grid-row:hover {
-  background: var(--hover);
 }
 
 .dns-grid-row:last-child {
