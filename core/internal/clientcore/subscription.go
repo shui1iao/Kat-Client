@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/shui1iao/Kat/internal/clientegress"
 	"github.com/shui1iao/Kat/internal/kernel"
@@ -733,10 +734,11 @@ func (h *Host) previewSubscription(ctx context.Context, raw json.RawMessage) (an
 		f.RuleSets[i].Name = sub.SetNames[f.RuleSets[i].Name]
 	}
 	if e = validateFullGraph(f, h.workspace); e != nil {
+		reason := "配置校验未通过：" + quotedNameRx.ReplaceAllString(e.Error(), "[名称]")
 		if p.FullOnly {
-			return nil, fail("subscription_conflict", "graph", "订阅图引用校验失败，原配置已保留")
+			return nil, fail("subscription_format_unsupported", "graph", reason+"，原配置已保留")
 		}
-		preview.Issues = append(preview.Issues, "配置校验未通过："+quotedNameRx.ReplaceAllString(e.Error(), "[名称]"))
+		preview.Issues = append(preview.Issues, reason)
 		return preview, nil
 	}
 	for from, to := range sub.Names {
@@ -1359,6 +1361,12 @@ func (h *Host) fetchFull(ctx context.Context, url string, p *clientegress.Policy
 }
 
 func safeSubscriptionName(s string) string {
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
 	s = strings.Join(strings.Fields(s), "_")
 	s = strings.ReplaceAll(s, "=", "_")
 	if len(s) > 44 || s == "" {

@@ -82,7 +82,7 @@
   gap: 6px;
   flex: none;
   white-space: nowrap;
-  transition: background-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition: background-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease), color var(--t-fast) var(--ease), transform 90ms var(--ease);
 }
 
 .btn:hover:not(:disabled) {
@@ -91,6 +91,7 @@
 
 .btn:active:not(:disabled) {
   background: var(--press);
+  transform: scale(0.98);
 }
 
 .btn.sm {
@@ -105,14 +106,19 @@
 }
 
 .btn.primary {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, #FFFFFF 8%) 0%, var(--accent) 100%);
+  background-color: var(--accent);
   color: var(--on-accent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 1px 2px rgba(0, 122, 255, 0.20);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 122, 255, 0.20);
 }
 
 .btn.primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background-color: var(--accent-hover);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), 0 1px 3px rgba(0, 122, 255, 0.26);
+}
+
+.btn.primary:active:not(:disabled) {
+  background-color: color-mix(in srgb, var(--accent-hover) 88%, #000000 12%);
+  transform: scale(0.98);
 }
 
 .btn.danger {
@@ -125,6 +131,11 @@
   background: color-mix(in srgb, var(--bad) 22%, transparent);
 }
 
+.btn.danger:active:not(:disabled) {
+  background: color-mix(in srgb, var(--bad) 28%, transparent);
+  transform: scale(0.98);
+}
+
 .btn.primary.danger {
   background: var(--bad);
   color: #FFFFFF;
@@ -132,7 +143,12 @@
 }
 
 .btn.primary.danger:hover:not(:disabled) {
-  opacity: 0.92;
+  background-color: color-mix(in srgb, var(--bad) 90%, #000000 10%);
+}
+
+.btn.primary.danger:active:not(:disabled) {
+  background-color: color-mix(in srgb, var(--bad) 82%, #000000 18%);
+  transform: scale(0.98);
 }
 
 .btn.ghost {
@@ -174,11 +190,16 @@
   place-items: center;
   color: var(--text-3);
   flex: none;
-  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), transform 90ms var(--ease);
 }
 
 .ib:hover:not(:disabled) {
   background: var(--hover);
+}
+
+.ib:active:not(:disabled) {
+  background: var(--press);
+  transform: scale(0.95);
 }
 
 .ib.danger:hover:not(:disabled) {
@@ -219,7 +240,11 @@ input[type="number"]::-webkit-outer-spin-button {
   transition: background-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
 
-.inp:focus {
+:is(input, textarea).inp:focus {
+  box-shadow: inset 0 0 0 1.5px var(--accent-line);
+}
+
+:root:not([data-input="pointer"]) select.inp:focus-visible {
   box-shadow: inset 0 0 0 1.5px var(--accent-line);
 }
 
@@ -252,7 +277,6 @@ select.inp {
 }
 
 select.inp[data-open] {
-  background-color: var(--hover);
   box-shadow: inset 0 0 0 1.5px var(--accent-line);
 }
 
@@ -347,7 +371,7 @@ select.inp.display-sort {
   border-radius: 7.5px;
   background: var(--hig-thumb);
   box-shadow: var(--hig-thumb-shadow);
-  transition: left var(--t) var(--ease), width var(--t) var(--ease);
+  transition: left 200ms var(--ease-spring), width 200ms var(--ease-spring);
 }
 
 .seg.seg-sm > .seg-thumb {
@@ -506,7 +530,15 @@ select.inp.display-sort {
   will-change: transform;
   backface-visibility: hidden;
   transform: translate3d(0, 0, 0);
-  transition: transform var(--t) var(--ease);
+  transition: transform 200ms var(--ease-spring), width 120ms var(--ease);
+}
+
+.pref-toggle:active:not(:disabled):not([aria-disabled="true"]) .sw i {
+  width: 20px;
+}
+
+.pref-toggle:active:not(:disabled):not([aria-disabled="true"]) .sw.on i {
+  transform: translate3d(14px, 0, 0);
 }
 
 .sw.on {
@@ -701,6 +733,7 @@ select.inp.display-sort {
   display: grid;
   place-items: center;
   padding: 24px;
+  animation: kat-mask-in 140ms var(--ease);
 }
 
 .operation-error-mask {
@@ -717,6 +750,7 @@ select.inp.display-sort {
   flex-direction: column;
   overflow: hidden;
   outline: none;
+  animation: kat-modal-in 180ms var(--ease-spring);
 }
 
 .modal.modal-sm {

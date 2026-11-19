@@ -128,10 +128,10 @@ func TestRoutingCoreConfigSchema(t *testing.T) {
 		}
 		return `{` + rcInbound + `,"outbounds":[` + strings.Join(parts, ",") + `]}`
 	}
-	if e := loadJSON(t, many(256)); e != nil {
+	if e := loadJSON(t, many(1024)); e != nil {
 		t.Fatal("256 outbounds rejected:", e)
 	}
-	if e := loadJSON(t, many(257)); e == nil {
+	if e := loadJSON(t, many(1025)); e == nil {
 		t.Fatal("257 outbounds accepted")
 	}
 	groups := func(n int) string {
@@ -141,10 +141,10 @@ func TestRoutingCoreConfigSchema(t *testing.T) {
 		}
 		return `{` + rcInbound + `,"groups":[` + strings.Join(parts, ",") + `]}`
 	}
-	if e := loadJSON(t, groups(64)); e != nil {
+	if e := loadJSON(t, groups(128)); e != nil {
 		t.Fatal("64 groups rejected:", e)
 	}
-	if e := loadJSON(t, groups(65)); e == nil {
+	if e := loadJSON(t, groups(129)); e == nil {
 		t.Fatal("65 groups accepted")
 	}
 }

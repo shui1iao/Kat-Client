@@ -172,6 +172,7 @@
   --s5: 20px;
   --s6: 24px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --t-fast: 0.13s;
   --t: 0.19s;
   --t-slow: 0.24s;
@@ -354,6 +355,29 @@ time {
 :root:not([data-input="pointer"]) :is(button, input, select, textarea, a, [tabindex]):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+@keyframes kat-page-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes kat-mask-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes kat-modal-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.975); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @keyframes kat-spin {

@@ -312,11 +312,6 @@ export function Dns({
                 />
               </label>
               <span className="sp" />
-              {cleared !== null && (
-                <span className="card-note toolbar-status" role="status">
-                  已清除 {cleared} 条
-                </span>
-              )}
               <span className="muted num toolbar-count">
                 {cacheData ? `${cacheItems.length} / ${cacheData.capacity ?? 0} 条` : '0 条'}
               </span>
@@ -330,7 +325,7 @@ export function Dns({
                 disabled={!canClearDnsCache(running, c.busy)}
                 onClick={() => void clearAllCache()}
               >
-                清除缓存
+                <StableText current={cleared !== null ? `已清除 ${cleared} 条` : '清除缓存'} items={['清除缓存', '已清除 999 条']} />
               </button>
             </>
           )}
@@ -345,18 +340,13 @@ export function Dns({
                 {ipv6On ? 'IPv6 已开启' : 'IPv6 已关闭'}
               </span>
               <span className="sp" />
-              {cleared !== null && (
-                <span className="card-note toolbar-status" role="status">
-                  已清除 {cleared} 条
-                </span>
-              )}
               <button
                 type="button"
                 className="btn sm btn-fixed-md"
                 disabled={!canClearDnsCache(running, c.busy)}
                 onClick={() => void clearAllCache()}
               >
-                清除缓存
+                <StableText current={cleared !== null ? `已清除 ${cleared} 条` : '清除缓存'} items={['清除缓存', '已清除 999 条']} />
               </button>
             </>
           )}
@@ -415,7 +405,7 @@ export function Dns({
                           onClick={() => copyRecentAddr(e.seq, allIps)}
                           {...tip(extraCount > 0 ? `${allIps}（点击复制）` : `点击复制 ${primaryIp}`)}
                         >
-                          <code className="mono">{primaryIp}</code>
+                          <span className="dns-ip-val num">{primaryIp}</span>
                           {extraCount > 0 && <span className="dns-ip-more num">+{extraCount}</span>}
                           {copiedSeq === e.seq && <span className="dns-copied-badge">已复制</span>}
                         </button>
@@ -522,7 +512,7 @@ export function Dns({
                           onClick={() => copyCacheAddr(rowKey, allIps)}
                           {...tip(extraCount > 0 ? `${allIps}（点击复制）` : `点击复制 ${primaryIp}`)}
                         >
-                          <code className="mono">{primaryIp}</code>
+                          <span className="dns-ip-val num">{primaryIp}</span>
                           {extraCount > 0 && <span className="dns-ip-more num">+{extraCount}</span>}
                           {copiedKey === rowKey && <span className="dns-copied-badge">已复制</span>}
                         </button>

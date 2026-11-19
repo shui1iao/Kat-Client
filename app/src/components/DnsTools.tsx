@@ -86,7 +86,7 @@ export function DnsQuery({ c }: { c: Client }) {
               {reply.addresses.map((a) => (
                 <li key={a.type + a.addr}>
                   <i>{a.type}</i>
-                  <code>{a.addr}</code>
+                  <span className="dq-addr num">{a.addr}</span>
                 </li>
               ))}
             </ul>

@@ -73,24 +73,22 @@ function BypassForm({ c }: { c: Client }) {
 
       <LocalError text={error} />
 
-      {dirty && (
-        <div className="set-form-foot">
-          <button
-            className="btn sm"
-            type="button"
-            disabled={c.busy.has('preferences')}
-            onClick={() => {
-              draft.reset();
-              setError('');
-            }}
-          >
-            取消更改
-          </button>
-          <button className="btn sm primary" type="submit" disabled={c.busy.has('preferences')}>
-            保存绕过设置
-          </button>
-        </div>
-      )}
+      <div className="set-form-foot">
+        <button
+          className="btn sm"
+          type="button"
+          disabled={!dirty || c.busy.has('preferences')}
+          onClick={() => {
+            draft.reset();
+            setError('');
+          }}
+        >
+          取消更改
+        </button>
+        <button className="btn sm primary" type="submit" disabled={!dirty || c.busy.has('preferences')}>
+          保存绕过设置
+        </button>
+      </div>
     </form>
   );
 }

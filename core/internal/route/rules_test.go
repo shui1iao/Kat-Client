@@ -254,7 +254,7 @@ func TestValidateStrict(t *testing.T) {
 		{RuleSets: []RuleSetOptions{{Name: "s", Format: "domain", Path: "same"}}, GeoIP: &GeoIPOptions{Path: "same"}},
 	}
 	many := Options{}
-	for i := 0; i < 33; i++ {
+	for i := 0; i < 129; i++ {
 		many.RuleSets = append(many.RuleSets, RuleSetOptions{Name: "s" + itoa(i), Format: "domain", Path: "p" + itoa(i)})
 	}
 	bad = append(bad, many)
@@ -263,7 +263,7 @@ func TestValidateStrict(t *testing.T) {
 			t.Fatalf("bad options %d accepted: %+v", i, o)
 		}
 	}
-	many.RuleSets = many.RuleSets[:32]
+	many.RuleSets = many.RuleSets[:128]
 	if err := many.Validate(); err != nil {
 		t.Fatal("32 rule sets", err)
 	}

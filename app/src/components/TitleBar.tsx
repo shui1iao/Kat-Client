@@ -1,4 +1,3 @@
-import { SideControls } from './SideControls';
 import { tip } from './Tooltip';
 import { host } from '../client/ipc';
 import type { Client } from '../client/useClient';
@@ -18,12 +17,10 @@ export function TitleBar({
   c,
   title,
   meta,
-  onOpenGlobalGroup,
 }: {
   c: Client;
   title?: string;
   meta?: string;
-  onOpenGlobalGroup?: (groupName?: string) => void;
 }) {
   const action = (act: string) => void c.run('window', () => host('window_action', { action: act }));
   const drag = useWindowDrag(c);
@@ -35,7 +32,6 @@ export function TitleBar({
         {meta && <span className="page-meta num">{meta}</span>}
       </div>
       <div className="titlebar-spacer" />
-      <SideControls c={c} onOpenGlobalGroup={onOpenGlobalGroup} />
       <div className="winbtns">
         <button
           type="button"

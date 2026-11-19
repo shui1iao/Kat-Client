@@ -32,10 +32,11 @@ export function Diagnostics({
     setDays(c.desktop?.preferences.log_retention_days ?? 7);
   }, [c.desktop?.preferences.log_retention_days]);
 
-  const saveRetention = async () => {
+  const saveRetention = async (nextDays: 1 | 7 | 30) => {
+    setDays(nextDays);
     setRetentionError('');
     try {
-      if (!(await c.setPreferences({ log_retention_days: days }))) {
+      if (!(await c.setPreferences({ log_retention_days: nextDays }))) {
         setRetentionError('日志保留未能保存，请查看错误提示');
       }
     } catch (e) {
@@ -171,46 +172,30 @@ export function Diagnostics({
       )}
 
       {showSummary && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void saveRetention();
-          }}
-        >
+        <div>
           <label className="set-row" htmlFor="log-retention">
             <span className="set-row-copy">
               <b>日志保留时长</b>
               <small>仅保存精简诊断，最多 16 MiB</small>
             </span>
-            <div className="row-actions">
-              {days !== (c.desktop?.preferences.log_retention_days ?? 7) && (
-                <button
-                  className="btn primary sm"
-                  type="submit"
-                  disabled={!c.desktop || c.busy.has('preferences')}
-                >
-                  <StableText current={c.busy.has('preferences') ? '保存中' : '保存'} items={['保存', '保存中']} />
-                </button>
-              )}
-              <select
-                id="log-retention"
-                className="inp sm"
-                value={days}
-                disabled={!c.desktop || c.busy.has('preferences')}
-                onChange={(e) => setDays(Number(e.target.value) as 1 | 7 | 30)}
-              >
-                <option value="1">1 天</option>
-                <option value="7">7 天</option>
-                <option value="30">30 天</option>
-              </select>
-            </div>
+            <select
+              id="log-retention"
+              className="inp sm"
+              value={days}
+              disabled={!c.desktop || c.busy.has('preferences')}
+              onChange={(e) => void saveRetention(Number(e.target.value) as 1 | 7 | 30)}
+            >
+              <option value="1">1 天</option>
+              <option value="7">7 天</option>
+              <option value="30">30 天</option>
+            </select>
           </label>
           {retentionError && (
             <div className="form-error" role="alert">
               {retentionError}
             </div>
           )}
-        </form>
+        </div>
       )}
 
       {data ? (

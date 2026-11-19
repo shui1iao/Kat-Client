@@ -396,7 +396,7 @@ func (c *Config) validateNetwork() error {
 	if c.Routing == nil {
 		return nil
 	}
-	if len(c.Routing.Rules) > 1024 {
+	if len(c.Routing.Rules) > 16384 {
 		return errNetworkConfig
 	}
 	for i := range c.Routing.Rules {

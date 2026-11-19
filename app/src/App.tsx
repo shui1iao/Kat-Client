@@ -3,6 +3,7 @@ import { OperationError } from './components/OperationError';
 import { useEffect, useState } from 'react';
 import { TitleBar, useWindowDrag } from './components/TitleBar';
 import { Sidebar, PAGE_IDS, PAGE_LABEL, type PageId } from './components/Sidebar';
+import { SideControls } from './components/SideControls';
 import { SideStatus } from './components/SideStatus';
 import { Dashboard, type ConnTab } from './pages/Dashboard';
 import { Policies } from './pages/Policies';
@@ -17,7 +18,6 @@ import { useClient } from './client/useClient';
 import { configurationMeta } from './client/daily';
 import { exitChain } from './client/display';
 import { useTheme } from './lib/theme';
-import { useUiScale } from './lib/scale';
 import { useSidebar } from './lib/sidebar';
 import { SelectPopover } from './components/SelectPopover';
 import { TooltipHost } from './components/Tooltip';
@@ -62,7 +62,6 @@ export default function App() {
   const [selectedGroupName, setSelectedGroupName] = useState<string | null>(null);
 
   const [theme, setTheme] = useTheme();
-  const [uiScale, setUiScale] = useUiScale();
   const c = useClient();
   const sidebar = useSidebar();
 
@@ -136,6 +135,15 @@ export default function App() {
             activeConnections={running ? activeCount : null}
             configDirty={c.doc.dirty}
             hasUpdate={(updates.data?.rows ?? []).some((r) => !!(r.offer && r.latest && r.latest !== r.current))}
+            controls={
+              <SideControls
+                c={c}
+                onOpenGlobalGroup={(groupName) => {
+                  if (groupName) setSelectedGroupName(groupName);
+                  go('policies');
+                }}
+              />
+            }
             footer={
               <SideStatus
                 c={c}
@@ -149,15 +157,7 @@ export default function App() {
             }
           />
           <div className="workspace">
-            <TitleBar
-              c={c}
-              title={PAGE_LABEL[page]}
-              meta={meta[page]}
-              onOpenGlobalGroup={(groupName) => {
-                if (groupName) setSelectedGroupName(groupName);
-                go('policies');
-              }}
-            />
+            <TitleBar c={c} title={PAGE_LABEL[page]} meta={meta[page]} />
             <main className="main">
               <div className={'content page-' + page}>
                 {page === 'overview' && (
@@ -193,8 +193,6 @@ export default function App() {
                     updates={updates}
                     theme={theme}
                     onTheme={setTheme}
-                    uiScale={uiScale}
-                    onUiScale={setUiScale}
                     section={settingsSection}
                     onSection={setSettingsSection}
                   />

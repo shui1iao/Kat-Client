@@ -95,9 +95,11 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
     }
     const r = pillRef.current?.getBoundingClientRect();
     if (!r) return;
-    const minWidth = Math.max(200, r.width);
+    const minWidth = Math.max(216, r.width);
+    const openAbove = window.innerHeight - r.bottom < 220 && r.top > 220;
     const left = Math.max(10, Math.min(r.left, window.innerWidth - minWidth - 12));
-    setMenuPos({ left, top: r.bottom + 6, minWidth });
+    const top = openAbove ? Math.max(10, r.top - 220) : r.bottom + 6;
+    setMenuPos({ left, top, minWidth });
   };
 
   const selectGlobalGroup = (name: string) => {
@@ -109,8 +111,25 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
   };
 
   return (
-    <div className="top-controls">
-      {/* Global selector placed on the LEFT of mode segmented control so right-side controls never shift */}
+    <div className="side-controls" aria-label="代理模式与接管开关">
+      <div ref={segRef} className="mode-seg" role="radiogroup" aria-label="代理模式" aria-busy={c.doc.saving || !!pending}>
+        {thumb}
+        {modes.map((m) => (
+          <button
+            key={m}
+            type="button"
+            role="radio"
+            aria-checked={mode === m}
+            disabled={!c.connected}
+            className={shown === m ? 'on m-' + m : ''}
+            onClick={() => pick(m)}
+            data-mode={m}
+          >
+            {MODE_LABEL[m]}
+          </button>
+        ))}
+      </div>
+
       {shown === 'global' && (
         <button
           ref={pillRef}
@@ -184,24 +203,6 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
           document.body,
         )}
 
-      <div ref={segRef} className="mode-seg" role="radiogroup" aria-label="代理模式" aria-busy={c.doc.saving || !!pending}>
-        {thumb}
-        {modes.map((m) => (
-          <button
-            key={m}
-            type="button"
-            role="radio"
-            aria-checked={mode === m}
-            disabled={!c.connected}
-            className={shown === m ? 'on m-' + m : ''}
-            onClick={() => pick(m)}
-            data-mode={m}
-          >
-            {MODE_LABEL[m]}
-          </button>
-        ))}
-      </div>
-
       <div className="net-toggles" role="group" aria-label="入站接管开关">
         <button
           type="button"
@@ -222,8 +223,6 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
             <i className="ns-thumb" />
           </span>
         </button>
-
-        <span className="net-sep" aria-hidden="true" />
 
         <button
           type="button"

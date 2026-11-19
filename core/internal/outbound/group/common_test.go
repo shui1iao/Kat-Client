@@ -554,7 +554,7 @@ func TestValidate(t *testing.T) {
 			t.Fatalf("%+v: %v", o, err)
 		}
 	}
-	many := make([]string, 65)
+	many := make([]string, 1025)
 	for i := range many {
 		many[i] = "m" + string(rune('a'+i%26)) + string(rune('a'+i/26))
 	}
@@ -562,7 +562,7 @@ func TestValidate(t *testing.T) {
 		"no name":               {Type: TypeSelect, Members: []string{"a"}},
 		"bad type":              {Name: "g", Type: "load-balance", Members: []string{"a"}},
 		"no members":            {Name: "g", Type: TypeSelect},
-		"65 members":            {Name: "g", Type: TypeSelect, Members: many},
+		"1025 members":            {Name: "g", Type: TypeSelect, Members: many},
 		"dup member":            {Name: "g", Type: TypeSelect, Members: []string{"a", "a"}},
 		"self member":           {Name: "g", Type: TypeSelect, Members: []string{"g"}},
 		"selected not member":   {Name: "g", Type: TypeSelect, Members: []string{"a"}, Selected: "b"},

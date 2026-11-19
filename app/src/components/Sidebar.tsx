@@ -54,6 +54,7 @@ export function Sidebar({
   activeConnections,
   configDirty,
   hasUpdate,
+  controls,
   footer,
 }: {
   page: PageId;
@@ -64,6 +65,7 @@ export function Sidebar({
   activeConnections?: number | null;
   configDirty?: boolean;
   hasUpdate?: boolean;
+  controls?: ReactNode;
   footer?: ReactNode;
 }) {
   return (
@@ -95,6 +97,7 @@ export function Sidebar({
           )}
         </button>
       </div>
+      {controls}
       <div className="nav-list">
         {NAV.map((group) => (
           <Fragment key={group.section}>

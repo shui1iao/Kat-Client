@@ -122,10 +122,11 @@ func TestDependencyLimitsAndReadableNames(t *testing.T) {
 	}
 	b.Reset()
 	b.WriteString("proxies:\n")
-	for i := 0; i < 65; i++ {
+	b.WriteString(" - {name: tail, type: socks5, server: 127.0.0.1, port: 1, dialer-proxy: upstream}\n")
+	for i := 0; i < 1023; i++ {
 		fmt.Fprintf(&b, " - {name: front%d, type: socks5, server: 127.0.0.1, port: 1}\n", i)
 	}
-	b.WriteString(" - {name: tail, type: socks5, server: 127.0.0.1, port: 1, dialer-proxy: upstream}\nproxy-groups:\n - {name: upstream, type: url-test, include-all: true, filter: '^front'}\n")
+	b.WriteString("proxy-groups:\n - {name: g1, type: select, proxies: [DIRECT]}\n - {name: g2, type: select, proxies: [DIRECT]}\n - {name: upstream, type: url-test, include-all: true, filter: '^front', proxies: [g1, g2]}\n")
 	if _, e := Parse([]byte(b.String()), FormatAuto); e == nil {
 		t.Fatal("group member limit truncated")
 	}

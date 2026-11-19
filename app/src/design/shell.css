@@ -4,7 +4,7 @@
    ========================================================================== */
 
 .app {
-  height: calc(100vh / var(--browser-zoom, 1));
+  height: 100vh;
   background: var(--window-material);
   display: flex;
   flex-direction: column;
@@ -180,6 +180,11 @@
   background: var(--hover);
 }
 
+.navcard:active {
+  background: var(--press);
+  transform: scale(0.985);
+}
+
 .navcard.active,
 .navcard.active:hover {
   background: var(--hig-selected);
@@ -300,7 +305,12 @@
   gap: 4px;
   text-align: left;
   cursor: default;
-  transition: background-color var(--t-fast) var(--ease);
+  transition: background-color var(--t-fast) var(--ease), transform 90ms var(--ease);
+  animation: kat-pop-in 140ms var(--ease-spring);
+}
+
+.global-group-pill:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .side-status:hover .ss-capsule {
@@ -408,6 +418,64 @@
 .ss-l2 .down i { color: var(--down); }
 .ss-l2 .up i { color: var(--up); }
 
+.ss-spark {
+  width: 100%;
+  height: 30px;
+  margin: 2px 0;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.ss-spark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ss-spark-down {
+  fill: none;
+  stroke: var(--down);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.ss-spark-up {
+  fill: none;
+  stroke: var(--up);
+  stroke-width: 1.2;
+  stroke-opacity: 0.72;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.ss-spark-idle {
+  stroke: var(--line-2);
+  stroke-width: 1;
+}
+
+.ss-l3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-top: 4px;
+  margin-top: 1px;
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-micro);
+}
+
+.ss-mem-label {
+  color: var(--text-3);
+}
+
+.ss-mem-val {
+  color: var(--text-2);
+  font-weight: 500;
+}
+
 .sidebar-collapsed .ss-capsule {
   align-items: center;
   justify-content: center;
@@ -417,7 +485,9 @@
 
 .sidebar-collapsed .ss-state,
 .sidebar-collapsed .ss-uptime,
+.sidebar-collapsed .ss-spark,
 .sidebar-collapsed .ss-l2,
+.sidebar-collapsed .ss-l3,
 .sidebar-collapsed .ss-restart {
   display: none;
 }
@@ -471,20 +541,24 @@
   min-width: 12px;
 }
 
-/* Toolbar Controls: macOS Recessed Segmented Control + Unified Capsule */
-.top-controls {
+/* Sidebar Control Dock: Mode Segmented Control + System Proxy / TUN switches */
+.side-controls {
+  margin-top: 0;
+  margin-bottom: 6px;
+  padding: 2px 0 10px;
+  border-bottom: 1px solid var(--line);
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
   flex: none;
 }
 
-.mode-seg,
-.net-toggles {
+.mode-seg {
   position: relative;
   isolation: isolate;
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  width: 100%;
   height: 30px;
   padding: 2px;
   gap: 0;
@@ -500,7 +574,7 @@
   border-radius: 7.5px;
   background: var(--hig-thumb);
   box-shadow: var(--hig-thumb-shadow);
-  transition: left var(--t) var(--ease), width var(--t) var(--ease);
+  transition: left 200ms var(--ease-spring), width 200ms var(--ease-spring);
 }
 
 .mode-seg > .seg-thumb.instant {
@@ -509,8 +583,9 @@
 
 .mode-seg > button {
   position: relative;
+  flex: 1 1 0;
+  min-width: 0;
   height: 26px;
-  width: 48px;
   padding: 0;
   border-radius: 7.5px;
   display: inline-flex;
@@ -532,20 +607,20 @@
 .mode-seg > button.on.m-direct { color: var(--text); }
 
 .global-group-pill {
-  height: 30px;
-  padding: 0 10px 0 12px;
-  border-radius: 9.5px;
+  width: 100%;
+  height: 28px;
+  padding: 0 9px 0 10px;
+  border-radius: 8px;
   background: var(--accent-soft);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
   color: var(--accent-text);
   font-size: var(--fs-meta);
   font-weight: 550;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 5px;
+  justify-content: space-between;
+  gap: 6px;
   min-width: 0;
-  max-width: 192px;
-  flex: 0 1 auto;
   transition: background-color var(--t-fast) var(--ease);
 }
 
@@ -602,27 +677,28 @@
   font-size: var(--fs-meta);
 }
 
-/* System proxy | TUN — single recessed capsule split by a hairline, zero hover box/tooltip clutter */
-.net-sep {
-  width: 1px;
-  height: 15px;
-  margin: 0 1px;
-  background: var(--line-2);
+/* System Proxy & TUN — clean stacked sidebar toggle rows */
+.net-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
   flex: none;
 }
 
 .net-switch {
   --ns-track-off: rgba(255, 255, 255, 0.16);
   position: relative;
-  height: 26px;
-  padding: 0 8px 0 10px;
-  border-radius: 6px;
-  display: inline-flex;
+  width: 100%;
+  height: 30px;
+  padding: 0 8px 0 9px;
+  border-radius: 8px;
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 8px;
   flex: none;
-  font-size: var(--fs-meta);
+  font-size: var(--fs-data);
   font-weight: 500;
   color: var(--text-2);
   background: transparent;
@@ -634,8 +710,9 @@
   --ns-track-off: rgba(15, 23, 42, 0.15);
 }
 
-.net-switch[data-toggle="sysproxy"] { width: 100px; }
-.net-switch[data-toggle="tun"] { width: 72px; }
+.sidebar-collapsed .side-controls {
+  display: none;
+}
 
 .net-switch .ns-label {
   line-height: 1;
@@ -660,11 +737,15 @@
   border-radius: 50%;
   background: #FFFFFF;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.26), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
-  transition: transform var(--t) var(--ease);
+  transition: transform 200ms var(--ease-spring), width 120ms var(--ease);
 }
 
-.net-switch:hover:not(:disabled):not(.on) .ns-track {
-  background: color-mix(in srgb, var(--ns-track-off) 82%, var(--text) 18%);
+.net-switch:active:not(:disabled) .ns-thumb {
+  width: 14.5px;
+}
+
+.net-switch.on:active:not(:disabled) .ns-thumb {
+  transform: translateX(8.5px);
 }
 
 .net-switch.on {
@@ -759,4 +840,9 @@
 
 .main:has(.page-overview) {
   padding-inline: 0;
+}
+
+/* Subtle macOS page transition on navigation */
+.content > * {
+  animation: kat-page-in 150ms var(--ease-spring);
 }

@@ -245,7 +245,7 @@ func builtin(s string) string {
 	switch s {
 	case "DIRECT":
 		return "direct"
-	case "REJECT":
+	case "REJECT", "REJECT-DROP":
 		return "reject"
 	}
 	return s
@@ -291,7 +291,9 @@ func fullGroup(m map[string]any, probe string, nodes []outbound.Options) (group.
 		g.Priority = w
 	}
 
-	_, g.ToleranceSet = m["tolerance"]
+	if g.Type == group.TypeURLTest || g.Type == group.TypeSmart {
+		_, g.ToleranceSet = m["tolerance"]
+	}
 	if !oneOf(g.Type, group.TypeSelect, group.TypeSmart, group.TypeURLTest, group.TypeFallback, group.TypeLoadBalance, group.TypeRelay) {
 		return g, bad
 	}
@@ -300,12 +302,18 @@ func fullGroup(m map[string]any, probe string, nodes []outbound.Options) (group.
 		if !ok {
 			return g, bad
 		}
+		seenMembers := make(map[string]bool, len(a))
 		for _, x := range a {
 			s, ok := x.(string)
 			if !ok || s == "" {
 				return g, bad
 			}
-			g.Members = append(g.Members, builtin(s))
+			mName := builtin(s)
+			if seenMembers[mName] {
+				continue
+			}
+			seenMembers[mName] = true
+			g.Members = append(g.Members, mName)
 		}
 	}
 	inc := false
@@ -357,6 +365,9 @@ func fullGroup(m map[string]any, probe string, nodes []outbound.Options) (group.
 			p    *outbound.Duration
 			unit time.Duration
 		}{{"interval", &g.Probe.Interval, time.Second}, {"timeout", &g.Probe.Timeout, time.Millisecond}, {"tolerance", &g.Tolerance, time.Millisecond}} {
+			if f.k == "tolerance" && g.Type != group.TypeURLTest && g.Type != group.TypeSmart {
+				continue
+			}
 			if v, ok := m[f.k]; ok {
 				n, e := strconv.ParseInt(fmt.Sprint(v), 10, 64)
 				if e != nil || n < 0 || n > 604800000 {
@@ -373,7 +384,7 @@ func fullGroup(m map[string]any, probe string, nodes []outbound.Options) (group.
 			g.Lazy = &b
 		}
 		g.Strategy = str(m, "strategy")
-	} else {
+	} else if g.Type == group.TypeRelay {
 		for _, k := range []string{"url", "interval", "timeout", "tolerance", "lazy", "expected-status", "strategy"} {
 			if m[k] != nil {
 				return g, bad

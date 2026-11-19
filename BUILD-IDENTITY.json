@@ -1,52 +1,51 @@
 {
-  "candidate": "v0.2.25-windows-core-v0.8.16",
-  "app_version": "0.2.25",
-  "windows_clientcore_version": "0.8.16",
-  "sequence": 1794906000,
-  "core_source_fingerprint": "1ddd03e186b08e6d094c7b512be745c94deb601f23f005f9d7ada26e78af7697",
-  "core_build_commit": "1ddd03e186b08e6d094c7b512be745c94deb601f",
+  "candidate": "v0.2.26-windows-core-v0.8.17",
+  "app_version": "0.2.26",
+  "windows_clientcore_version": "0.8.17",
+  "sequence": 1794907000,
+  "core_source_fingerprint": "e50829b80230520a3566e15992e98e9a995d4899be7e5239ace568a7541229b5",
+  "core_build_commit": "e50829b80230520a3566e15992e98e9a995d4899",
   "core_build_commit_kind": "exact core source fingerprint first40, not a Git commit",
   "executables": {
     "kat-client-core.exe": {
-      "bytes": 17577984,
-      "sha256": "8e39c373fdf0d511374fd35e9470ed8aaeca3bb310e38015a5182dac02c9cd2a"
+      "bytes": 17579008,
+      "sha256": "9e4109a9ef400e2ee602879f76e3bc67f51b01b58c3fa0c3ae055667719c6bfa"
     },
     "kat-desktop.exe": {
-      "bytes": 11970048,
-      "sha256": "361b061d7a93d6870c3f29bfb7a29055f253248ef1612d473f783a37145e4569"
+      "bytes": 11969536,
+      "sha256": "90b8ad0cb774bc333e809683bf37a4f63ddbeade508d88aa0f479b1a5fdb0375"
     },
     "kat-elevate-helper.exe": {
       "bytes": 569856,
-      "sha256": "1c0f089af0e5e97d428b7703878bca8dfcaaefe5e77296af16ec6846a5eba3d2"
+      "sha256": "1fd9f994522506d696df96b2f03ae14acb1bb328598c5e475e81416358613568"
     },
     "kat-install-helper.exe": {
       "bytes": 1359872,
-      "sha256": "2a9430be33f3148cea247277a7061154ef1a9884bdd489fd9f3397dfdaa44147"
+      "sha256": "ce8e002ca6d2c1cfe9592efd5e253b2bc66707607f557c6573423c8b87680a60"
     },
     "kat-network-service.exe": {
       "bytes": 1880064,
-      "sha256": "a1e269a5a3ac42ddcedca2fb8d3e02419d7b6742ee982afed2f19d5a0bd3928a"
+      "sha256": "2bc7e913207a6c1942274e7737802ceb5b980feaa493b462bcbd16895c5d3ed9"
     },
     "kat-proxy-watchdog.exe": {
       "bytes": 465408,
-      "sha256": "17994cd84fb9731f1bce4616e65265cdc92b429fbe652e79acc9e62a9c914fe0"
+      "sha256": "21a7f450b87198e4f83cb549b8ac5837d0fe9757d7a9ad1893ea4d97e4e0b14b"
     }
   },
   "signature_key_id": "0afa646ee76f17d8",
-  "package_auth_sha256": "26e2ca8f59ec1f30101d196b8c27f2aa08b358615ec42662b5a2b9773374eca5",
-  "package_auth_signature_sha256": "8dba5e2a5f5f2886dd013dca18215cd95f49e517f73123cdf62b31c3ce2dd07d",
-  "source_manifest_sha256": "e6ac906f48bc7fae35364bb29cd6d21a72fd95c75ac3e0dfccb32a8d0a2e5a54",
+  "package_auth_sha256": "3da1d2a797270f7cc9c338c3825fa40e01de7f0b73a41e9587b0893b836005f4",
+  "package_auth_signature_sha256": "46e98214dfd4ce416bfc09821c081cf7c39847e85397ca0012c838c1eb328d3a",
+  "source_manifest_sha256": "625f55e16969c7b5ac81284f72e41ca6311c0c21ccee779fe1f6f531d45e4e89",
   "source_manifest_members": 2147,
   "validation": {
-    "client_version": "0.2.25",
-    "core_version": "0.8.16",
-    "sequence": 1794906000,
-    "core_source_fingerprint": "1ddd03e186b08e6d094c7b512be745c94deb601f23f005f9d7ada26e78af7697",
+    "client_version": "0.2.26",
+    "core_version": "0.8.17",
+    "sequence": 1794907000,
+    "core_source_fingerprint": "e50829b80230520a3566e15992e98e9a995d4899be7e5239ace568a7541229b5",
     "all_targeted_checks_passed": true,
     "new_failures": [],
     "checks": {
-      "gpt_6_2_sol_independent_review": "passed (round 2 after P0/P1/P2 fixes)",
-      "go_core_tests": "go test ./internal/kernel/... ./internal/route/... ./internal/clientcore/... passed (including TestSniffOverridePublicIPDirectGroupAndProxyZeroExtraDNS)",
+      "go_core_tests": "go test ./internal/provider/... ./internal/outbound/group/... ./internal/route/... ./internal/kernel/... ./internal/clientcore/... passed (including TestAirportClashLargeSubscriptionImport & TestSniffOverridePublicIPDirectGroupAndProxyZeroExtraDNS)",
       "rust_host_tests": "cargo test --offline --locked --lib r1_r2_regression_tests & --test control-contract passed",
       "frontend_build": "npm run build (tsc --noEmit -p . && node build.mjs) passed",
       "windows_x64_cross_build": "all 6 Windows amd64 roles built cleanly"

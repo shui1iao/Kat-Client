@@ -41,7 +41,7 @@ function matchSemanticIcon(groupName: string, type: string): { flag?: string; ba
       badge: {
         color: '#10A37F',
         svg: (
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z" />
             <path d="M19 16l.9 2.1L22 19l-2.1.9L19 22l-.9-2.1L16 19l2.1-.9L19 16z" />
           </svg>
@@ -55,7 +55,7 @@ function matchSemanticIcon(groupName: string, type: string): { flag?: string; ba
       badge: {
         color: '#4C8DFF',
         svg: (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
             <path d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81" />
           </svg>
         ),
@@ -68,7 +68,7 @@ function matchSemanticIcon(groupName: string, type: string): { flag?: string; ba
       badge: {
         color: '#2AABEE',
         svg: (
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21.5 4.5L2.8 11.7c-.8.3-.8 1.4 0 1.7l4.7 1.6 1.8 5.3c.2.7 1.1.9 1.6.4l2.7-2.6 4.8 3.5c.6.4 1.5.1 1.7-.7l2.6-15.3c.2-.8-.5-1.4-1.2-1.1z" />
             <path d="M7.5 15l9.5-7.5" />
           </svg>
@@ -82,7 +82,7 @@ function matchSemanticIcon(groupName: string, type: string): { flag?: string; ba
       badge: {
         color: '#E5484D',
         svg: (
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
             <path d="M8 5.5v13l10.5-6.5z" />
           </svg>
         ),
@@ -95,7 +95,7 @@ function matchSemanticIcon(groupName: string, type: string): { flag?: string; ba
       badge: {
         color: '#8B5CF6',
         svg: (
-          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <rect x="2.5" y="7" width="19" height="10" rx="5" />
             <path d="M8 10v4M6 12h4" />
             <circle cx="15.5" cy="11" r="1" fill="currentColor" />
@@ -110,7 +110,7 @@ function matchSemanticIcon(groupName: string, type: string): { flag?: string; ba
     return {
       badge: {
         color: '#6E7681',
-        svg: <Icon name="config" size={20} />,
+        svg: <Icon name="config" size={25} />,
       },
     };
   }
@@ -119,7 +119,7 @@ function matchSemanticIcon(groupName: string, type: string): { flag?: string; ba
     return {
       badge: {
         color: '#8E8E93',
-        svg: <Icon name="monitor" size={20} />,
+        svg: <Icon name="monitor" size={25} />,
       },
     };
   }
@@ -128,7 +128,7 @@ function matchSemanticIcon(groupName: string, type: string): { flag?: string; ba
     return {
       badge: {
         color: '#F85149',
-        svg: <Icon name="shield" size={20} />,
+        svg: <Icon name="shield" size={25} />,
       },
     };
   }
@@ -137,7 +137,7 @@ function matchSemanticIcon(groupName: string, type: string): { flag?: string; ba
     return {
       badge: {
         color: '#10B981',
-        svg: <Icon name="direct" size={20} />,
+        svg: <Icon name="direct" size={25} />,
       },
     };
   }
@@ -146,7 +146,7 @@ function matchSemanticIcon(groupName: string, type: string): { flag?: string; ba
     return {
       badge: {
         color: '#F08C3A',
-        svg: <Icon name="target" size={20} />,
+        svg: <Icon name="target" size={25} />,
       },
     };
   }
@@ -161,7 +161,7 @@ function matchSemanticIcon(groupName: string, type: string): { flag?: string; ba
     return {
       badge: {
         color: '#F59E0B',
-        svg: <Icon name="bolt" size={20} />,
+        svg: <Icon name="bolt" size={25} />,
       },
     };
   }
@@ -170,7 +170,7 @@ function matchSemanticIcon(groupName: string, type: string): { flag?: string; ba
     return {
       badge: {
         color: '#22B8CF',
-        svg: <Icon name="route" size={20} />,
+        svg: <Icon name="route" size={25} />,
       },
     };
   }
@@ -179,7 +179,7 @@ function matchSemanticIcon(groupName: string, type: string): { flag?: string; ba
     return {
       badge: {
         color: '#4C8DFF',
-        svg: <Icon name="nodes" size={20} />,
+        svg: <Icon name="nodes" size={25} />,
       },
     };
   }
@@ -187,7 +187,7 @@ function matchSemanticIcon(groupName: string, type: string): { flag?: string; ba
   return {
     badge: {
       color: '#A371F7',
-      svg: <Icon name="policies" size={20} />,
+      svg: <Icon name="policies" size={25} />,
     },
   };
 }

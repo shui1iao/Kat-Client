@@ -20,8 +20,8 @@ import (
 
 // Limits for the outbound graph (design constants).
 const (
-	maxOutbounds  = 256
-	maxGroups     = 64
+	maxOutbounds  = 1024
+	maxGroups     = 128
 	maxChainDepth = 4 // proxy hops only; groups and direct do not count
 )
 

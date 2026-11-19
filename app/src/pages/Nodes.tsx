@@ -263,7 +263,7 @@ export function Nodes({ c }: { c: Client }) {
             <Icon name="bolt" size={13} />
             <StableText
               current={c.probeAllProgress ? `测速中 ${c.probeAllProgress.done}/${c.probeAllProgress.total}` : '全部测速'}
-              items={['全部测速', '测速中 99/99']}
+              items={['全部测速', '测速中 999/999']}
             />
           </button>
           <button

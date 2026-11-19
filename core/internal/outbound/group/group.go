@@ -52,7 +52,7 @@ const (
 
 // Fixed parameters (design constants; not configurable).
 const (
-	maxMembers             = 64   // explicitly written members
+	maxMembers             = 1024 // explicitly written members
 	maxExpandedMembers     = 1024 // after provider/include_all expansion
 	maxRelayMembers        = 4
 	defaultStickyTTL       = 10 * time.Minute

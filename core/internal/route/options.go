@@ -24,8 +24,8 @@ import (
 )
 
 const (
-	maxRules        = 1024
-	maxRuleSets     = 32
+	maxRules        = 16384
+	maxRuleSets     = 128
 	maxSetEntries   = 1_000_000
 	maxTotalEntries = 2_000_000
 

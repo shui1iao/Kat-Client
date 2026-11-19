@@ -237,8 +237,9 @@ export function SoftwareUpdateCard({ u }: { u: SoftwareUpdateController }) {
       {rows.map((r) => {
         const hasNew = !!(r.latest && r.latest !== r.current && r.offer);
         const hasNotes = !!r.notes?.trim();
+        const pct = r.total ? Math.floor(Math.min(100, (r.received / r.total) * 100)) : null;
         return (
-          <div className="update-row" key={r.kind}>
+          <div className={'update-row' + (r.phase === 'downloading' ? ' is-downloading' : '')} key={r.kind}>
             <div className="update-row-info">
               <div className="update-row-title">
                 <b>{label(r.kind)}</b>
@@ -249,30 +250,19 @@ export function SoftwareUpdateCard({ u }: { u: SoftwareUpdateController }) {
                 {hasNew && r.size_bytes ? <small className="update-pkg-size num">{showBytes(r.size_bytes)}</small> : null}
               </div>
 
-              <div className={'update-message' + (r.phase === 'error' ? ' is-error' : '')} role={r.phase === 'error' ? 'status' : undefined}>
-                {hasNew && <span>可用新版本 {r.latest} · </span>}
-                {r.message}
+              <div className={'update-message num' + (r.phase === 'error' ? ' is-error' : '')} role={r.phase === 'error' ? 'status' : undefined}>
+                {r.phase === 'downloading' ? (
+                  <>
+                    正在下载 {showBytes(r.received)}
+                    {r.total ? ` / ${showBytes(r.total)} · ${pct}%` : ''}
+                  </>
+                ) : (
+                  <>
+                    {hasNew && <span>可用新版本 {r.latest} · </span>}
+                    {r.message}
+                  </>
+                )}
               </div>
-
-              {r.phase === 'downloading' && (
-                <>
-                  <div
-                    className="update-progress"
-                    role="progressbar"
-                    aria-label={`${label(r.kind)}更新下载`}
-                    aria-valuemin={0}
-                    aria-valuemax={r.total ?? undefined}
-                    aria-valuenow={r.total ? r.received : undefined}
-                    aria-valuetext={r.total ? `${showBytes(r.received)} / ${showBytes(r.total)}` : showBytes(r.received)}
-                  >
-                    {r.total && <i style={{ width: `${Math.min(100, (r.received / r.total) * 100)}%` }} />}
-                  </div>
-                  <div className="update-download-bytes num">
-                    {showBytes(r.received)}
-                    {r.total ? ` / ${showBytes(r.total)} · ${Math.floor(Math.min(100, (r.received / r.total) * 100))}%` : ''}
-                  </div>
-                </>
-              )}
             </div>
 
             <div className="update-row-action">
@@ -283,7 +273,7 @@ export function SoftwareUpdateCard({ u }: { u: SoftwareUpdateController }) {
               )}
               {r.phase === 'downloading' ? (
                 <button className="btn sm" disabled={u.working} onClick={() => void u.action('update_cancel', { offer: r.offer })}>
-                  取消下载
+                  <StableText current="取消下载" items={['下载更新', '取消下载', '安装更新']} />
                 </button>
               ) : (
                 <button
@@ -291,17 +281,33 @@ export function SoftwareUpdateCard({ u }: { u: SoftwareUpdateController }) {
                   disabled={!r.offer || u.working || !!d?.preparing || r.phase === 'checking'}
                   onClick={() => (r.downloaded ? u.setConfirm(r) : void u.action('update_download', { offer: r.offer }))}
                 >
-                  <StableText current={r.downloaded ? '安装更新' : '下载更新'} items={['下载更新', '安装更新']} />
+                  <StableText current={r.downloaded ? '安装更新' : '下载更新'} items={['下载更新', '取消下载', '安装更新']} />
                 </button>
               )}
             </div>
+
+            {r.phase === 'downloading' && (
+              <div
+                className="update-progress-rail"
+                role="progressbar"
+                aria-label={`${label(r.kind)}更新下载`}
+                aria-valuemin={0}
+                aria-valuemax={r.total ?? undefined}
+                aria-valuenow={r.total ? r.received : undefined}
+                aria-valuetext={r.total ? `${showBytes(r.received)} / ${showBytes(r.total)}` : showBytes(r.received)}
+              >
+                <i style={{ width: `${pct ?? 18}%` }} />
+              </div>
+            )}
           </div>
         );
       })}
 
-      {d?.last_check ? (
-        <p className="update-help update-last">上次检查 {new Date(d.last_check * 1000).toLocaleString('zh-CN', { hour12: false })}</p>
-      ) : null}
+      <p className="update-help update-last num">
+        {d?.last_check
+          ? `上次检查 ${new Date(d.last_check * 1000).toLocaleString('zh-CN', { hour12: false })}`
+          : '尚未检查更新'}
+      </p>
       <LocalError text={u.error || d?.error || ''} />
     </Card>
   );
@@ -373,6 +379,16 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
           title={dialogRow.offer ? `发现新版本 · Kat ${label(dialogRow.kind)}` : `版本更新说明 · Kat ${label(dialogRow.kind)}`}
           closeLabel={dialogRow.offer ? '稍后提醒' : '关闭'}
           close={() => u.setDialogKind(null)}
+          footerLeft={
+            dialogRow.phase === 'downloading' ? (
+              <div className="sparkle-foot-progress num" role="progressbar" aria-label="更新下载进度">
+                <span>
+                  下载中 {showBytes(dialogRow.received)}
+                  {dialogRow.total ? ` / ${showBytes(dialogRow.total)} · ${Math.floor(Math.min(100, (dialogRow.received / dialogRow.total) * 100))}%` : ''}
+                </span>
+              </div>
+            ) : undefined
+          }
           saveLabel={
             dialogRow.phase === 'downloading'
               ? '取消下载'
@@ -417,18 +433,6 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
           <div className="sparkle-notes-box">
             <ReleaseNotesBody markdown={dialogRow.notes} />
           </div>
-
-          {dialogRow.phase === 'downloading' && (
-            <div className="sparkle-dl-bar">
-              <div className="update-progress" role="progressbar">
-                {dialogRow.total && <i style={{ width: `${Math.min(100, (dialogRow.received / dialogRow.total) * 100)}%` }} />}
-              </div>
-              <span className="num">
-                正在下载：{showBytes(dialogRow.received)}
-                {dialogRow.total ? ` / ${showBytes(dialogRow.total)}（${Math.floor(Math.min(100, (dialogRow.received / dialogRow.total) * 100))}%）` : ''}
-              </span>
-            </div>
-          )}
 
           {dialogRow.downloaded && u.blocked && <LocalError text="请先保存或取消当前未保存的配置草稿，再安装更新。" />}
           <LocalError text={u.error || d?.error || ''} />

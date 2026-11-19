@@ -416,7 +416,6 @@ fn window_action(app: tauri::AppHandle, action: String) -> Result<()> {
         "close"=>{save_window_now(&app);if app.state::<Host>().settings.lock().unwrap().close_action==crate::preferences::CloseAction::Quit{quit(app.clone());return Ok(());}else{close_to_tray(&app)}}, "show"=>{show_main(&app);return Ok(());},
         "quit"=>{quit(app); return Ok(());},
         "restart-app"=>return restart_app(app),
-        "zoom-100"|"zoom-110"|"zoom-115"|"zoom-125"=>{let f=match action.as_str(){"zoom-110"=>1.10,"zoom-115"=>1.15,"zoom-125"=>1.25,_=>1.0};w.set_zoom(f).map_err(|_|Error::new("WINDOW_FAILED","Cannot set window zoom"))?;return Ok(());},
         _=>return Err(Error::new("ACTION_DENIED", "Unsupported window action")),
     };
     sync_main_window_visibility(&app,false);

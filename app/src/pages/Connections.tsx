@@ -504,24 +504,22 @@ export function Connections({
             按进程
           </button>
           <span className="sp" />
-          {tab === 'active' && (
-            <button
-              type="button"
-              className="btn sm danger conn-close-btn"
-              disabled={!running || closing || !sorted.length}
-              onClick={() =>
-                setConfirmation({
-                  ids: sorted.map((x) => x.id),
-                  matched: !!needle || process !== '*',
-                })
-              }
-            >
-              <StableText
-                current={needle || process !== '*' ? `关闭匹配 ${sorted.length}` : '关闭全部'}
-                items={['关闭全部', '关闭匹配 999']}
-              />
-            </button>
-          )}
+          <button
+            type="button"
+            className="btn sm danger conn-close-btn"
+            disabled={tab !== 'active' || !running || closing || !sorted.length}
+            onClick={() =>
+              setConfirmation({
+                ids: sorted.map((x) => x.id),
+                matched: !!needle || process !== '*',
+              })
+            }
+          >
+            <StableText
+              current={tab === 'active' && (needle || process !== '*') ? `关闭匹配 ${sorted.length}` : '关闭全部'}
+              items={['关闭全部', '关闭匹配 999']}
+            />
+          </button>
           <button
             type="button"
             className="btn sm"

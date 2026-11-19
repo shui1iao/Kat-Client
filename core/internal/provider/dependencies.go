@@ -204,7 +204,7 @@ func clashDependencies(r *Result, raw []any, gs []map[string]any) error {
 			r.DependencyGroups = append(r.DependencyGroups, v)
 		}
 	}
-	if len(r.DependencyGroups) > 64 {
+	if len(r.DependencyGroups) > 128 {
 		return ErrDependency
 	}
 	return nil
