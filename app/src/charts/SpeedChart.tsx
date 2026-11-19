@@ -4,7 +4,7 @@ import { rateStr, clock } from '../lib/format';
 import { speedAxis, axisLabel, speedTimeTicks } from './scale';
 import { speedColumns, columnAt, speedBar, columnPath } from './speedColumns';
 
-const PAD = { l: 72, r: 2, t: 8, b: 22 };
+const PAD = { l: 64, r: 2, t: 8, b: 20 };
 const DENSITY = { default: { pitch: 4, fill: 0.7 }, relaxed: { pitch: 6, fill: 0.52 } } as const;
 
 export function SpeedChart({
@@ -23,7 +23,7 @@ export function SpeedChart({
   density?: keyof typeof DENSITY;
 }) {
   const [ref, { w, h }] = useSize<HTMLDivElement>();
-  const height = fixedH ?? Math.max(118, h);
+  const height = fixedH ?? Math.max(96, h);
   const n = down.length;
   const [hover, setHover] = useState<number | null>(null);
   const [tipWidth, setTipWidth] = useState(240);

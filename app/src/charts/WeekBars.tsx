@@ -15,7 +15,7 @@ export interface Bar {
   elapsed?: boolean;
 }
 
-const PAD = { l: 0, r: 58, t: 8, b: 22 };
+const PAD = { l: 2, r: 2, t: 15, b: 17 };
 const known = (v: number | null | undefined): v is number => v != null && Number.isFinite(v) && v >= 0;
 const totalOf = (d: Bar) => {
   if (known(d.proxy) || known(d.direct)) return (known(d.proxy) ? d.proxy : 0) + (known(d.direct) ? d.direct : 0);
@@ -33,7 +33,7 @@ export function WeekBars({
 }) {
   const clipPrefix = 'wb-clip-' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const [ref, { w, h }] = useSize<HTMLDivElement>();
-  const height = fixed ?? Math.max(98, h);
+  const height = fixed ?? Math.max(88, h);
   const [hover, setHover] = useState<{ index: number; anchor: TipAnchor } | null>(null);
   const { unit, label, top, ticks } = byteAxis(data.map((d) => totalOf(d) ?? NaN));
   const yMax = Math.max(1, top * unit);
@@ -42,8 +42,8 @@ export function WeekBars({
   const slot = iw / Math.max(1, data.length);
   const bw =
     mode === '7d'
-      ? Math.max(10, Math.min(24, slot * 0.52))
-      : Math.max(5, Math.min(mode === 'today' ? 10 : 12, slot * 0.64));
+      ? Math.max(12, Math.min(28, slot * 0.56))
+      : Math.max(6, Math.min(mode === 'today' ? 11 : 13, slot * 0.68));
   const rx = mode === '7d' ? 3.5 : 2;
   const base = PAD.t + ih;
   const y = (v: number) => base - (Math.max(0, Math.min(yMax, v)) / yMax) * ih;
@@ -80,7 +80,7 @@ export function WeekBars({
               <g key={t}>
                 <line x1={PAD.l} x2={w - PAD.r} y1={gy} y2={gy} className={t === 0 ? 'axis' : 'grid'} />
                 {t > 0 && (
-                  <text x={w} y={gy + 3.5} className="ylab" textAnchor="end">
+                  <text x={w - PAD.r} y={gy - 3.5} className="ylab" textAnchor="end">
                     {axisLabel(t)} {label}
                   </text>
                 )}

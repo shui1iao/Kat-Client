@@ -1,9 +1,8 @@
-# Validation: Kat-Client v0.2.23 / Windows Core v0.8.15
+# Validation: Kat-Client v0.2.24 / Windows Core v0.8.15
 
-2026-11-18 本地候选构建与门禁记录（客户端 sequence `1794904000`，内置 Windows Core v0.8.15 sequence `1794902000`，Core 源码指纹 `04a81276f5f663a48f9cfb4fac548cf4950f207d0c9df3893e0069736d3f7a8e`）：
-
-1. **前端检查与生产构建**：
-   - `tsc --noEmit -p .` 与 `node build.mjs` 生产构建通过，零类型错误。
-2. **Rust 全套单测与 6 角色 Windows x64 交叉编译验签**：
-   - `cargo test --offline --locked` 全套通过（0 失败，2 忽略），`verify-vendor.py` 通过。
-   - 6 角色 Windows x64 二进制离线编译，内置 `kat-client-core.exe` 与正式发布的 Windows Core v0.8.15 逐字节一致；原 Ed25519 公钥 `0afa646ee76f17d8` 离线签包并通过产品原生 `kat-package-validator`（`update_manifest::verify_package`）门禁校验。
+- Sequence: `1794905000` (client) / `1794902000` (core)
+- Core source fingerprint: `04a81276f5f663a48f9cfb4fac548cf4950f207d0c9df3893e0069736d3f7a8e` (matches Windows Core v0.8.15 byte-for-byte)
+- Frontend: `npx tsc --noEmit` & `npm run build` passed (0 errors)
+- Rust host tests: `cargo test --offline --locked --lib` (`276 passed; 0 failed; 1 ignored`) and `--test control-contract` (`12 passed; 0 failed`)
+- Offline UI visual & layout checks: Chromium Playwright verified `1040×680` & `1180×800` (light/dark) with 0 runtime errors, 0 vertical overflow on overview, `0.00px` label shift on top-bar switches, and equal-height subscription cards
+- Offline package gate: `kat-package-validator` (`update_manifest::verify_package`, key `0afa646ee76f17d8`) passed prior to NSIS 3.11 packaging

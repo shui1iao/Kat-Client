@@ -27,8 +27,8 @@ export function SideStatus({ c }: { c: Client; current?: boolean; onOpen?: () =>
           <span className="ss-uptime num">{uptime}</span>
         </div>
         <div className="ss-l2 num">
-          <span className="up">↑ {running ? showRate(s?.traffic.up_rate) : '—'}</span>
-          <span className="down">↓ {running ? showRate(s?.traffic.down_rate) : '—'}</span>
+          <span className="down"><i aria-hidden="true">↓</i>{running ? showRate(s?.traffic.down_rate) : '—'}</span>
+          <span className="up"><i aria-hidden="true">↑</i>{running ? showRate(s?.traffic.up_rate) : '—'}</span>
         </div>
       </div>
       <button

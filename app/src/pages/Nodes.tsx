@@ -4,7 +4,7 @@ import { nodeRows } from '../client/nodeRows';
 import { useState } from 'react';
 import { SubscriptionCard } from '../components/SubscriptionCard';
 import { SubscriptionImport } from '../components/SubscriptionImport';
-import { Card, Segmented } from '../components/ui';
+import { Card, Segmented, StableText } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { Field, LocalError, Modal, Secret } from '../components/Editors';
 import { nodeFormValue } from '../client/entityValidation';
@@ -165,7 +165,7 @@ export function Nodes({ c }: { c: Client }) {
           <header className="qi-head">
             <span className="qi-title">
               <Icon name="plus" size={15} />
-              添加订阅或导入链接
+              添加订阅
             </span>
             {subscriptionCount >= 2 && (
               <button
@@ -191,7 +191,7 @@ export function Nodes({ c }: { c: Client }) {
                 className="inp sm"
                 type={showQuickURL ? 'text' : 'password'}
                 aria-label="粘贴订阅链接"
-                placeholder="粘贴 https:// 订阅链接"
+                placeholder="粘贴订阅链接"
                 autoComplete="off"
                 spellCheck={false}
                 value={quickURL}
@@ -211,13 +211,12 @@ export function Nodes({ c }: { c: Client }) {
               type="submit"
               className="btn sm primary"
               disabled={!editable || !quickURL.trim() || c.busy.has('subscription:new')}
-              style={{ minWidth: 64 }}
             >
-              {c.busy.has('subscription:new') ? '导入中…' : '导入'}
+              <StableText current={c.busy.has('subscription:new') ? '导入中…' : '导入'} items={['导入', '导入中…']} />
             </button>
           </form>
           <div className="qi-foot">
-            <span>支持 Clash YAML / 订阅链接</span>
+            <span>支持 Clash YAML</span>
             <button type="button" className="link-btn" onClick={() => setFull({ initialText: quickURL })}>
               本地文件 / 更多选项
             </button>
@@ -233,7 +232,7 @@ export function Nodes({ c }: { c: Client }) {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜索节点名称、协议、来源"
+              placeholder="搜索"
               aria-label="搜索节点"
             />
           </label>
@@ -260,10 +259,12 @@ export function Nodes({ c }: { c: Client }) {
               [...c.busy].some((k) => k.startsWith('probe.node:') || k.startsWith('probe.group:'))
             }
             onClick={() => void c.probeAll()}
-            style={{ minWidth: 104 }}
           >
             <Icon name="bolt" size={13} />
-            {c.probeAllProgress ? `测速中 ${c.probeAllProgress.done}/${c.probeAllProgress.total}` : '全部测速'}
+            <StableText
+              current={c.probeAllProgress ? `测速中 ${c.probeAllProgress.done}/${c.probeAllProgress.total}` : '全部测速'}
+              items={['全部测速', '测速中 99/99']}
+            />
           </button>
           <button
             type="button"

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { tip } from './Tooltip';
 import { ConnectionRule } from './labels';
+import { StableText } from './ui';
 import { ProtocolTag } from './ProtocolTag';
 import { inboundLabel } from '../client/logDetails';
 import { clockStr, durationStr, showBytes } from '../client/display';
@@ -113,7 +114,7 @@ export function FlowDetail({
             {e.error_stage && <code>{e.error_stage}</code>}
           </div>
           <button type="button" className="link-btn" onClick={() => void copyError()}>
-            {copiedErr === 'ok' ? '已复制' : copiedErr === 'fail' ? '复制失败' : '复制原因'}
+            <StableText current={copiedErr === 'ok' ? '已复制' : copiedErr === 'fail' ? '复制失败' : '复制原因'} items={['复制原因', '复制失败', '已复制']} />
           </button>
         </div>
       )}
@@ -145,7 +146,7 @@ export function FlowDetail({
             </button>
           )}
           <button type="button" className="btn sm" disabled={!name} onClick={() => void copyTarget()}>
-            {copiedTarget ? '已复制' : '复制目标'}
+            <StableText current={copiedTarget ? '已复制' : '复制目标'} items={['复制目标', '已复制']} />
           </button>
         </div>
       </div>

@@ -40,7 +40,7 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
   const shown = pending ?? mode;
   const [segRef, thumb] = useThumb<HTMLDivElement>(shown);
   const pick = (m: Mode) => {
-    if (mode === m || pending) return;
+    if (mode === m || pending || !c.connected || c.doc.saving) return;
     setMenuPos(null);
     setPending(m);
     void c.edit((d) => {
@@ -102,7 +102,7 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
 
   const selectGlobalGroup = (name: string) => {
     setMenuPos(null);
-    if (name === c.source?.client.global_group) return;
+    if (name === c.source?.client.global_group || c.doc.saving) return;
     void c.edit((d) => {
       d.client.global_group = name;
     }, c.reportOperationError);
@@ -118,7 +118,7 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
           className={'global-group-pill' + (menuPos ? ' is-open' : '')}
           aria-haspopup="listbox"
           aria-expanded={!!menuPos}
-          disabled={!c.connected || c.doc.saving}
+          disabled={!c.connected}
           onClick={toggleGlobalMenu}
           {...tip(
             globalGroup
@@ -192,7 +192,7 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
             type="button"
             role="radio"
             aria-checked={mode === m}
-            disabled={!c.connected || c.doc.saving}
+            disabled={!c.connected}
             className={shown === m ? 'on m-' + m : ''}
             onClick={() => pick(m)}
             data-mode={m}
@@ -210,7 +210,7 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
           onClick={() => toggle('sysproxy', !sys?.enabled)}
           aria-pressed={sysShown}
           data-toggle="sysproxy"
-          {...tip(sysError || (sysShown ? '系统代理：已开启（点击关闭）' : '系统代理：已关闭（点击开启）'))}
+          {...tip(sysError || null)}
         >
           {sysError && (
             <span className="net-warning" title={sysError}>
@@ -222,6 +222,8 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
             <i className="ns-thumb" />
           </span>
         </button>
+
+        <span className="net-sep" aria-hidden="true" />
 
         <button
           type="button"
@@ -237,9 +239,7 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
           data-toggle="tun"
           {...tip(
             tunError ||
-              (!service?.installed && !tunShown
-                ? 'TUN：需先在设置中安装网络服务'
-                : `TUN：${stateLabel(tunState)}${tunTransition ? '' : tunShown ? '（点击关闭）' : '（点击开启）'}`),
+              (!service?.installed && !tunShown ? 'TUN：需先在设置中安装网络服务' : null),
           )}
         >
           {tunError && (

@@ -1,6 +1,6 @@
 import { weightedProbe, smartProbe, groupSummary, groupTypeLabel, resolveGroupPath } from '../client/groupDisplay';
 import { subscriptionGroup } from '../client/subscription';
-import { Segmented } from '../components/ui';
+import { Segmented, StableText } from '../components/ui';
 import { durationNumber } from '../client/groupSelection';
 import { protocolInfo } from '../components/ProtocolTag';
 import { useState, useEffect, useLayoutEffect, type KeyboardEvent } from 'react';
@@ -104,7 +104,7 @@ export function Policies({
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索策略组或成员节点"
+            placeholder="搜索"
             aria-label="搜索策略组或成员节点"
           />
         </label>
@@ -124,9 +124,8 @@ export function Policies({
             type="button"
             className="btn sm"
             onClick={() => setOpenSet(allOpen ? new Set() : new Set(visibleGroups.map((g) => g.name)))}
-            style={{ minWidth: 74 }}
           >
-            {allOpen ? '全部收起' : '全部展开'}
+            <StableText current={allOpen ? '全部收起' : '全部展开'} items={['全部展开', '全部收起']} />
           </button>
         )}
         <button
@@ -180,7 +179,19 @@ export function Policies({
               ? c.label(path.node)
               : '无可用节点';
           const routeSummary = site ? currentLabel : [...path.via.map(c.label), currentLabel].join(' → ');
+          const routeHops = site ? [currentLabel] : [...path.via.map(c.label), currentLabel];
           const isOpen = !!needle || openSet.has(g.name);
+          const activeMember = site ? headerMember : runtime?.current;
+          // Collapsed-state health strip: one dot per member, coloured by its last probe.
+          const health = allMemberNames.map((m) => {
+            const pr = memberProbes.get(m);
+            return {
+              name: m,
+              tone: pr?.probe_error ? 'bad' : latencyTone(pr?.probe_ms ?? null),
+              on: m === activeMember || m === g.fixed,
+            };
+          });
+          const healthy = health.filter((h) => h.tone === 'ok' || h.tone === 'mid').length;
 
           return (
             <section key={g.name} className={'card pcard' + (isOpen ? ' open' : '')} data-group={g.name}>
@@ -192,52 +203,77 @@ export function Policies({
                 onClick={() => toggleGroup(g.name)}
                 onKeyDown={(e) => activate(e, () => toggleGroup(g.name))}
               >
-                <GroupIcon value={g.icon} type={g.type} group={g.name} running={c.status?.runtime.state === 'running'} />
+                <span className="pc-icon-well">
+                  <GroupIcon value={g.icon} type={g.type} group={g.name} running={c.status?.runtime.state === 'running'} />
+                </span>
                 <div className="pc-title">
-                  <span className="pc-name" {...tip(c.label(g.name), true)}>
-                    {c.label(g.name)}
+                  <span className="pc-name-row">
+                    <span className="pc-name" {...tip(c.label(g.name), true)}>
+                      {c.label(g.name)}
+                    </span>
+                    {pin && g.fixed && (
+                      <button
+                        type="button"
+                        className="pc-unpin-chip"
+                        {...tip('已固定到 ' + c.label(g.fixed) + '，点击取消固定')}
+                        disabled={c.doc.saving}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          editMember(g.name, '', true);
+                        }}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        aria-label="取消固定，恢复自动选择"
+                      >
+                        <Icon name="pin" size={11} />
+                        取消固定
+                      </button>
+                    )}
                   </span>
                   <span className="pc-summary" {...tip(groupSummary(g.type, routeSummary), true)}>
-                    <span className="pc-type">{groupTypeLabel(g.type)}</span>
-                    <span className="pc-dot">·</span>
-                    {g.fixed && <Icon name="pin" size={11} />}
-                    <span className="pc-current">{routeSummary}</span>
+                    <span className={'pc-type t-' + g.type}>{groupTypeLabel(g.type)}</span>
+                    <span className="pc-current">
+                      {routeHops.map((hop, i) => (
+                        <span key={i} className={'pc-hop' + (i === routeHops.length - 1 ? ' is-leaf' : '')}>
+                          {i > 0 && <i className="pc-hop-arrow" aria-hidden="true">›</i>}
+                          {hop}
+                        </span>
+                      ))}
+                    </span>
                   </span>
                 </div>
 
-                {pin && g.fixed && (
-                  <button
-                    type="button"
-                    className="btn sm is-active"
-                    {...tip('已固定到 ' + c.label(g.fixed) + '，点击恢复自动选择')}
-                    disabled={c.doc.saving}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      editMember(g.name, '', true);
-                    }}
-                    onKeyDown={(e) => e.stopPropagation()}
-                    aria-label="取消固定，恢复自动选择"
-                  >
-                    <Icon name="pin" size={12} />
-                    恢复自动
-                  </button>
+                {(health.length > 0 || runtime) && (
+                  <div className="pc-meta-cluster">
+                    {health.length > 0 && (
+                      <span
+                        className="pc-health"
+                        aria-label={`${healthy} / ${health.length} 个成员可用`}
+                        {...tip(`${healthy} / ${health.length} 个成员可用`)}
+                      >
+                        {health.slice(0, 12).map((h) => (
+                          <i key={h.name} className={'hd-' + h.tone + (h.on ? ' on' : '')} />
+                        ))}
+                        {health.length > 12 && <em>+{health.length - 12}</em>}
+                      </span>
+                    )}
+
+                    {runtime && (
+                      <span
+                        {...tip(probeFailureTitle(currentProbe?.probe_error))}
+                        className={
+                          'pc-lat num lat-' +
+                          (currentProbe?.probe_error ? 'bad' : latencyTone(currentProbe?.probe_ms ?? null))
+                        }
+                      >
+                        {g.type === 'smart'
+                          ? smartProbe(currentProbe?.probe_ms, currentProbe?.probe_error, headerWeight)
+                          : weightedProbe(currentProbe?.probe_ms, currentProbe?.probe_error, headerWeight)}
+                      </span>
+                    )}
+                  </div>
                 )}
 
-                {runtime && (
-                  <span
-                    {...tip(probeFailureTitle(currentProbe?.probe_error))}
-                    className={
-                      'pc-lat num lat-' +
-                      (currentProbe?.probe_error ? 'bad' : latencyTone(currentProbe?.probe_ms ?? null))
-                    }
-                  >
-                    {g.type === 'smart'
-                      ? smartProbe(currentProbe?.probe_ms, currentProbe?.probe_error, headerWeight)
-                      : weightedProbe(currentProbe?.probe_ms, currentProbe?.probe_error, headerWeight)}
-                  </span>
-                )}
-
-                <span className="tag num pc-count">{allMemberNames.length}</span>
+                <span className="pc-head-sep" aria-hidden="true" />
 
                 <div
                   className="pc-actions"
@@ -279,7 +315,7 @@ export function Policies({
                 </div>
 
                 <span className={'pc-chev' + (isOpen ? ' open' : '')} aria-hidden="true">
-                  <Icon name="chevDown" size={15} />
+                  <Icon name="chevDown" size={14} stroke={2} />
                 </span>
               </div>
 
@@ -296,7 +332,6 @@ export function Policies({
                           probe_error: probe?.probe_error,
                           probe_at: probe?.probe_at,
                         };
-                        const activeMember = site ? headerMember : runtime?.current;
                         const isPinned = g.fixed === m;
                         const manualSelected =
                           g.type === 'select' ? (runtime ? runtime.current === m : g.selected === m) : isPinned;
@@ -334,24 +369,11 @@ export function Policies({
                             onClick={toggleOrSelect}
                             onKeyDown={(e) => activate(e, toggleOrSelect)}
                           >
-                            <div className="ntile-top">
+                            <span className="nt-text">
                               <span className="nt-name" {...tip(c.label(m), true)}>
-                                {c.label(m)}
+                                <span className="nt-name-txt">{c.label(m)}</span>
+                                {isPinned && <span className="nt-pin-ico"><Icon name="pin" size={11} /></span>}
                               </span>
-                              {manualSelected ? (
-                                <span
-                                  className="nt-mark"
-                                  {...tip(isPinned ? '已手动固定，再次点击恢复自动' : '当前手动选中')}
-                                >
-                                  <Icon name={isPinned ? 'pin' : 'check'} size={13} />
-                                </span>
-                              ) : autoSelected ? (
-                                <span className="nt-mark auto" {...tip('当前自动选路命中，点击可固定此节点')}>
-                                  <Icon name="bolt" size={12} />
-                                </span>
-                              ) : null}
-                            </div>
-                            <div className="ntile-bot">
                               <span
                                 className="nt-sub"
                                 {...tip(
@@ -371,39 +393,39 @@ export function Policies({
                                       ? protocolInfo(protoType).label
                                       : '—'}
                               </span>
-                              <button
-                                type="button"
-                                className={
-                                  'nt-test num' +
-                                  (testing
-                                    ? ' spin'
-                                    : ' lat-' + (ms?.probe_error ? 'bad' : latencyTone(ms?.probe_ms ?? null)))
-                                }
-                                data-weight={w}
-                                {...tip(
-                                  isDirectOrReject
-                                    ? undefined
-                                    : '单点测速' +
-                                        (ms?.probe_error ? ' · ' + probeFailureTitle(ms.probe_error) : '') +
-                                        (measuredAt === '—' ? '' : ' · ' + measuredAt),
-                                )}
-                                disabled={c.probeLocked || testing || isDirectOrReject}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void c.probe('node', m);
-                                }}
-                                onKeyDown={(e) => e.stopPropagation()}
-                                aria-label={'成员测速 ' + c.label(m)}
-                              >
-                                {testing ? (
-                                  <Icon name="refresh" size={13} />
-                                ) : g.type === 'smart' ? (
-                                  smartProbe(ms?.probe_ms, ms?.probe_error, w)
-                                ) : (
-                                  weightedProbe(ms?.probe_ms, ms?.probe_error, w)
-                                )}
-                              </button>
-                            </div>
+                            </span>
+                            <button
+                              type="button"
+                              className={
+                                'nt-test num' +
+                                (testing
+                                  ? ' spin'
+                                  : ' lat-' + (ms?.probe_error ? 'bad' : latencyTone(ms?.probe_ms ?? null)))
+                              }
+                              data-weight={w}
+                              {...tip(
+                                isDirectOrReject
+                                  ? undefined
+                                  : '单点测速' +
+                                      (ms?.probe_error ? ' · ' + probeFailureTitle(ms.probe_error) : '') +
+                                      (measuredAt === '—' ? '' : ' · ' + measuredAt),
+                              )}
+                              disabled={c.probeLocked || testing || isDirectOrReject}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void c.probe('node', m);
+                              }}
+                              onKeyDown={(e) => e.stopPropagation()}
+                              aria-label={'成员测速 ' + c.label(m)}
+                            >
+                              {testing ? (
+                                <Icon name="refresh" size={13} />
+                              ) : g.type === 'smart' ? (
+                                smartProbe(ms?.probe_ms, ms?.probe_error, w)
+                              ) : (
+                                weightedProbe(ms?.probe_ms, ms?.probe_error, w)
+                              )}
+                            </button>
                           </div>
                         );
                       })}

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Icon } from './Icon';
-import { Card, Switch } from './ui';
+import { Card, SettingSwitch, StableText } from './ui';
 import { LocalError } from './Editors';
 import { core } from '../client/ipc';
 import { errorText } from '../lib/errors';
@@ -65,7 +65,7 @@ export function DnsQuery({ c }: { c: Client }) {
         </select>
         <button className="btn primary" type="submit" disabled={!running || !name.trim() || busy}>
           <Icon name="search" size={13} />
-          {busy ? '查询中…' : '查询'}
+          <StableText current={busy ? '查询中…' : '查询'} items={['查询', '查询中…']} />
         </button>
       </form>
       {!running && <div className="dq-note">内核运行时才能发起解析测试</div>}
@@ -102,30 +102,25 @@ export function DnsQuery({ c }: { c: Client }) {
 /** Only expose the options the existing generated inbound already supports. */
 export function SniffSettingsCard({ c }: { c: Client }) {
   const cur: SniffSettings = patchSniff(c.source?.client.sniff, {});
-  const disabled = !c.source || !c.connected || c.doc.saving || c.doc.dirty;
+  const disabled = !c.source || !c.connected || c.doc.dirty;
   const set = async (patch: Partial<SniffSettings>) =>
     c.edit((d) => {
       d.client.sniff = patchSniff(d.client.sniff, patch);
     }, c.reportOperationError);
   const off = disabled || !cur.enabled;
-  return (
-    <Card title="域名嗅探" className="sniff-card">
+  const body = (
+    <>
       <div className="set-row">
         <div className="set-row-copy">
           <b>启用流量域名嗅探</b>
           <small>从纯 IP 连接的首包握手中提取真实访问域名以匹配域名规则</small>
         </div>
-        <button
-          type="button"
-          className="pref-toggle"
-          role="switch"
-          aria-label="启用域名嗅探"
-          aria-checked={cur.enabled}
-          disabled={disabled}
-          onClick={() => void set({ enabled: !cur.enabled })}
-        >
-          <Switch on={cur.enabled} />
-        </button>
+        <SettingSwitch
+          ariaLabel="启用域名嗅探"
+          on={cur.enabled}
+          locked={disabled}
+          onToggle={(next) => set({ enabled: next })}
+        />
       </div>
       <div className={'sniff-options' + (!cur.enabled ? ' is-off' : '')}>
         <div className="set-row sniff-protocols">
@@ -171,17 +166,12 @@ export function SniffSettingsCard({ c }: { c: Client }) {
             <b>用嗅探域名覆盖目标地址</b>
             <small>开启后远端节点直接收到域名并由远端解析，避免本地 DNS 污染</small>
           </div>
-          <button
-            type="button"
-            className="pref-toggle"
-            role="switch"
-            aria-label="用嗅探到的域名替换目标地址"
-            aria-checked={cur.override_destination}
-            disabled={off}
-            onClick={() => void set({ override_destination: !cur.override_destination })}
-          >
-            <Switch on={cur.override_destination} />
-          </button>
+          <SettingSwitch
+            ariaLabel="用嗅探到的域名替换目标地址"
+            on={cur.override_destination}
+            locked={off}
+            onToggle={(next) => set({ override_destination: next })}
+          />
         </div>
         <SkipDomainInput
           rawSkip={cur.skip_domain}
@@ -190,6 +180,11 @@ export function SniffSettingsCard({ c }: { c: Client }) {
         />
       </div>
       {c.doc.dirty && <div className="form-error">原文有未保存草稿</div>}
+    </>
+  );
+  return (
+    <Card title="域名嗅探" className="sniff-card">
+      {body}
     </Card>
   );
 }

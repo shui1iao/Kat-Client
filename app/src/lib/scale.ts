@@ -4,7 +4,10 @@ import { hasHost, host } from '../client/ipc';
 export type UiScale = 100 | 110 | 115 | 125;
 export const UI_SCALES: UiScale[] = [100, 110, 115, 125];
 const KEY = 'kat.ui_scale';
-const DEFAULT_SCALE: UiScale = 110;
+
+export function defaultUiScale(): UiScale {
+  return 100;
+}
 
 export function storedUiScale(): UiScale {
   try {
@@ -13,7 +16,7 @@ export function storedUiScale(): UiScale {
   } catch {
     /* ignore storage restrictions */
   }
-  return DEFAULT_SCALE;
+  return defaultUiScale();
 }
 
 export function applyUiScale(scale: UiScale) {

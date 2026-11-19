@@ -9,7 +9,7 @@ import { PolicyReveal } from '../components/PolicyReveal';
 import { Icon } from '../components/Icon';
 import { ProcessIcon } from '../components/EntityIcons';
 import { Modal } from '../components/Editors';
-import { Segmented } from '../components/ui';
+import { Segmented, StableText } from '../components/ui';
 import { core } from '../client/ipc';
 import { errorText } from '../lib/errors';
 import { clockStr, durationStr, showBytes, showRate } from '../client/display';
@@ -419,10 +419,10 @@ export function Connections({
                 </button>
                 <button
                   type="button"
-                  className="btn sm btn-fixed-md"
+                  className="btn sm"
                   onClick={() => void copyTarget(x.id, name || x.target)}
                 >
-                  {copiedId === x.id ? '已复制' : '复制目标'}
+                  <StableText current={copiedId === x.id ? '已复制' : '复制目标'} items={['复制目标', '已复制']} />
                 </button>
                 {tab === 'active' && (
                   <button
@@ -460,7 +460,7 @@ export function Connections({
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="搜索进程、目标或规则…"
+              placeholder="搜索"
               aria-label="搜索连接"
             />
           </label>
@@ -516,17 +516,20 @@ export function Connections({
                 })
               }
             >
-              {needle || process !== '*' ? `关闭匹配 ${sorted.length}` : '关闭全部'}
+              <StableText
+                current={needle || process !== '*' ? `关闭匹配 ${sorted.length}` : '关闭全部'}
+                items={['关闭全部', '关闭匹配 999']}
+              />
             </button>
           )}
           <button
             type="button"
-            className="btn sm btn-fixed-xs"
+            className="btn sm"
             onClick={() => setPaused((p) => !p)}
             disabled={!running}
             aria-pressed={paused}
           >
-            {paused ? '继续' : '暂停'}
+            <StableText current={paused ? '继续' : '暂停'} items={['暂停', '继续']} />
           </button>
         </header>
 

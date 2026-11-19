@@ -1,5 +1,6 @@
 import {useEffect,useRef,useState} from 'react';
 import {Modal,LocalError} from './Editors';
+import {StableText} from './ui';
 import {Icon} from './Icon';
 import {core,errorText} from '../client/ipc';
 import type {Client} from '../client/useClient';
@@ -30,7 +31,7 @@ export function TargetRulePreview({c,close}:{c:Client;close:()=>void}){
     <label htmlFor="target-preview-address">域名或 IP</label>
     <div className="target-preview-input-row">
      <input id="target-preview-address" className="inp" placeholder="example.com / 1.1.1.1" autoComplete="off" spellCheck={false} value={target} disabled={busy} onChange={e=>{setTarget(e.target.value);setResult(null);setError('');}} onKeyDown={e=>{if(e.key==='Enter'&&!e.nativeEvent.isComposing){e.preventDefault();void preview();}}}/>
-     <button className="btn primary" type="button" disabled={busy||!target.trim()||!c.hasHost} onClick={()=>void preview()}>{busy?'判定中…':'判定'}</button>
+     <button className="btn primary" type="button" disabled={busy||!target.trim()||!c.hasHost} onClick={()=>void preview()}><StableText current={busy?'判定中…':'判定'} items={['判定','判定中…']}/></button>
     </div>
     <p className="target-preview-help">也可粘贴网址。仅匹配域名和目标 IP，进程等条件不参与；不访问目标，必要时仅查询 DNS。</p>
    </div>

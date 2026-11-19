@@ -46,30 +46,32 @@ export function TrafficDistribution({ items, running = false }: { items: Traffic
   const percent = (v: number) => trafficPercent(v, total);
 
   return (
-    <div className="share-wrap">
-      <ul className="share-list" role="list" aria-label="策略组流量占比">
+    <div className="share-wrap rank-wrap">
+      <ul className="share-list rank-list" role="list" aria-label="策略组流量占比">
         {folded.map((g) => (
           <li
             key={g.label}
-            className="share-row"
+            className="share-row rank-row"
             aria-label={`${g.label} 下载 ${showBytes(g.down)}，上传 ${showBytes(g.up)}，合计 ${showBytes(g.value)}，占 ${percent(g.value)}`}
             {...tip(`${g.label} · ↓ ${showBytes(g.down)} · ↑ ${showBytes(g.up)} (${percent(g.value)})`)}
           >
-            <span className="share-label-cell">
-              <PolicyMiniIcon name={g.label} iconUrl={g.iconUrl} groupType={g.groupType} running={running} />
-              <span className="share-name">{g.label}</span>
-            </span>
-            <span className="share-track">
-              <i
-                style={{
-                  width: `${maxVal > 0 ? (g.value / maxVal) * 100 : 0}%`,
-                  minWidth: g.value > 0 ? 4 : 0,
-                  background: g.color,
-                }}
-              />
-            </span>
-            <span className="share-bytes num">{showBytes(g.value)}</span>
-            <span className="share-pct num">{percent(g.value)}</span>
+            <PolicyMiniIcon name={g.label} iconUrl={g.iconUrl} groupType={g.groupType} running={running} />
+            <div className="rank-body">
+              <div className="rank-top">
+                <span className="share-name rank-name">{g.label}</span>
+                <span className="share-pct rank-aux num">{percent(g.value)}</span>
+                <b className="share-bytes rank-val num">{showBytes(g.value)}</b>
+              </div>
+              <span className="share-track rank-track">
+                <i
+                  style={{
+                    width: `${maxVal > 0 ? (g.value / maxVal) * 100 : 0}%`,
+                    minWidth: g.value > 0 ? 4 : 0,
+                    background: g.color,
+                  }}
+                />
+              </span>
+            </div>
           </li>
         ))}
       </ul>
@@ -87,8 +89,8 @@ export function DomainRankList({ items }: { items: DomainRankItem[] }) {
   }
 
   return (
-    <div className="domain-rank-wrap">
-      <ul className="domain-rank-list" role="list" aria-label="域名流量排行">
+    <div className="domain-rank-wrap rank-wrap">
+      <ul className="domain-rank-list rank-list" role="list" aria-label="域名流量排行">
         {top.map((d) => {
           const widthPct = Math.max(4, (d.total / maxVal) * 100);
           const proxyRatio = d.total > 0 ? (d.proxy / d.total) * 100 : 100;
@@ -97,17 +99,17 @@ export function DomainRankList({ items }: { items: DomainRankItem[] }) {
           return (
             <li
               key={d.name}
-              className="domain-rank-row"
+              className="domain-rank-row rank-row"
               aria-label={`${d.name} 合计 ${showBytes(d.total)}，代理 ${showBytes(d.proxy)}，直连 ${showBytes(d.direct)}`}
               {...tip(detail)}
             >
-              <DomainIcon domain={d.name} />
-              <div className="domain-rank-body">
-                <div className="domain-rank-top">
-                  <span className="domain-rank-name">{d.name}</span>
-                  <b className="domain-rank-bytes num">{showBytes(d.total)}</b>
+              <DomainIcon domain={d.name} size="sm" />
+              <div className="domain-rank-body rank-body">
+                <div className="domain-rank-top rank-top">
+                  <span className="domain-rank-name rank-name">{d.name}</span>
+                  <b className="domain-rank-bytes rank-val num">{showBytes(d.total)}</b>
                 </div>
-                <div className="domain-rank-track">
+                <div className="domain-rank-track rank-track">
                   <div className="domain-rank-fill" style={{ width: `${widthPct}%` }}>
                     {d.proxy > 0 && <i style={{ width: `${proxyRatio}%`, background: 'var(--proxy)' }} />}
                     {d.direct > 0 && <i style={{ width: `${directRatio}%`, background: 'var(--direct)' }} />}

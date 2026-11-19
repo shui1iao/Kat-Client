@@ -523,15 +523,18 @@ pub fn run() {
           .transparent(true)
           .on_navigation(|url| url.scheme()=="tauri" || (url.scheme()=="http" && url.host_str()==Some("tauri.localhost")))
           .icon(window_image())?
-          .visible((installed_handoff||crate::preferences::initially_visible(&settings,autostart_launch,settings_error.is_some()||intent_error.is_some()||app.state::<Host>().core.is_none())) && !settings.remember_window).build()?;
+          .visible(false).build()?;
         crate::windows::identity::set_uac_owner(window.hwnd().map(|h|h.0 as isize).unwrap_or(0));
         if installed_handoff { refresh_shell_icons(); }
         crate::acrylic::install(&window);
+        let should_show=installed_handoff||crate::preferences::initially_visible(&settings,autostart_launch,settings_error.is_some()||intent_error.is_some()||app.state::<Host>().core.is_none());
         if settings.remember_window{
           let result=crate::windows::window_state::restore(&window,&app.state::<Host>().store);
           match result{Ok((maximized,error))=>{app.state::<Host>().pending_maximize.store(maximized,Ordering::SeqCst);if let Some(e)=error{app.state::<Host>().record::<()>(crate::safe_log::HostEvent::Settings,&Err(e));}},Err(e)=>{app.state::<Host>().record::<()>(crate::safe_log::HostEvent::Settings,&Err(e));}}
-          if installed_handoff||crate::preferences::initially_visible(&settings,autostart_launch,settings_error.is_some()||intent_error.is_some()||app.state::<Host>().core.is_none()){show_main(app.handle());}
+        }else{
+          if let Err(e)=crate::windows::window_state::apply_default(&window){app.state::<Host>().record::<()>(crate::safe_log::HostEvent::Settings,&Err(e));}
         }
+        if should_show{show_main(app.handle());}
         window.on_window_event({let a=app.handle().clone();move |e| match e{
           tauri::WindowEvent::CloseRequested{api,..}=>{api.prevent_close();if a.state::<Host>().installing.load(Ordering::SeqCst){show_main(&a);return;}save_window_now(&a);if a.state::<Host>().settings.lock().unwrap().close_action==crate::preferences::CloseAction::Quit{quit(a.clone());}else{let _=close_to_tray(&a);}sync_main_window_visibility(&a,false);},
           tauri::WindowEvent::Moved(_)|tauri::WindowEvent::Resized(_)|tauri::WindowEvent::ScaleFactorChanged{..}=>queue_window_save(&a),tauri::WindowEvent::Focused(_)=>sync_main_window_visibility(&a,false),_=>{}

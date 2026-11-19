@@ -7,7 +7,7 @@ import { flowRuleDraft, type FlowRuleSource } from '../client/flowRule';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NetworkTag, ConnectionRule, KState, KTag, ConnectionTarget } from '../components/labels';
 import { Icon } from '../components/Icon';
-import { Segmented } from '../components/ui';
+import { Segmented, StableText } from '../components/ui';
 import { Diagnostics } from '../components/Diagnostics';
 import { core } from '../client/ipc';
 import { errorText } from '../lib/errors';
@@ -162,7 +162,7 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="搜索域名、进程、规则、出口"
+            placeholder="搜索"
             aria-label="搜索连接日志"
           />
         </label>
@@ -182,8 +182,8 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
         </div>
         <span className="sp" />
         <span className="muted num toolbar-count">{shown.length} 条</span>
-        <button type="button" className="btn sm btn-fixed-xs" onClick={() => setPaused(!paused)} aria-pressed={paused}>
-          {paused ? '继续' : '暂停'}
+        <button type="button" className="btn sm" onClick={() => setPaused(!paused)} aria-pressed={paused}>
+          <StableText current={paused ? '继续' : '暂停'} items={['暂停', '继续']} />
         </button>
         <button
           type="button"
@@ -381,7 +381,7 @@ function KernelLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
           <Icon name="search" size={14} />
           <input
             aria-label="搜索内核日志"
-            placeholder="搜索内核输出"
+            placeholder="搜索"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -402,8 +402,8 @@ function KernelLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
         </div>
         <span className="sp" />
         <span className="muted num toolbar-count">{shown.length} 条</span>
-        <button type="button" className="btn sm btn-fixed-xs" onClick={() => setPaused(!paused)} aria-pressed={paused}>
-          {paused ? '继续' : '暂停'}
+        <button type="button" className="btn sm" onClick={() => setPaused(!paused)} aria-pressed={paused}>
+          <StableText current={paused ? '继续' : '暂停'} items={['暂停', '继续']} />
         </button>
         <button type="button" className="btn sm btn-fixed-xs" disabled={!entries.length} onClick={() => setEntries([])}>
           清空

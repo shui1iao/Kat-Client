@@ -4,6 +4,7 @@ import { SubscriptionImport } from '../components/SubscriptionImport';
 import { importKind } from '../client/subscription';
 import { Modal } from '../components/Editors';
 import { KState } from '../components/labels';
+import { StableText } from '../components/ui';
 import { errorText, errorLocation } from '../lib/errors';
 import { yamlHighlightRanges, yamlKeyOffset } from '../client/yaml';
 import { useConfirmation } from '../components/Confirm';
@@ -131,6 +132,7 @@ export function Config({ c }: { c: Client }) {
   const wrap = useRef<HTMLDivElement>(null);
   const ta = useRef<HTMLTextAreaElement>(null);
   const [hl, setHl] = useState<number | null>(null);
+  const [activeKey, setActiveKey] = useState<string | null>(null);
   const dirty = c.doc.dirty;
   const [dnsChoice, setDNSChoice] = useState<'' | 'system' | 'custom'>('');
   const [dnsServers, setDNSServers] = useState('');
@@ -264,8 +266,7 @@ export function Config({ c }: { c: Client }) {
 
       {/* Compact File Tools & Wrapping Document Outline */}
       <section className="card cfg-tools" aria-label="配置导航与文件工具">
-        <div className="cfg-tools-row">
-          <div className="cfg-doc-box">
+        <div className="cfg-doc-box">
             <div className="cfg-doc-name" {...tip(fileLabel, true)}>
               <Icon name="doc" size={14} />
               <span className="ell">{fileLabel}</span>
@@ -280,6 +281,35 @@ export function Config({ c }: { c: Client }) {
               </span>
             </div>
           </div>
+        {v && (
+          <nav className="cfg-outline" aria-label="结构大纲">
+            <div className="cfg-outline-label">结构大纲</div>
+            <div className="cfg-outline-list">
+              {sections.map((s) => (
+                <button
+                  type="button"
+                  key={s.key}
+                  className={'vsec' + (activeKey === s.key && hl != null ? ' is-active' : '')}
+                  {...tip(`点击定位到「${s.label}」配置段`)}
+                  onClick={() => {
+                    setActiveKey(s.key);
+                    locate(s.key);
+                  }}
+                >
+                  <span className="vsec-label">
+                    <Icon name={s.icon} size={15} />
+                    <span>{s.label}</span>
+                  </span>
+                  <b className="num">{s.count}</b>
+                  <span className="vsec-go" aria-hidden="true">
+                    <Icon name="chevRight" size={13} />
+                  </span>
+                </button>
+              ))}
+            </div>
+          </nav>
+        )}
+        <div className="cfg-tools-foot">
           {v && (
             <label className="cfg-inline-field">
               <span>日志级别</span>
@@ -335,23 +365,6 @@ export function Config({ c }: { c: Client }) {
             </button>
           </div>
         </div>
-
-        {v && (
-          <nav className="cfg-outline" aria-label="结构大纲">
-            <div className="cfg-outline-label">结构大纲</div>
-            <div className="cfg-outline-list">
-              {sections.map((s) => (
-                <button type="button" key={s.key} className="vsec" onClick={() => locate(s.key)}>
-                  <span className="vsec-label">
-                    <Icon name={s.icon} size={14} />
-                    <span>{s.label}</span>
-                  </span>
-                  <b className="num">{s.count}</b>
-                </button>
-              ))}
-            </div>
-          </nav>
-        )}
       </section>
 
       {/* Full-Width Syntax-Highlighted Code Workbench */}
@@ -410,10 +423,9 @@ export function Config({ c }: { c: Client }) {
               className="btn sm primary"
               {...tip('快捷键 Ctrl+S')}
               disabled={!canSave}
-              style={{ minWidth: 68 }}
               onClick={() => void (advancedDNS ? resolveDNS() : c.save())}
             >
-              {c.doc.saving ? '保存中…' : '保存'}
+              <StableText current={c.doc.saving ? '保存中…' : '保存'} items={['保存', '保存中…']} />
             </button>
           </div>
         </header>

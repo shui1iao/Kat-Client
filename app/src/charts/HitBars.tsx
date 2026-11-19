@@ -19,24 +19,27 @@ export function HitBars({
   const containerStyle = { '--hit-count-cols': `${maxDigits + 0.5}ch` } as CSSProperties;
 
   return (
-    <div className="hit-bars" role="list" aria-label="按策略组命中次数" style={containerStyle}>
+    <div className="hit-bars rank-list" role="list" aria-label="按策略组命中次数" style={containerStyle}>
       {items.map((it) => (
         <div
           key={it.key}
-          className="hit-row"
+          className="hit-row rank-row"
           style={categoryStyle(it.colorIndex, it.key, it.color)}
           role="listitem"
           aria-label={`${it.label} 命中 ${countStr(it.value)} 次，占 ${trafficPercent(it.value, total)}`}
           {...tip(`${it.label} · 命中 ${countStr(it.value)} 次 (${trafficPercent(it.value, total)})`)}
         >
-          <span className="hit-label-cell">
-            <PolicyMiniIcon name={it.label} iconUrl={it.iconUrl} groupType={it.groupType} running={running} />
-            <span className="hit-name">{it.label}</span>
-          </span>
-          <span className="hit-track">
-            <i style={{ width: `${maximum > 0 ? (it.value / maximum) * 100 : 0}%`, minWidth: it.value > 0 ? 4 : 0 }} />
-          </span>
-          <b className="num">{countStr(it.value)}</b>
+          <PolicyMiniIcon name={it.label} iconUrl={it.iconUrl} groupType={it.groupType} running={running} />
+          <div className="rank-body">
+            <div className="rank-top">
+              <span className="hit-name rank-name">{it.label}</span>
+              <span className="rank-aux num">{trafficPercent(it.value, total)}</span>
+              <b className="rank-val num">{countStr(it.value)}</b>
+            </div>
+            <span className="hit-track rank-track">
+              <i style={{ width: `${maximum > 0 ? (it.value / maximum) * 100 : 0}%`, minWidth: it.value > 0 ? 4 : 0 }} />
+            </span>
+          </div>
         </div>
       ))}
     </div>

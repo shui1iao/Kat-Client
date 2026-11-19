@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { host } from '../client/ipc';
 import { errorText } from '../lib/errors';
 import type { Client } from '../client/useClient';
-import { Card, Switch } from './ui';
+import { Card, SettingSwitch, StableText } from './ui';
 import { Modal, LocalError } from './Editors';
 import { Icon } from './Icon';
 import { showBytes } from '../client/display';
@@ -214,10 +214,10 @@ export function SoftwareUpdateCard({ u }: { u: SoftwareUpdateController }) {
       extra={
         <button
           className="btn sm"
-          disabled={!d || d.checking || u.working || d.preparing}
+          disabled={!d || d.checking || d.preparing}
           onClick={() => void u.action('update_check')}
         >
-          {d?.checking ? '检查中…' : '检查更新'}
+          <StableText current={d?.checking ? '检查中…' : '检查更新'} items={['检查更新', '检查中…']} />
         </button>
       }
     >
@@ -226,16 +226,12 @@ export function SoftwareUpdateCard({ u }: { u: SoftwareUpdateController }) {
           <b>自动检查更新</b>
           <small>仅检查版本与更新日志，不自动下载或静默安装</small>
         </span>
-        <button
-          className="pref-toggle"
-          role="switch"
-          aria-label="自动检查更新"
-          aria-checked={d?.auto_check ?? true}
-          disabled={!d || u.working || d.preparing}
-          onClick={() => void u.action('update_settings', { autoCheck: !d?.auto_check })}
-        >
-          <Switch on={d?.auto_check ?? true} />
-        </button>
+        <SettingSwitch
+          ariaLabel="自动检查更新"
+          on={d?.auto_check ?? true}
+          locked={!d || !!d.preparing}
+          onToggle={(next) => u.action('update_settings', { autoCheck: next })}
+        />
       </div>
 
       {rows.map((r) => {
@@ -282,7 +278,7 @@ export function SoftwareUpdateCard({ u }: { u: SoftwareUpdateController }) {
             <div className="update-row-action">
               {(hasNew || hasNotes) && (
                 <button type="button" className="btn sm" onClick={() => u.setDialogKind(r.kind)}>
-                  {hasNew ? '更新说明' : '版本说明'}
+                  <StableText current={hasNew ? '更新说明' : '版本说明'} items={['更新说明', '版本说明']} />
                 </button>
               )}
               {r.phase === 'downloading' ? (
@@ -295,7 +291,7 @@ export function SoftwareUpdateCard({ u }: { u: SoftwareUpdateController }) {
                   disabled={!r.offer || u.working || !!d?.preparing || r.phase === 'checking'}
                   onClick={() => (r.downloaded ? u.setConfirm(r) : void u.action('update_download', { offer: r.offer }))}
                 >
-                  {r.downloaded ? '安装更新' : '下载更新'}
+                  <StableText current={r.downloaded ? '安装更新' : '下载更新'} items={['下载更新', '安装更新']} />
                 </button>
               )}
             </div>
@@ -333,7 +329,7 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
             {u.error && <span role="alert"> · {u.error}</span>}
           </span>
           <button className="btn sm" style={{ flexShrink: 0 }} disabled={d.confirmation.running || u.working} onClick={() => void u.action('update_recover')}>
-            {d.confirmation.running ? '等待确认…' : '重试确认'}
+            <StableText current={d.confirmation.running ? '等待确认…' : '重试确认'} items={['重试确认', '等待确认…']} />
           </button>
         </div>
       )}

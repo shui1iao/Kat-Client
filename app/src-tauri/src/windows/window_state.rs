@@ -19,6 +19,15 @@ pub fn capture(hwnd:HWND)->Result<Option<WindowState>>{unsafe{
  let s=WindowState{schema:1,normal,work:rect(i.rcWork),dpi:GetDpiForWindow(hwnd),maximized:p.showCmd==SW_SHOWMAXIMIZED as u32};if !s.valid(){return Err(failure());}Ok(Some(s))
 }}
 /// Position only. Return maximized intent so the caller can defer it until show when start_hidden=true.
+pub fn apply_default(w:&tauri::WebviewWindow)->Result<()>{
+ let mut monitors=Vec::<Monitor>::new();if unsafe{EnumDisplayMonitors(std::ptr::null_mut(),std::ptr::null(),Some(collect),(&mut monitors as *mut Vec<Monitor>)as LPARAM)}==0{return Err(failure());}
+ let p=window_geometry::placement(None,&monitors).ok_or_else(failure)?;
+ let scale=f64::from(p.monitor.dpi)/96.0;
+ w.set_min_size(Some(tauri::LogicalSize::new((f64::from(p.monitor.work.width)/scale).min(900.0),(f64::from(p.monitor.work.height)/scale).min(600.0)))).map_err(|_|failure())?;
+ let h=w.hwnd().map_err(|_|failure())?;let n=p.normal;
+ if unsafe{SetWindowPos(h.0,std::ptr::null_mut(),n.x,n.y,n.width,n.height,SWP_NOZORDER|SWP_NOACTIVATE|SWP_NOOWNERZORDER)}==0{return Err(failure());}
+ Ok(())
+}
 pub fn restore(w:&tauri::WebviewWindow,store:&Store)->Result<(bool,Option<Error>)>{
  let mut monitors=Vec::<Monitor>::new();if unsafe{EnumDisplayMonitors(std::ptr::null_mut(),std::ptr::null(),Some(collect),(&mut monitors as *mut Vec<Monitor>)as LPARAM)}==0{return Err(failure());}
  let loaded=window_geometry::load(store);let error=loaded.as_ref().err().cloned();let p=window_geometry::placement(loaded.unwrap_or(None),&monitors).ok_or_else(failure)?;

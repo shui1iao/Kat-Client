@@ -20,8 +20,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 48px;
-  padding: 8px 12px 8px 16px;
+  min-height: 44px;
+  padding: 6px 12px 6px 16px;
   flex: none;
 }
 
@@ -29,7 +29,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 15.5px;
+  font-size: var(--fs-section);
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
@@ -49,7 +49,7 @@
 }
 
 .card-note {
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--text-3);
   display: inline-flex;
   align-items: center;
@@ -65,14 +65,15 @@
 .card-note .sq.up { background: var(--up); }
 .card-note .sq.down { background: var(--down); }
 
-/* ---------- Buttons (Borderless Surface Elevation) ---------- */
+/* ---------- macOS Push Buttons (Crisp Elevated Surface + Top Highlight) ---------- */
 .btn {
-  height: 34px;
-  padding: 0 14px;
+  height: var(--h-ctl);
+  padding: 0 13px;
   border-radius: var(--r-ctl);
-  background: var(--card-2);
+  background: var(--btn-bg);
+  box-shadow: var(--btn-shadow);
   color: var(--text);
-  font-size: 13.5px;
+  font-size: var(--fs-body);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   display: inline-flex;
@@ -81,7 +82,7 @@
   gap: 6px;
   flex: none;
   white-space: nowrap;
-  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  transition: background-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
 .btn:hover:not(:disabled) {
@@ -93,26 +94,31 @@
 }
 
 .btn.sm {
-  height: 32px;
-  padding: 0 12px;
-  font-size: 13px;
+  height: var(--h-ctl-sm);
+  padding: 0 10px;
+  font-size: var(--fs-data);
   border-radius: var(--r-ctl);
 }
 
+.btn svg {
+  flex: none;
+}
+
 .btn.primary {
-  background: var(--accent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 92%, #FFFFFF 8%) 0%, var(--accent) 100%);
   color: var(--on-accent);
-  box-shadow: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 1px 2px rgba(0, 122, 255, 0.20);
 }
 
 .btn.primary:hover:not(:disabled) {
   background: var(--accent-hover);
-  box-shadow: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), 0 1px 3px rgba(0, 122, 255, 0.26);
 }
 
 .btn.danger {
   color: var(--bad);
   background: var(--bad-soft);
+  box-shadow: none;
 }
 
 .btn.danger:hover:not(:disabled) {
@@ -122,7 +128,7 @@
 .btn.primary.danger {
   background: var(--bad);
   color: #FFFFFF;
-  box-shadow: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), 0 1px 2px rgba(217, 56, 49, 0.24);
 }
 
 .btn.primary.danger:hover:not(:disabled) {
@@ -143,16 +149,17 @@
 
 .btn.is-active {
   background: var(--accent-soft);
-  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+  color: var(--accent-text);
 }
 
 .link-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 500;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .link-btn:hover:not(:disabled) {
@@ -161,8 +168,8 @@
 
 /* Icon Buttons */
 .ib {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: var(--r-inner);
   display: inline-grid;
   place-items: center;
@@ -202,14 +209,14 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 .inp {
-  height: 34px;
-  padding: 0 11px;
+  height: var(--h-ctl);
+  padding: 0 10px;
   border-radius: var(--r-ctl);
   background-color: var(--card-2);
   box-shadow: inset 0 0 0 1px var(--line);
   border: 0;
   color: var(--text);
-  font-size: 13.5px;
+  font-size: var(--fs-body);
   outline: none;
   transition: background-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
@@ -228,9 +235,9 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 .inp.sm {
-  height: 32px;
-  padding: 0 10px;
-  font-size: 13px;
+  height: var(--h-ctl-sm);
+  padding: 0 9px;
+  font-size: var(--fs-data);
   border-radius: var(--r-ctl);
 }
 
@@ -276,18 +283,22 @@ select.inp.display-sort {
   min-width: 108px;
 }
 
+/* Search: elastic, never truncated. Grows into free toolbar space,
+   shrinks before any button does, floor keeps the word “搜索” whole. */
 .search {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 32px;
-  padding: 0 11px;
+  gap: 7px;
+  height: var(--h-ctl-sm);
+  padding: 0 10px;
   border-radius: var(--r-ctl);
   background-color: var(--card-2);
   box-shadow: inset 0 0 0 1px var(--line);
   color: var(--text-3);
-  width: 236px;
-  min-width: 120px;
+  flex: 1 1 220px;
+  width: auto;
+  min-width: 112px;
+  max-width: 300px;
   transition: background-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
 
@@ -312,7 +323,7 @@ select.inp.display-sort {
   background: transparent;
   border: 0;
   outline: none;
-  font-size: 13.5px;
+  font-size: var(--fs-body);
   color: var(--text);
 }
 
@@ -321,41 +332,38 @@ select.inp.display-sort {
   color: var(--text-3);
 }
 
-/* ---------- Segmented Control & Filter Pills ---------- */
+/* ---------- macOS Segmented Control & Filter Pills ---------- */
 .seg {
   position: relative;
   isolation: isolate;
   display: inline-flex;
   align-items: center;
   flex: none;
-  height: 34px;
-  padding: 3px;
-  gap: 2px;
-  border-radius: 9px;
-  background: var(--card-2);
+  height: 32px;
+  padding: 2px;
+  gap: 0;
+  border-radius: 9.5px;
+  background: var(--recess-bg);
+  box-shadow: var(--recess-shadow);
 }
 
 .seg.seg-sm {
-  height: 32px;
+  height: 28px;
   padding: 2px;
-  border-radius: 8px;
+  border-radius: 8.5px;
 }
 
 .seg > .seg-thumb {
   position: absolute;
   z-index: -1;
-  border-radius: var(--r-inner);
-  background: var(--hover);
+  border-radius: 7.5px;
+  background: var(--hig-thumb);
+  box-shadow: var(--hig-thumb-shadow);
   transition: left var(--t) var(--ease), width var(--t) var(--ease);
 }
 
-:root[data-theme="light"] .seg > .seg-thumb {
-  background: var(--hig-thumb);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-
 .seg.seg-sm > .seg-thumb {
-  border-radius: var(--r-inner);
+  border-radius: 6.5px;
 }
 
 .seg > .seg-thumb.instant {
@@ -369,8 +377,8 @@ select.inp.display-sort {
   justify-content: center;
   height: 28px;
   padding: 0 13px;
-  border-radius: var(--r-inner);
-  font-size: 13.5px;
+  border-radius: 5px;
+  font-size: var(--fs-body);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--text-3);
@@ -379,10 +387,10 @@ select.inp.display-sort {
 }
 
 .seg.seg-sm > button {
-  height: 28px;
-  padding: 0 11px;
-  font-size: 13px;
-  border-radius: var(--r-inner);
+  height: 24px;
+  padding: 0 10px;
+  font-size: var(--fs-meta);
+  border-radius: 4px;
 }
 
 .seg > button:hover:not(.on):not(:disabled) {
@@ -399,10 +407,11 @@ select.inp.display-sort {
   align-items: center;
   flex: none;
   height: 32px;
-  gap: 2px;
+  gap: 0;
   padding: 2px;
-  border-radius: 8px;
-  background: var(--card-2);
+  border-radius: 9.5px;
+  background: var(--recess-bg);
+  box-shadow: var(--recess-shadow);
   max-width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
@@ -415,9 +424,9 @@ select.inp.display-sort {
 .pill-bar button {
   flex: none;
   height: 28px;
-  padding: 0 10px;
-  border-radius: var(--r-inner);
-  font-size: 13px;
+  padding: 0 11px;
+  border-radius: 5px;
+  font-size: var(--fs-body);
   font-weight: 500;
   color: var(--text-3);
   display: inline-flex;
@@ -432,18 +441,14 @@ select.inp.display-sort {
 }
 
 .pill-bar button.on {
-  background: var(--hover);
-  color: var(--text);
-}
-
-:root[data-theme="light"] .pill-bar button.on {
   background: var(--hig-thumb);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--hig-thumb-shadow);
+  color: var(--text);
 }
 
 .pill-bar button em {
   font-style: normal;
-  font-size: 12px;
+  font-size: var(--fs-meta);
   color: var(--text-3);
 }
 
@@ -453,7 +458,7 @@ select.inp.display-sort {
   border-radius: var(--r-inner);
   background: var(--card-2);
   color: var(--text-2);
-  font-size: 12px;
+  font-size: var(--fs-meta);
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -466,44 +471,83 @@ select.inp.display-sort {
 
 .pick.on {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
-/* ---------- Switch ---------- */
+/* ---------- Stable Multi-State Label Stack ---------- */
+.stable-stack {
+  display: inline-grid;
+  align-items: center;
+  justify-items: center;
+}
+
+.stable-stack > * {
+  grid-area: 1 / 1;
+  white-space: nowrap;
+}
+
+.stable-stack > .is-ghost {
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+  height: 0;
+  overflow: hidden;
+}
+
+/* ---------- macOS Sequoia NSSwitch (38x21, Pure-White Porcelain Knob, GPU-Isolated) ---------- */
 .sw {
   position: relative;
   display: inline-block;
-  width: 36px;
-  height: 20px;
+  width: 38px;
+  height: 21px;
   border-radius: 999px;
-  background: var(--track);
+  background: rgba(120, 125, 136, 0.26);
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.06);
   flex: none;
+  contain: layout paint;
+  isolation: isolate;
+  transform: translateZ(0);
   transition: background-color var(--t-fast) var(--ease);
+}
+
+:root[data-theme="dark"] .sw:not(.on) {
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
 }
 
 .sw i {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
   border-radius: 50%;
   background: #FFFFFF;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
-  transition: transform var(--t-fast) var(--ease);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.24), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translate3d(0, 0, 0);
+  transition: transform var(--t) var(--ease);
 }
 
 .sw.on {
   background: var(--accent);
+  box-shadow: none;
 }
 
 .sw.on i {
-  transform: translateX(16px);
+  background: #FFFFFF;
+  transform: translate3d(17px, 0, 0);
 }
 
 .pref-toggle {
   display: inline-flex;
   align-items: center;
+}
+
+.pref-toggle[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
 }
 
 /* ---------- Chips, Tags, Latency & States ---------- */
@@ -514,11 +558,11 @@ select.inp.display-sort {
   align-items: center;
   justify-content: center;
   text-align: center;
-  height: 22px;
-  padding: 0 8px;
+  height: 20px;
+  padding: 0 6px;
   border-radius: var(--r-chip);
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: var(--fs-micro);
   font-weight: 500;
   letter-spacing: 0.2px;
   line-height: 1;
@@ -542,7 +586,7 @@ select.inp.display-sort {
 
 .tag {
   font-family: var(--font);
-  font-size: 12px;
+  font-size: var(--fs-meta);
   background: var(--card-2);
   color: var(--text-2);
 }
@@ -556,7 +600,7 @@ select.inp.display-sort {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -581,7 +625,7 @@ select.inp.display-sort {
 .lat-off { color: var(--text-3); }
 
 .ui-count {
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -628,7 +672,7 @@ select.inp.display-sort {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-2);
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 
 /* ---------- Empty & Error States ---------- */
@@ -640,7 +684,7 @@ select.inp.display-sort {
   justify-content: center;
   padding: 16px;
   color: var(--text-3);
-  font-size: 13.5px;
+  font-size: var(--fs-body);
   text-align: center;
 }
 
@@ -650,14 +694,14 @@ select.inp.display-sort {
   background: var(--bad-soft);
   box-shadow: inset 0 0 0 1px rgba(248, 81, 73, 0.25);
   color: var(--bad);
-  font-size: 12px;
+  font-size: var(--fs-meta);
   line-height: 1.45;
 }
 
 .field-error {
   display: block;
   color: var(--bad);
-  font-size: 11.5px;
+  font-size: var(--fs-micro);
   margin-top: 2px;
 }
 
@@ -673,6 +717,8 @@ select.inp.display-sort {
   inset: 0;
   z-index: 1000;
   background: var(--mask);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
   padding: 24px;
@@ -683,10 +729,10 @@ select.inp.display-sort {
 }
 
 .modal {
-  width: min(520px, calc(100vw - 48px));
+  width: min(540px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
-  background: var(--pop);
-  border-radius: var(--r-card);
+  background: var(--pop-solid);
+  border-radius: var(--r-modal);
   box-shadow: var(--shadow-modal);
   display: flex;
   flex-direction: column;
@@ -708,15 +754,15 @@ select.inp.display-sort {
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 48px;
-  padding: 0 12px 0 18px;
-  background: var(--pop);
+  height: 46px;
+  padding: 0 10px 0 18px;
+  background: var(--pop-solid);
   border-bottom: 1px solid var(--line);
   flex: none;
 }
 
 .modal > header h3 {
-  font-size: 16.5px;
+  font-size: var(--fs-modal);
   font-weight: 600;
   color: var(--text);
   flex: 1;
@@ -752,7 +798,7 @@ select.inp.display-sort {
 }
 
 .modal .inp:not(.sm) {
-  height: 34px;
+  height: var(--h-ctl);
 }
 
 .modal select.inp:not(.sm) {
@@ -763,14 +809,14 @@ select.inp.display-sort {
 }
 
 .modal :is(.secret-input, .sub-secret) .btn.sm {
-  height: 34px;
+  height: var(--h-ctl);
   padding: 0 12px;
   border-radius: var(--r-ctl);
 }
 
 .modal .editor-field > .seg:not(.seg-sm) {
   display: flex;
-  height: 34px;
+  height: var(--h-ctl);
 }
 
 .modal .editor-field > .seg:not(.seg-sm) > button {
@@ -790,7 +836,7 @@ select.inp.display-sort {
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 14px;
-  background: var(--pop);
+  background: var(--pop-solid);
   border-top: 1px solid var(--line);
   flex: none;
 }
@@ -806,7 +852,7 @@ select.inp.display-sort {
 
 .modal-note {
   margin-right: auto;
-  font-size: 12px;
+  font-size: var(--fs-meta);
   color: var(--text-3);
 }
 
@@ -818,7 +864,7 @@ select.inp.display-sort {
 }
 
 .editor-field > span {
-  font-size: 12px;
+  font-size: var(--fs-meta);
   font-weight: 500;
   color: var(--text-2);
 }
@@ -831,7 +877,7 @@ select.inp.display-sort {
 
 .raw-object {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-meta);
   min-height: 220px !important;
   white-space: pre;
 }
@@ -859,7 +905,7 @@ select.inp.display-sort {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 12.5px;
+  font-size: var(--fs-data);
   color: var(--text-2);
   align-self: end;
   min-height: 34px;
@@ -875,7 +921,7 @@ select.inp.display-sort {
   border-radius: var(--r-inner);
   background: color-mix(in srgb, var(--accent) 7%, transparent);
   border-left: 2.5px solid var(--accent-line);
-  font-size: 12px;
+  font-size: var(--fs-meta);
   color: var(--text-2);
 }
 
@@ -886,7 +932,7 @@ select.inp.display-sort {
 /* OperationError details */
 .operation-error-code {
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: var(--fs-micro);
   color: var(--text-3);
 }
 
@@ -895,7 +941,7 @@ select.inp.display-sort {
   padding: 8px 10px;
   border-radius: var(--r-ctl);
   background: var(--card-2);
-  font-size: 12px;
+  font-size: var(--fs-meta);
   color: var(--text-2);
   display: flex;
   flex-direction: column;
@@ -913,7 +959,7 @@ select.inp.display-sort {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: var(--fs-meta);
   color: var(--text-2);
   cursor: pointer;
 }
@@ -951,9 +997,11 @@ select.inp.display-sort {
 .kat-pop {
   position: fixed;
   z-index: 1200;
-  padding: 4px;
-  border-radius: var(--r-tray);
+  padding: 5px;
+  border-radius: 12px;
   background: var(--pop);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
   box-shadow: var(--shadow-pop);
   overflow-y: auto;
   scrollbar-gutter: stable;
@@ -971,7 +1019,7 @@ select.inp.display-sort {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  font-size: 12.5px;
+  font-size: var(--fs-data);
   color: var(--text-2);
   text-align: left;
   transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
@@ -1025,7 +1073,7 @@ select.inp.display-sort {
   border: 1px solid var(--line-2);
   box-shadow: var(--shadow-pop);
   color: var(--text);
-  font-size: 11.5px;
+  font-size: var(--fs-meta);
   line-height: 1.4;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
@@ -1044,7 +1092,7 @@ select.inp.display-sort {
   border: 1px solid var(--line-2);
   box-shadow: var(--shadow-pop);
   color: var(--text);
-  font-size: 11.5px;
+  font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
   pointer-events: none;
   animation: kat-tip-in 110ms var(--ease);
@@ -1059,7 +1107,7 @@ select.inp.display-sort {
 
 .chart-tip-title {
   font-weight: 600;
-  font-size: 12px;
+  font-size: var(--fs-meta);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1106,7 +1154,7 @@ select.inp.display-sort {
   border-radius: var(--r-tray);
   background: var(--pop);
   box-shadow: var(--shadow-pop);
-  font-size: 12.5px;
+  font-size: var(--fs-data);
   color: var(--text);
   opacity: 0;
   pointer-events: none;

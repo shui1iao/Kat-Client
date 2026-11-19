@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { Icon } from '../components/Icon';
 import { DomainIcon } from '../components/EntityIcons';
 import { tip } from '../components/Tooltip';
-import { Card, Segmented } from '../components/ui';
+import { Card, Segmented, useSize } from '../components/ui';
 import { SpeedChart } from '../charts/SpeedChart';
 import { WeekBars, type Bar } from '../charts/WeekBars';
 import { DomainRankList, TrafficDistribution, type DomainRankItem } from '../charts/TrafficDistribution';
@@ -260,14 +260,17 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
   const udp = s?.connections.udp ?? (items.length ? items.filter((x) => x.network === 'udp').length : null);
   const all = running ? s?.connections.total ?? items.length : null;
 
-  const topRows = topConnections(running ? items : [], c.connectionSpeeds);
+  // Show as many live rows as the card comfortably holds (30px pitch): 5 on a laptop, more on a desktop.
+  const [acRef, acSize] = useSize<HTMLDivElement>();
+  const acLimit = acSize.h > 0 ? Math.max(3, Math.min(10, Math.floor((acSize.h + 1) / 31))) : 5;
+  const topRows = topConnections(running ? items : [], c.connectionSpeeds, acLimit);
   const rangeLabel = { today: '今天', '7d': '7 天', month: '本月' }[usageRange];
 
   return (
     <div className="dash ov overview-bento">
       {/* Row 1 Left (Span 6): Live Speed Telemetry */}
       <Card
-        className="hero-telemetry c6"
+        className="hero-telemetry ov-speed"
         title="实时速率"
         extra={
           <Segmented
@@ -283,7 +286,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
         }
       >
         <div className="speed-kpi-strip">
-          <div className="speed-kpi-item">
+          <div className="speed-kpi-item is-down">
             <span className="hero-rate-label is-down">
               <i style={{ background: 'var(--down)' }} />
               下载
@@ -292,7 +295,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
               <RateValue value={showRate(t?.down_rate)} />
             </div>
           </div>
-          <div className="speed-kpi-item is-right">
+          <div className="speed-kpi-item is-up">
             <span className="hero-rate-label is-up">
               <i style={{ background: 'var(--up)' }} />
               上传
@@ -319,7 +322,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
 
       {/* Row 1 Right (Span 6): Traffic Usage */}
       <Card
-        className="usage-card c6"
+        className="usage-card ov-usage"
         title="流量用量"
         extra={
           <Segmented
@@ -375,7 +378,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
 
       {/* Row 2 Left (Span 6): Traffic Destination (Domain / Policy) */}
       <Card
-        className="distribution-card c6"
+        className="distribution-card ov-dest"
         title="流量去向"
         extra={
           <Segmented
@@ -416,7 +419,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
       </Card>
 
       {/* Row 2 Right (Span 6): Rule Hits */}
-      <Card className="rule-hits-card c6" title="规则命中" extra={<span className="card-note">本次运行</span>}>
+      <Card className="rule-hits-card ov-hits" title="规则命中" extra={<span className="card-note">本次运行</span>}>
         <HitBars items={rules} running={!!running} />
         <footer className="analytics-foot num">
           <span>
@@ -430,7 +433,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
 
       {/* Row 3 Left (Span 6 — Compact Side-by-Side): Active Connections */}
       <Card
-        className="active-connections-card c6"
+        className="active-connections-card ov-live"
         title="活跃连接"
         extra={
           <button type="button" className="ac-extra-link" onClick={() => onConnections('active')}>
@@ -444,7 +447,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
           </button>
         }
       >
-        <div className="ac-list">
+        <div className="ac-list" ref={acRef}>
           {topRows.map((x) => {
             const chain = x.chain ?? [];
             const rawExit = chain.at(-1);

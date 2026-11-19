@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useFormDraft } from '../lib/formDraft';
-import { Switch, Card } from './ui';
+import { Switch, Card, SettingSwitch, StableText } from './ui';
 import { errorText } from '../lib/errors';
 import { LocalError } from './Editors';
 import { probeDraft, patchProbe, PROBE_URLS } from '../client/settings';
@@ -35,21 +35,16 @@ function ProbeForm({ c }: { c: Client }) {
           <b>切换节点时断开旧连接</b>
           <small>手动切换策略组节点后立即清理仍走旧节点的连接</small>
         </div>
-        <button
-          type="button"
-          className="pref-toggle"
-          role="switch"
-          aria-label="手动切换节点时断开该组的旧连接"
-          aria-checked={c.source?.client.close_on_switch !== false}
-          disabled={c.doc.saving || c.doc.dirty}
-          onClick={() =>
-            void c.edit((d) => {
-              d.client.close_on_switch = d.client.close_on_switch === false;
+        <SettingSwitch
+          ariaLabel="手动切换节点时断开该组的旧连接"
+          on={c.source?.client.close_on_switch !== false}
+          locked={c.doc.dirty}
+          onToggle={(next) =>
+            c.edit((d) => {
+              d.client.close_on_switch = next;
             })
           }
-        >
-          <Switch on={c.source?.client.close_on_switch !== false} />
-        </button>
+        />
       </div>
 
       <div className="set-row">
@@ -165,7 +160,7 @@ function ProbeForm({ c }: { c: Client }) {
           取消更改
         </button>
         <button className="btn sm primary" type="submit" disabled={!changed.size || c.doc.saving || c.doc.dirty}>
-          {c.doc.saving ? '保存中…' : '保存测速设置'}
+          <StableText current={changed.size && c.doc.saving ? '保存中…' : '保存测速设置'} items={['保存测速设置', '保存中…']} />
         </button>
       </div>
     </form>

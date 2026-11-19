@@ -1,5 +1,5 @@
 import { flowRuleValues, type FlowRuleSource } from '../client/flowRule';
-import { Segmented } from '../components/ui';
+import { Segmented, StableText } from '../components/ui';
 import { subscriptionRule } from '../client/subscription';
 import { policyColor, ruleType, ruleKeys, reorderRule, ruleKindLabel } from '../client/presentation';
 import { useEffect, useRef, useState } from 'react';
@@ -261,7 +261,7 @@ export function Rules({
                 <input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="搜索域名、IP、进程、策略"
+                  placeholder="搜索"
                   aria-label="搜索规则"
                 />
               </label>
@@ -323,10 +323,9 @@ export function Rules({
                 className={'btn sm primary' + (resUpdating ? ' spin' : '')}
                 disabled={resUnavailable || resBusy || !resItems?.length}
                 onClick={() => void refreshResources(resItems ?? [])}
-                style={{ minWidth: 112 }}
               >
                 <Icon name="refresh" size={13} />
-                {resUpdating ? '更新中…' : '更新全部资源'}
+                <StableText current={resUpdating ? '更新中…' : '更新全部资源'} items={['更新全部资源', '更新中…']} />
               </button>
             </>
           )}
@@ -364,9 +363,8 @@ export function Rules({
                     type="submit"
                     className="btn sm primary"
                     disabled={judgeBusy || !judgeTarget.trim() || !c.hasHost || !c.connected}
-                    style={{ minWidth: 68 }}
                   >
-                    {judgeBusy ? '判定中…' : '判定'}
+                    <StableText current={judgeBusy ? '判定中…' : '判定'} items={['判定', '判定中…']} />
                   </button>
                 </form>
 

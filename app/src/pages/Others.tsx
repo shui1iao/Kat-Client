@@ -8,7 +8,7 @@ import { desktopExtras } from '../client/settings';
 import { NetworkSettings } from '../components/NetworkSettings';
 import { SniffSettingsCard } from '../components/DnsTools';
 import { Diagnostics } from '../components/Diagnostics';
-import { Card, Segmented, Switch } from '../components/ui';
+import { Card, Segmented, SettingSwitch, StableText } from '../components/ui';
 import { KState } from '../components/labels';
 import { LocalError, Modal } from '../components/Editors';
 import { host } from '../client/ipc';
@@ -43,7 +43,7 @@ function KernelCard({ c }: { c: Client }) {
           onClick={() => void c.restartCore()}
         >
           <Icon name="refresh" size={13} />
-          {restarting ? '重启中…' : '重启内核'}
+          <StableText current={restarting ? '重启中…' : '重启内核'} items={['重启内核', '重启中…']} />
         </button>
       }
     >
@@ -150,7 +150,7 @@ export function Settings({
     const el = container?.querySelector<HTMLElement>(`[data-sec-id="${target}"]`);
     if (container && el) {
       programmaticScrollUntil.current = Date.now() + 450;
-      const top = Math.max(0, el.offsetTop - container.offsetTop - 4);
+      const top = Math.max(0, el.offsetTop - container.offsetTop - 12);
       container.scrollTo({ top, behavior: instant ? 'instant' : 'smooth' });
     }
   };
@@ -163,7 +163,7 @@ export function Settings({
       const el = container?.querySelector<HTMLElement>(`[data-sec-id="${section}"]`);
       if (container && el) {
         programmaticScrollUntil.current = Date.now() + 300;
-        const top = Math.max(0, el.offsetTop - container.offsetTop - 4);
+        const top = Math.max(0, el.offsetTop - container.offsetTop - 12);
         container.scrollTo({ top, behavior: 'instant' });
       }
     });
@@ -220,7 +220,7 @@ export function Settings({
               <button
                 type="button"
                 className="btn sm"
-                disabled={!c.hasHost || c.busy.has('preferences')}
+                disabled={!c.hasHost}
                 onClick={() => void c.run('preferences', () => c.refreshDesktop())}
               >
                 刷新偏好
@@ -269,17 +269,12 @@ export function Settings({
                   <b>登录时启动</b>
                   <small>{autostartSub}</small>
                 </span>
-                <button
-                  type="button"
-                  className="pref-toggle"
-                  role="switch"
-                  aria-label="登录时启动"
-                  aria-checked={prefs?.launch_at_login ?? false}
-                  disabled={!prefs || c.busy.has('preferences')}
-                  onClick={() => void c.setPreferences({ launch_at_login: !prefs?.launch_at_login })}
-                >
-                  <Switch on={prefs?.launch_at_login ?? false} />
-                </button>
+                <SettingSwitch
+                  ariaLabel="登录时启动"
+                  on={prefs?.launch_at_login ?? false}
+                  locked={!prefs}
+                  onToggle={(next) => c.setPreferences({ launch_at_login: next })}
+                />
               </div>
               {c.desktop?.autostart.error && <LocalError text={c.desktop.autostart.error} />}
 
@@ -288,17 +283,12 @@ export function Settings({
                   <b>静默启动</b>
                   <small>开机登录自启时静默驻留系统托盘，平时手动打开仍正常显示主窗口</small>
                 </span>
-                <button
-                  type="button"
-                  className="pref-toggle"
-                  role="switch"
-                  aria-label="静默启动"
-                  aria-checked={prefs?.start_hidden ?? false}
-                  disabled={!prefs || c.busy.has('preferences')}
-                  onClick={() => void c.setPreferences({ start_hidden: !prefs?.start_hidden })}
-                >
-                  <Switch on={prefs?.start_hidden ?? false} />
-                </button>
+                <SettingSwitch
+                  ariaLabel="静默启动"
+                  on={prefs?.start_hidden ?? false}
+                  locked={!prefs}
+                  onToggle={(next) => c.setPreferences({ start_hidden: next })}
+                />
               </div>
 
               <label className="set-row">
@@ -309,7 +299,7 @@ export function Settings({
                 <select
                   className="inp set-inp-md"
                   aria-label="关窗行为"
-                  disabled={!prefs || c.busy.has('preferences')}
+                  disabled={!prefs}
                   value={prefs?.close_action ?? 'tray'}
                   onChange={(e) => void c.setPreferences({ close_action: e.target.value as 'tray' | 'quit' })}
                 >
@@ -323,17 +313,12 @@ export function Settings({
                   <b>记忆窗口位置与尺寸</b>
                   <small>下次打开主窗口时恢复上次关闭时的屏幕位置与宽高</small>
                 </span>
-                <button
-                  type="button"
-                  className="pref-toggle"
-                  role="switch"
-                  aria-label="记忆窗口"
-                  aria-checked={extraPrefs?.remember_window ?? false}
-                  disabled={!prefs || c.busy.has('preferences')}
-                  onClick={() => void c.setPreferences({ remember_window: !extraPrefs?.remember_window })}
-                >
-                  <Switch on={extraPrefs?.remember_window ?? false} />
-                </button>
+                <SettingSwitch
+                  ariaLabel="记忆窗口"
+                  on={extraPrefs?.remember_window ?? false}
+                  locked={!prefs}
+                  onToggle={(next) => c.setPreferences({ remember_window: next })}
+                />
               </div>
 
               <label className="set-row">
@@ -344,7 +329,7 @@ export function Settings({
                 <select
                   className="inp set-inp-md"
                   aria-label="托盘左击"
-                  disabled={!prefs || c.busy.has('preferences')}
+                  disabled={!prefs}
                   value={extraPrefs?.tray_click ?? 'show'}
                   onChange={(e) => void c.setPreferences({ tray_click: e.target.value as 'show' | 'toggle' })}
                 >
@@ -429,7 +414,7 @@ export function Settings({
                     disabled={!c.hasHost || !service || c.busy.has('network')}
                     onClick={() => setConfirm(service?.installed ? 'update' : 'install')}
                   >
-                    {service?.installed ? '更新服务' : '安装服务'}
+                    <StableText current={service?.installed ? '更新服务' : '安装服务'} items={['安装服务', '更新服务']} />
                   </button>
                   <button
                     type="button"

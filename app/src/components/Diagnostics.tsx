@@ -3,7 +3,7 @@ import { tip } from './Tooltip';
 import { diagnosticEvents, tunDiagnosticText } from '../client/daily';
 import { KTag } from './labels';
 import { Icon } from './Icon';
-import { Card } from './ui';
+import { Card, StableText } from './ui';
 import { host } from '../client/ipc';
 import { errorText } from '../lib/errors';
 import { showUptime } from '../client/display';
@@ -185,11 +185,11 @@ export function Diagnostics({
             <div className="row-actions">
               {days !== (c.desktop?.preferences.log_retention_days ?? 7) && (
                 <button
-                  className="btn primary sm btn-fixed-xs"
+                  className="btn primary sm"
                   type="submit"
                   disabled={!c.desktop || c.busy.has('preferences')}
                 >
-                  {c.busy.has('preferences') ? '保存中' : '保存'}
+                  <StableText current={c.busy.has('preferences') ? '保存中' : '保存'} items={['保存', '保存中']} />
                 </button>
               )}
               <select

@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { DomainIcon } from '../components/EntityIcons';
-import { SniffSettingsCard } from '../components/DnsTools';
 import { canClearDnsCache } from '../client/sniff';
 import { NetworkSettings } from '../components/NetworkSettings';
 import { Icon } from '../components/Icon';
-import { Segmented } from '../components/ui';
+import { Segmented, StableText } from '../components/ui';
 import { KState, KTag } from '../components/labels';
 import { tip } from '../components/Tooltip';
 import { core } from '../client/ipc';
@@ -262,7 +261,7 @@ export function Dns({
                 <input
                   value={recentQ}
                   onChange={(e) => setRecentQ(e.target.value)}
-                  placeholder="搜索域名、IP、上游"
+                  placeholder="搜索"
                   aria-label="搜索最近解析"
                 />
               </label>
@@ -284,11 +283,11 @@ export function Dns({
               <span className="muted num toolbar-count">{shownRecent.length} 条</span>
               <button
                 type="button"
-                className="btn sm btn-fixed-xs"
+                className="btn sm"
                 onClick={() => setPaused(!paused)}
                 aria-pressed={paused}
               >
-                {paused ? '继续' : '暂停'}
+                <StableText current={paused ? '继续' : '暂停'} items={['暂停', '继续']} />
               </button>
               <button
                 type="button"
@@ -308,7 +307,7 @@ export function Dns({
                 <input
                   value={cacheQ}
                   onChange={(e) => setCacheQ(e.target.value)}
-                  placeholder="搜索缓存域名、IP 地址、来源上游"
+                  placeholder="搜索"
                   aria-label="搜索解析缓存"
                 />
               </label>
@@ -561,7 +560,6 @@ export function Dns({
         {activeTab === 'settings' && (
           <div className="log-scroll dns-settings-unified">
             <NetworkSettings c={c} section="dns" bare />
-            <SniffSettingsCard c={c} />
           </div>
         )}
       </section>
@@ -638,7 +636,7 @@ function QuickQueryStrip({ c, onQueried }: { c: Client; onQueried?: () => void }
         </select>
         <button className="btn sm primary dns-quick-submit" type="submit" disabled={!running || !name.trim() || busy}>
           <Icon name="bolt" size={13} />
-          {busy ? '解析中…' : '测试解析'}
+          <StableText current={busy ? '解析中…' : '测试解析'} items={['测试解析', '解析中…']} />
         </button>
       </form>
       {notice && (

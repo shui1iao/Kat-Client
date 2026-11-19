@@ -47,7 +47,6 @@ function BypassForm({ c }: { c: Client }) {
           className="inp set-inp-md"
           aria-label="绕过模式"
           value={mode}
-          disabled={c.busy.has('preferences')}
           onChange={(e) => draft.set('mode', e.target.value as typeof mode)}
         >
           <option value="inherit">沿用 Windows 原值</option>

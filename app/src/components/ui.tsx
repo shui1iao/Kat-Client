@@ -5,6 +5,75 @@ export function Switch({ on }: { on: boolean }) {
   return <span className={'sw' + (on ? ' on' : '')} aria-hidden="true"><i /></span>;
 }
 
+/** Stacked grid slot so multi-state buttons keep the exact width of their widest label (0.00px shift). */
+export function StableText({ current, items }: { current: string; items: string[] }) {
+  const uniq = Array.from(new Set([...items, current]));
+  return (
+    <span className="stable-stack">
+      {uniq.map((txt) =>
+        txt === current ? (
+          <span key={txt}>{txt}</span>
+        ) : (
+          <span key={txt} className="is-ghost" aria-hidden="true">
+            {txt}
+          </span>
+        ),
+      )}
+    </span>
+  );
+}
+
+/** Optimistic switch button that flips on Frame 0 without setting HTML disabled (eliminating 0.45 opacity flash). */
+export function SettingSwitch({
+  on,
+  ariaLabel,
+  locked = false,
+  onToggle,
+}: {
+  on: boolean;
+  ariaLabel: string;
+  locked?: boolean;
+  onToggle: (next: boolean) => Promise<unknown> | void;
+}) {
+  const [optimistic, setOptimistic] = useState<boolean | null>(null);
+  const inflight = useRef(false);
+  const shown = optimistic ?? on;
+
+  useEffect(() => {
+    if (!inflight.current) setOptimistic(null);
+  }, [on]);
+
+  const handleClick = async () => {
+    if (locked || inflight.current) return;
+    const next = !shown;
+    inflight.current = true;
+    setOptimistic(next);
+    try {
+      const res = await onToggle(next);
+      if (res === false) setOptimistic(null);
+    } catch {
+      setOptimistic(null);
+    } finally {
+      inflight.current = false;
+      setOptimistic(null);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      className="pref-toggle"
+      role="switch"
+      aria-label={ariaLabel}
+      aria-checked={shown}
+      aria-disabled={locked || undefined}
+      onClick={() => void handleClick()}
+    >
+      <Switch on={shown} />
+    </button>
+  );
+}
+
 /** Sliding accent thumb behind the selected button of a segmented control.
  *  Measures `:scope > button.on` (x/y/size, so vertical stacks work too);
  *  first placement is instant, later moves glide. */

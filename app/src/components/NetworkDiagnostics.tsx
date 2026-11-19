@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ServiceIcon } from './ServiceIcon';
-import { Card, Segmented } from './ui';
+import { Card, Segmented, StableText } from './ui';
 import { Icon } from './Icon';
 import { tip } from './Tooltip';
 import { Field, Modal, LocalError } from './Editors';
@@ -107,28 +107,53 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
   return (
     <>
       <Card
-        className="diagnostic-card c6"
+        className="diagnostic-card ov-diag"
         title="网络检测"
         extra={
-          <Segmented
-            size="sm"
-            value={kind}
-            onChange={setKind}
-            options={[
-              { value: 'unlock', label: '解锁' },
-              { value: 'connectivity', label: '连通性' },
-              { value: 'exit', label: '出口 IP' },
-            ]}
-          />
+          <>
+            <Segmented
+              size="sm"
+              value={kind}
+              onChange={setKind}
+              options={[
+                { value: 'unlock', label: '解锁' },
+                { value: 'connectivity', label: '连通性' },
+                { value: 'exit', label: '出口 IP' },
+              ]}
+            />
+            <div className="diagnostic-foot-actions">
+              <span className="diagnostic-last num">{lastAt}</span>
+              {kind === 'connectivity' && (
+                <button
+                  type="button"
+                  className="btn sm ghost diag-add-btn"
+                  disabled={urls.length >= 16 || c.busy.has('preferences')}
+                  onClick={() => setAdding(true)}
+                >
+                  <Icon name="plus" size={12} />
+                  添加网址
+                </button>
+              )}
+              <button
+                type="button"
+                className={'btn sm diag-run-btn' + (busy === kind ? ' spin' : '')}
+                disabled={!running || !!busy}
+                onClick={() => void detect(kind)}
+              >
+                <Icon name="refresh" size={12} />
+                <StableText current={busy === kind ? '检测中…' : kind === 'exit' ? '刷新' : '检测'} items={['检测', '刷新', '检测中…']} />
+              </button>
+            </div>
+          </>
         }
       >
         <div className="diag-body">
           {kind === 'unlock' && (
-            <div className="diag-list" role="list" aria-label="服务解锁结果">
+            <div className="diag-list diag-grid-2" role="list" aria-label="服务解锁结果">
               {services.map(({ name, row: x }) => (
                 <div className="unlock-row" role="listitem" key={name}>
                   <span className="service-cell">
-                    <ServiceIcon name={name} size={18} />
+                    <ServiceIcon name={name} size={16} />
                     <span className="service-name">{name}</span>
                   </span>
                   <span className="unlock-node" {...tip((x?.chain ?? []).map(c.label).join(' → '), true)}>
@@ -153,9 +178,9 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
 
           {kind === 'connectivity' &&
             (!r ? (
-              <div className="empty">点击下方检测查看连通性</div>
+              <div className="empty">点击右上角「检测」查看连通性</div>
             ) : (
-              <div className="diag-list" role="list" aria-label="连通性检测结果">
+              <div className="diag-list diag-grid-2" role="list" aria-label="连通性检测结果">
                 {connectivityItems?.map((x) => (
                   <div className="conn-diag-row" role="listitem" key={x.name}>
                     <div className="diagnostic-target">
@@ -182,9 +207,9 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
 
           {kind === 'exit' &&
             (!cache.exit ? (
-              <div className="empty">点击下方刷新查看出口 IP</div>
+              <div className="empty">点击右上角「刷新」查看出口 IP</div>
             ) : (cache.exit.items ?? []).length ? (
-              <div className="diag-list" role="list" aria-label="出口 IP">
+              <div className="diag-list diag-grid-2" role="list" aria-label="出口 IP">
                 {(cache.exit.items ?? []).map((x) => {
                   const failed = x.result === 'failed';
                   return (
@@ -206,31 +231,6 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
             ))}
         </div>
 
-        <footer className="diagnostic-footer">
-          <span className="diagnostic-last num">{lastAt}</span>
-          <div className="diagnostic-foot-actions">
-            {kind === 'connectivity' && (
-              <button
-                type="button"
-                className="link-btn"
-                disabled={urls.length >= 16 || c.busy.has('preferences')}
-                onClick={() => setAdding(true)}
-              >
-                <Icon name="plus" size={12} />
-                添加网址
-              </button>
-            )}
-            <button
-              type="button"
-              className={'btn sm diag-run-btn' + (busy === kind ? ' spin' : '')}
-              disabled={!running || !!busy}
-              onClick={() => void detect(kind)}
-            >
-              <Icon name="refresh" size={12} />
-              {busy === kind ? '检测中…' : kind === 'exit' ? '刷新' : '检测'}
-            </button>
-          </div>
-        </footer>
       </Card>
 
       {adding && (

@@ -2,7 +2,7 @@ import { Icon } from './Icon';
 import { tip } from './Tooltip';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useFormDraft } from '../lib/formDraft';
-import { Card, Switch } from './ui';
+import { Card, SettingSwitch, StableText } from './ui';
 import { LocalError } from './Editors';
 import { networkDraft, patchNetwork, dnsCacheError, type DNSMode } from '../client/daily';
 import { errorText } from '../lib/errors';
@@ -124,21 +124,16 @@ function NetworkForm({ c, section }: { c: Client; section: 'ports' | 'dns' }) {
               <b>允许 IPv6</b>
               <small>开启后本地入站与节点解析支持 IPv6</small>
             </div>
-            <button
-              type="button"
-              className="pref-toggle"
-              role="switch"
-              aria-label="IPv6"
-              aria-checked={c.source?.client.ipv6 ?? false}
-              disabled={c.doc.saving || c.doc.dirty || !c.connected}
-              onClick={() =>
-                void c.edit((d) => {
-                  d.client.ipv6 = !(d.client.ipv6 ?? false);
+            <SettingSwitch
+              ariaLabel="IPv6"
+              on={c.source?.client.ipv6 ?? false}
+              locked={c.doc.dirty || !c.connected}
+              onToggle={(next) =>
+                c.edit((d) => {
+                  d.client.ipv6 = next;
                 }, c.reportOperationError)
               }
-            >
-              <Switch on={c.source?.client.ipv6 ?? false} />
-            </button>
+            />
           </div>
         </>
       )}
@@ -262,8 +257,11 @@ function NetworkForm({ c, section }: { c: Client; section: 'ports' | 'dns' }) {
         >
           取消更改
         </button>
-        <button className="btn sm primary" style={{ minWidth: 88 }} type="submit" disabled={!changed.size || c.doc.saving || c.doc.dirty}>
-          {c.doc.saving ? '保存中…' : section === 'dns' ? '保存 DNS' : '保存网络参数'}
+        <button className="btn sm primary" type="submit" disabled={!changed.size || c.doc.saving || c.doc.dirty}>
+          <StableText
+            current={changed.size && c.doc.saving ? '保存中…' : section === 'dns' ? '保存 DNS' : '保存网络参数'}
+            items={section === 'dns' ? ['保存 DNS', '保存中…'] : ['保存网络参数', '保存中…']}
+          />
         </button>
       </div>
     </form>
