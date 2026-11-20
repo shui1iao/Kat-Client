@@ -325,7 +325,7 @@ export function Dns({
                 disabled={!canClearDnsCache(running, c.busy)}
                 onClick={() => void clearAllCache()}
               >
-                <StableText current={cleared !== null ? `已清除 ${cleared} 条` : '清除缓存'} items={['清除缓存', '已清除 999 条']} />
+                <StableText current={cleared !== null ? `已清除 ${cleared} 条` : '清除缓存'} items={['清除缓存', '已清除 4096 条']} />
               </button>
             </>
           )}
@@ -346,7 +346,7 @@ export function Dns({
                 disabled={!canClearDnsCache(running, c.busy)}
                 onClick={() => void clearAllCache()}
               >
-                <StableText current={cleared !== null ? `已清除 ${cleared} 条` : '清除缓存'} items={['清除缓存', '已清除 999 条']} />
+                <StableText current={cleared !== null ? `已清除 ${cleared} 条` : '清除缓存'} items={['清除缓存', '已清除 4096 条']} />
               </button>
             </>
           )}
@@ -399,16 +399,20 @@ export function Dns({
 
                     <span className="dns-addr-cell" role="cell">
                       {primaryIp ? (
-                        <button
-                          type="button"
-                          className="dns-ip-copy"
-                          onClick={() => copyRecentAddr(e.seq, allIps)}
-                          {...tip(extraCount > 0 ? `${allIps}（点击复制）` : `点击复制 ${primaryIp}`)}
-                        >
-                          <span className="dns-ip-val num">{primaryIp}</span>
-                          {extraCount > 0 && <span className="dns-ip-more num">+{extraCount}</span>}
-                          {copiedSeq === e.seq && <span className="dns-copied-badge">已复制</span>}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="dns-ip-copy"
+                            onClick={() => copyRecentAddr(e.seq, allIps)}
+                            {...tip(extraCount > 0 ? `${allIps}（点击复制）` : `点击复制 ${primaryIp}`)}
+                          >
+                            <span className="dns-ip-val num">{primaryIp}</span>
+                            {extraCount > 0 && <span className="dns-ip-more num">+{extraCount}</span>}
+                          </button>
+                          <span className="dns-copied-slot" role="status" aria-live="polite">
+                            {copiedSeq === e.seq ? '已复制' : ''}
+                          </span>
+                        </>
                       ) : (
                         <span className="muted">
                           {e.outcome === 'ok'
@@ -506,16 +510,20 @@ export function Dns({
 
                     <span className="dns-addr-cell" role="cell">
                       {primaryIp ? (
-                        <button
-                          type="button"
-                          className="dns-ip-copy"
-                          onClick={() => copyCacheAddr(rowKey, allIps)}
-                          {...tip(extraCount > 0 ? `${allIps}（点击复制）` : `点击复制 ${primaryIp}`)}
-                        >
-                          <span className="dns-ip-val num">{primaryIp}</span>
-                          {extraCount > 0 && <span className="dns-ip-more num">+{extraCount}</span>}
-                          {copiedKey === rowKey && <span className="dns-copied-badge">已复制</span>}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="dns-ip-copy"
+                            onClick={() => copyCacheAddr(rowKey, allIps)}
+                            {...tip(extraCount > 0 ? `${allIps}（点击复制）` : `点击复制 ${primaryIp}`)}
+                          >
+                            <span className="dns-ip-val num">{primaryIp}</span>
+                            {extraCount > 0 && <span className="dns-ip-more num">+{extraCount}</span>}
+                          </button>
+                          <span className="dns-copied-slot" role="status" aria-live="polite">
+                            {copiedKey === rowKey ? '已复制' : ''}
+                          </span>
+                        </>
                       ) : (
                         <span className="muted">{`${qtype} 缓存已就绪`}</span>
                       )}

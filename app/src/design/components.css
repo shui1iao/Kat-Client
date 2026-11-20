@@ -240,6 +240,10 @@ input[type="number"]::-webkit-outer-spin-button {
   transition: background-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
 
+:is(input, textarea).inp:hover:not(:disabled):not(:focus) {
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
 :is(input, textarea).inp:focus {
   box-shadow: inset 0 0 0 1.5px var(--accent-line);
 }
@@ -269,25 +273,38 @@ textarea.inp {
 
 select.inp {
   appearance: none;
-  padding-right: 26px;
+  padding: 0 26px;
   background-image: var(--chev);
   background-repeat: no-repeat;
   background-position: right 8px center;
+  text-align: center;
+  text-align-last: center;
   cursor: pointer;
 }
 
-select.inp[data-open] {
+select.inp:hover:not(:disabled) {
+  background-color: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+select.inp:active:not(:disabled) {
+  background-color: var(--press);
+}
+
+select.inp[data-open],
+select.inp[data-open]:hover {
+  background-color: var(--card);
   box-shadow: inset 0 0 0 1.5px var(--accent-line);
 }
 
-/* Compact toolbar & inline selects: stable fixed geometry so sibling buttons never shift */
+/* Compact toolbar & inline selects: stable fixed geometry matching popup width */
 select.inp.sm {
   flex: none;
-  width: 104px;
-  min-width: 88px;
-  max-width: 176px;
-  padding: 0 24px 0 10px;
-  background-position: right 7px center;
+  width: 118px;
+  min-width: 96px;
+  max-width: 196px;
+  padding: 0 24px;
+  background-position: right 8px center;
   text-align: center;
   text-align-last: center;
   white-space: nowrap;
@@ -296,8 +313,24 @@ select.inp.sm {
 }
 
 select.inp.display-sort {
-  width: 108px;
-  min-width: 108px;
+  width: 118px;
+  min-width: 118px;
+}
+
+select.inp.sm.cfg-format-select {
+  width: 140px;
+  min-width: 140px;
+}
+
+select.inp.sm.rule-type-select {
+  width: 164px;
+  min-width: 164px;
+}
+
+select.inp.sm.conn-proc-select {
+  width: 184px;
+  min-width: 148px;
+  max-width: 196px;
 }
 
 /* Search: elastic, never truncated. Grows into free toolbar space,
@@ -317,6 +350,10 @@ select.inp.display-sort {
   min-width: 112px;
   max-width: 300px;
   transition: background-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+
+.search:hover:not(:focus-within) {
+  box-shadow: inset 0 0 0 1px var(--line-2);
 }
 
 .search:focus-within {
@@ -539,6 +576,24 @@ select.inp.display-sort {
 
 .pref-toggle:active:not(:disabled):not([aria-disabled="true"]) .sw.on i {
   transform: translate3d(14px, 0, 0);
+}
+
+.pref-toggle:hover:not(:disabled):not([aria-disabled="true"]) .sw:not(.on) {
+  background: rgba(120, 125, 136, 0.34);
+  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.10);
+}
+
+:root[data-theme="dark"] .pref-toggle:hover:not(:disabled):not([aria-disabled="true"]) .sw:not(.on) {
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.10);
+}
+
+.pref-toggle:hover:not(:disabled):not([aria-disabled="true"]) .sw.on {
+  background: var(--accent-hover);
+}
+
+.pref-toggle:hover:not(:disabled):not([aria-disabled="true"]) .sw i {
+  box-shadow: 0 1.5px 4px rgba(0, 0, 0, 0.28), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
 }
 
 .sw.on {
@@ -816,6 +871,7 @@ select.inp.display-sort {
 
 .modal select.inp:not(.sm) {
   width: 100%;
+  padding: 0 26px 0 10px;
   field-sizing: fixed;
   text-align: start;
   text-align-last: start;
@@ -1013,15 +1069,14 @@ select.inp.display-sort {
   padding: 5px;
   border-radius: 12px;
   background: var(--pop);
-  backdrop-filter: blur(22px) saturate(180%);
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(36px) saturate(190%);
+  -webkit-backdrop-filter: blur(36px) saturate(190%);
   box-shadow: var(--shadow-pop);
   overflow-y: auto;
-  scrollbar-gutter: stable;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  animation: kat-pop-in 120ms cubic-bezier(0.2, 0, 0, 1);
+  gap: 3px;
+  animation: kat-pop-in 130ms var(--ease-spring);
 }
 
 .kat-opt {
@@ -1032,10 +1087,21 @@ select.inp.display-sort {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  min-width: 0;
+  overflow: hidden;
   font-size: var(--fs-data);
+  font-weight: 500;
   color: var(--text-2);
   text-align: left;
-  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  white-space: nowrap;
+  transition: background-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.kat-opt > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kat-opt.active {
@@ -1045,29 +1111,27 @@ select.inp.display-sort {
 
 .kat-opt:hover:not(:disabled) {
   background: var(--hover);
+  color: var(--text);
 }
 
 .kat-opt.cur {
   background: var(--accent-soft);
-  color: var(--accent);
+  box-shadow: inset 0 0 0 1.5px var(--accent-line);
+  color: var(--accent-text);
   font-weight: 500;
 }
 
-.kat-opt.cur svg {
-  color: var(--accent);
-  flex: none;
+.kat-opt.cur.active,
+.kat-opt.cur:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  color: var(--accent-text);
 }
 
 .kat-pop.centered .kat-opt {
-  position: relative;
   justify-content: center;
-  padding-inline: 24px;
+  padding-inline: 12px;
   text-align: center;
-}
-
-.kat-pop.centered .kat-opt > svg {
-  position: absolute;
-  right: 6px;
 }
 
 @keyframes kat-tip-in {
@@ -1181,4 +1245,30 @@ select.inp.display-sort {
 .toast.show {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* Forced Colors High-Contrast Overrides (loaded after component rules) */
+@media (forced-colors: active) {
+  select,
+  select.inp,
+  select.inp.sm {
+    appearance: auto;
+    background-image: none;
+    padding-inline: 8px;
+  }
+  .kat-opt {
+    border: 1px solid transparent;
+  }
+  .kat-opt.cur,
+  .kat-opt.cur.active,
+  .kat-opt.cur:hover:not(:disabled) {
+    background: Highlight;
+    color: HighlightText;
+    border-color: Highlight;
+    box-shadow: none;
+    forced-color-adjust: none;
+  }
+  .kat-opt.cur em {
+    color: HighlightText;
+  }
 }

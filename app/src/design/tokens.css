@@ -28,7 +28,7 @@
   --expand-lv2: rgba(255, 255, 255, 0.055);
   --btn-bg: rgba(255, 255, 255, 0.075);
   --btn-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 1px 1.5px rgba(0, 0, 0, 0.20);
-  --pop: rgba(40, 44, 52, 0.88);
+  --pop: rgba(36, 40, 48, 0.74);
   --pop-solid: #282C34;
   --hover: rgba(255, 255, 255, 0.068);
   --press: rgba(255, 255, 255, 0.11);
@@ -62,7 +62,7 @@
   --recess-shadow: inset 0 1px 1.5px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
   --card-border: 1px solid rgba(255, 255, 255, 0.065);
   --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.20);
-  --shadow-pop: 0 14px 36px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(255, 255, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.50), 0 0 0 1px rgba(255, 255, 255, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.09);
   --shadow-modal: 0 28px 70px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(255, 255, 255, 0.09), inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --mask: rgba(0, 0, 0, 0.44);
   --scroll: rgba(255, 255, 255, 0.16);
@@ -89,7 +89,7 @@
   --expand-lv2: rgba(15, 23, 42, 0.048);
   --btn-bg: #FFFFFF;
   --btn-shadow: 0 0.5px 1.5px rgba(15, 23, 42, 0.07), inset 0 0 0 1px rgba(15, 23, 42, 0.10);
-  --pop: rgba(255, 255, 255, 0.88);
+  --pop: rgba(255, 255, 255, 0.72);
   --pop-solid: #FFFFFF;
   --hover: rgba(15, 23, 42, 0.052);
   --press: rgba(15, 23, 42, 0.088);
@@ -123,7 +123,7 @@
   --recess-shadow: inset 0 1px 1.5px rgba(15, 23, 42, 0.045), inset 0 0 0 0.5px rgba(15, 23, 42, 0.04);
   --card-border: 1px solid rgba(15, 23, 42, 0.062);
   --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.035), 0 4px 12px rgba(15, 23, 42, 0.022);
-  --shadow-pop: 0 12px 32px rgba(15, 23, 42, 0.14), 0 0 0 0.5px rgba(15, 23, 42, 0.09);
+  --shadow-pop: 0 14px 36px rgba(15, 23, 42, 0.14), 0 0 0 0.5px rgba(15, 23, 42, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.78);
   --shadow-modal: 0 26px 68px rgba(15, 23, 42, 0.20), 0 0 0 0.5px rgba(15, 23, 42, 0.08);
   --mask: rgba(15, 23, 42, 0.24);
   --scroll: rgba(15, 23, 42, 0.16);
@@ -182,22 +182,24 @@
 :root[data-native-acrylic="enabled"] {
   --window-material: rgba(27, 29, 34, 0.78);
   --side-bg: transparent;
-  --card: rgba(38, 41, 49, 0.82);
+  --card: rgba(38, 41, 49, 0.70);
 }
 :root[data-native-acrylic="enabled"][data-theme="light"] {
   --window-material: rgba(242, 244, 247, 0.80);
   --side-bg: transparent;
-  --card: rgba(255, 255, 255, 0.88);
+  --card: rgba(255, 255, 255, 0.70);
+  --card-border: 1px solid rgba(15, 23, 42, 0.068);
+  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 14px rgba(15, 23, 42, 0.025);
 }
 :root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"] {
-  --window-material: rgba(27, 29, 34, 0.93);
+  --window-material: rgba(27, 29, 34, 0.92);
   --side-bg: transparent;
-  --card: rgba(36, 39, 46, 0.92);
+  --card: rgba(36, 39, 46, 0.86);
 }
 :root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"][data-theme="light"] {
-  --window-material: rgba(242, 244, 247, 0.94);
+  --window-material: rgba(242, 244, 247, 0.92);
   --side-bg: transparent;
-  --card: rgba(255, 255, 255, 0.94);
+  --card: rgba(255, 255, 255, 0.86);
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -212,12 +214,14 @@
     --pop: #FFFFFF;
     --side-bg: transparent;
   }
-  :root[data-native-acrylic="enabled"] {
+  :root[data-native-acrylic="enabled"],
+  :root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"] {
     --window-material: #1B1D22;
     --side-bg: transparent;
     --card: #24272E;
   }
-  :root[data-native-acrylic="enabled"][data-theme="light"] {
+  :root[data-native-acrylic="enabled"][data-theme="light"],
+  :root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"][data-theme="light"] {
     --window-material: #F2F4F7;
     --side-bg: transparent;
     --card: #FFFFFF;

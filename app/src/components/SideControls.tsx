@@ -179,7 +179,6 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
                     <b>{c.label(g.name)}</b>
                     {leaf && <em>{c.label(leaf)}</em>}
                   </span>
-                  {cur && <Icon name="check" size={15} stroke={2} />}
                 </button>
               );
             })}

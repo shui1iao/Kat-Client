@@ -1,8 +1,10 @@
 {
-  "candidate": "v0.2.26-windows-core-v0.8.17",
-  "app_version": "0.2.26",
+  "candidate": "v0.2.27-windows-core-v0.8.17",
+  "app_version": "0.2.27",
   "windows_clientcore_version": "0.8.17",
-  "sequence": 1794907000,
+  "sequence": 1794908000,
+  "client_sequence": 1794908000,
+  "core_sequence": 1794907000,
   "core_source_fingerprint": "e50829b80230520a3566e15992e98e9a995d4899be7e5239ace568a7541229b5",
   "core_build_commit": "e50829b80230520a3566e15992e98e9a995d4899",
   "core_build_commit_kind": "exact core source fingerprint first40, not a Git commit",
@@ -13,41 +15,44 @@
     },
     "kat-desktop.exe": {
       "bytes": 11969536,
-      "sha256": "90b8ad0cb774bc333e809683bf37a4f63ddbeade508d88aa0f479b1a5fdb0375"
+      "sha256": "98f92ef4ba9dd1b0e5c866e34340e76beb937f419405d0682c16e2d133fd06ad"
     },
     "kat-elevate-helper.exe": {
       "bytes": 569856,
-      "sha256": "1fd9f994522506d696df96b2f03ae14acb1bb328598c5e475e81416358613568"
+      "sha256": "e944cff748cc0cfc6a37fe4f3ee64a9911e463e5e0d0134e3e0367928a441da3"
     },
     "kat-install-helper.exe": {
       "bytes": 1359872,
-      "sha256": "ce8e002ca6d2c1cfe9592efd5e253b2bc66707607f557c6573423c8b87680a60"
+      "sha256": "16d3517c358de0d59d8c669cfddcc3657d065600f73c69109ebb01d06ada83e7"
     },
     "kat-network-service.exe": {
       "bytes": 1880064,
-      "sha256": "2bc7e913207a6c1942274e7737802ceb5b980feaa493b462bcbd16895c5d3ed9"
+      "sha256": "2379de56fdebdb77016b22efd170bdba2529fa06827974e77efc968bc67dd36e"
     },
     "kat-proxy-watchdog.exe": {
       "bytes": 465408,
-      "sha256": "21a7f450b87198e4f83cb549b8ac5837d0fe9757d7a9ad1893ea4d97e4e0b14b"
+      "sha256": "5e9b8d067e86358782bfcaaa930c40e9d9c465d8a1557bc894b164ce077efcf9"
     }
   },
   "signature_key_id": "0afa646ee76f17d8",
-  "package_auth_sha256": "3da1d2a797270f7cc9c338c3825fa40e01de7f0b73a41e9587b0893b836005f4",
-  "package_auth_signature_sha256": "46e98214dfd4ce416bfc09821c081cf7c39847e85397ca0012c838c1eb328d3a",
-  "source_manifest_sha256": "625f55e16969c7b5ac81284f72e41ca6311c0c21ccee779fe1f6f531d45e4e89",
+  "package_auth_sha256": "e0d8e44b294b7d5cfe791b382960775d25c4c8d9537d7b6f1010d58db1fa50db",
+  "package_auth_signature_sha256": "e567328f9be7eac541f387cbecd3b08af8fe29b782c39e516b692305e968c986",
+  "source_manifest_sha256": "43aefe8653a088504483fe822c2a335f4cd0720ed2fd3a3ae73b80538147604f",
   "source_manifest_members": 2147,
   "validation": {
-    "client_version": "0.2.26",
+    "client_version": "0.2.27",
     "core_version": "0.8.17",
-    "sequence": 1794907000,
+    "sequence": 1794908000,
+    "client_sequence": 1794908000,
+    "core_sequence": 1794907000,
     "core_source_fingerprint": "e50829b80230520a3566e15992e98e9a995d4899be7e5239ace568a7541229b5",
     "all_targeted_checks_passed": true,
     "new_failures": [],
     "checks": {
-      "go_core_tests": "go test ./internal/provider/... ./internal/outbound/group/... ./internal/route/... ./internal/kernel/... ./internal/clientcore/... passed (including TestAirportClashLargeSubscriptionImport & TestSniffOverridePublicIPDirectGroupAndProxyZeroExtraDNS)",
-      "rust_host_tests": "cargo test --offline --locked --lib r1_r2_regression_tests & --test control-contract passed",
+      "gpt_6_2_astra_review": "Independent 4-round GPT-6.2-Astra review passed with zero remaining P0/P1/P2 blockers across 900x600..3840x2160 viewports, forced-colors, and prefers-reduced-transparency.",
+      "rust_host_tests": "cargo test --offline --locked --lib r1_r2_regression_tests (6 passed) & --test control-contract (12 passed)",
       "frontend_build": "npm run build (tsc --noEmit -p . && node build.mjs) passed",
+      "windows_core_reproducibility": "kat-client-core.exe v0.8.17 bit-identical SHA256 9e4109a9ef400e2ee602879f76e3bc67f51b01b58c3fa0c3ae055667719c6bfa",
       "windows_x64_cross_build": "all 6 Windows amd64 roles built cleanly"
     },
     "real_product_package_validator": "passed"

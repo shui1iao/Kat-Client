@@ -238,7 +238,8 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
 
   // Show as many live rows as the card comfortably holds (30px pitch): 5 on a laptop, more on a desktop.
   const [acRef, acSize] = useSize<HTMLDivElement>();
-  const acLimit = acSize.h > 0 ? Math.max(3, Math.min(10, Math.floor((acSize.h + 1) / 31))) : 5;
+  const acLimit = acSize.h > 0 ? Math.max(3, Math.min(30, Math.round(acSize.h / 34))) : 5;
+  const acRowH = acSize.h > 0 ? Number(Math.max(28, Math.min(36, (acSize.h - 6 - (acLimit - 1) * 2) / acLimit)).toFixed(2)) : 32;
   const topRows = topConnections(running ? items : [], c.connectionSpeeds, acLimit);
   const rangeLabel = { today: '今天', '7d': '7 天', month: '本月' }[usageRange];
 
@@ -394,7 +395,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
           </button>
         }
       >
-        <div className="ac-list" ref={acRef}>
+        <div className="ac-list" ref={acRef} style={{ "--ac-row-h": `${acRowH}px` } as Record<string, string>}>
           {topRows.map((x) => {
             const chain = x.chain ?? [];
             const rawExit = chain.at(-1);

@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Icon } from './Icon';
 
 /**
  * Legacy fallback for engines without customizable native <select>. Modern
@@ -139,14 +138,14 @@ export function SelectPopover() {
   if (!open) return null;
   const selected = open.el.selectedIndex;
   return createPortal(
-    <div ref={list} className={'kat-pop' + (open.up ? ' up' : '') + (open.el.classList.contains('display-sort') ? ' centered' : '')} role="listbox" aria-label={open.label}
-      style={{ left: open.left, top: open.top, bottom: open.bottom, minWidth: open.width, maxHeight: open.maxHeight, maxWidth: window.innerWidth - open.left - 10 }}>
+    <div ref={list} className={'kat-pop' + (open.up ? ' up' : '') + (!(open.el.closest('.modal') && !open.el.classList.contains('sm')) ? ' centered' : '')} role="listbox" aria-label={open.label}
+      style={{ left: open.left, top: open.top, bottom: open.bottom, width: open.width, minWidth: open.width, maxHeight: open.maxHeight, maxWidth: window.innerWidth - open.left - 10 }}>
       {open.options.map((o, i) => (
-        <button key={i} type="button" tabIndex={-1} role="option" aria-selected={i === selected} disabled={o.disabled}
+        <button key={i} type="button" tabIndex={-1} role="option" aria-selected={i === selected} disabled={o.disabled} title={o.label}
           className={'kat-opt' + (i === open.active ? ' active' : '') + (i === selected ? ' cur' : '')}
           onMouseEnter={() => { if (!o.disabled) setOpen((s) => (s && s.active !== i ? { ...s, active: i } : s)); }}
           onClick={() => commitRef.current(i)}>
-          <span>{o.label}</span>{i === selected && <Icon name="check" size={16} stroke={2} />}
+          <span>{o.label}</span>
         </button>
       ))}
     </div>,

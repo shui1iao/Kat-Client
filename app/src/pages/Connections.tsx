@@ -451,8 +451,18 @@ export function Connections({
             value={tab}
             onChange={onTab}
             options={[
-              { value: 'active', label: `活跃 ${active.length}` },
-              { value: 'closed', label: `已关闭 ${closed.length}` },
+              {
+                value: 'active',
+                label: (
+                  <StableText current={`活跃 ${active.length}`} items={['活跃 999']} />
+                ),
+              },
+              {
+                value: 'closed',
+                label: (
+                  <StableText current={`已关闭 ${closed.length}`} items={['已关闭 999']} />
+                ),
+              },
             ]}
           />
           <label className="search">
@@ -465,7 +475,7 @@ export function Connections({
             />
           </label>
           <select
-            className="inp sm"
+            className="inp sm conn-proc-select"
             aria-label="进程筛选"
             value={groupByProc ? '*' : process}
             disabled={groupByProc}

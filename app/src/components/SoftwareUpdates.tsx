@@ -396,6 +396,7 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
                 ? '立即安装并重启'
                 : '下载更新'
           }
+          saveLabelItems={['下载更新', '取消下载', '立即安装并重启', '处理中']}
           busy={u.working}
           saveDisabled={dialogRow.downloaded && u.blocked}
           save={

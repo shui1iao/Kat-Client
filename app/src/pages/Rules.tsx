@@ -266,7 +266,7 @@ export function Rules({
                 />
               </label>
               <select
-                className="inp sm"
+                className="inp sm rule-type-select"
                 aria-label="规则类型筛选"
                 value={ft}
                 onChange={(e) => setFt(e.target.value)}

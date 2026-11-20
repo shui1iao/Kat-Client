@@ -389,7 +389,7 @@ export function Config({ c }: { c: Client }) {
 
           <div className="cfg-editor-actions">
             <select
-              className="inp sm"
+              className="inp sm cfg-format-select"
               aria-label="配置格式"
               value={format}
               disabled={!c.connected || c.doc.saving || filesBusy}

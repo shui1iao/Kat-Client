@@ -104,7 +104,7 @@ export function useThumb<T extends HTMLElement>(selected: unknown) {
   return [ref, thumb] as const;
 }
 
-export function Segmented<T extends string>({ value, options, onChange, size }: { value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; size?: 'sm' }) {
+export function Segmented<T extends string>({ value, options, onChange, size }: { value: T; options: { value: T; label: ReactNode }[]; onChange: (v: T) => void; size?: 'sm' }) {
   const [ref, thumb] = useThumb<HTMLDivElement>(value);
   return (
     <div ref={ref} className={'seg' + (size ? ' seg-' + size : '')} role="tablist">

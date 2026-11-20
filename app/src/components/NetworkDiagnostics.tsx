@@ -122,18 +122,20 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
               ]}
             />
             <div className="diagnostic-foot-actions">
-              <span className="diagnostic-last num">{lastAt}</span>
-              {kind === 'connectivity' && (
-                <button
-                  type="button"
-                  className="btn sm ghost diag-add-btn"
-                  disabled={urls.length >= 16 || c.busy.has('preferences')}
-                  onClick={() => setAdding(true)}
-                >
-                  <Icon name="plus" size={12} />
-                  添加网址
-                </button>
-              )}
+              <span className="diagnostic-last num">
+                <StableText current={lastAt} items={['尚未检测', '上次检测 23:59']} />
+              </span>
+              <button
+                type="button"
+                className={'btn sm ghost diag-add-btn' + (kind !== 'connectivity' ? ' is-placeholder' : '')}
+                aria-hidden={kind !== 'connectivity' || undefined}
+                tabIndex={kind !== 'connectivity' ? -1 : undefined}
+                disabled={kind !== 'connectivity' || urls.length >= 16 || c.busy.has('preferences')}
+                onClick={() => setAdding(true)}
+              >
+                <Icon name="plus" size={12} />
+                添加网址
+              </button>
               <button
                 type="button"
                 className={'btn sm diag-run-btn' + (busy === kind ? ' spin' : '')}

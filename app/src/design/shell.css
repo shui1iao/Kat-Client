@@ -703,7 +703,20 @@
   color: var(--text-2);
   background: transparent;
   white-space: nowrap;
-  transition: color var(--t-fast) var(--ease);
+  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.net-switch:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.net-switch:hover:not(:disabled) .ns-thumb {
+  box-shadow: 0 1.5px 3.5px rgba(0, 0, 0, 0.30), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+}
+
+.net-switch.on:hover:not(:disabled) .ns-track {
+  background: var(--accent-hover);
 }
 
 :root[data-theme="light"] .net-switch {

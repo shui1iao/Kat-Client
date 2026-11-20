@@ -39,14 +39,16 @@ export function NetworkSettings({ c, section = 'ports', bare = false, children }
       extra={
         section === 'dns' ? (
           <div className="dns-clear-actions">
-            {cleared !== null && <span className="card-note" role="status">已清除 {cleared.count} 条</span>}
             <button
               type="button"
               className="btn sm"
               disabled={c.status?.runtime.state !== 'running' || c.busy.has('dns-clear')}
               onClick={() => void clear()}
             >
-              清除缓存
+              <StableText
+                current={cleared !== null ? `已清除 ${cleared.count} 条` : '清除缓存'}
+                items={['清除缓存', '已清除 4096 条']}
+              />
             </button>
           </div>
         ) : undefined
