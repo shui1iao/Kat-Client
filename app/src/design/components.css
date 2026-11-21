@@ -784,7 +784,6 @@ select.inp.sm.conn-proc-select {
   z-index: 1000;
   background: var(--mask);
   backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
   padding: 24px;
@@ -1069,8 +1068,7 @@ select.inp.sm.conn-proc-select {
   padding: 5px;
   border-radius: 12px;
   background: var(--pop);
-  backdrop-filter: blur(36px) saturate(190%);
-  -webkit-backdrop-filter: blur(36px) saturate(190%);
+  backdrop-filter: blur(20px) saturate(200%);
   box-shadow: var(--shadow-pop);
   overflow-y: auto;
   display: flex;
@@ -1147,9 +1145,8 @@ select.inp.sm.conn-proc-select {
   max-width: 320px;
   padding: 5px 10px;
   border-radius: var(--r-tray);
-  background: color-mix(in srgb, var(--pop) 92%, transparent);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: var(--pop);
+  backdrop-filter: blur(20px) saturate(200%);
   border: 1px solid var(--line-2);
   box-shadow: var(--shadow-pop);
   color: var(--text);
@@ -1166,9 +1163,8 @@ select.inp.sm.conn-proc-select {
   z-index: 30;
   padding: 8px 11px;
   border-radius: var(--r-tray);
-  background: color-mix(in srgb, var(--pop) 92%, transparent);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: var(--pop);
+  backdrop-filter: blur(20px) saturate(200%);
   border: 1px solid var(--line-2);
   box-shadow: var(--shadow-pop);
   color: var(--text);
@@ -1233,6 +1229,7 @@ select.inp.sm.conn-proc-select {
   padding: 8px 12px;
   border-radius: var(--r-tray);
   background: var(--pop);
+  backdrop-filter: blur(20px) saturate(200%);
   box-shadow: var(--shadow-pop);
   font-size: var(--fs-data);
   color: var(--text);

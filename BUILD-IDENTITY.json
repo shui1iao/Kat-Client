@@ -1,9 +1,9 @@
 {
-  "candidate": "v0.2.27-windows-core-v0.8.17",
-  "app_version": "0.2.27",
+  "candidate": "v0.2.28-windows-core-v0.8.17",
+  "app_version": "0.2.28",
   "windows_clientcore_version": "0.8.17",
-  "sequence": 1794908000,
-  "client_sequence": 1794908000,
+  "sequence": 1794909000,
+  "client_sequence": 1794909000,
   "core_sequence": 1794907000,
   "core_source_fingerprint": "e50829b80230520a3566e15992e98e9a995d4899be7e5239ace568a7541229b5",
   "core_build_commit": "e50829b80230520a3566e15992e98e9a995d4899",
@@ -15,43 +15,43 @@
     },
     "kat-desktop.exe": {
       "bytes": 11969536,
-      "sha256": "98f92ef4ba9dd1b0e5c866e34340e76beb937f419405d0682c16e2d133fd06ad"
+      "sha256": "138d7af4b8ba97f70ca2467b01c8625f804ea537cbec2544e1fda39d293cd33e"
     },
     "kat-elevate-helper.exe": {
       "bytes": 569856,
-      "sha256": "e944cff748cc0cfc6a37fe4f3ee64a9911e463e5e0d0134e3e0367928a441da3"
+      "sha256": "ae46a9575cf5b04a452cc0e77e7a9bb61613b61ee65bf04a395e8495d651b386"
     },
     "kat-install-helper.exe": {
       "bytes": 1359872,
-      "sha256": "16d3517c358de0d59d8c669cfddcc3657d065600f73c69109ebb01d06ada83e7"
+      "sha256": "f848841e35476f5c469c24f6fb12d54457f93e7654930099ce835c1791429b76"
     },
     "kat-network-service.exe": {
       "bytes": 1880064,
-      "sha256": "2379de56fdebdb77016b22efd170bdba2529fa06827974e77efc968bc67dd36e"
+      "sha256": "9f1633e9e71fa6eb8f6a823ece382d2cd82357d545feaf66e7b40060c1480740"
     },
     "kat-proxy-watchdog.exe": {
       "bytes": 465408,
-      "sha256": "5e9b8d067e86358782bfcaaa930c40e9d9c465d8a1557bc894b164ce077efcf9"
+      "sha256": "db92b53cdac2b2031590b358ce3145e664371cd6c538e3ddd0ff430e6a65f219"
     }
   },
   "signature_key_id": "0afa646ee76f17d8",
-  "package_auth_sha256": "e0d8e44b294b7d5cfe791b382960775d25c4c8d9537d7b6f1010d58db1fa50db",
-  "package_auth_signature_sha256": "e567328f9be7eac541f387cbecd3b08af8fe29b782c39e516b692305e968c986",
-  "source_manifest_sha256": "43aefe8653a088504483fe822c2a335f4cd0720ed2fd3a3ae73b80538147604f",
+  "package_auth_sha256": "cc359253e0560dac732b83313c18fe239161b5c469c2c89bac6796e9489679a3",
+  "package_auth_signature_sha256": "b48620e912908d653b10aef41b1048d8c115db964b3b772e4fed39d85f1d7c1f",
+  "source_manifest_sha256": "5792979aa2fb392bfdcda738e006982276e459256fea440635a51a6a2acad2e4",
   "source_manifest_members": 2147,
   "validation": {
-    "client_version": "0.2.27",
+    "client_version": "0.2.28",
     "core_version": "0.8.17",
-    "sequence": 1794908000,
-    "client_sequence": 1794908000,
+    "sequence": 1794909000,
+    "client_sequence": 1794909000,
     "core_sequence": 1794907000,
     "core_source_fingerprint": "e50829b80230520a3566e15992e98e9a995d4899be7e5239ace568a7541229b5",
     "all_targeted_checks_passed": true,
     "new_failures": [],
     "checks": {
-      "gpt_6_2_astra_review": "Independent 4-round GPT-6.2-Astra review passed with zero remaining P0/P1/P2 blockers across 900x600..3840x2160 viewports, forced-colors, and prefers-reduced-transparency.",
-      "rust_host_tests": "cargo test --offline --locked --lib r1_r2_regression_tests (6 passed) & --test control-contract (12 passed)",
-      "frontend_build": "npm run build (tsc --noEmit -p . && node build.mjs) passed",
+      "gpt_6_2_astra_review": "Independent GPT-6.2-Astra review conducted; EOF close-race blocker and release tree metadata alignment resolved and re-verified.",
+      "rust_host_tests": "cargo test --offline --locked full suite passed (279 lib + 12 control_contract + 1 elevation_launch + 23 supervisor, including both planned-close-then-EOF and unexpected-EOF-before-terminate ordering tests)",
+      "frontend_build": "npm run build (tsc --noEmit -p . && node build.mjs) passed; compiled CSS verified to emit standard backdrop-filter on all 6 blur surfaces",
       "windows_core_reproducibility": "kat-client-core.exe v0.8.17 bit-identical SHA256 9e4109a9ef400e2ee602879f76e3bc67f51b01b58c3fa0c3ae055667719c6bfa",
       "windows_x64_cross_build": "all 6 Windows amd64 roles built cleanly"
     },

@@ -78,12 +78,21 @@ mod native {
         fn DwmIsCompositionEnabled(enabled: *mut i32) -> i32;
         fn DwmSetWindowAttribute(hwnd: HWND, attribute: u32, value: *const c_void, size: u32) -> i32;
         fn DwmGetWindowAttribute(hwnd: HWND, attribute: u32, value: *mut c_void, size: u32) -> i32;
+        fn DwmExtendFrameIntoClientArea(hwnd: HWND, margins: *const Margins) -> i32;
+        fn DwmEnableBlurBehindWindow(hwnd: HWND, blur_behind: *const DwmBlurBehind) -> i32;
     }
     const DWMWA_USE_IMMERSIVE_DARK_MODE: u32 = 20;
     const DWMWA_SYSTEMBACKDROP_TYPE: u32 = 38;
     // Microsoft: DWMSBT_TRANSIENTWINDOW = Desktop/Background Acrylic on Win11.
     const DWMSBT_TRANSIENTWINDOW: i32 = 3;
     const DWMSBT_NONE: i32 = 1;
+    const DWM_BB_ENABLE: u32 = 1;
+
+    #[repr(C)]
+    struct Margins { cx_left_width: i32, cx_right_width: i32, cy_top_height: i32, cy_bottom_height: i32 }
+    // dwmapi.h wraps DWM_BLURBEHIND in pshpack1.h (20 bytes on x64).
+    #[repr(C, packed(1))]
+    struct DwmBlurBehind { dw_flags: u32, f_enable: i32, h_rgn_blur: *mut c_void, f_transition_on_maximized: i32 }
 
     #[repr(C)]
     struct HighContrast { size: u32, flags: u32, scheme: *mut u16 }
@@ -116,6 +125,18 @@ mod native {
     fn set_attribute(hwnd: HWND, attribute: u32, value: i32) -> bool {
         unsafe { DwmSetWindowAttribute(hwnd, attribute, (&value as *const i32).cast(), size_of::<i32>() as u32) >= 0 }
     }
+    // tao enables DwmEnableBlurBehindWindow with an empty region when transparent(true)
+    // is set, which forces clear unblurred transparency and suppresses Win11 Acrylic.
+    fn disable_legacy_blur_behind(hwnd: HWND) -> bool {
+        let bb = DwmBlurBehind { dw_flags: DWM_BB_ENABLE, f_enable: 0, h_rgn_blur: std::ptr::null_mut(), f_transition_on_maximized: 0 };
+        unsafe { DwmEnableBlurBehindWindow(hwnd, &bb) >= 0 }
+    }
+    // Win11 system backdrop requires extending the DWM glass frame into the client area.
+    fn extend_frame(hwnd: HWND, all: bool) -> bool {
+        let v = if all { -1 } else { 0 };
+        let m = Margins { cx_left_width: v, cx_right_width: v, cy_top_height: v, cy_bottom_height: v };
+        unsafe { DwmExtendFrameIntoClientArea(hwnd, &m) >= 0 }
+    }
     fn opaque(dark: bool) -> Color { if dark { Color(22,31,48,255) } else { Color(245,246,248,255) } }
 
     fn refresh(window: &WebviewWindow, force: bool) {
@@ -136,9 +157,11 @@ mod native {
                     enabled = true;
                 } else if let Some(hwnd) = hwnd {
                     attempted = true;
-                    // Tauri is the effect selector. Explicit HRESULT + readback
-                    // below close its swallowed-native-error gap on Win11 22H2+.
-                    enabled = window.set_effects(WindowEffectsConfig { effects: vec![Effect::Acrylic], ..Default::default() }).is_ok()
+                    // Clear tao's empty-region blur-behind, extend the DWM sheet-of-glass
+                    // frame across the client area, then apply and verify Win11 Desktop Acrylic.
+                    enabled = disable_legacy_blur_behind(hwnd)
+                        && extend_frame(hwnd, true)
+                        && window.set_effects(WindowEffectsConfig { effects: vec![Effect::Acrylic], ..Default::default() }).is_ok()
                         && set_attribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, i32::from(state.dark))
                         && set_attribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, DWMSBT_TRANSIENTWINDOW)
                         && backdrop(hwnd) == Some(DWMSBT_TRANSIENTWINDOW)
@@ -157,7 +180,11 @@ mod native {
             }
             if attempted || state.applied_dark.is_some() {
                 let _ = window.set_effects(None::<WindowEffectsConfig>);
-                if let Some(hwnd) = hwnd { let _ = set_attribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, DWMSBT_NONE); }
+                if let Some(hwnd) = hwnd {
+                    let _ = set_attribute(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, DWMSBT_NONE);
+                    let _ = extend_frame(hwnd, false);
+                    let _ = disable_legacy_blur_behind(hwnd);
+                }
             }
             state.applied_dark = None;
         }
@@ -188,6 +215,9 @@ mod native {
         let app = window.app_handle();
         let initial_hidden = main_window_hidden(window.is_visible().ok(), window.is_minimized().ok());
         app.manage(Controller(Mutex::new(State { hidden: initial_hidden, ..Default::default() })));
+        // Clear tao's empty-region blur-behind immediately so the window never
+        // renders as unblurred transparent glass before Acrylic is verified.
+        if let Ok(hwnd) = window.hwnd() { let _ = disable_legacy_blur_behind(hwnd.0); }
         // Stay opaque until the page has registered its listener and supplied
         // its *actual* theme (kat.theme itself remains frontend-owned).
         let _ = window.set_background_color(Some(opaque(true)));

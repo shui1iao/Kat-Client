@@ -624,9 +624,14 @@
   transition: background-color var(--t-fast) var(--ease);
 }
 
-.global-group-pill:hover:not(:disabled),
-.global-group-pill.is-open {
+.global-group-pill:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.global-group-pill.is-open,
+.global-group-pill.is-open:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--accent-line);
 }
 
 .global-group-pill svg {
@@ -655,6 +660,10 @@
 .global-opt-copy b {
   font-weight: 500;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 .global-opt-copy em {

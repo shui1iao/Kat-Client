@@ -22,7 +22,7 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
 
   const [pending, setPending] = useState<Mode | null>(null);
   const [netPending, setNetPending] = useState<{ key: 'sysproxy' | 'tun'; enabled: boolean } | null>(null);
-  const [menuPos, setMenuPos] = useState<{ left: number; top: number; minWidth: number } | null>(null);
+  const [menuPos, setMenuPos] = useState<{ left: number; top?: number; bottom?: number; width: number; maxHeight: number; up: boolean } | null>(null);
   const pillRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
 
@@ -95,11 +95,13 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
     }
     const r = pillRef.current?.getBoundingClientRect();
     if (!r) return;
-    const minWidth = Math.max(216, r.width);
-    const openAbove = window.innerHeight - r.bottom < 220 && r.top > 220;
-    const left = Math.max(10, Math.min(r.left, window.innerWidth - minWidth - 12));
-    const top = openAbove ? Math.max(10, r.top - 220) : r.bottom + 6;
-    setMenuPos({ left, top, minWidth });
+    const gap = 6, margin = 10, width = r.width;
+    const below = window.innerHeight - r.bottom - gap - margin;
+    const above = r.top - gap - margin;
+    const up = below < 220 && above > below;
+    const maxHeight = Math.max(120, Math.min(300, up ? above : below));
+    const left = Math.max(margin, Math.min(r.left, window.innerWidth - width - margin));
+    setMenuPos({ left, width, maxHeight, up, ...(up ? { bottom: window.innerHeight - r.top + gap } : { top: r.bottom + gap }) });
   };
 
   const selectGlobalGroup = (name: string) => {
@@ -158,10 +160,10 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
         createPortal(
           <div
             ref={popRef}
-            className="kat-pop global-pop"
+            className={'kat-pop global-pop' + (menuPos.up ? ' up' : '')}
             role="listbox"
             aria-label="全局策略组"
-            style={{ left: menuPos.left, top: menuPos.top, minWidth: menuPos.minWidth, maxHeight: 300 }}
+            style={{ left: menuPos.left, top: menuPos.top, bottom: menuPos.bottom, width: menuPos.width, minWidth: menuPos.width, maxHeight: menuPos.maxHeight }}
           >
             {groups.map((g) => {
               const cur = g.name === globalGroup;

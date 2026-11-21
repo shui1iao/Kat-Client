@@ -12,7 +12,7 @@ struct Inner {
     write: mpsc::Sender<Write>, control: mpsc::Sender<()>, life: watch::Sender<Life>,
     #[cfg(windows)] stamp:u64, checkpoint:Mutex<Option<crate::elevated_protocol::Checkpoint>>,
     pid: u32, exited: watch::Sender<bool>, exit: watch::Sender<Option<ChildExit>>,
-    update: AtomicBool, update_prepare_sent: AtomicBool, update_closing: AtomicBool,
+    update: AtomicBool, update_prepare_sent: AtomicBool, update_closing: AtomicBool, transport_closed: AtomicBool,
     mutation: Mutex<Option<Arc<MutationFlight>>>, reconcile: tokio::sync::Mutex<()>,
     #[cfg(windows)] _job: Option<crate::windows::identity::Handle>,
 }
@@ -41,12 +41,16 @@ impl Inner {
         let mut d=crate::safe_log::RuntimeEvidence::new("ipc_response","ok",self.transport);d.transport=Some(detail);d.inflight=Some(self.pending.lock().unwrap().len()as u64);d.response_bytes=Some(frame_len as u64);
         crate::safe_log::runtime_event_at(self.component_instance.load(Ordering::Acquire),crate::log_context::Component::Core,"diagnostics.collect",None,d);
     }
-    fn fail(&self, mut err: Error) {
+    fn fail(&self, err: Error) {
+        self.fail_with_expected_eof(err, false);
+    }
+    fn fail_with_expected_eof(&self, mut err: Error, expected_eof: bool) {
         if err.transport.is_none(){if let Some(d)=crate::transport_diagnostics::fallback(&err){err=err.transport(d);}}
         let mut p = self.pending.lock().unwrap();
         let previous=self.life.borrow().clone();
         let err=if let Life::Exited(first)=previous{first}else{
-            if err.code!="CORE_EXITED"{let mut sample=self.recent.lock().unwrap().clone().unwrap_or_else(||{let mut s=crate::safe_log::RuntimeEvidence::new("ipc_read","unknown",self.transport);s.snapshot_unavailable=Some(true);s});sample.category=crate::safe_log::error_category(&err.code).into();sample.inflight=Some(p.len()as u64);sample.queued=Some((MAX_INFLIGHT-self.write.capacity())as u64);sample.native=err.os_error;sample.response_bytes=err.transport.as_ref().and_then(|d|d.frame_len);sample.transport=err.transport.clone();if let Some(d)=&err.transport{sample.stage=match d.branch{crate::transport_diagnostics::Branch::Read|crate::transport_diagnostics::Branch::TruncatedEof|crate::transport_diagnostics::Branch::Eof=>"ipc_read",crate::transport_diagnostics::Branch::Write=>"ipc_write",_=>"ipc_response"}.into();}if let Some(t)=sample.sampled_unix_ms{sample.age_ms=Some(unix_ms().saturating_sub(t));}let id=crate::safe_log::process_evidence(crate::log_context::Component::Core,self.component_instance.load(Ordering::Acquire),None,Some(&err.code),crate::safe_log::ProcessEvidence::Transport{os_error:err.os_error},Some(sample));self.primary.store(id,Ordering::Release);}
+            let planned_eof=expected_eof&&err.code=="CORE_EOF";
+            if err.code!="CORE_EXITED"&&!planned_eof{let mut sample=self.recent.lock().unwrap().clone().unwrap_or_else(||{let mut s=crate::safe_log::RuntimeEvidence::new("ipc_read","unknown",self.transport);s.snapshot_unavailable=Some(true);s});sample.category=crate::safe_log::error_category(&err.code).into();sample.inflight=Some(p.len()as u64);sample.queued=Some((MAX_INFLIGHT-self.write.capacity())as u64);sample.native=err.os_error;sample.response_bytes=err.transport.as_ref().and_then(|d|d.frame_len);sample.transport=err.transport.clone();if let Some(d)=&err.transport{sample.stage=match d.branch{crate::transport_diagnostics::Branch::Read|crate::transport_diagnostics::Branch::TruncatedEof|crate::transport_diagnostics::Branch::Eof=>"ipc_read",crate::transport_diagnostics::Branch::Write=>"ipc_write",_=>"ipc_response"}.into();}if let Some(t)=sample.sampled_unix_ms{sample.age_ms=Some(unix_ms().saturating_sub(t));}let id=crate::safe_log::process_evidence(crate::log_context::Component::Core,self.component_instance.load(Ordering::Acquire),None,Some(&err.code),crate::safe_log::ProcessEvidence::Transport{os_error:err.os_error},Some(sample));self.primary.store(id,Ordering::Release);}
             self.life.send_replace(Life::Exited(err.clone()));err
         };
         for (_, tx) in p.drain() { let _ = tx.send(Err(err.clone())); }
@@ -127,12 +131,12 @@ impl Supervisor {
         let (exited,_) = watch::channel(false);
         let (exit,_) = watch::channel(None);
         let (stderr_result,stderr_done)=watch::channel(None);
-        let inner = Arc::new(Inner { transport:"stdio",remote_owned:false,#[cfg(windows)] stamp,checkpoint:Mutex::new(None),component_instance:AtomicU64::new(0),primary:AtomicU64::new(0),recent:Mutex::new(None),pending: Mutex::new(HashMap::new()), permits: Arc::new(Semaphore::new(MAX_INFLIGHT)), log_permits: Arc::new(Semaphore::new(2)), probe_permits:Arc::new(Semaphore::new(MAX_INFLIGHT-4)), next: AtomicU64::new(1), write, control, life, pid, exited, exit, update:AtomicBool::new(false), update_prepare_sent:AtomicBool::new(false), update_closing:AtomicBool::new(false), mutation:Mutex::new(None), reconcile:tokio::sync::Mutex::new(()), #[cfg(windows)] _job: Some(job) });
+        let inner = Arc::new(Inner { transport:"stdio",remote_owned:false,#[cfg(windows)] stamp,checkpoint:Mutex::new(None),component_instance:AtomicU64::new(0),primary:AtomicU64::new(0),recent:Mutex::new(None),pending: Mutex::new(HashMap::new()), permits: Arc::new(Semaphore::new(MAX_INFLIGHT)), log_permits: Arc::new(Semaphore::new(2)), probe_permits:Arc::new(Semaphore::new(MAX_INFLIGHT-4)), next: AtomicU64::new(1), write, control, life, pid, exited, exit, update:AtomicBool::new(false), update_prepare_sent:AtomicBool::new(false), update_closing:AtomicBool::new(false), transport_closed:AtomicBool::new(false), mutation:Mutex::new(None), reconcile:tokio::sync::Mutex::new(()), #[cfg(windows)] _job: Some(job) });
         let i = inner.clone();
         let marker=stderr_done.clone();
         tokio::spawn(async move {
             while let Some(message) = writes.recv().await {
-                let frame = match message { Write::Frame(f) => f, Write::Close => { let _ = stdin.shutdown().await; break; } };
+                let frame = match message { Write::Frame(f) => f, Write::Close => { i.transport_closed.store(true, Ordering::Release); let _ = stdin.shutdown().await; break; } };
                 let written=async{stdin.write_all(&frame).await?;stdin.write_all(b"\n").await?;stdin.flush().await}.await;
                 if let Err(e)=written {
                     i.fail(terminal_error(marker.clone(),Error::io("CORE_WRITE", &e)).await); break;
@@ -154,7 +158,7 @@ impl Supervisor {
                         }
                         Err(e) => {let mut d=crate::safe_log::RuntimeEvidence::new("ipc_parse",crate::safe_log::error_category(&e.code),"stdio");d.response_bytes=Some(frame.len()as u64);i.fail(e);let p=i.primary.load(Ordering::Acquire);crate::safe_log::runtime_event_at(i.component_instance.load(Ordering::Acquire),crate::log_context::Component::Core,"core.transport",(p>0).then_some(p),d);break; }
                     },
-                    Ok(None) => { i.fail(terminal_error(marker.clone(),Error::new("CORE_EOF", "Core output closed")).await); break; }
+                    Ok(None) => { let expected_eof = i.transport_closed.load(Ordering::Acquire); i.fail_with_expected_eof(terminal_error(marker.clone(),Error::new("CORE_EOF", "Core output closed")).await, expected_eof); break; }
                     Err(e) => { i.fail(e); break; }
                 }
             }
@@ -402,6 +406,29 @@ pub fn sibling_core() -> Result<PathBuf> {
 
 #[cfg(test)]mod startup_marker_tests{use super::*;
  #[test]fn exact_complete_line_only_and_bounded_noise(){for (bytes,expected) in [(b"kat-client-core: configuration_conflict\n".as_slice(),true),(b"kat-client-core: configuration_conflict",false),(b"secret kat-client-core: configuration_conflict\n",false),(b"kat-client-core: configuration_conflict secret\n",false)]{let mut m=StartupMarker::default();for b in bytes.chunks(3){m.feed(b);}assert_eq!(m.found,expected);}let mut m=StartupMarker::default();m.feed(&vec![b'x';2*1024*1024]);m.feed(b"\nkat-client-core: configuration_conflict\n");assert!(m.found);assert_eq!(m.offset,0);}
+}
+
+#[cfg(all(test, unix))]mod planned_eof_ordering_tests{
+ use super::*;
+ #[tokio::test]async fn planned_close_then_eof_suppresses_false_transport_error(){
+  let mut cmd = Command::new("/bin/sh");
+  cmd.arg("-c").arg("cat >/dev/null");
+  let sup = Supervisor::spawn(cmd).await.unwrap();
+  let forced = sup.terminate(Duration::from_secs(3)).await.unwrap();
+  assert!(!forced);
+  assert_eq!(sup.0.primary.load(Ordering::Acquire), 0, "planned close followed by EOF must not record CORE_EOF transport failure");
+ }
+ #[tokio::test]async fn unexpected_eof_before_terminate_retains_transport_error_evidence(){
+  // Close stdout immediately (triggering EOF) while keeping stderr open for 250ms
+  // so terminal_error() is awaiting stderr drain when terminate() runs at 40ms.
+  let mut cmd = Command::new("/bin/sh");
+  cmd.arg("-c").arg("exec 1>&-; sleep 0.25");
+  let sup = Supervisor::spawn(cmd).await.unwrap();
+  tokio::time::sleep(Duration::from_millis(40)).await;
+  let _ = sup.terminate(Duration::from_secs(3)).await.unwrap();
+  assert!(sup.0.primary.load(Ordering::Acquire) > 0, "unexpected EOF prior to terminate must record CORE_EOF transport failure");
+  assert!(matches!(&*sup.0.life.borrow(), Life::Exited(e) if e.code == "CORE_EOF"));
+ }
 }
 
 #[cfg(test)]mod framing_boundary_tests{
