@@ -61,7 +61,7 @@ func (h *Host) Status() any {
 				"probe_round":        nil,
 				"probe_group_rounds": map[string]any{},
 				"probe_round_result": nil,
-				"probe_group_results": map[string]probeOutcome(nil),
+				"probe_group_results": map[string]probeOutcome{},
 				"runtime": map[string]any{
 					"state":        "starting",
 					"core_version": kernel.Version,

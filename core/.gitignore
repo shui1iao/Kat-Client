@@ -1,3 +1,5 @@
 /kat
 /bin/
 *.test
+
+.tools/

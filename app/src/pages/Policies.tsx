@@ -509,8 +509,8 @@ function GroupEditor({ c, value, previous, close }: { c: Client; value: Group; p
       void previewGroupSource(previewCall, g, previous)
         .then((r) => {
           if (live) {
-            setPreview(r.names);
-            setPreviewErrors(r.errors);
+            setPreview(Array.isArray(r?.names) ? r.names : []);
+            setPreviewErrors(r?.errors && typeof r.errors === 'object' ? r.errors : {});
             setPreviewBusy(false);
           }
         })
