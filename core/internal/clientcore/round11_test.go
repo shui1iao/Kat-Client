@@ -71,7 +71,8 @@ func TestR11RuntimeResourceRealRegisteredSOCKSAndRouteFailure(t *testing.T) {
 		t.Fatal(e)
 	}
 	ctx := context.WithValue(context.Background(), resourceKernelKey{}, true)
-	_, err := h.fetchFull(ctx, target.URL, nil, 1024)
+	const resource = "https://resource-fixture.invalid/file"
+	_, err := h.fetchFull(ctx, resource, nil, 1024)
 	if err == nil || calls.Load() != 0 {
 		t.Fatal("resource silently bypassed kernel rules")
 	}
@@ -83,7 +84,7 @@ func TestR11RuntimeResourceRealRegisteredSOCKSAndRouteFailure(t *testing.T) {
 	if _, e := h.Stop(); e != nil {
 		t.Fatal(e)
 	}
-	_, err = h.fetchFull(ctx, target.URL, nil, 1024)
+	_, err = h.fetchFull(ctx, resource, nil, 1024)
 	if err == nil {
 		t.Fatal("lost runtime silently fell back")
 	}
@@ -94,7 +95,14 @@ func TestR11RuntimeResourceRealRegisteredSOCKSAndRouteFailure(t *testing.T) {
 	if _, e := h.Start(); e != nil {
 		t.Fatal(e)
 	}
-	out, err := h.fetchFull(ctx, target.URL, nil, 1024)
+	// A resource may no longer use the loopback HTTP endpoint as a
+	// successful Direct fixture, even if normal client traffic allows it.
+	if _, err = h.fetchFull(ctx, target.URL, nil, 1024); err == nil || calls.Load() != 0 {
+		t.Fatal("private resource accepted")
+	}
+	// Exercise the same no-TUN, registered SOCKS transport with a permitted
+	// ordinary asset. No deployment or public network is required.
+	out, err := h.fetchKernelAsset(context.Background(), target.URL, 1024)
 	if err != nil || string(out) != "payload: [example.org]" || calls.Load() != 1 {
 		t.Fatal("no TUN direct rule SOCKS route failed", err)
 	}

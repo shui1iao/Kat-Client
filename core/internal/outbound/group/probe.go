@@ -38,12 +38,13 @@ type probeFunc func(ctx context.Context, m outbound.Outbound) (time.Duration, er
 var errProbeStatus = errors.New("probe: server error status")
 
 type probeFlightKey struct {
-	underlying   any
-	url          string
-	expectedSpec string
-	head         bool
-	unified      bool
-	prepared     bool
+	publicDirectOnly bool
+	underlying       any
+	url              string
+	expectedSpec     string
+	head             bool
+	unified          bool
+	prepared         bool
 }
 
 type probeFlight struct {
@@ -91,10 +92,11 @@ func unwrapComparableOutbound(m outbound.Outbound) (any, bool) {
 // are not followed and the connection is never reused, so only the configured
 // URL is ever contacted, once per member per round.
 type httpProber struct {
-	url    string
-	target outbound.Addr
-	tls    *tls.Config // nil: standard verification against system roots
-	clk    clock
+	publicDirectOnly bool
+	url              string
+	target           outbound.Addr
+	tls              *tls.Config // nil: standard verification against system roots
+	clk              clock
 	// expected: statuses that count as success (probe.expected_status);
 	// nil = any status below 500.
 	unified      bool
@@ -111,16 +113,20 @@ func (p *httpProber) statusOK(code int) bool {
 }
 
 func (p *httpProber) probe(ctx context.Context, m outbound.Outbound) (time.Duration, error) {
+	if p.publicDirectOnly {
+		ctx = outbound.WithPublicTarget(ctx)
+	}
 	_, isReal := p.clk.(realClock)
 	if p.head && p.tls == nil && isReal && (p.expected == nil || p.expectedSpec != "") {
 		if underlying, ok := unwrapComparableOutbound(m); ok {
 			return p.probeShared(ctx, m, probeFlightKey{
-				underlying:   underlying,
-				url:          p.url,
-				expectedSpec: p.expectedSpec,
-				head:         p.head,
-				unified:      p.unified,
-				prepared:     ctx.Value(preparedProbeKey{}) != nil,
+				publicDirectOnly: outbound.PublicTargetOnly(ctx),
+				underlying:       underlying,
+				url:              p.url,
+				expectedSpec:     p.expectedSpec,
+				head:             p.head,
+				unified:          p.unified,
+				prepared:         ctx.Value(preparedProbeKey{}) != nil,
 			})
 		}
 	}

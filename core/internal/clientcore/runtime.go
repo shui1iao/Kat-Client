@@ -3,6 +3,7 @@ package clientcore
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -79,6 +80,7 @@ type Host struct {
 	release                  func()
 	doc                      document
 	server                   *kernel.Server
+	connectionInstance       string // Flow IDs are local to one server lifetime.
 	bridge                   *httpBridge
 	probeCtx                 context.Context
 	probeCancel              context.CancelFunc
@@ -602,6 +604,7 @@ func (h *Host) startLocked() *Error {
 	}
 	b.setServer(s)
 	h.server, h.bridge = s, b
+	h.connectionInstance = rand.Text()
 	h.probeCtx, h.probeCancel = context.WithCancel(context.Background())
 	h.resetManualLocked()
 	h.history.resetBaseline()
@@ -650,6 +653,7 @@ func (h *Host) stopWithDrainLocked(drain time.Duration, allowTimeout bool) *Erro
 	e := h.server.Close(ctx)
 	h.sampleLocked(time.Now())
 	h.server = nil
+	h.connectionInstance = ""
 	h.bridge = nil
 	h.state = "stopped"
 	if e != nil && !allowTimeout {

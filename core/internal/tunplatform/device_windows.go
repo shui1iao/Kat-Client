@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sys/windows"
 	"io"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -37,12 +38,30 @@ type nativeDevice struct {
 	dll                                                 *windows.DLL
 	pins                                                []windows.Handle
 	receive, release, allocate, send, end, closeAdapter uintptr
+	moveMemory                                          uintptr
 	readMu, writeMu                                     sync.Mutex
 	once                                                sync.Once
 	closed                                              atomic.Bool
 	closeErr                                            error
 }
 
+// Microsoft documents the user-mode ABI as Ntdll.dll!RtlMoveMemory
+// (VOID *, const VOID *, SIZE_T) -> VOID:
+// https://learn.microsoft.com/windows/win32/devnotes/rtlmovememory
+// Resolve before creating the adapter; do not interpret LastError from a void call.
+var ringMove = windows.NewLazySystemDLL("ntdll.dll").NewProc("RtlMoveMemory")
+
+// Both slices are nonempty and limited to the size received/allocated by
+// Wintun. Ring pointers remain native addresses; Wintun owns them until the
+// paired ReleaseReceivePacket / SendPacket. No pointer survives the copy.
+func (d *nativeDevice) copyFromRing(dst []byte, src uintptr) {
+	syscall.SyscallN(d.moveMemory, uintptr(unsafe.Pointer(&dst[0])), src, uintptr(len(dst)))
+	runtime.KeepAlive(dst)
+}
+func (d *nativeDevice) copyToRing(dst uintptr, src []byte) {
+	syscall.SyscallN(d.moveMemory, dst, uintptr(unsafe.Pointer(&src[0])), uintptr(len(src)))
+	runtime.KeepAlive(src)
+}
 func (d *nativeDevice) MTU() int     { return MTU }
 func (d *nativeDevice) LUID() uint64 { return d.luid }
 func (d *nativeDevice) GUID() string { return d.guid }
@@ -65,7 +84,7 @@ func (d *nativeDevice) ReadPacket(b []byte) (int, error) {
 				syscall.SyscallN(d.release, d.session, p)
 				return 0, io.ErrShortBuffer
 			}
-			copy(b, unsafe.Slice((*byte)(unsafe.Pointer(p)), int(n)))
+			d.copyFromRing(b[:n], p)
 			syscall.SyscallN(d.release, d.session, p)
 			return int(n), nil
 		}
@@ -95,7 +114,7 @@ func (d *nativeDevice) WritePacket(b []byte) error {
 	}
 	p, _, errno := syscall.SyscallN(d.allocate, d.session, uintptr(len(b)))
 	if p != 0 {
-		copy(unsafe.Slice((*byte)(unsafe.Pointer(p)), len(b)), b)
+		d.copyToRing(p, b)
 		syscall.SyscallN(d.send, d.session, p)
 		return nil
 	}
@@ -110,7 +129,7 @@ func (d *nativeDevice) WritePacket(b []byte) error {
 			return pkt, e
 		},
 		func(pkt uintptr, src []byte) {
-			copy(unsafe.Slice((*byte)(unsafe.Pointer(pkt)), len(src)), src)
+			d.copyToRing(pkt, src)
 			syscall.SyscallN(d.send, d.session, pkt)
 		},
 	)
@@ -323,6 +342,10 @@ func createNativeDevice(a Adapter) (dev Device, err error) {
 	d := &nativeDevice{dll: dll, pins: pins, guid: a.GUID}
 	fail := func(e error) (Device, error) { d.Close(); return nil, e }
 	stage = "dll_exports"
+	if e := ringMove.Find(); e != nil {
+		return fail(e)
+	}
+	d.moveMemory = ringMove.Addr()
 	var create, start, event, getLUID uintptr
 	for _, item := range []struct {
 		name string

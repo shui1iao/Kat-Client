@@ -71,6 +71,7 @@ var Coverage = []string{"tcp", "udp", "dns", "bootstrap", "provider", "probe"}
 type Policy struct {
 	Options     Options
 	failed      atomic.Bool
+	failedCh    chan struct{}
 	disableIPv6 atomic.Bool
 	dns         atomic.Pointer[dnsRevision]
 	dnsSlots    chan struct{}
@@ -142,16 +143,21 @@ func newPolicy(o Options, bind func(string, syscall.RawConn) error, validate fun
 	}
 	// Freeze the full endpoint identity, including owner and scope.
 	o = o.Clone()
-	p := &Policy{Options: o, bind: bind, dnsSlots: make(chan struct{}, 64), owner: platformDNSOwner, dnsConnect: connectDNS}
+	p := &Policy{Options: o, failedCh: make(chan struct{}), bind: bind, dnsSlots: make(chan struct{}, 64), owner: platformDNSOwner, dnsConnect: connectDNS}
 	// The Go resolver retains its CNAME/dual-family/StrictErrors semantics, but
 	// its wire requests and raw gateway requests share exactly one transport.
 	p.installDNS(o, 1)
 	return p, nil
 }
 func (p *Policy) Ready() bool { return p != nil && !p.failed.Load() }
+
+// Failed closes on the first binding failure or retirement of this revision.
+func (p *Policy) Failed() <-chan struct{} { return p.failedCh }
 func (p *Policy) Fail() {
 	if p != nil {
-		p.failed.Store(true)
+		if !p.failed.Swap(true) && p.failedCh != nil {
+			close(p.failedCh)
+		}
 		if state := p.dns.Load(); state != nil {
 			state.cancel()
 		}
@@ -245,8 +251,8 @@ func (p *Policy) SetIPv6(enabled bool) {
 }
 
 func Blocked() *Policy {
-	p := &Policy{Options: Options{Schema: Schema, Enabled: true, DNS: []DNSEndpoint{}}}
-	p.failed.Store(true)
+	p := &Policy{Options: Options{Schema: Schema, Enabled: true, DNS: []DNSEndpoint{}}, failedCh: make(chan struct{})}
+	p.Fail()
 	p.installDNS(p.Options, 1)
 	return p
 }

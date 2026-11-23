@@ -22,7 +22,9 @@ func cleanupFixture(t *testing.T) (*Manager, *fakeOS, *fakeBroker, *clientegress
 	}
 	b.rejectAbsentWAL = true
 	sw := &clientegress.Switch{}
-	m.config.Egress = sw
+	m.mu.Lock()
+	m.egress = sw
+	m.mu.Unlock()
 	t.Cleanup(func() { m.cancel(); m.wg.Wait() })
 	return m, o, b, sw
 }

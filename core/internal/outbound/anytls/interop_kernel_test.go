@@ -1,111 +1,150 @@
-package anytls_test
+package anytls
 
 import (
-	"context"
+	"bytes"
+	"encoding/json"
 	"net"
 	"os"
-	"strconv"
+	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/shui1iao/Kat/internal/kernel"
 	"github.com/shui1iao/Kat/internal/outbound"
-	at "github.com/shui1iao/Kat/internal/outbound/anytls"
 )
 
-// Interop with Kat's own AnyTLS inbound through the real kernel (kernel.Start,
-// loopback). Gated by KAT_INTEROP_KERNEL=1; run under the shared flock.
+// Kat-Client contains no inbound AnyTLS server. Run interop against a separately
+// built Kat-Server: KAT_INTEROP_SERVER=/absolute/path/to/kat go test ./internal/outbound/anytls
+// Only test-owned children, temporary files and loopback listeners are used.
+const testServerEnv = "KAT_INTEROP_SERVER"
 
-func startKernel(t *testing.T, listen, certFile, keyFile, password string) (*kernel.Server, outbound.Addr) {
-	t.Helper()
-	cfg := kernel.Config{Inbounds: []kernel.Inbound{{
-		Protocol: "anytls", Listen: listen,
-		TLS:    &kernel.TLSConfig{Cert: certFile, Key: keyFile},
-		AnyTLS: &kernel.AnyTLSOptions{Password: password},
-	}}}
-	cfg.Security = &kernel.SecurityOptions{AllowLoopback: true}
-	s, e := kernel.Start(cfg)
-	if e != nil {
-		t.Fatal(e)
-	}
-	ta := s.Addresses()[0].(*net.TCPAddr)
-	return s, outbound.Addr{Host: ta.IP.String(), Port: uint16(ta.Port)}
+type katServer struct {
+	addr        outbound.Addr
+	bin, config string
+	cmd         *exec.Cmd
+	exited      chan struct{}
+	log         bytes.Buffer // read only after Wait
 }
 
-func closeKernel(s *kernel.Server) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	_ = s.Close(ctx)
+func katFixture(t *testing.T, options ...map[string]any) (testCert, *katServer) {
+	t.Helper()
+	bin := os.Getenv(testServerEnv)
+	if bin == "" {
+		t.Skip("set " + testServerEnv + " to a Kat-Server binary for process interop")
+	}
+	cert := newTestCert(t)
+	addr := outbound.Addr{Host: "127.0.0.1", Port: uint16(freePort(t))}
+	dir := t.TempDir()
+	srv := &katServer{addr: addr, bin: bin, config: filepath.Join(dir, "config.json")}
+	opts := map[string]any{"password": testPassword}
+	for _, fields := range options {
+		for k, v := range fields {
+			opts[k] = v
+		}
+	}
+	cfg := map[string]any{
+		"inbounds": []any{map[string]any{"protocol": "anytls", "listen": addr.String(), "tls": map[string]string{"cert": cert.certFile, "key": cert.keyFile}, "anytls": opts}},
+		"security": map[string]bool{"allow_loopback": true}, "api": map[string]bool{"enabled": false}, "stats": map[string]bool{"persist": false},
+	}
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(srv.config, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(srv.stop)
+	srv.start(t)
+	return cert, srv
+}
+func (s *katServer) start(t *testing.T) {
+	t.Helper()
+	cmd := exec.Command(s.bin, "run", s.config)
+	cmd.Dir = filepath.Dir(s.config)
+	s.log.Reset()
+	cmd.Stderr = &s.log
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	s.cmd = cmd
+	done := make(chan struct{})
+	s.exited = done
+	go func() { _ = cmd.Wait(); close(done) }()
+	for until := time.Now().Add(5 * time.Second); time.Now().Before(until); {
+		select {
+		case <-done:
+			t.Fatalf("Kat-Server exited during startup: %s", s.log.String())
+		default:
+		}
+		if c, e := net.DialTimeout("tcp", s.addr.String(), 100*time.Millisecond); e == nil {
+			c.Close()
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("Kat-Server did not start listening")
+}
+func (s *katServer) stop() {
+	if s.cmd != nil {
+		_ = s.cmd.Process.Kill()
+		<-s.exited
+		s.cmd = nil
+	}
 }
 
 func TestKatKernelInterop(t *testing.T) {
-	if os.Getenv("KAT_INTEROP_KERNEL") == "" {
-		t.Skip("set KAT_INTEROP_KERNEL=1 to run Kat kernel interop")
-	}
-	certFile, keyFile, pin := at.ExportCertFiles(t)
-	const password = "kat-kernel-interop"
-	srv, addr := startKernel(t, "127.0.0.1:0", certFile, keyFile, password)
-	stopped := false
-	t.Cleanup(func() {
-		if !stopped {
-			closeKernel(srv)
-		}
-	})
-	echo := at.ExportTCPEcho(t)
-	under := at.ExportNewCounting()
-	ob, e := at.New(at.ExportBaseOptions(addr, password, &outbound.TLSOptions{PinSHA256: pin}), under)
-	if e != nil {
-		t.Fatal(e)
-	}
+	cert, srv := katFixture(t)
+	echo := tcpEchoServer(t)
+	under := &countingDialer{}
+	ob := newTestOutbound(t, baseOptions(srv.addr, testPassword, &outbound.TLSOptions{PinSHA256: cert.pin}), under)
 	defer ob.Close()
 
-	c, e := ob.DialTCP(at.ExportCtx(t, 5*time.Second), echo)
+	c, e := ob.DialTCP(ctxTimeout(t, 5*time.Second), echo)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = at.ExportEchoRT(c, []byte("hello kat kernel")); e != nil {
+	if e = echoRoundTrip(c, []byte("hello kat kernel")); e != nil {
 		t.Fatal(e)
 	}
 	c.Close()
-	at.ExportWaitIdle(t, ob, 1)
-	at.ExportConcurrentEcho(t, ob, echo, 8, 200<<10) // 8 distinct sessions, one reused
-	if n, d := at.ExportSessionsCreated(ob), at.ExportCountedDials(under); n != 8 || d != 8 {
+	waitIdle(t, ob, 1)
+	concurrentEcho(t, ob, echo, 8, 200<<10) // 8 distinct sessions, one reused
+	if n, d := ob.sessionsCreated.Load(), under.n.Load(); n != 8 || d != 8 {
 		t.Fatalf("sessions=%d under dials=%d, want 8/8", n, d)
 	}
-	at.ExportWaitIdle(t, ob, 4)
-	c, e = ob.DialTCP(at.ExportCtx(t, 5*time.Second), echo)
+	waitIdle(t, ob, 4)
+	c, e = ob.DialTCP(ctxTimeout(t, 5*time.Second), echo)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = at.ExportEchoRT(c, []byte("reuse")); e != nil {
+	if e = echoRoundTrip(c, []byte("reuse")); e != nil {
 		t.Fatal(e)
 	}
 	c.Close()
-	if n, d := at.ExportSessionsCreated(ob), at.ExportCountedDials(under); n != 8 || d != 8 {
+	if n, d := ob.sessionsCreated.Load(), under.n.Load(); n != 8 || d != 8 {
 		t.Fatalf("reuse: sessions=%d under dials=%d, want 8/8", n, d)
 	}
-	t.Logf("TCP via Kat kernel: echo + 8 concurrent on 8 sessions + idle reuse (under dials 8)")
+	t.Logf("TCP via Kat server: echo + 8 concurrent on 8 sessions + idle reuse (under dials 8)")
 
-	pc, e := ob.ListenPacket(at.ExportCtx(t, 5*time.Second))
+	pc, e := ob.ListenPacket(ctxTimeout(t, 5*time.Second))
 	if e != nil {
 		t.Fatal(e)
 	}
-	u1, u2 := at.ExportUDPEcho(t, "k1:"), at.ExportUDPEcho(t, "k2:")
-	at.ExportUDPRT(t, pc, u1, []byte("kernel uot 1"), "k1:")
-	at.ExportUDPRT(t, pc, u2, []byte("kernel uot 2"), "k2:")
-	at.ExportUDPRT(t, pc, u1, at.ExportPattern(7, 1400), "k1:")
-	if d := at.ExportCountedDials(under); d != 8 {
+	u1, u2 := udpEchoServer(t, "k1:"), udpEchoServer(t, "k2:")
+	udpRoundTrip(t, pc, u1, []byte("kernel uot 1"), "k1:")
+	udpRoundTrip(t, pc, u2, []byte("kernel uot 2"), "k2:")
+	udpRoundTrip(t, pc, u1, pattern(7, 1400), "k1:")
+	if d := under.n.Load(); d != 8 {
 		t.Fatalf("UoT should take an idle session; under dials=%d", d)
 	}
-	t.Logf("UoT v2 via Kat kernel: replies from %v and %v verified", u1, u2)
+	t.Logf("UoT v2 via Kat server: replies from %v and %v verified", u1, u2)
 
 	// Server shutdown with live streams: they error; a restarted server gets a new session.
-	c, e = ob.DialTCP(at.ExportCtx(t, 5*time.Second), echo)
+	c, e = ob.DialTCP(ctxTimeout(t, 5*time.Second), echo)
 	if e != nil {
 		t.Fatal(e)
 	}
-	closeKernel(srv)
-	stopped = true
+	srv.stop()
 	errc := make(chan error, 2)
 	go func() { _, e := c.Read(make([]byte, 8)); errc <- e }()
 	go func() { _, _, e := pc.ReadFrom(make([]byte, 8)); errc <- e }()
@@ -122,18 +161,17 @@ func TestKatKernelInterop(t *testing.T) {
 	}
 	c.Close()
 	pc.Close()
-	before := at.ExportSessionsCreated(ob)
-	srv2, _ := startKernel(t, net.JoinHostPort(addr.Host, strconv.Itoa(int(addr.Port))), certFile, keyFile, password)
-	defer closeKernel(srv2)
-	c, e = ob.DialTCP(at.ExportCtx(t, 5*time.Second), echo)
+	before := ob.sessionsCreated.Load()
+	srv.start(t)
+	c, e = ob.DialTCP(ctxTimeout(t, 5*time.Second), echo)
 	if e != nil {
 		t.Fatal("dial after restart:", e)
 	}
-	if e = at.ExportEchoRT(c, []byte("after restart")); e != nil {
+	if e = echoRoundTrip(c, []byte("after restart")); e != nil {
 		t.Fatal(e)
 	}
 	c.Close()
-	if n := at.ExportSessionsCreated(ob); n != before+1 {
+	if n := ob.sessionsCreated.Load(); n != before+1 {
 		t.Fatalf("sessions=%d, want %d (one new session after restart)", n, before+1)
 	}
 }

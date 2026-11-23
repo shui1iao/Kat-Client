@@ -90,7 +90,7 @@ func TestFullRuleOnlyAndTextSets(t *testing.T) {
 		t.Fatal("optional proxies not supported")
 	}
 	f, e = ParseFull([]byte("proxies: []\nrule-providers:\n  set: {type: http, behavior: classical, format: text, url: https://example.org/rules}\nrules: ['RULE-SET,set,DIRECT,no-resolve']\n"), "https://example.org/204")
-	if e != nil || f.RuleSets[0].Format != "classical" || !f.Rules[0].NoResolve {
+	if e != nil || f.RuleSets[0].Format != "mihomo-text" || f.RuleSets[0].Behavior != "classical" || !f.Rules[0].NoResolve {
 		t.Fatal("text/classical conversion lost semantics")
 	}
 }

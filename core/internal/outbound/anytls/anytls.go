@@ -10,8 +10,8 @@
 // flow control). Every connection to the server
 // goes through the supplied under dialer, so chaining (via) works for TCP and UDP.
 //
-// Wire behavior follows the public AnyTLS protocol description and Kat's own
-// server (internal/anytls); no upstream implementation code is used.
+// Wire behavior follows the public AnyTLS protocol description and the separate
+// Kat server; no upstream implementation code is used.
 package anytls
 
 import (
@@ -46,8 +46,11 @@ const (
 )
 
 var (
-	errProtocol   = errors.New("anytls: protocol violation from server")
-	errNoResponse = errors.New("anytls: server did not respond")
+	errStreamRefused = errors.New("anytls: server refused stream")
+	errQueueFull     = errors.New("anytls: session write queue full")
+	errServerAlert   = errors.New("anytls: server alert")
+	errProtocol      = errors.New("anytls: protocol violation from server")
+	errNoResponse    = errors.New("anytls: server did not respond")
 )
 
 func configError(msg string) error { return errors.New("anytls outbound: " + msg) }
@@ -260,6 +263,9 @@ func (o *Outbound) open(ctx context.Context, target []byte, tcp bool) (*stream, 
 		}
 		st, req, e := s.openStream(target)
 		if e != nil {
+			if errors.Is(e, errQueueFull) {
+				s.fail(e)
+			}
 			o.release(s)
 			if !fresh && ctx.Err() == nil {
 				last = e
@@ -267,8 +273,8 @@ func (o *Outbound) open(ctx context.Context, target []byte, tcp bool) (*stream, 
 			}
 			return nil, e
 		}
-		if !fresh && tcp {
-			e = st.awaitWrite(ctx, req)
+		if !fresh {
+			e = st.awaitWrite(ctx, req, tcp)
 		} else {
 			e = st.await(ctx, tcp)
 		}
@@ -509,7 +515,10 @@ func (o *Outbound) sessionCount() (busy, idle int) {
 var _ outbound.Outbound = (*Outbound)(nil)
 
 func SafeFailure(e error) string {
-	if errors.Is(e, errProtocol) {
+	if errors.Is(e, errStreamRefused) {
+		return "rejected"
+	}
+	if errors.Is(e, errProtocol) || errors.Is(e, errServerAlert) {
 		return "protocol"
 	}
 	if errors.Is(e, errNoResponse) {

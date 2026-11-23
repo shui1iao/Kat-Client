@@ -147,6 +147,11 @@ func legacyFull(b []byte, probe string, c *legacyConversion) (provider.Full, err
 	if e != nil {
 		return provider.Full{}, e
 	}
+	// Do not turn a pin refusal into a successful empty/partial policy
+	// and remove the old provider on acceptance.
+	if res.FirstUnsupportedSPKI > 0 {
+		return provider.Full{}, &provider.FullError{Section: "outbounds.tls.certificate_public_key_sha256", Index: res.FirstUnsupportedSPKI - 1, Code: "unsupported_spki_pin"}
+	}
 	keep, e := group.MemberFilter(group.Options{Filter: c.Config.Filter, ExcludeFilter: c.Config.ExcludeFilter, ExcludeType: c.Config.ExcludeType})
 	if e != nil {
 		return provider.Full{}, e

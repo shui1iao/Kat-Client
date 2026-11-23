@@ -239,7 +239,7 @@ No default drain budget is enlarged by this change.
 ## 新版界面后端接口（协议仍为 1）
 
 - `status.connections.total`：本次启动的逻辑 TCP/UDP 流总数（不是入站传输 socket/握手次数），停止为 null。`traffic.rules` 保留内核快照标签/顺序，`rules_since` 为该内存累计起点；客户端不跨重启累计规则计数。
-- `connections.list {closed_limit?:1..500=200}`：`{active,closed,total}`。closed 500 条内存环形缓冲，最新在前，增加 end；停止/重启清空。source 保持 ConnInfo 的前缀截断，host 在能取得嗅探域名时提供。
+- `connections.list {closed_limit?:1..500=200}`：`{active,closed,total,connection_instance}`。运行时 `connection_instance` 是本次内核启动的非空字符串，停止时为空串；每个活跃行的 `member_ids` 是生成该行时的全部成员 ID（单例也包含自身），`id` 仅是展示代表。closed 500 条内存环形缓冲，最新在前，增加 end；停止/重启清空。source 保持 ConnInfo 的前缀截断，host 在能取得嗅探域名时提供。
 - `logs.connections {after?:seq,limit?:1..500=200}`：`{entries,next_seq,dropped}`。独立 2000 条内存缓冲，游标同 logs.get，停止可保留；进程退出清空，不写磁盘且不参与诊断导出。TCP 建立完成/失败记录结果；UDP 每个新目标路由决定记录，建立失败另记错误。现有 logs.get 完全不变。
 - `dns.query {name,type?:A|AAAA|both}`：走当前内核同一 DNS 链和缓存；type 仅过滤已有双栈解析的返回视图，不改变查询/缓存/TTL，不绕过缓存。返回实际回答上游（缓存命中为缓存原始上游）、耗时及 cached；系统答案不进内核缓存。失败码 invalid_params、invalid_name、core_not_running、dns_failed。
 - 可选 `client.sniff: {enabled:boolean,override_destination:boolean,tcp_ports?:string,udp_ports?:string,timeout?:string}`（两个布尔字段仍必填，旧的两字段文档完全兼容），缺省关闭。仅给生成的 kat-client SOCKS 入站传递内核已有嗅探选项；系统代理与 TUN 均经此入站。TCP 缺省/空串为 `80,443,8080,8443`，UDP 为 `443`；端口串与内核同规则（逗号或 `/` 分隔、`8000-8100` 范围、`none` 关闭该网络）。timeout 为 Go duration 字符串，1ms–2s；缺省或零时仍为 300ms。校验失败返回 `client.sniff.<字段>`，即使 disabled 也验证而不丢配置；未知字段/错误类型拒绝。设置页毫秒输入只在失焦/回车后保存。支持 TLS SNI / HTTP Host / QUIC SNI，不增加逐协议开关或其它路由机制。原始 JSON/YAML 字节、未知大整数、get/apply 与格式互转保留可选字段，不实体化默认值。
@@ -256,17 +256,21 @@ No default drain budget is enlarged by this change.
 
 - 新写入/修改kernel.providers、在新组加入use或include_all_providers会以`legacy_provider_unsupported`拒绝：“节点订阅已不再支持，请使用完整订阅”。已接纳旧文档可原样保留或删减旧provider/use，不能借遗留例外创建新项。Clash proxy-providers继续拒绝。
 - 初次连接时客户端按原顺序逐provider调用`subscription.migrate {name}`：它只产生绑定当前文档字节/format的完整候选，不直接接纳。随后仍经原生document.apply链：校验前后文档 → 既有可回滚文件/内核事务（不再创建本地配置备份；需要留存原文可先导出）。失败后候选取消；该provider及引用原样保留，启动时再尝试，或待转换卡片手动重试。没有provider时循环为空，不请求迁移、不写文件、不改文档任何字节。
-- HTTP沿用同URL完整订阅所有权匹配/升级路径（URL保留、interval对应秒数，符合完整订阅60秒至30天范围）；headers/User-Agent/timeout/filter/exclude等作为完整订阅source_options私有元数据保存，并在后续刷新复用。所有下载仍用现有安全公共HTTPS、TLS、受控出口、不重定向/不环境代理路径；不会为了迁移放宽下载安全边界。旧非direct via无法安全映射时保旧为待转换；不静默改为direct。旧HTTP/内网URL被现有安全下载规则拒绝时亦保旧。下载超时不放宽现有30秒上限，原更短timeout优先。
+- HTTP沿用同URL完整订阅所有权匹配/升级路径（URL保留、interval对应秒数，符合完整订阅60秒至30天范围）；headers/User-Agent/timeout/filter/exclude等作为完整订阅source_options私有元数据保存，并在后续刷新复用。所有下载仍用现有安全公共HTTPS、TLS、受控出口、不使用环境代理的路径；不会为了迁移放宽下载安全边界。旧非direct via无法安全映射时保旧为待转换；不静默改为direct。旧HTTP/内网URL被现有安全下载规则拒绝时亦保旧。下载超时不放宽现有30秒上限，原更短timeout优先。
 - file内容使用现有有界、不跟随叶子链接/重解析点的只读资源读取器，转本地完整快照。节点格式使用原provider解析器和依赖物化；filter/exclude保留RE2和依赖支持节点语义。真正完整Clash保留规则/组/资源；若过滤后图引用不成立，失败保旧，不丢规则伪装成功。
 - 成功候选移除本provider，将引用它的use成员（含include-all-providers）按筛选和原组筛选写成成员，保留原显式成员顺序/去重；可确定的selected/fixed映射沿用。其它provider仍保留，逐项原子。失败卡只显示安全原因、重试转换和现有危险删除入口，无旧编辑/刷新/导入为完整订阅入口。
 - `probe.all {}`：立即返回`{started:true,total:N}`并在core内运行后台批次（非整批同步IPC）。捕获单代非direct/reject节点；worker数取client.probe_concurrency（1..100，默认100），每个节点由worker取出后才开始其独立probe_round_timeout（默认10s，含依赖准备）和原probe_timeout（默认5s目标HTTP）；与单节点测速同一实现、失败分类。**没有共享整批截止时间**，排队不判失败；总时间随节点数增长。status.probe_round={done,total,names}按实际完成数递增，结束为null且最终逐行结果仍在status.nodes。导航/重连读status可恢复进度。Stop/Apply/Close取消并排空旧epoch，迟到结果不能写回新代；重复整批及与其它手动测速重叠请求返回probe_busy，不重复并发同一节点。组/单节点原预算和内核背景测速不变；本方法的既有IPC时限只约束接纳，不约束后台批次。
-- `connections.close {ids:[positive-safe-integer...]}`：关闭捕获的一批活跃逻辑流，单关传一个id；不存在、重复、已请求关闭id忽略，返回{closed:实际新关闭数}。复用TCP双端/UDP会话已有取消路径，TUN捕获后经同一逻辑流注册路径亦适用；不重载内核、不影响未选连接，结束时仍进入原内存closed环。原closed记录无reason字段，不加第二套历史字段。连接页只在活跃标签提供危险行关闭；批量确认捕获当前匹配id列表，确认后不受后续新连接/搜索变化扩大范围。
+- `connections.close {connection_instance:string,ids:[positive-safe-integer...]}`：在打开确认框时，从同一次 `connections.list` 冻结实例与所选行 `member_ids` 的去重并集（立即关闭则在点击时捕获）。运行中缺少实例拒绝；实例已过期或已停止返回 `{closed:0}`。内核只取消传入的 ID，不按代表 ID 重枚举同组流；不存在、重复、已请求关闭的 ID 忽略，返回{closed:实际新关闭数}。复用TCP双端/UDP会话已有取消路径，TUN捕获后经同一逻辑流注册路径亦适用；不重载内核、不影响未选连接，结束时仍进入原内存closed环。原closed记录无reason字段，不加第二套历史字段。连接页只在活跃标签提供危险行关闭；批量确认捕获当前匹配id列表，确认后不受后续新连接/搜索变化扩大范围。
 
 新增方法仍走既有受限core_request，不增加文件/进程/网络服务权限；`subscription.migrate`及connections.close在supervisor未确认变更门后执行，document.apply所有提交/所有权/回滚判断保持原样。
 
 ## 完整订阅系统代理与fake-IP DNS（第六轮）
 
-`windows_static_http`路线对主订阅/规则集/GeoIP/ASN统一以原始`host:port`发送一次HTTP CONNECT，由代理解析域名，不使用本机目标DNS。因此其它软件的fake-IP DNS（198.18.0.0/15）不影响经代理下载。主机名`localhost`/`*.localhost`（含大小写和尾点）仍拒绝；字面IP仍必须通过publicImportIP。TLS仍以原域名验证证书、禁止重定向、响应限额与原预算不变。这里只信任用户显式选择且已通过归属校验的代理解析，不向直连路线回退。
+`windows_static_http`路线对主订阅/规则集/GeoIP/ASN统一以原始`host:port`发送一次HTTP CONNECT，由代理解析域名，不使用本机目标DNS。因此其它软件的fake-IP DNS（198.18.0.0/15）不影响经代理下载。主机名`localhost`/`*.localhost`（含大小写和尾点）仍拒绝；字面IP仍必须通过publicImportIP。TLS仍以原域名验证证书；允许重定向的订阅请求逐跳检查公共 HTTPS URL，响应限额与原预算不变。这里只信任用户显式选择且已通过归属校验的代理解析，不向直连路线回退。
+
+订阅信任边界：迁移的自定义请求头和 User-Agent 仅用于原 origin（scheme、host、有效端口相同）的主订阅；转到不同 origin 后不再带入，即使跳转回来。规则集、GeoIP、ASN 不继承这些头。`kernel_rules` 不是“强制代理”：若分流或嵌套组选择 Direct，Core 在最终本地拨号前检查候选 IP，再拨该字面地址；若选远端解析的代理叶，则实际远端 DNS 地址受所选代理控制，本地的额外 DNS 预查不能提供保证。此限制适用于订阅提供的探测 URL 到 Direct 的拨号；手工组或显式替换为用户自身探测 URL 仍可访问用户的 LAN 服务。代理服务器自身的 carrier 拨号不是资源目标。
+
+URI 订阅最多解析 4096 条非注释记录，单行不超过 16 KiB，仍只保留至多 1024 个节点；`import.parse.skipped` 为最多 128 条诊断样本，`skipped_total` 为总跳过数（含超过解析预算而未处理的记录）。不支持的 sing-box `tls.certificate_public_key_sha256` 明确拒绝节点，不会按普通 CA 或无验证方式接受。Clash `format: text` 保存为 `mihomo-text` 加原 `behavior`，例如 `.example.org` 仅匹配子域。
 
 代理端点自身的DNS/受控egress/本机反向socket归属及self_loop核验完全保持；CONNECT非2xx沿用proxy_http/proxy_auth_required分类。直连继续校验全部解析IP并拒绝私网/保留地址；仅198.18/15的拒绝分类细化为`fake_ip`，提示“本机DNS返回了代理软件的虚拟地址(fake-ip)，请改用‘通过系统代理’下载”。其它保留地址仍address_refused，不允许绕过DNS或连接安全检查。IPC ResourceDetail分类表及native/前端枚举已同步；safe_log只存既有subscription_fetch_failed等顶层安全码，不存分类或远端文本。
 

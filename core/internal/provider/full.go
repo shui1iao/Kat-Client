@@ -190,7 +190,7 @@ func ParseFull(b []byte, probe string) (Full, error) {
 			return f, fullErr("rule-providers", i, "invalid_interval")
 		}
 		if format == "text" {
-			format = behavior
+			format = route.FormatMihomoText
 		}
 		f.RuleSets = append(f.RuleSets, route.RuleSetOptions{Name: name, Format: format, Behavior: behavior, URL: str(m, "url"), Interval: outbound.Duration(time.Duration(n) * time.Second)})
 	}

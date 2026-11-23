@@ -130,6 +130,12 @@ func TestStage5UpdateShutdownSyncsSourceAndHistoryAndPreservesAllUserData(t *tes
 	if string(resumed["ok"]) != "true" {
 		t.Fatalf("resume-update failed: %s", resumed["error"])
 	}
+	// Repeating resume while already admitted must remain idempotent.
+	for _, id := range []string{"4a", "4b"} {
+		if r := rpc(id, "host.resume-update"); string(r["ok"]) != "true" {
+			t.Fatalf("duplicate resume failed: %s", r["error"])
+		}
+	}
 	if r := rpc("5", "status"); string(r["ok"]) != "true" {
 		t.Fatalf("status after resume failed: %s", r["error"])
 	}

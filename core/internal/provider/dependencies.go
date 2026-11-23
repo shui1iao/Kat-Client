@@ -341,6 +341,7 @@ func (r Result) Materialize(namespace, probeURL string, taken map[string]bool, k
 			return nil, nil, nil, ErrDependency
 		}
 		p := *g.Probe
+		p.PublicDirectOnly = p.URL != "" // explicit source URL, not user-supplied fallback
 		if p.URL == "" {
 			p.URL = probeURL
 		}

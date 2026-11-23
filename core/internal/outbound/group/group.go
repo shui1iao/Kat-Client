@@ -79,6 +79,8 @@ const (
 
 // ProbeOptions configures active HTTP(S) probing.
 type ProbeOptions struct {
+	// Restrictive provenance survives a node-only import draft; absent on hand-written groups.
+	PublicDirectOnly bool `json:"public_direct_only,omitempty"`
 	// Prepare is supplied only by the runtime. It prepares cold nested/via/relay
 	// dependencies before a background probe reserves shared HTTP capacity.
 	Prepare func(context.Context, string) error `json:"-"`
@@ -330,15 +332,16 @@ type config struct {
 	adaptiveDial bool
 	priority     []float64
 
-	strategy  string
-	stickyTTL time.Duration
-	lazy      bool
-	maxFailed int
-	head      bool
-	unified   bool
-	expected     func(int) bool // nil: status < 500
-	expectedSpec string
-	prepare   func(context.Context, string) error
+	strategy         string
+	stickyTTL        time.Duration
+	lazy             bool
+	maxFailed        int
+	publicDirectOnly bool
+	head             bool
+	unified          bool
+	expected         func(int) bool // nil: status < 500
+	expectedSpec     string
+	prepare          func(context.Context, string) error
 }
 
 func normalize(o Options) (config, error) {
@@ -488,6 +491,7 @@ func normalize(o Options) (config, error) {
 		c.interval = defaultInterval
 	}
 	c.head, c.unified = o.Probe.ClientHead, o.Probe.ClientUnified
+	c.publicDirectOnly = o.Probe.PublicDirectOnly
 	c.prepare = o.Probe.Prepare
 	c.timeout = o.Probe.Timeout.Value()
 	switch {
@@ -804,7 +808,7 @@ func newGroup(o Options, members []outbound.Outbound, events outbound.EventSink,
 		return &selectGroup{cfg: c, members: ms, events: events, sel: c.selected}, nil
 	}
 	if h.probe == nil {
-		h.probe = (&httpProber{url: c.url, target: c.target, tls: h.tls, clk: h.clk, expected: c.expected, expectedSpec: c.expectedSpec, head: c.head, unified: c.unified}).probe
+		h.probe = (&httpProber{publicDirectOnly: c.publicDirectOnly, url: c.url, target: c.target, tls: h.tls, clk: h.clk, expected: c.expected, expectedSpec: c.expectedSpec, head: c.head, unified: c.unified}).probe
 	}
 	return newAutoGroup(c, ms, events, h), nil
 }

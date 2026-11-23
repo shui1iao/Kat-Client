@@ -15,6 +15,7 @@ const (
 	FormatDomain         = "domain"
 	FormatIPCIDR         = "ipcidr"
 	FormatClassical      = "classical"
+	FormatMihomoText     = "mihomo-text"      // plain Clash rule-provider lines; behavior required
 	FormatYAML           = "yaml"             // Clash rule-provider payload; behavior required
 	FormatMRS            = "mrs"              // mihomo binary; behavior domain|ipcidr
 	FormatSRS            = "srs"              // sing-box binary rule set
@@ -28,13 +29,13 @@ func validateFormat(s *RuleSetOptions) error {
 	switch s.Format {
 	case FormatDomain, FormatIPCIDR, FormatClassical, FormatSRS, FormatSingBoxJSON, FormatSurgeRuleSet, FormatSurgeDomainSet:
 		if s.Behavior != "" {
-			return errors.New("behavior is only used with format yaml or mrs")
+			return errors.New("behavior is only used with format yaml, mihomo-text or mrs")
 		}
-	case FormatYAML:
+	case FormatYAML, FormatMihomoText:
 		switch s.Behavior {
 		case "domain", "ipcidr", "classical":
 		default:
-			return errors.New("format yaml needs behavior domain, ipcidr or classical")
+			return fmt.Errorf("format %s needs behavior domain, ipcidr or classical", s.Format)
 		}
 	case FormatMRS:
 		switch s.Behavior {
@@ -43,7 +44,7 @@ func validateFormat(s *RuleSetOptions) error {
 			return errors.New("format mrs needs behavior domain or ipcidr")
 		}
 	default:
-		return errors.New("format must be domain, ipcidr, classical, yaml, mrs, srs, sing-box-json, surge-ruleset or surge-domain-set")
+		return errors.New("format must be domain, ipcidr, classical, yaml, mihomo-text, mrs, srs, sing-box-json, surge-ruleset or surge-domain-set")
 	}
 	return nil
 }

@@ -4,118 +4,178 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 
+	"github.com/shui1iao/Kat/internal/outbound"
 	"github.com/shui1iao/Kat/internal/outbound/group"
 )
 
-// prepareManualProbe waits for the same first URLTest/Smart readiness that a real
-// dial would await. It does not dial the target, override fixed/selected members,
-// or change any group's probe policy.
 func (s *Server) prepareManualProbe(ctx context.Context, name string) error {
-	return s.prepareProbeDependencies(ctx, s.rt, name)
+	return s.prepareProbeDependencies(ctx, s.rt, name, false)
 }
 
+// Manual and progressive background probes have different readiness contracts.
+// Scope flights to both the captured generation and the caller's readiness mode.
+type probeDepKey struct {
+	name       string
+	background bool
+}
 type depFlight struct {
-	done chan struct{}
-	err  error
+	done      chan struct{}
+	err       error
+	abandoned bool
+}
+type probeDependencies struct {
+	outs    map[string]outbound.Options
+	groups  map[string]group.Options
+	mu      sync.Mutex
+	flights map[probeDepKey]*depFlight
+	// Only optional sibling workers use this budget. Never require a worker or
+	// a network slot to descend, or parents could starve a cold child's round.
+	workers chan struct{}
 }
 
-// Both probe paths resolve the captured generation's expanded dependency graph.
-// Independent child dependencies warm concurrently with singleflight deduplication.
-func (s *Server) prepareProbeDependencies(ctx context.Context, rt *routingRuntime, name string) error {
-	outs := make(map[string]OutboundConfig, len(s.cfg.Outbounds))
-	groups := make(map[string]GroupConfig, len(s.cfg.Groups))
-	for _, o := range s.cfg.Outbounds {
-		outs[o.Name] = o
-	}
-	for _, g := range s.cfg.Groups {
-		groups[g.Name] = g
-	}
+const probeDepWorkers = 8
 
-	var mu sync.Mutex
-	flights := make(map[string]*depFlight)
+func newProbeDependencies(outs map[string]outbound.Options, groups map[string]group.Options) *probeDependencies {
+	return &probeDependencies{outs: outs, groups: groups, flights: make(map[probeDepKey]*depFlight), workers: make(chan struct{}, probeDepWorkers)}
+}
+func (p *probeDependencies) share(ctx context.Context, k probeDepKey, do func() error) error {
+	for {
+		if e := ctx.Err(); e != nil {
+			return e
+		}
+		p.mu.Lock()
+		f := p.flights[k]
+		if f != nil {
+			p.mu.Unlock()
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-f.done:
+			}
+			if f.abandoned {
+				continue
+			}
+			return f.err
+		}
+		f = &depFlight{done: make(chan struct{})}
+		p.flights[k] = f
+		p.mu.Unlock()
+		e := do()
+		p.mu.Lock()
+		f.err = e
+		f.abandoned = ctx.Err() != nil && (errors.Is(e, context.DeadlineExceeded) || errors.Is(e, context.Canceled))
+		delete(p.flights, k)
+		close(f.done)
+		p.mu.Unlock()
+		return e
+	}
+}
 
-	var prepare func(string, map[string]bool) error
-	prepare = func(target string, stack map[string]bool) error {
+// Generated graph is cycle-checked by config validation. One traversal per
+// active target, using the generation's existing indexes; do not cache readiness
+// after completion (select/fixed state can change between requests).
+func (s *Server) prepareProbeDependencies(ctx context.Context, rt *routingRuntime, name string, background bool) error {
+	if rt == nil || rt.probeDeps == nil {
+		return errors.New("probe dependency graph unavailable")
+	}
+	p := rt.probeDeps
+	var seen sync.Map // avoid re-walking a diamond even if its shared flight already completed
+	var visit func(string) error
+	visit = func(target string) error {
 		if e := ctx.Err(); e != nil {
 			return e
 		}
 		if s.superseded.Load() {
 			return context.Canceled
 		}
-		if target == "" || target == "direct" || target == "reject" || stack[target] {
+		if target == "" || target == "direct" || target == "reject" {
 			return nil
 		}
-
-		mu.Lock()
-		if f, ok := flights[target]; ok {
-			mu.Unlock()
-			select {
-			case <-f.done:
-				return f.err
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+		if _, ok := seen.Load(target); ok {
+			return nil
 		}
-		f := &depFlight{done: make(chan struct{})}
-		flights[target] = f
-		mu.Unlock()
-
-		nextStack := make(map[string]bool, len(stack)+1)
-		for k := range stack {
-			nextStack[k] = true
+		// The common leaf path is constant time, allocates no flight or goroutine.
+		if o, ok := p.outs[target]; ok && (o.Via == "" || o.Via == "direct") {
+			return nil
 		}
-		nextStack[target] = true
-
-		err := func() error {
-			if o, ok := outs[target]; ok {
-				return prepare(o.Via, nextStack)
+		e := p.share(ctx, probeDepKey{target, background}, func() error {
+			if o, ok := p.outs[target]; ok {
+				return visit(o.Via)
 			}
-			cfg, ok := groups[target]
-			if !ok {
-				return errors.New("probe dependency unavailable")
-			}
+			g, ok := p.groups[target]
 			node := rt.nodes[target]
-			if node == nil {
+			if !ok || node == nil {
 				return errors.New("probe dependency unavailable")
 			}
-			members := cfg.Members
-			if cfg.Type == group.TypeSelect {
+			members := g.Members
+			if g.Type == group.TypeSelect {
 				members = []string{node.(group.Group).Current()}
-			} else if cfg.Fixed != "" {
-				members = []string{cfg.Fixed}
+			} else if g.Fixed != "" {
+				members = []string{g.Fixed}
 			}
-			if len(members) == 1 {
-				if e := prepare(members[0], nextStack); e != nil {
-					return e
-				}
-			} else if len(members) > 1 {
-				errs := make([]error, len(members))
-				var wg sync.WaitGroup
-				wg.Add(len(members))
-				for idx, m := range members {
-					go func(i int, memberName string) {
-						defer wg.Done()
-						errs[i] = prepare(memberName, nextStack)
-					}(idx, m)
-				}
-				wg.Wait()
-				for _, e := range errs {
-					if e != nil {
-						return e
-					}
-				}
+			if e := p.each(ctx, members, visit); e != nil {
+				return e
 			}
 			if ready, ok := node.(interface{ WaitReady(context.Context) error }); ok {
 				return ready.WaitReady(ctx)
 			}
 			return nil
-		}()
-
-		f.err = err
-		close(f.done)
-		return err
+		})
+		if e == nil {
+			seen.Store(target, struct{}{})
+		}
+		return e
 	}
+	return visit(name)
+}
 
-	return prepare(name, nil)
+func (p *probeDependencies) each(ctx context.Context, members []string, visit func(string) error) error {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	first := len(members)
+	var failure error
+	run := func(i int, m string) {
+		if e := visit(m); e != nil {
+			mu.Lock()
+			if i < first {
+				first, failure = i, e
+			}
+			mu.Unlock()
+		}
+	}
+	if len(members) == 0 {
+		return nil
+	}
+	if len(members) == 1 {
+		return visit(members[0])
+	}
+	var next atomic.Int64
+	worker := func() {
+		for ctx.Err() == nil {
+			i := int(next.Add(1) - 1)
+			if i >= len(members) {
+				return
+			}
+			run(i, members[i])
+		}
+	}
+	// A bounded set of workers drains the batch; do not launch a goroutine per edge.
+schedule:
+	for range min(probeDepWorkers, len(members)-1) {
+		select {
+		case p.workers <- struct{}{}:
+			wg.Add(1)
+			go func() { defer wg.Done(); defer func() { <-p.workers }(); worker() }()
+		default:
+			break schedule
+		}
+	}
+	worker()
+	wg.Wait()
+	if e := ctx.Err(); e != nil {
+		return e
+	}
+	return failure
 }

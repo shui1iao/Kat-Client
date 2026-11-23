@@ -42,11 +42,12 @@ type fakePlane struct {
 	closed       bool
 }
 
-func (p *fakePlane) Quiesce()                { p.os.log = append(p.os.log, "quiesce") }
-func (p *fakePlane) Resume() error           { return p.err }
-func (p *fakePlane) Failed() <-chan struct{} { return p.failed }
-func (p *fakePlane) Done() <-chan struct{}   { return p.done }
-func (p *fakePlane) Err() error              { return p.err }
+func (p *fakePlane) Quiesce()                       { p.os.log = append(p.os.log, "quiesce") }
+func (p *fakePlane) DrainUDP(context.Context) error { return nil }
+func (p *fakePlane) Resume() error                  { return p.err }
+func (p *fakePlane) Failed() <-chan struct{}        { return p.failed }
+func (p *fakePlane) Done() <-chan struct{}          { return p.done }
+func (p *fakePlane) Err() error                     { return p.err }
 func (p *fakePlane) Close(context.Context) error {
 	p.os.log = append(p.os.log, "plane.close")
 	if !p.closed {
@@ -71,6 +72,11 @@ type fakeOS struct {
 func (o *fakeOS) Device(_ context.Context, _ Adapter) (Device, error) {
 	o.log = append(o.log, "device.create")
 	o.gone = false
+	o.rows = make(map[string]*Value)
+	for _, f := range []uint16{2, 23} {
+		o.rows["interface:"+map[uint16]string{2: "2", 23: "23"}[f]] = &Value{Interface: &InterfaceValue{Family: f, MTU: 1500, Metric: 25, AutomaticMetric: true, DADTransmits: 1}}
+	}
+	o.rows["dns"] = &Value{DNS: &DNSValue{Servers: ""}}
 	o.dev = &fakeDevice{os: o}
 	return o.dev, nil
 }
@@ -217,10 +223,7 @@ func (b *fakeBroker) Read(context.Context) (JournalState, error) { return b.stat
 func fixtureManager(t *testing.T, factoryFailure bool) (*Manager, *fakeOS, *fakeBroker) {
 	t.Helper()
 	o := &fakeOS{rows: map[string]*Value{}, gone: true}
-	for _, f := range []uint16{2, 23} {
-		o.rows["interface:"+map[uint16]string{2: "2", 23: "23"}[f]] = &Value{Interface: &InterfaceValue{Family: f, MTU: 1500, Metric: 25, AutomaticMetric: true, DADTransmits: 1}}
-	}
-	o.rows["dns"] = &Value{DNS: &DNSValue{Servers: ""}}
+
 	launch := Launch{Schema: 2, Engine: Engine, Epoch: strings.Repeat("a", 32)}
 	b := &fakeBroker{os: o, j: Journal{Schema: 2, Engine: Engine, Launch: launch, Adapter: Adapter{GUID: "11111111-1111-1111-1111-111111111111", Compartment: 1}}}
 	c := Config{Launch: launch, Broker: b, Start: func(_ context.Context, d Device, f FlowContext) (DataPlane, error) {

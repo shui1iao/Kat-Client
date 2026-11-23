@@ -44,6 +44,8 @@ type Options struct {
 	// ErrBlocked. The kernel uses it to keep proxied client traffic away from
 	// local addresses; Kat's own traffic (probes, downloads) is never refused.
 	Guard func(ctx context.Context, ip netip.Addr) bool
+	// BlockTCP checks resolved protocol carrier endpoints against this kernel's own live listeners.
+	BlockTCP func(context.Context, netip.AddrPort) bool
 	// Control, when set, is the net.Dialer ControlContext of TCP dials (the
 	// kernel uses it for TCP Fast Open).
 	Control func(ctx context.Context, network, address string, c syscall.RawConn) error
@@ -121,6 +123,9 @@ func (d *Outbound) DialTCP(ctx context.Context, dst outbound.Addr) (net.Conn, er
 		outbound.ReportError(ctx, "direct", "dns_lookup", e, started)
 		return nil, e
 	}
+	if !outbound.PublicTargetCandidatesOK(ctx, ips) {
+		return nil, ErrBlocked
+	}
 	if d.o.Guard != nil {
 		allowed := ips[:0:0]
 		for _, ip := range ips {
@@ -136,6 +141,10 @@ func (d *Outbound) DialTCP(ctx context.Context, dst outbound.Addr) (net.Conn, er
 	outbound.ObserveDial(ctx, ips, netip.Addr{})
 	var last error
 	for _, ip := range ips {
+		if d.o.BlockTCP != nil && d.o.BlockTCP(ctx, netip.AddrPortFrom(ip, dst.Port)) {
+			last = ErrBlocked
+			continue
+		}
 		dial := (&net.Dialer{ControlContext: d.o.Control}).DialContext
 		if d.o.DialContext != nil {
 			dial = d.o.DialContext
@@ -416,6 +425,30 @@ func (p *packetConn) target(dst outbound.Addr) (netip.AddrPort, error) {
 		}
 	}
 	return netip.AddrPort{}, errNoAddress
+}
+
+// SelectCandidate chooses only among the router's already-permitted addresses.
+// It shares the controlled association's socket selection, not its DNS cache.
+func (p *packetConn) SelectCandidate(allowed []netip.AddrPort) (netip.AddrPort, error) {
+	var last error = errNoAddress
+	for _, ap := range allowed {
+		ip := ap.Addr().Unmap()
+		if !ap.IsValid() || ap.Port() == 0 || ip.Zone() != "" || ip.Is4() && p.v4 == nil || ip.Is6() && (p.v6 == nil || p.d.o.DisableIPv6) {
+			continue
+		}
+		if p.guard != nil && p.guard(ip) {
+			last = ErrBlocked
+			continue
+		}
+		if p.d.o.PacketControl != nil && !ip.IsLoopback() {
+			if _, e := p.remoteSocket(ip.Is6()); e != nil {
+				last = e
+				continue
+			}
+		}
+		return netip.AddrPortFrom(ip, ap.Port()), nil
+	}
+	return netip.AddrPort{}, last
 }
 
 func (p *packetConn) WriteTo(b []byte, dst outbound.Addr) (int, error) {

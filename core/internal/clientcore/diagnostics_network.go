@@ -371,7 +371,13 @@ func (h *Host) readDiagnosticCache(kind string) *diagnosticReply {
 		return nil
 	}
 	r = *visibleDiagnosticCache(kind, &r)
-	for _, v := range r.Items {
+	if r.Items == nil {
+		r.Items = []diagnosticRow{}
+	}
+	for i, v := range r.Items {
+		if v.Chain == nil {
+			r.Items[i].Chain = []string{}
+		}
 		if kind == "unlock" && (v.Result == "unknown" || v.Result == "challenge") {
 			continue
 		}

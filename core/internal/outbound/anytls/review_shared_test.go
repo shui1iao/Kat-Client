@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	A "github.com/shui1iao/Kat/internal/anytls"
 	"github.com/shui1iao/Kat/internal/outbound"
 	"github.com/shui1iao/Kat/internal/outbound/internal/tlsclient"
 )
@@ -1638,7 +1637,7 @@ func TestSendPathMatrixAndSafetyBoundaries(t *testing.T) {
 	// 6. Small stream immediacy (1B & short writes over real AnyTLS server):
 	// Verify no cross-call timer buffering delays 1B writes.
 	t.Run("small_stream_immediacy_and_0rtt", func(t *testing.T) {
-		cert, ks := katFixture(t, A.Config{})
+		cert, ks := katFixture(t)
 		echo := tcpEchoServer(t)
 		o := newTestOutbound(t, baseOptions(ks.addr, testPassword, &outbound.TLSOptions{PinSHA256: cert.pin}), &countingDialer{})
 		c, e := o.DialTCP(ctxTimeout(t, 5*time.Second), echo)
@@ -2154,7 +2153,6 @@ func TestWriteFailureVisibilityBeforeTokenRelease(t *testing.T) {
 	})
 }
 
-
 func assertRecvPoolInvariants(t testing.TB) {
 	t.Helper()
 	recvPool.mu.Lock()
@@ -2459,13 +2457,13 @@ func (c *chunkQueueConn) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-func (c *chunkQueueConn) Write(p []byte) (int, error)        { return len(p), nil }
-func (c *chunkQueueConn) Close() error                       { c.closeWithError(net.ErrClosed); return nil }
-func (c *chunkQueueConn) LocalAddr() net.Addr                { return dummyAddr("local") }
-func (c *chunkQueueConn) RemoteAddr() net.Addr               { return dummyAddr("remote") }
-func (c *chunkQueueConn) SetDeadline(time.Time) error        { return nil }
-func (c *chunkQueueConn) SetReadDeadline(time.Time) error    { return nil }
-func (c *chunkQueueConn) SetWriteDeadline(time.Time) error   { return nil }
+func (c *chunkQueueConn) Write(p []byte) (int, error)      { return len(p), nil }
+func (c *chunkQueueConn) Close() error                     { c.closeWithError(net.ErrClosed); return nil }
+func (c *chunkQueueConn) LocalAddr() net.Addr              { return dummyAddr("local") }
+func (c *chunkQueueConn) RemoteAddr() net.Addr             { return dummyAddr("remote") }
+func (c *chunkQueueConn) SetDeadline(time.Time) error      { return nil }
+func (c *chunkQueueConn) SetReadDeadline(time.Time) error  { return nil }
+func (c *chunkQueueConn) SetWriteDeadline(time.Time) error { return nil }
 
 type dummyAddr string
 

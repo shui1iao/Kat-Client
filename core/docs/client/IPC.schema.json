@@ -717,10 +717,16 @@
                     "minimum": 1,
                     "maximum": 9007199254740991
                   }
+                },
+                "connection_instance": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Captured from the same connections.list snapshot as the selected member_ids; required while running."
                 }
               },
               "required": [
-                "ids"
+                "ids",
+                "connection_instance"
               ],
               "additionalProperties": false
             }
@@ -2591,6 +2597,16 @@
         "domain_suffix": {
           "type": "string",
           "description": "PSL eTLD+1 of dest_host, for explicit rule editor prefill."
+        },
+        "member_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "minItems": 1,
+          "uniqueItems": true
         }
       },
       "required": [
@@ -2604,7 +2620,8 @@
         "start",
         "duration_ms",
         "up",
-        "down"
+        "down",
+        "member_ids"
       ],
       "additionalProperties": false
     },
@@ -2701,12 +2718,17 @@
             "null"
           ],
           "minimum": 0
+        },
+        "connection_instance": {
+          "type": "string",
+          "description": "Opaque runtime instance; empty while stopped."
         }
       },
       "required": [
         "active",
         "closed",
-        "total"
+        "total",
+        "connection_instance"
       ],
       "additionalProperties": false
     },
@@ -4017,12 +4039,18 @@
               "type": "object"
             },
             "description": "Only complete necessary Kat dependency group closure, not original whole proxy-groups/rules."
+          },
+          "skipped_total": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Total skipped entries, including entries omitted from the bounded detail list."
           }
         },
         "required": [
           "outbounds",
           "skipped",
-          "dependency_groups"
+          "dependency_groups",
+          "skipped_total"
         ],
         "additionalProperties": false
       },
@@ -4414,10 +4442,16 @@
               "minimum": 1,
               "maximum": 9007199254740991
             }
+          },
+          "connection_instance": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Captured from the same connections.list snapshot as the selected member_ids; required while running."
           }
         },
         "required": [
-          "ids"
+          "ids",
+          "connection_instance"
         ],
         "additionalProperties": false
       },
@@ -4434,7 +4468,7 @@
         ],
         "additionalProperties": false
       },
-      "description": "Cancel only selected active TCP/UDP/TUN logical flows; duplicate/missing/already-closed ignored; return actual newly closed count. No kernel reload.",
+      "description": "Cancel only the captured member IDs in the supplied runtime instance. No re-enumeration; a stale instance closes nothing.",
       "hostOnly": false
     },
     "icon.get": {

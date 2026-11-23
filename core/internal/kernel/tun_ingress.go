@@ -6,10 +6,28 @@ import (
 	"github.com/shui1iao/Kat/internal/outbound"
 	"github.com/shui1iao/Kat/internal/tunstack"
 	"net"
+	"sync/atomic"
 	"time"
 )
 
 type tunFlowKey struct{}
+
+type tunUDPReservationKey struct{}
+
+// begin holds one UDP slot through handler teardown, including pcWG.Wait.
+// The first concurrent mapping borrows that reservation. Only other mappings
+// need another slot. This keeps the TCP and UDP limits independent.
+type tunUDPReservation struct{ inUse atomic.Bool }
+
+func claimTUNMapping(ctx context.Context, slots *slots) (func(), bool) {
+	if r, _ := ctx.Value(tunUDPReservationKey{}).(*tunUDPReservation); r != nil && r.inUse.CompareAndSwap(false, true) {
+		return func() { r.inUse.Store(false) }, true
+	}
+	if !slots.try() {
+		return nil, false
+	}
+	return slots.release, true
+}
 
 func tunFlowOf(ctx context.Context) (tunstack.Flow, bool) {
 	f, ok := ctx.Value(tunFlowKey{}).(tunstack.Flow)
@@ -71,6 +89,9 @@ func (i *TUNIngress) begin(parent context.Context, t tunstack.Flow, c net.Conn, 
 	ctx, cancel := context.WithCancel(s.trafficContext())
 	stopParent := context.AfterFunc(parent, cancel)
 	stopIO := context.AfterFunc(ctx, func() { _ = c.Close() })
+	if p == tunstack.UDP {
+		ctx = context.WithValue(ctx, tunUDPReservationKey{}, &tunUDPReservation{})
+	}
 	ctx = context.WithValue(ctx, tunFlowKey{}, t)
 	ctx = withInbound(ctx, -1)
 	ctx = outbound.WithSource(ctx, t.Source.Addr())

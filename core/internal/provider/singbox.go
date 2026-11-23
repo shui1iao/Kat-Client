@@ -77,6 +77,15 @@ func singBoxNode(r *Result, m map[string]any) {
 		r.skip(name, typ, "not a proxy node (sing-box "+typ+")")
 		return
 	}
+	if t := sub(m, "tls"); t != nil {
+		if _, pinned := t["certificate_public_key_sha256"]; pinned {
+			if r.FirstUnsupportedSPKI == 0 {
+				r.FirstUnsupportedSPKI = len(r.Nodes) + r.SkippedTotal + 1
+			}
+			r.skip(name, typ, "tls.certificate_public_key_sha256 (SPKI pin) is not supported")
+			return
+		}
+	}
 	if jsonStr(m, "detour") != "" {
 		r.skip(name, typ, "detour chaining is not supported in providers")
 		return
@@ -159,6 +168,9 @@ func singBoxTLS(m map[string]any) (*outbound.TLSOptions, string, string) {
 	}
 	if ech, _ := t["ech"].(map[string]any); ech != nil && jsonBool(ech, "enabled") {
 		return nil, "", "ECH is not supported"
+	}
+	if _, ok := t["certificate_path"]; ok {
+		return nil, "", "tls.certificate_path is not supported"
 	}
 	if _, ok := t["certificate"]; ok {
 		return nil, "", "inline tls.certificate is not supported"

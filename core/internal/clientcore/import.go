@@ -106,7 +106,10 @@ func (h *Host) importParse(ctx context.Context, raw json.RawMessage) (any, *Erro
 	for _, v := range r.Skipped {
 		skipped = append(skipped, map[string]any{"name": v.Name, "type": v.Type, "reason": v.Reason})
 	}
-	result := map[string]any{"outbounds": outs, "skipped": skipped, "dependency_groups": groups}
+	result := map[string]any{"outbounds": outs, "skipped": skipped, "skipped_total": r.SkippedTotal, "dependency_groups": groups}
+	if r.FirstUnsupportedSPKI > 0 {
+		result["first_unsupported_spki_entry"] = r.FirstUnsupportedSPKI
+	}
 	encoded, err := json.Marshal(result)
 	if err != nil || len(encoded) > MaxFrame-1024 {
 		return nil, fail("import_too_large", "params", "Import result exceeds response budget")
@@ -139,31 +142,11 @@ func validImportURL(raw string) bool {
 	if ip, e := netip.ParseAddr(u.Hostname()); e == nil {
 		return publicImportIP(ip)
 	}
-	return !strings.Contains(u.Hostname(), ":") && !strings.Contains(u.Hostname(), "%")
+	local := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	return local != "localhost" && !strings.HasSuffix(local, ".localhost") && !strings.Contains(u.Hostname(), ":") && !strings.Contains(u.Hostname(), "%")
 }
 
-var importReserved = func() []netip.Prefix {
-	var out []netip.Prefix
-	for _, s := range strings.Fields("0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.0.0.0/24 192.0.2.0/24 192.88.99.0/24 192.168.0.0/16 198.18.0.0/15 198.51.100.0/24 203.0.113.0/24 224.0.0.0/3 2001::/23 2001:db8::/32 2002::/16 3fff::/20") {
-		out = append(out, netip.MustParsePrefix(s))
-	}
-	return out
-}()
-
-func publicImportIP(ip netip.Addr) bool {
-	if !ip.IsValid() || ip.Zone() != "" || ip.Is4In6() || !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
-		return false
-	}
-	if ip.Is6() && !netip.MustParsePrefix("2000::/3").Contains(ip) {
-		return false
-	}
-	for _, p := range importReserved {
-		if p.Contains(ip) {
-			return false
-		}
-	}
-	return true
-}
+func publicImportIP(ip netip.Addr) bool { return outbound.PublicTargetIP(ip) }
 
 // seam replaces only RoundTrip for local tests; production always uses the
 // checked resolver + literal dial below, with ordinary certificate validation.
@@ -247,15 +230,7 @@ func fetchImportBounded(ctx context.Context, raw string, policy *clientegress.Po
 			transportStage.Store(2)
 		}
 	}}))
-	req.Header.Set("User-Agent", "clash.meta")
-	if c, _ := ctx.Value(legacyKey{}).(*legacyConversion); c != nil {
-		if c.Config.UserAgent != "" {
-			req.Header.Set("User-Agent", c.Config.UserAgent)
-		}
-		for k, v := range c.Config.Headers {
-			req.Header.Set(k, v)
-		}
-	}
+	setSubscriptionRequestHeaders(req)
 	resp, e := client.Do(req)
 	if e != nil {
 		stage := "connect"

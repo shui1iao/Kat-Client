@@ -66,13 +66,32 @@ func unique(rows []Row, q Query) (uint32, string) {
 // Origin belongs to one accepted HTTP connection and is never shared through
 // headers. Its TCP owner is loaded lazily once while that socket is alive.
 type Origin struct {
-	query    Query
-	once     sync.Once
-	identity Identity
+	publicTarget bool
+	query        Query
+	once         sync.Once
+	identity     Identity
 }
 
 func NewOrigin(source, destination net.Addr) *Origin {
 	return &Origin{query: Query{Network: "tcp", Source: Addr(source), Destination: Addr(destination)}}
+}
+
+// RegisterPublicTarget binds an internal resource request to the exact live
+// SOCKS transport. No application-controlled SOCKS or HTTP field grants scope.
+func RegisterPublicTarget(c net.Conn) net.Conn {
+	o := NewOrigin(c.LocalAddr(), c.RemoteAddr())
+	o.publicTarget = true
+	return RegisterHTTP(c, o)
+}
+func PublicTargetSocket(c net.Conn) bool {
+	k := key{Addr(c.RemoteAddr()), Addr(c.LocalAddr())}
+	if !k.source.IsValid() || !k.destination.IsValid() {
+		return false
+	}
+	httpFlows.Lock()
+	defer httpFlows.Unlock()
+	o := httpFlows.m[k]
+	return o != nil && o.publicTarget
 }
 func (o *Origin) lookup(ctx context.Context) Identity {
 	o.once.Do(func() { o.identity = lookupLocal(ctx, o.query) })

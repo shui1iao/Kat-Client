@@ -237,7 +237,7 @@ func platformConfirmSource(o OwnerState, source netip.Addr) error {
 			row.Address.Scope_id = o.IfIndex
 		}
 	}
-	if e := windows.GetUnicastIpAddressEntry(&row); e != nil || row.SkipAsSource != 0 || (row.DadState != 4 && row.DadState != 3) || row.ValidLifetime == 0 {
+	if e := windows.GetUnicastIpAddressEntry(&row); e != nil || row.InterfaceLuid != o.LUID || row.InterfaceIndex != o.IfIndex || !UsableUnicastSource(source, row.SkipAsSource, row.DadState, row.ValidLifetime) {
 		return errors.New("actual physical source unavailable")
 	}
 	return nil

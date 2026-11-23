@@ -155,3 +155,9 @@ func TestFullSubscriptionAliasCannotFallbackToNodes(t *testing.T) {
 		t.Fatal("unsafe full YAML fell back to nodes-only")
 	}
 }
+func TestSubscriptionTextClassicalDependencies(t *testing.T) {
+	c, a, e := subscriptionSetNeeds(route.RuleSetOptions{Format: route.FormatMihomoText, Behavior: "classical"}, []byte("gEoIp,cn\nor,((domain,example.org),(src-ip-asn,123))"))
+	if e != nil || !c || !a {
+		t.Fatal("missing mihomo text dependency", c, a, e)
+	}
+}

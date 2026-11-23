@@ -67,6 +67,7 @@ func (s ClientSniff) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(m)
 }
+
 type Client struct {
 	TunDNS            *kernel.ClientDNSOptions `json:"tun_dns,omitempty"`
 	IPv6              bool                     `json:"ipv6"`
@@ -664,15 +665,21 @@ func parseDocument(text, workspace string, formats ...DocumentFormat) (document,
 	c.SetClientIPv6(cl.IPv6)
 	c.SetClientUnifiedDelay(cl.UnifiedDelay == nil || *cl.UnifiedDelay)
 	ownedGroups := map[string]bool{}
-	customProbeURLGroups := map[string]bool{}
+	customProbeURLGroups := map[string]string{}
 	owners, _ := subscriptionsOf(map[string]json.RawMessage{"subscriptions": root.Subscriptions})
 	for _, s := range owners {
+		if !subActive(s) {
+			continue
+		}
 		for _, g := range s.Snapshot.Groups {
 			name := rawName(g)
 			ownedGroups[name] = true
 			if patch, ok := s.Overlay.Groups[name]; ok {
 				if pm := rawObject(patch["probe"]); pm["url"] != nil {
-					customProbeURLGroups[name] = true
+					var overridden string
+					if json.Unmarshal(pm["url"], &overridden) == nil && overridden != "" {
+						customProbeURLGroups[name] = overridden
+					}
 				}
 			}
 		}
@@ -687,8 +694,11 @@ func parseDocument(text, workspace string, formats ...DocumentFormat) (document,
 					probe.Interval = outbound.Duration(time.Minute)
 				}
 			}
-			if !customProbeURLGroups[g.Name] && probe.URL == "https://www.gstatic.com/generate_204" && cl.ProbeURL != "" {
+			userProbe := customProbeURLGroups[g.Name] != "" && customProbeURLGroups[g.Name] == probe.URL
+			probe.PublicDirectOnly = !userProbe
+			if !userProbe && probe.URL == "https://www.gstatic.com/generate_204" && cl.ProbeURL != "" {
 				probe.URL = cl.ProbeURL
+				probe.PublicDirectOnly = false // this URL came from client settings
 			}
 			g.Probe = &probe
 		}

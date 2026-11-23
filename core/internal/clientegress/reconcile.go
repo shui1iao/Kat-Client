@@ -72,6 +72,12 @@ func (e *EgressSnapshot) valid(p SocketOwner) bool {
 	}
 	return false
 }
+
+// UsableUnicastSource is shared by Windows snapshotting and the live lookup
+// before socket admission (DAD 3 = deprecated but valid, 4 = preferred).
+func UsableUnicastSource(ip netip.Addr, skip uint8, dad, lifetime uint32) bool {
+	return ip.IsValid() && !ip.IsUnspecified() && !ip.IsLoopback() && !ip.IsMulticast() && !ip.Is4In6() && skip == 0 && (dad == 3 || dad == 4) && lifetime != 0
+}
 func sourceScope(ip netip.Addr, index uint32) uint32 {
 	if ip.Is6() && ip.IsLinkLocalUnicast() {
 		return index

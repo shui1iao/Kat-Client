@@ -170,10 +170,9 @@ func signal(c chan struct{}) {
 	}
 }
 
-// await waits for the server's verdict on a new stream. TCP needs the v2
-// SYNACK; UoT only needs proof the session is authenticated (server settings),
-// because servers may delay SYNACK until the UoT request arrives.
-func (st *stream) awaitWrite(ctx context.Context, req *writeReq) error {
+// On reuse, the previous stream already authenticated the session. Flush this
+// stream's SYN/target before evaluating its protocol-specific verdict.
+func (st *stream) awaitWrite(ctx context.Context, req *writeReq, needAck bool) error {
 	s := st.s
 	select {
 	case e := <-req.done:
@@ -183,21 +182,18 @@ func (st *stream) awaitWrite(ctx context.Context, req *writeReq) error {
 	case <-s.done:
 		return s.cause()
 	case <-ctx.Done():
-		if !s.cancel(req) {
-			select {
-			case e := <-req.done:
-				if e != nil {
-					return e
-				}
-			case <-s.done:
-				return s.cause()
-			}
-		}
+		// SYN/target has its own immutable buffer. A request already taken
+		// by the writer can finish ahead of the closing FIN without holding
+		// the canceled caller until the carrier's stall deadline.
+		s.cancel(req)
 		return fmt.Errorf("anytls: waiting for server: %w", ctx.Err())
 	}
-	return st.await(ctx, false)
+	return st.await(ctx, needAck)
 }
 
+// await waits for the server's verdict on a new stream. TCP needs the v2
+// SYNACK; UoT only needs proof the session is authenticated (server settings),
+// because servers may delay SYNACK until the UoT request arrives.
 func (st *stream) await(ctx context.Context, needAck bool) error {
 	s := st.s
 	ver := s.ver
@@ -219,13 +215,11 @@ func (st *stream) await(ctx context.Context, needAck bool) error {
 		if rerr == io.EOF {
 			return errClosedByPeer
 		}
-		if v, known := s.version(); known && (!needAck || v < 2) {
-			return nil
-		}
-		if needAck {
-			if _, known := s.version(); known {
-				ver = nil // keep waiting for SYNACK only
+		if v, known := s.version(); known {
+			if !needAck || v < 2 {
+				return nil
 			}
+			ver = nil // v2 TCP: only this stream's SYNACK is sufficient.
 		}
 		select {
 		case <-st.rch:
@@ -241,15 +235,15 @@ func (st *stream) await(ctx context.Context, needAck bool) error {
 	}
 }
 
-func (st *stream) acknowledge(msg []byte) {
+func (st *stream) acknowledge(accepted bool) {
 	st.mu.Lock()
-	if len(msg) == 0 {
+	if accepted {
 		st.acked = true
 		st.mu.Unlock()
 		signal(st.rch)
 		return
 	}
-	st.synErr = fmt.Errorf("anytls: server refused stream: %s", printable(msg))
+	st.synErr = errStreamRefused
 	if st.rerr == nil {
 		st.rerr = st.synErr
 	}
@@ -394,7 +388,11 @@ func (st *stream) detach(sendFIN bool) {
 	s := st.s
 	s.detachStream(st.id)
 	if sendFIN {
-		_ = s.enqueue(&writeReq{wire: appendFrame(nil, cmdFIN, st.id, nil), done: make(chan error, 1)})
+		if err := s.enqueue(&writeReq{wire: appendFrame(nil, cmdFIN, st.id, nil), done: make(chan error, 1)}); errors.Is(err, errQueueFull) {
+			// A FIN cannot be dropped or reordered. Retire this carrier instead
+			// of making Close wait behind a stalled writer.
+			s.fail(err)
+		}
 	}
 	s.o.release(s)
 }

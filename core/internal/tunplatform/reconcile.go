@@ -2,6 +2,7 @@ package tunplatform
 
 import (
 	"context"
+	"errors"
 	"github.com/shui1iao/Kat/internal/clientegress"
 	"time"
 )
@@ -34,19 +35,32 @@ func (m *Manager) startWatch() error {
 		var timer *time.Timer
 		var due <-chan time.Time
 		for {
+			// Wake on a live binding failure even when Windows reports no row change.
+			m.mu.Lock()
+			var failed <-chan struct{}
+			if m.committed && m.state.Enabled && m.egress != nil {
+				p, _, _ := m.egress.PolicySnapshot()
+				if p != nil {
+					failed = p.Failed()
+				}
+			}
+			m.mu.Unlock()
 			select {
 			case <-m.life.Done():
 				if timer != nil {
 					timer.Stop()
 				}
 				return
+			case <-failed:
+			case <-m.watchWake:
+				continue // resubscribe after Commit; it just reread the OS
 			case <-dirty:
 			case <-review.C:
 			case <-due:
 				due = nil
 			}
 			m.mu.Lock()
-			if m.journal != nil && m.plane != nil && m.state.Intent && !m.closed {
+			if m.committed && m.journal != nil && m.plane != nil && m.state.Intent && !m.closed {
 				ctx, cancel := context.WithTimeout(m.life, 3*time.Second)
 				p, err := m.os.Snapshot(ctx, m.journal.Adapter.LUID)
 				retry := m.reconcileObserved(ctx, p, err, time.Now())
@@ -72,25 +86,53 @@ func (m *Manager) startWatch() error {
 	return nil
 }
 
+func (m *Manager) egressReady() bool {
+	if m.egress == nil {
+		return true // data-plane-only test fixture
+	}
+	p, _, frozen := m.egress.PolicySnapshot()
+	return !frozen && p.Ready()
+}
+func (m *Manager) admissionHealth() error {
+	if !m.egressReady() {
+		return errors.New("EGRESS_BIND_UNSAFE")
+	}
+	return m.healthy()
+}
+
 // Called only by the manager's serial loop under mu. Notifications are hints:
 // no callback row or missing field is accepted as an OS observation.
 func (m *Manager) reconcileObserved(ctx context.Context, next Physical, readErr error, now time.Time) bool {
+	// Observation never grants initial route authority, even after repeated
+	// stable observations or a failed observation while Prepare holds a token.
+	if !m.committed {
+		return false
+	}
+	failedBind := m.state.Enabled && !m.egressReady()
+	if failedBind {
+		m.rebindRequired = true
+	}
 	if readErr != nil {
 		m.candidate = nil
 		m.suspend(ctx, "WAITING_NETWORK")
 		return false
 	}
 	proof := egressSnapshot(next, m.state.Generation+1, m.epoch.Load())
-	if m.config.Egress != nil {
-		m.config.Egress.RetireObserved(proof.Owners)
+	if m.egress != nil {
+		m.egress.RetireObserved(proof.Owners)
 	}
 	if e := physicalSafe(next); e != nil {
 		m.candidate = nil
 		m.suspend(ctx, e.Error())
 		return false
 	}
+	if failedBind {
+		m.candidate = nil
+		m.suspend(ctx, "EGRESS_BIND_UNSAFE")
+	}
 	changed := next.Options.Fingerprint != m.physical.Options.Fingerprint || m.state.State == "waiting_network" || m.state.State == "egress_bind_unsafe"
 	if !changed {
+		m.candidate = nil
 		return false
 	}
 	if m.candidate == nil || m.candidate.Options.Fingerprint != next.Options.Fingerprint {
@@ -105,24 +147,36 @@ func (m *Manager) reconcileObserved(ctx context.Context, next Physical, readErr 
 	ownerChanged := next.Options.Identity != m.physical.Options.Identity
 	if ownerChanged {
 		m.admission.Store(false)
-		if m.plane != nil {
-			m.plane.Quiesce()
+		if m.egress != nil {
+			m.egress.FreezeNew()
 		}
-		if m.config.Egress != nil {
-			m.config.Egress.FreezeNew()
+		m.plane.Quiesce()
+	}
+	// A lazy PacketConn may bind on first WriteTo. Do not publish the next
+	// owner until even pre-fence sends and DNS work have left the old handler.
+	if ownerChanged || !m.state.Enabled {
+		if err := m.plane.DrainUDP(ctx); err != nil {
+			m.suspend(ctx, "EGRESS_BIND_UNSAFE")
+			return true
 		}
+	}
+	if ownerChanged {
 		m.epoch.Add(1)
 	}
 	m.state.Generation++
 	proof.Generation = m.state.Generation
 	proof.Epoch = m.epoch.Load()
-	if m.config.Egress != nil {
-		if e := m.config.Egress.Reconcile(proof); e != nil {
+	if m.egress != nil {
+		if e := m.egress.Reconcile(proof); e != nil {
+			m.rebindRequired = true
 			m.suspend(ctx, e.Error())
 			return false
 		}
 	}
-	if e := m.healthy(); e != nil {
+	if e := m.admissionHealth(); e != nil {
+		if !m.egressReady() {
+			m.rebindRequired = true
+		}
 		m.suspend(ctx, e.Error())
 		return false
 	}
@@ -143,10 +197,14 @@ func (m *Manager) reconcileObserved(ctx context.Context, next Physical, readErr 
 			return false
 		}
 	}
-	if e := m.healthy(); e != nil {
+	if e := m.admissionHealth(); e != nil {
+		if !m.egressReady() {
+			m.rebindRequired = true
+		}
 		m.suspend(ctx, e.Error())
 		return false
 	}
+	m.rebindRequired = false
 	m.physical = next
 	m.candidate = nil
 	m.admission.Store(true)
@@ -161,8 +219,8 @@ func (m *Manager) suspend(ctx context.Context, code string) {
 	if m.plane != nil {
 		m.plane.Quiesce()
 	}
-	if m.config.Egress != nil {
-		m.config.Egress.FreezeNew()
+	if m.egress != nil {
+		m.egress.FreezeNew()
 	}
 	m.state.Enabled = false
 	m.state.Intent = true
@@ -182,8 +240,8 @@ func (m *Manager) suspend(ctx context.Context, code string) {
 			code += "; RECOVERY_PENDING: " + e.Error()
 		}
 	}
-	if routesCleared && m.config.Egress != nil {
-		m.config.Egress.ReleasePhysical()
+	if routesCleared && !m.rebindRequired && m.egress != nil && (m.plane == nil || m.plane.DrainUDP(ctx) == nil) {
+		m.egress.ReleasePhysical()
 	}
 	m.state.Code = code
 	m.state.State = "waiting_network"

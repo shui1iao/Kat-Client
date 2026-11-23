@@ -39,7 +39,11 @@ func dnsRequest(w []byte) (dnsmessage.Message, error) {
 	if len(w) < 12 || len(w) > maxDNSMessage || m.Unpack(w) != nil || m.Response || m.OpCode != 0 || len(m.Questions) != 1 || m.Questions[0].Class != dnsmessage.ClassINET || len(m.Answers) != 0 || len(m.Authorities) != 0 {
 		return m, errDNS
 	}
-	if _, e := dnsName(strings.TrimSuffix(m.Questions[0].Name.String(), ".")); e != nil {
+	// Unpack has already validated the DNS label encoding. Owner names are
+	// not dial hostnames (e.g. the root, _service._tcp or a wildcard).
+	// Never feed terminal/control bytes from a label to diagnostics/policy.
+	name := m.Questions[0].Name.String()
+	if len(name) > 254 || strings.IndexFunc(name, func(c rune) bool { return c < 0x21 || c > 0x7e }) >= 0 {
 		return m, errDNS
 	}
 	return m, nil
@@ -172,6 +176,9 @@ func (r *internalDNS) gatewayWithPolicy(ctx context.Context, wire []byte, tcp bo
 	q := m.Questions[0]
 	name := strings.ToLower(strings.TrimSuffix(q.Name.String(), "."))
 	qName = name
+	if qName == "" {
+		qName = "." // Preserve the root in the diagnostic record.
+	}
 	qType = dnsTypeString(q.Type)
 
 	if pol != nil && pol.server != nil {
@@ -435,8 +442,10 @@ func (r *internalDNS) gatewayWithPolicy(ctx context.Context, wire []byte, tcp bo
 	}
 
 	usedServer = rawSrv
-	if pol != nil {
-		stripECHRecords(&rawMsg)
+	// The local-name exception applies to the reply as well as the query.
+	// In particular, retain service bindings and ALPN from a LAN resolver.
+	if pol != nil && pol.server != nil && !localDNSName(name) && stripECHRecords(&rawMsg) {
+		rawMsg.AuthenticData = false // the upstream did not authenticate our edited RRsets
 	}
 	stripOPTRecords(&rawMsg)
 

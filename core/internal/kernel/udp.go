@@ -358,7 +358,7 @@ func (a *udpAssociation) send(ctx context.Context, p packet, idle time.Duration)
 			// the outbound gets the original target.
 			dst = p.target
 		}
-		a.sendProxy(proxy, dst, p.payload, p.target, rule)
+		a.sendProxy(proxy, dst, p.payload, p.target, rule, candidates)
 		return
 	}
 	var target netip.AddrPort

@@ -3,13 +3,35 @@ package clientcore
 import (
 	"context"
 	"github.com/shui1iao/Kat/internal/clientegress"
-	"net"
+	"github.com/shui1iao/Kat/internal/provider"
 	"net/http"
-	"net/netip"
+	"net/url"
 	"time"
 )
 
 type mainRouteKey struct{}
+type mainSubscriptionRequestKey struct{}
+
+// This capability is granted only to the call fetching the main subscription.
+// The enclosing preview/refresh context (also used by dependencies) lacks it.
+func setSubscriptionRequestHeaders(req *http.Request) {
+	req.Header.Set("User-Agent", "clash.meta")
+	main, _ := req.Context().Value(mainSubscriptionRequestKey{}).(bool)
+	c, _ := req.Context().Value(legacyKey{}).(*legacyConversion)
+	if !main || c == nil {
+		return
+	}
+	origin, err := url.Parse(c.Config.URL)
+	if err != nil || !provider.SameOrigin(origin, req.URL) {
+		return
+	}
+	if c.Config.UserAgent != "" {
+		req.Header.Set("User-Agent", c.Config.UserAgent)
+	}
+	for k, v := range c.Config.Headers {
+		req.Header.Set(k, v)
+	}
+}
 
 func subscriptionRedirect(req *http.Request, via []*http.Request) error {
 	if e := checkHostEgress(req.Context()); e != nil {
@@ -18,32 +40,21 @@ func subscriptionRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) > 5 || !validImportURL(req.URL.String()) || req.URL.Scheme != via[0].URL.Scheme {
 		return dl("url_check", "redirect_refused")
 	}
-	// Explicitly validate each hop, also on the SOCKS route where DNS may be
-	// remote. Never let redirects acquire access to loopback/private services.
-	if ip, e := netip.ParseAddr(req.URL.Hostname()); e == nil {
-		if !publicImportIP(ip) {
-			return dl("url_check", "redirect_refused")
-		}
-	} else {
-		var ips []netip.Addr
-		var e error
-		if s := hostEgress(req.Context()); s != nil {
-			ips, e = s.Bootstrap(req.Context(), ipNetwork(req.Context()), req.URL.Hostname())
-		} else {
-			ips, e = net.DefaultResolver.LookupNetIP(req.Context(), ipNetwork(req.Context()), req.URL.Hostname())
-		}
-		if _, e = checkedImportAddresses(ips, e); e != nil {
-			return dl("url_check", "redirect_refused")
-		}
-	}
-	if e := checkHostEgress(req.Context()); e != nil {
-		return e
-	}
+	// URL/literal checks are per-hop. A Direct leaf validates its actual DNS
+	// result at connect time. A proxy resolving remotely is a trust boundary;
+	// a separate local DNS lookup cannot attest the address used by the proxy.
 	req.Header = make(http.Header)
 	req.Header.Set("User-Agent", "clash.meta")
+	for _, prev := range via {
+		if !provider.SameOrigin(prev.URL, req.URL) {
+			return nil
+		}
+	}
+	setSubscriptionRequestHeaders(req)
 	return nil
 }
 func (h *Host) fetchMainSubscription(ctx context.Context, url string, policy *clientegress.Policy, limit int64, mode, last string, proxy *bootstrapProxy) ([]byte, string, error) {
+	ctx = context.WithValue(ctx, mainSubscriptionRequestKey{}, true)
 	ctx, done := h.ipContext(ctx)
 	defer done()
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)

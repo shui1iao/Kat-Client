@@ -251,6 +251,9 @@ func (g *autoGroup) lbDialTCP(ctx context.Context, dst outbound.Addr) (net.Conn,
 }
 
 func (g *autoGroup) lbListenPacket(ctx context.Context) (outbound.PacketConn, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if !g.UDP() {
 		return nil, noMember(g.cfg.name, "UDP")
 	}
@@ -292,6 +295,7 @@ type lbPacket struct {
 	rdl        time.Time
 	readMember string
 	wdl        time.Time
+	opening    *lbOpening // single writer; protected by mu
 	wg         sync.WaitGroup
 
 	in   chan lbDatagram
@@ -353,9 +357,80 @@ func (p *lbPacket) sub(i int) *lbSub {
 	return p.subs[i]
 }
 
+type lbOpening struct {
+	cancel context.CancelCauseFunc
+	timer  *time.Timer
+}
+
+// The setup caller no longer owns this PacketConn. Give each lazy open a
+// single time budget across its retries. Close and changes to the packet
+// write deadline can cancel that open while a member is still dialing.
+func (p *lbPacket) beginOpen() (context.Context, func(), error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if err := p.writeStateLocked(); err != nil {
+		return nil, nil, err
+	}
+	budget, stop := context.WithTimeout(withDialBudget(p.ctx), lbOpenTimeout)
+	ctx, cancel := context.WithCancelCause(budget)
+	op := &lbOpening{cancel: cancel}
+	p.opening = op
+	p.armOpenDeadlineLocked()
+	return ctx, func() {
+		p.mu.Lock()
+		p.opening = nil
+		if op.timer != nil {
+			op.timer.Stop()
+		}
+		p.mu.Unlock()
+		cancel(nil)
+		stop()
+	}, nil
+}
+func (p *lbPacket) writeStateLocked() error {
+	if p.closed {
+		return net.ErrClosed
+	}
+	if !p.wdl.IsZero() && !time.Now().Before(p.wdl) {
+		return os.ErrDeadlineExceeded
+	}
+	return nil
+}
+func (p *lbPacket) armOpenDeadlineLocked() {
+	op := p.opening
+	if op == nil {
+		return
+	}
+	if op.timer != nil {
+		op.timer.Stop()
+		op.timer = nil
+	}
+	if p.wdl.IsZero() {
+		return
+	}
+	if d := time.Until(p.wdl); d <= 0 {
+		op.cancel(os.ErrDeadlineExceeded)
+	} else {
+		op.timer = time.AfterFunc(d, func() {
+			p.mu.Lock()
+			defer p.mu.Unlock()
+			if p.opening == op {
+				if err := p.writeStateLocked(); err != nil {
+					op.cancel(err)
+				}
+			}
+		})
+	}
+}
+
 // openSub opens a member session for key, trying the next candidates when
 // the assigned member fails.
 func (p *lbPacket) openSub(key string, first int) (*lbSub, error) {
+	ctx, finish, err := p.beginOpen()
+	if err != nil {
+		return nil, err
+	}
+	defer finish()
 	tried := map[int]bool{}
 	cands := []int{first}
 	var errs []error
@@ -365,21 +440,32 @@ func (p *lbPacket) openSub(key string, first int) (*lbSub, error) {
 		if tried[i] {
 			continue
 		}
+		if err := context.Cause(ctx); err != nil {
+			return nil, err
+		}
+		if len(tried) > 0 && !retryBudget(ctx) {
+			break
+		}
 		tried[i] = true
 		if s := p.sub(i); s != nil {
 			p.setRoute(key, i)
 			return s, nil
 		}
-		ctx, cancel := context.WithTimeout(p.ctx, lbOpenTimeout)
 		pc, err := p.g.members[i].ListenPacket(ctx)
-		cancel()
 		if err == nil {
 			s := &lbSub{i: i, pc: pc}
 			p.mu.Lock()
-			if p.closed {
+			state := p.writeStateLocked()
+			if state == nil {
+				state = context.Cause(ctx)
+			}
+			if state == nil {
+				state = pc.SetWriteDeadline(p.wdl)
+			}
+			if state != nil {
 				p.mu.Unlock()
 				pc.Close()
-				return nil, net.ErrClosed
+				return nil, state
 			}
 			if old := p.subs[i]; old != nil { // cannot happen with one writer; keep the first
 				p.mu.Unlock()
@@ -393,8 +479,11 @@ func (p *lbPacket) openSub(key string, first int) (*lbSub, error) {
 			go p.readLoop(s)
 			return s, nil
 		}
+		if cause := context.Cause(ctx); cause != nil {
+			return nil, cause
+		}
 		errs = append(errs, err)
-		if !errors.Is(err, errProbeDependencyUnready) {
+		if !isProbe(ctx) && !errors.Is(err, errProbeDependencyUnready) {
 			p.g.realFailure(i, "", false)
 		}
 		if len(errs) >= maxAttempts {
@@ -452,10 +541,11 @@ func (p *lbPacket) dropSub(s *lbSub) {
 }
 
 func (p *lbPacket) WriteTo(b []byte, dst outbound.Addr) (int, error) {
-	select {
-	case <-p.done:
-		return 0, net.ErrClosed
-	default:
+	p.mu.Lock()
+	state := p.writeStateLocked()
+	p.mu.Unlock()
+	if state != nil {
+		return 0, state
 	}
 	key := DestinationKey(dst.Host)
 	i, ok := p.assign(key)
@@ -469,13 +559,12 @@ func (p *lbPacket) WriteTo(b []byte, dst outbound.Addr) (int, error) {
 			return 0, err
 		}
 	}
-	p.mu.Lock()
-	wdl := p.wdl
-	p.mu.Unlock()
-	s.pc.SetWriteDeadline(wdl)
 	n, err := s.pc.WriteTo(b, dst)
 	if err != nil {
-		if !isDeadline(err) && !errors.Is(err, errProbeDependencyUnready) {
+		p.mu.Lock()
+		closed := p.closed
+		p.mu.Unlock()
+		if !closed && !isProbe(p.ctx) && !isDeadline(err) && !errors.Is(err, errProbeDependencyUnready) {
 			p.g.realFailure(s.i, dst.Host, false)
 		}
 		p.dropSub(s)
@@ -528,6 +617,9 @@ func (p *lbPacket) Close() error {
 	p.once.Do(func() {
 		p.mu.Lock()
 		p.closed = true
+		if p.opening != nil {
+			p.opening.cancel(net.ErrClosed)
+		}
 		subs := p.subs
 		p.subs = map[int]*lbSub{}
 		p.mu.Unlock()
@@ -553,7 +645,17 @@ func (p *lbPacket) SetReadDeadline(t time.Time) error {
 
 func (p *lbPacket) SetWriteDeadline(t time.Time) error {
 	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed {
+		return net.ErrClosed
+	}
 	p.wdl = t
-	p.mu.Unlock()
-	return nil
+	p.armOpenDeadlineLocked()
+	var first error
+	for _, s := range p.subs {
+		if err := s.pc.SetWriteDeadline(t); err != nil && first == nil {
+			first = err
+		}
+	}
+	return first
 }

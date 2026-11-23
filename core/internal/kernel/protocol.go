@@ -5,17 +5,19 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"errors"
+	"github.com/shui1iao/Kat/internal/procattr"
 	"net"
 )
 
 type request struct {
-	Context   context.Context
-	Reply     func(net.Conn, net.Addr, bool) error
-	Command   byte
-	Target    Address
-	Mode      string
-	UserIndex int      // -1 for intentionally unauthenticated loopback SOCKS
-	Stream    net.Conn // optional transforming stream; never expose raw TCP if transforms remain
+	publicTarget bool
+	Context      context.Context
+	Reply        func(net.Conn, net.Addr, bool) error
+	Command      byte
+	Target       Address
+	Mode         string
+	UserIndex    int      // -1 for intentionally unauthenticated loopback SOCKS
+	Stream       net.Conn // optional transforming stream; never expose raw TCP if transforms remain
 }
 type adapter func(net.Conn, Inbound) (request, error)
 
@@ -69,6 +71,9 @@ func parseSOCKS(c net.Conn, in Inbound) (request, error) {
 		_ = writeAll(c, []byte{5, 255})
 		return r, errors.New("no supported authentication method")
 	}
+	// The registered client sends no SOCKS request until this greeting reply.
+	// Capture once before replying, while its registration is necessarily live.
+	r.publicTarget = procattr.PublicTargetSocket(c)
 	if e = writeAll(c, []byte{5, method}); e != nil {
 		return r, e
 	}

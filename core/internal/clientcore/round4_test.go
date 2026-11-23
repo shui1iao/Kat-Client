@@ -344,7 +344,8 @@ func TestR4MigrationIndependentAndYAMLNoOperation(t *testing.T) {
 	}
 }
 func TestR4MigrationRequestHeadersAndShorterTimeout(t *testing.T) {
-	ctx := context.WithValue(context.Background(), legacyKey{}, &legacyConversion{Config: kernel.ProviderConfig{Headers: map[string]string{"X-Original": "keep"}, UserAgent: "original", Timeout: kernel.Duration(time.Second)}})
+	ctx := context.WithValue(context.Background(), legacyKey{}, &legacyConversion{Config: kernel.ProviderConfig{URL: "https://migration.invalid/sub", Headers: map[string]string{"X-Original": "keep"}, UserAgent: "original", Timeout: kernel.Duration(time.Second)}})
+	ctx = context.WithValue(ctx, mainSubscriptionRequestKey{}, true)
 	_, e := fetchImportBounded(ctx, "https://migration.invalid/sub", nil, func(*http.Transport) http.RoundTripper {
 		return roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			if req.Header.Get("X-Original") != "keep" || req.Header.Get("User-Agent") != "original" {

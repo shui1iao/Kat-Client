@@ -173,7 +173,7 @@ func (n *nativeOS) Snapshot(ctx context.Context, exclude uint64) (Physical, erro
 		var o FamilyOwner
 		foundChoice := false
 		for _, cand := range choices {
-			if owner, err := familyOwner(cand.a.Luid, cand.index, family, sources); err == nil {
+			if owner, err := familyOwner(cand.a.Luid, cand.index, family, sources); err == nil && owner.Up && owner.hasUsableSource() {
 				c = cand
 				o = owner
 				foundChoice = true
@@ -229,7 +229,7 @@ func (n *nativeOS) Snapshot(ctx context.Context, exclude uint64) (Physical, erro
 				continue
 			}
 			out.Owners = append(out.Owners, o)
-			ownerFamilies[[2]uint64{luid, uint64(family)}] = true
+			ownerFamilies[[2]uint64{luid, uint64(family)}] = o.Up && o.hasUsableSource()
 			for _, s := range o.Sources {
 				addresses = append(addresses, fmt.Sprint(luid, ":", family, ":", s.Address, ":", s.Scope, ":", s.Usable))
 			}
@@ -393,36 +393,61 @@ func familyOwner(luid uint64, index uint32, family uint16, sources []windows.Mib
 		return o, errors.New("PHYSICAL_OWNER_CHANGED")
 	}
 	o = FamilyOwner{Family: family, LUID: luid, IfIndex: index, GUID: strings.Trim(g.String(), "{}"), Up: r.Connected != 0, Hardware: true, Forwarding: false, WeakHostSend: false}
-	hasUsable := false
+	o.Sources, e = ownerSources(luid, index, family, sources)
+	return o, e
+}
+func ownerSources(luid uint64, index uint32, family uint16, sources []windows.MibUnicastIpAddressRow) ([]Source, error) {
+	var out []Source
 	for _, s := range sources {
-		if s.InterfaceLuid != luid || s.Address.Family != family {
+		if s.InterfaceLuid != luid || s.InterfaceIndex != index || s.Address.Family != family {
 			continue
 		}
 		ip, scope, e := sockaddrIP(unsafe.Pointer(&s.Address))
 		if e != nil {
-			return o, e
+			return nil, e
 		}
-		if ip.IsLinkLocalUnicast() && scope == 0 {
+		if ip.Is6() && ip.IsLinkLocalUnicast() && scope == 0 {
 			scope = index
 		}
-		usable := s.SkipAsSource == 0 && (s.DadState == 4 || s.DadState == 3) && s.ValidLifetime > 0
-		if usable {
-			hasUsable = true
-		}
-		o.Sources = append(o.Sources, Source{Address: ip, Scope: scope, Usable: usable})
+		usable := clientegress.UsableUnicastSource(ip, s.SkipAsSource, s.DadState, s.ValidLifetime)
+		out = append(out, Source{Address: ip, Scope: scope, Usable: usable})
 	}
-	if !hasUsable {
-		for i := range o.Sources {
-			if o.Sources[i].Address.IsValid() && !o.Sources[i].Address.IsUnspecified() && !o.Sources[i].Address.IsLoopback() {
-				o.Sources[i].Usable = true
-				break
-			}
-		}
-	}
-	return o, nil
+	return out, nil
 }
 func validDNS(ip netip.Addr) bool {
 	return ip.IsValid() && !ip.Is4In6() && !ip.IsUnspecified() && !ip.IsLoopback() && !ip.IsMulticast() && !netip.MustParsePrefix("198.18.0.0/30").Contains(ip) && !netip.MustParsePrefix("fd4b:6174::/126").Contains(ip) && !netip.MustParsePrefix("198.19.0.0/16").Contains(ip) && !netip.MustParsePrefix("fd4b:6174:6661::/112").Contains(ip)
+}
+
+type registryWatch struct {
+	k     registry.Key
+	event windows.Handle
+}
+
+func closeRegistryWatches(ws []registryWatch) {
+	for _, w := range ws {
+		w.k.Close()
+		if w.event != 0 {
+			windows.CloseHandle(w.event)
+		}
+	}
+}
+func openRegistryWatches(open func(string) (registry.Key, error), event func() (windows.Handle, error)) ([]registryWatch, error) {
+	var ws []registryWatch
+	for _, path := range []string{`SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces`, `SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters\Interfaces`} {
+		k, err := open(path)
+		if err != nil {
+			closeRegistryWatches(ws)
+			return nil, err
+		}
+		ws = append(ws, registryWatch{k: k}) // own this key even if CreateEvent fails
+		h, err := event()
+		if err != nil {
+			closeRegistryWatches(ws)
+			return nil, err
+		}
+		ws[len(ws)-1].event = h
+	}
+	return ws, nil
 }
 func (n *nativeOS) Watch(ctx context.Context) (<-chan struct{}, error) {
 	dirty := make(chan struct{}, 1)
@@ -434,7 +459,9 @@ func (n *nativeOS) Watch(ctx context.Context) (<-chan struct{}, error) {
 	}
 	callback := windows.NewCallback(func(_ uintptr, _ uintptr, _ uint32) uintptr { signal(); return 0 })
 	var handles []windows.Handle
+	var dns []registryWatch
 	cleanup := func() {
+		closeRegistryWatches(dns)
 		for _, h := range handles {
 			windows.CancelMibChangeNotify2(h)
 		}
@@ -450,31 +477,16 @@ func (n *nativeOS) Watch(ctx context.Context) (<-chan struct{}, error) {
 	// DNS configuration notifications via the documented registry change API.
 	// These fixed HKLM TCP/IP subtree watchers are read-only and merely trigger
 	// GetAdaptersAddresses again. Low-frequency verification covers other writers.
-	type watch struct {
-		k     registry.Key
-		event windows.Handle
-	}
-	var dns []watch
-	for _, path := range []string{`SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces`, `SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters\Interfaces`} {
-		k, e := registry.OpenKey(registry.LOCAL_MACHINE, path, registry.NOTIFY|registry.QUERY_VALUE)
-		if e != nil {
-			cleanup()
-			for _, w := range dns {
-				w.k.Close()
-				windows.CloseHandle(w.event)
-			}
-			return nil, e
-		}
-		ev, e := windows.CreateEvent(nil, 0, 0, nil)
-		if e != nil {
-			k.Close()
-			cleanup()
-			return nil, e
-		}
-		dns = append(dns, watch{k, ev})
+	var err error
+	dns, err = openRegistryWatches(func(path string) (registry.Key, error) {
+		return registry.OpenKey(registry.LOCAL_MACHINE, path, registry.NOTIFY|registry.QUERY_VALUE)
+	}, func() (windows.Handle, error) { return windows.CreateEvent(nil, 0, 0, nil) })
+	if err != nil {
+		cleanup()
+		return nil, err
 	}
 	notify := windows.NewLazySystemDLL("advapi32.dll").NewProc("RegNotifyChangeKeyValue")
-	arm := func(w watch) error {
+	arm := func(w registryWatch) error {
 		r, _, _ := notify.Call(uintptr(w.k), 1, 0x1|0x4|0x10000000, uintptr(w.event), 1)
 		if r != 0 {
 			return syscallError(r)
@@ -484,21 +496,11 @@ func (n *nativeOS) Watch(ctx context.Context) (<-chan struct{}, error) {
 	for _, w := range dns {
 		if e := arm(w); e != nil {
 			cleanup()
-			for _, x := range dns {
-				x.k.Close()
-				windows.CloseHandle(x.event)
-			}
 			return nil, e
 		}
 	}
 	go func() {
 		defer cleanup()
-		defer func() {
-			for _, w := range dns {
-				w.k.Close()
-				windows.CloseHandle(w.event)
-			}
-		}()
 		for {
 			select {
 			case <-ctx.Done():

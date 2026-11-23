@@ -85,6 +85,8 @@ type Runtime struct {
 	err, closeErr    error
 	udpSources       map[sourceKey]*sourceConn
 	udpQueuedBytes   int64
+	udpHandlers      int
+	udpDrained       chan struct{}
 	writeMu          sync.Mutex
 	packetID         atomic.Uint32
 	active           map[net.Conn]struct{}
@@ -146,7 +148,36 @@ func StartReady(ctx context.Context, cfg Config) (*Runtime, error) {
 	}
 	return r, nil
 }
-func (r *Runtime) Quiesce() { r.mu.Lock(); r.paused = true; r.mu.Unlock() }
+func (r *Runtime) Quiesce() {
+	r.mu.Lock()
+	r.paused = true
+	for _, c := range r.udpSources {
+		c.cancel()
+	}
+	r.mu.Unlock()
+}
+
+// DrainUDP follows Quiesce. A source disappearing from udpSources means its
+// ingress closed, not that its last outbound write (or DNS query) has joined.
+func (r *Runtime) DrainUDP(ctx context.Context) error {
+	r.mu.Lock()
+	if !r.paused {
+		r.mu.Unlock()
+		return errors.New("tunstack: UDP not quiesced")
+	}
+	if r.udpHandlers == 0 {
+		r.mu.Unlock()
+		return nil
+	}
+	drained := r.udpDrained
+	r.mu.Unlock()
+	select {
+	case <-drained:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
 func (r *Runtime) Resume() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -236,6 +267,12 @@ func (r *Runtime) release(c net.Conn) {
 	}
 	r.mu.Lock()
 	delete(r.active, c)
+	if _, udp := c.(*sourceConn); udp {
+		r.udpHandlers--
+		if r.udpHandlers == 0 {
+			close(r.udpDrained)
+		}
+	}
 	r.pending--
 	r.mu.Unlock()
 	r.wg.Done()

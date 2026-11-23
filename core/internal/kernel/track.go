@@ -126,6 +126,7 @@ func withHops(ctx context.Context, h *hops) context.Context {
 type underlay struct{ d outbound.Dialer }
 
 func strip(ctx context.Context) context.Context {
+	ctx = outbound.CarrierTargetContext(ctx)
 	// A typed nil hop recorder marks an already-stripped underlay context.
 	// Protocol hops never reattach a client observer; avoid redundant
 	// value contexts per subsequent hop (a typed nil interface is not nil).
@@ -143,7 +144,7 @@ func strip(ctx context.Context) context.Context {
 	return outbound.WithDialObserver(ctx, nil)
 }
 func (u underlay) DialTCP(ctx context.Context, dst outbound.Addr) (net.Conn, error) {
-	return dialCarrier(strip(ctx), u.d, dst)
+	return dialCarrier(context.WithValue(strip(ctx), carrierEndpointKey{}, true), u.d, dst)
 }
 func (u underlay) ListenPacket(ctx context.Context) (outbound.PacketConn, error) {
 	return u.d.ListenPacket(strip(ctx))

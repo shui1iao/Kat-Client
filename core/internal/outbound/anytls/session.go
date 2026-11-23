@@ -33,6 +33,11 @@ const (
 	maxFrame   = 65535
 	// Bytes coalesced into one physical write by the session writer.
 	maxBatch = 256 << 10
+	// Per-session FIFO admission bound (data writes are also chunked).
+	maxQueuedWrites = 64
+	// Leave space for the exclusive stream's open, data and FIN even if
+	// the reader is paused waiting to enqueue another heartbeat response.
+	responseHighWater = maxQueuedWrites - 3
 	// A physical write that makes no progress for this long fails the session
 	// (session-internal stall guard; stream deadlines never touch the transport).
 	writeStall = 30 * time.Second
@@ -174,6 +179,7 @@ type session struct {
 	nextID          uint32
 	writing         bool
 	queue           []*writeReq
+	queueSpace      chan struct{} // non-nil only while the reader is backpressured
 	pendingSettings []byte
 	err             error
 	peerVersion     int
@@ -265,6 +271,9 @@ func (s *session) openStream(first []byte) (*stream, *writeReq, error) {
 	if s.err != nil {
 		return nil, nil, s.err
 	}
+	if len(s.queue) >= maxQueuedWrites {
+		return nil, nil, errQueueFull
+	}
 	s.nextID++
 	st := newStream(s, s.nextID)
 	s.streams[st.id] = st
@@ -293,8 +302,41 @@ func (s *session) enqueue(r *writeReq) error {
 	if s.err != nil {
 		return s.err
 	}
+	if len(s.queue) >= maxQueuedWrites {
+		return errQueueFull
+	}
 	s.enqueueLocked(r)
 	return nil
+}
+
+// Block the reader at a full FIFO instead of buffering arbitrary heartbeat
+// responses. Writer pickup, withdrawal, and session shutdown resume the reader.
+func (s *session) enqueueResponse(id uint32) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for s.err == nil && len(s.queue) >= responseHighWater {
+		if s.queueSpace == nil {
+			s.queueSpace = make(chan struct{})
+		}
+		space := s.queueSpace
+		s.mu.Unlock()
+		select {
+		case <-space:
+		case <-s.done:
+		}
+		s.mu.Lock()
+	}
+	if s.err != nil {
+		return s.err
+	}
+	s.enqueueLocked(&writeReq{wire: appendFrame(nil, cmdHeartResponse, id, nil), done: make(chan error, 1)})
+	return nil
+}
+func (s *session) notifySpaceLocked() {
+	if s.queueSpace != nil {
+		close(s.queueSpace)
+		s.queueSpace = nil
+	}
 }
 
 // cancel withdraws r if the writer has not taken it yet (then nothing of it
@@ -310,6 +352,7 @@ func (s *session) cancel(r *writeReq) bool {
 			copy(s.queue[i:], s.queue[i+1:])
 			s.queue[len(s.queue)-1] = nil
 			s.queue = s.queue[:len(s.queue)-1]
+			s.notifySpaceLocked()
 			return true
 		}
 	}
@@ -411,6 +454,7 @@ func (s *session) writeLoop() {
 		remaining := copy(s.queue, s.queue[n:])
 		clear(s.queue[remaining:])
 		s.queue = s.queue[:remaining]
+		s.notifySpaceLocked()
 		s.mu.Unlock()
 
 		var payload []byte
@@ -576,12 +620,11 @@ func (s *session) readFrames() error {
 				return unexpected(e)
 			}
 		case cmdSYNACK:
-			msg, e := readBody(r, n)
-			if e != nil {
-				return e
+			if _, e := r.Discard(n); e != nil {
+				return unexpected(e)
 			}
 			if st := s.lookup(id); st != nil {
-				st.acknowledge(msg)
+				st.acknowledge(n == 0)
 			}
 		case cmdWaste, cmdHeartResponse:
 			if _, e := r.Discard(n); e != nil {
@@ -591,17 +634,21 @@ func (s *session) readFrames() error {
 			if _, e := r.Discard(n); e != nil {
 				return unexpected(e)
 			}
-			_ = s.enqueue(&writeReq{wire: appendFrame(nil, cmdHeartResponse, id, nil), done: make(chan error, 1)})
+			if err := s.enqueueResponse(id); err != nil {
+				return err
+			}
 		case cmdServerSettings:
 			body, e := readBody(r, n)
 			if e != nil {
 				return e
 			}
-			v := parseVersion(body)
-			s.mu.Lock()
-			s.peerVersion = v
-			s.mu.Unlock()
-			s.verOnce.Do(func() { close(s.ver) })
+			// Version negotiation is session-scoped, not per stream.
+			s.verOnce.Do(func() {
+				s.mu.Lock()
+				s.peerVersion = parseVersion(body)
+				s.mu.Unlock()
+				close(s.ver)
+			})
 		case cmdUpdatePaddingScheme:
 			body, e := readBody(r, n)
 			if e != nil {
@@ -613,8 +660,10 @@ func (s *session) readFrames() error {
 				s.o.paddingUpdates.Add(1)
 			}
 		case cmdAlert:
-			body, _ := readBody(r, n)
-			return fmt.Errorf("anytls: server alert: %s", printable(body))
+			if _, e := r.Discard(n); e != nil {
+				return unexpected(e)
+			}
+			return errServerAlert
 		default:
 			return fmt.Errorf("%w: command %d", errProtocol, cmd)
 		}
@@ -646,22 +695,6 @@ func parseVersion(b []byte) int {
 		}
 	}
 	return 0
-}
-
-// printable bounds and sanitizes server-provided text before it enters errors.
-func printable(b []byte) string {
-	if len(b) > 200 {
-		b = b[:200]
-	}
-	out := make([]byte, 0, len(b))
-	for _, c := range b {
-		if c >= 0x20 && c < 0x7f {
-			out = append(out, c)
-		} else {
-			out = append(out, '?')
-		}
-	}
-	return string(out)
 }
 
 func (s *session) version() (int, bool) {

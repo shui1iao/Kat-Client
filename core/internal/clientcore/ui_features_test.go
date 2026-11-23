@@ -100,7 +100,7 @@ func TestUIParamsAndStoppedSemantics(t *testing.T) {
 		}
 	}
 	c := uiRequest(t, h, "connections.list", `{}`).(map[string]any)
-	if c["total"] != nil || len(c["active"].([]kernel.ConnInfo)) != 0 || len(c["closed"].([]kernel.ClosedConn)) != 0 {
+	if c["total"] != nil || len(c["active"].([]activeConnection)) != 0 || len(c["closed"].([]kernel.ClosedConn)) != 0 {
 		t.Fatal(c)
 	}
 	st := h.Status().(map[string]any)

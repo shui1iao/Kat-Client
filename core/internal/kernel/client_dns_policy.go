@@ -311,6 +311,16 @@ func (d clientDirect) ListenPacket(ctx context.Context) (outbound.PacketConn, er
 // asking Resolve. Guard that path too, before physical transmission.
 type clientDirectPacket struct{ outbound.PacketConn }
 
+func (p clientDirectPacket) SelectCandidate(c []netip.AddrPort) (netip.AddrPort, error) {
+	selector, ok := p.PacketConn.(interface {
+		SelectCandidate([]netip.AddrPort) (netip.AddrPort, error)
+	})
+	if !ok {
+		return netip.AddrPort{}, errRouteReject
+	}
+	return selector.SelectCandidate(c)
+}
+
 func (p clientDirectPacket) WriteTo(b []byte, a outbound.Addr) (int, error) {
 	if ip, ok := a.IP(); ok && ClientFakeIP(ip) {
 		return 0, errFakeIP

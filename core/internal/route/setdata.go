@@ -258,6 +258,8 @@ func parseRuleSetAs(format, behavior string, b []byte, limit int, env parseEnv) 
 		return nil, err
 	}
 	switch format {
+	case FormatMihomoText:
+		return parseText(behavior, dialMihom, raw, limit, env)
 	case FormatDomain:
 		return parseText("domain", dialKat, raw, limit, env)
 	case FormatIPCIDR:

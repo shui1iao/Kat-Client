@@ -11,6 +11,7 @@ import (
 )
 
 type Manager struct {
+	egress                                                    physicalEgress
 	mu                                                        sync.Mutex
 	config                                                    Config
 	os                                                        osBackend
@@ -30,6 +31,8 @@ type Manager struct {
 	token                                                     uint64
 	closed                                                    bool
 	watchStarted                                              bool
+	committed, rebindRequired                                 bool
+	watchWake                                                 chan struct{}
 	candidate                                                 *Physical
 	candidateSince                                            time.Time
 	cleanupWorker                                             bool
@@ -50,7 +53,11 @@ func New(c Config) (*Manager, error) {
 }
 func newManager(c Config, backend osBackend) *Manager {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Manager{config: c, os: backend, life: ctx, cancel: cancel, state: Status{State: "off", CleanupComplete: true, NetworkClear: true}, events: make(chan Event, 1)}
+	m := &Manager{config: c, os: backend, life: ctx, cancel: cancel, state: Status{State: "off", CleanupComplete: true, NetworkClear: true}, events: make(chan Event, 1), watchWake: make(chan struct{}, 1)}
+	if c.Egress != nil {
+		m.egress = c.Egress
+	}
+	return m
 }
 func (m *Manager) Status() Status       { m.mu.Lock(); defer m.mu.Unlock(); return m.state }
 func (m *Manager) Events() <-chan Event { return m.events }
@@ -71,6 +78,14 @@ func (m *Manager) publish() {
 }
 func (m *Manager) flowContext() FlowContext {
 	return FlowContext{Admitting: m.admission.Load, Epoch: m.epoch.Load, Physical: m.physical}
+}
+func (o FamilyOwner) hasUsableSource() bool {
+	for _, source := range o.Sources {
+		if source.Usable {
+			return true
+		}
+	}
+	return false
 }
 func physicalSafe(p Physical) error {
 	if p.IPv4 == nil && p.IPv6 == nil {
@@ -97,14 +112,7 @@ func physicalSafe(p Physical) error {
 				if !o.Up {
 					return errors.New("EGRESS_BIND_UNSAFE")
 				}
-				usable := false
-				for _, source := range o.Sources {
-					if source.Usable {
-						usable = true
-						break
-					}
-				}
-				if !usable {
+				if !o.hasUsableSource() {
 					return errors.New("WAITING_NETWORK")
 				}
 			}
@@ -222,9 +230,9 @@ func (m *Manager) Prepare(ctx context.Context) (prepared Prepared, err error) {
 	if e = m.install(ctx, settingChanges()); e != nil {
 		return prepared, e
 	}
-	if m.config.Egress != nil {
+	if m.egress != nil {
 		stage = "egress_reconcile"
-		if e = m.config.Egress.Reconcile(egressSnapshot(physical, m.state.Generation, m.epoch.Load())); e != nil {
+		if e = m.egress.Reconcile(egressSnapshot(physical, m.state.Generation, m.epoch.Load())); e != nil {
 			return prepared, e
 		}
 	}
@@ -317,17 +325,21 @@ func (m *Manager) Commit(ctx context.Context, token uint64) (Status, error) {
 			stage = "commit_policy"
 			e = physicalSafe(next)
 		}
-		if e == nil && next.Options.Fingerprint != m.physical.Options.Fingerprint {
+		if e == nil && (next.Options.Fingerprint != m.physical.Options.Fingerprint || !m.egressReady()) {
 			if next.Options.Identity != m.physical.Options.Identity {
 				m.epoch.Add(1)
 			}
 			m.physical = next
 			m.state.Generation++
-			if m.config.Egress != nil {
+			if m.egress != nil {
 				stage = "commit_reconcile"
-				e = m.config.Egress.Reconcile(egressSnapshot(next, m.state.Generation, m.epoch.Load()))
+				e = m.egress.Reconcile(egressSnapshot(next, m.state.Generation, m.epoch.Load()))
 			}
 		}
+	}
+	if e == nil {
+		stage = "commit_policy"
+		e = m.admissionHealth()
 	}
 	if e == nil {
 		stage = "route_install"
@@ -335,7 +347,7 @@ func (m *Manager) Commit(ctx context.Context, token uint64) (Status, error) {
 	}
 	if e == nil {
 		stage = "commit_final_health"
-		e = m.healthy()
+		e = m.admissionHealth()
 	}
 	if e != nil {
 		e = At(stage, "", e)
@@ -365,6 +377,11 @@ func (m *Manager) Commit(ctx context.Context, token uint64) (Status, error) {
 		}
 		m.publish()
 		return m.state, e
+	}
+	m.committed = true
+	select {
+	case m.watchWake <- struct{}{}:
+	default:
 	}
 	m.admission.Store(true)
 	m.state.Enabled = true
@@ -504,10 +521,12 @@ func (m *Manager) Disable(ctx context.Context) (Status, error) {
 	return m.state, e
 }
 func (m *Manager) disableLocked(ctx context.Context, preserveIntent bool) error {
+	m.committed, m.rebindRequired = false, false
+	m.candidate = nil
 	m.state.NetworkClear = false
 	m.admission.Store(false)
-	if m.config.Egress != nil {
-		m.config.Egress.FreezeNew()
+	if m.egress != nil {
+		m.egress.FreezeNew()
 	}
 	m.state.Enabled = false
 	m.state.Intent = preserveIntent && m.state.Intent
@@ -584,8 +603,8 @@ func (m *Manager) disableLocked(ctx context.Context, preserveIntent bool) error 
 		m.state.State = "off"
 		m.state.Code = "RECOVERY_PENDING"
 		m.state.Failure = nil
-		if m.config.Egress != nil {
-			m.config.Egress.ReleasePhysical()
+		if m.egress != nil {
+			m.egress.ReleasePhysical()
 		}
 		m.startCleanupWorkerLocked()
 		m.publish()
@@ -607,8 +626,8 @@ func (m *Manager) disableLocked(ctx context.Context, preserveIntent bool) error 
 		}
 	}
 	m.state.NetworkClear = clear
-	if (clear || !hasRouteChanges) && m.config.Egress != nil {
-		m.config.Egress.ReleasePhysical()
+	if (clear || !hasRouteChanges && m.plane == nil) && m.egress != nil {
+		m.egress.ReleasePhysical()
 	}
 	if first == nil {
 		m.pendingRequiresFinish = false

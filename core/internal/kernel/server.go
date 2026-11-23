@@ -404,6 +404,9 @@ func (s *Server) handle(raw net.Conn, in Inbound) {
 	}
 	c.SetDeadline(time.Time{})
 	if req.Command == 1 {
+		if req.publicTarget {
+			ctx = outbound.WithPublicTarget(ctx)
+		}
 		// Sniffing (0.7.0): a SOCKS5 client waits for the reply before it
 		// sends data, so it is answered first on sniffed ports.
 		var early func() error
@@ -479,7 +482,7 @@ func (s *Server) dial(ctx context.Context, a Address) (conn net.Conn, err error)
 	if ip, e := netip.ParseAddr(a.Host); e == nil && s.cfg.clientDNS != nil && ClientFakeIP(ip) {
 		return nil, errFakeIP
 	}
-	if s.controlledDNS(a) {
+	if !outbound.PublicTargetOnly(ctx) && s.controlledDNS(a) {
 		return s.dnsTCP(ctx), nil
 	}
 	if ip, e := netip.ParseAddr(a.Host); e == nil && s.cfg.IPv6Disabled() && ip.Unmap().Is6() {
@@ -500,7 +503,7 @@ func (s *Server) dial(ctx context.Context, a Address) (conn net.Conn, err error)
 	s.counters.Dials.Add(1)
 	defer func() { s.dialSlots.release(); s.counters.Dials.Add(-1) }()
 	f := flowOf(parent)
-	if !s.networkPolicy() {
+	if !s.networkPolicy() && !outbound.PublicTargetOnly(ctx) {
 		// override_destination: an IP target becomes the sniffed domain.
 		a = sniffTarget(parent, a)
 		f.route(0, []string{"direct"})
@@ -530,6 +533,9 @@ func (s *Server) dial(ctx context.Context, a Address) (conn net.Conn, err error)
 			proxyCtx = withSniffOrigTarget(parent, host, outbound.Addr{Host: origIP.Unmap().String(), Port: a.Port})
 		}
 		return s.dialProxy(proxyCtx, start, d.Outbound, host, a.Port)
+	}
+	if !outbound.PublicTargetCandidatesOK(ctx, d.Candidates) {
+		return nil, errBlocked
 	}
 	blocked := 0
 	var lastDial error

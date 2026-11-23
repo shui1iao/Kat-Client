@@ -125,7 +125,7 @@ func ValidateSubscriptionSetWithDependencies(s RuleSetOptions, b []byte, deps Su
 				return d.entries, nil
 			}
 		}
-	case FormatDomain, FormatIPCIDR, FormatClassical, FormatSurgeDomainSet, FormatSurgeRuleSet:
+	case FormatMihomoText, FormatDomain, FormatIPCIDR, FormatClassical, FormatSurgeDomainSet, FormatSurgeRuleSet:
 		text, err := textOf(b)
 		if err != nil {
 			return 0, err

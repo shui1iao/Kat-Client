@@ -39,9 +39,12 @@ import (
 
 // Limits.
 const (
-	MaxNodes    = 1024    // nodes kept per provider
-	MaxSize     = 8 << 20 // subscription body
-	MaxNameSize = 128     // bytes of a node name
+	MaxURIEntries     = 4096 // expensive per-entry parsing budget; still count omitted lines
+	MaxURIBytes       = 16 << 10
+	MaxSkippedDetails = 128
+	MaxNodes          = 1024    // nodes kept per provider
+	MaxSize           = 8 << 20 // subscription body
+	MaxNameSize       = 128     // bytes of a node name
 )
 
 // Formats.
@@ -87,11 +90,13 @@ type Skipped struct {
 
 // Result is the parsed content of one subscription.
 type Result struct {
-	DependencyGroups []group.Options
-	Format           string // clash | uri | uri-base64 | sing-box
-	Nodes            []Node
-	Skipped          []Skipped
-	Renamed          [][2]string // duplicate names: {original, new}
+	DependencyGroups     []group.Options
+	Format               string // clash | uri | uri-base64 | sing-box
+	Nodes                []Node
+	FirstUnsupportedSPKI int // one-based entry, independent of the sampled detail limit
+	SkippedTotal         int // includes entries omitted from the bounded detail sample
+	Skipped              []Skipped
+	Renamed              [][2]string // duplicate names: {original, new}
 }
 
 // ErrFormat: the content is not in any supported format (or has no entry).
@@ -115,6 +120,8 @@ func Parse(b []byte, format string) (Result, error) {
 		r, err = parseURIBody(t)
 	case "", FormatAuto:
 		switch {
+		case BeginsURIList(t):
+			r, err = parseURIBody(t)
 		case isClash(t):
 			r, err = parseClash(t)
 		case len(t) > 0 && (t[0] == '{' || t[0] == '['):
@@ -154,12 +161,24 @@ func (r *Result) add(n Node, typ string) {
 }
 
 func (r *Result) skip(name, typ, reason string) {
+	r.SkippedTotal++
+	if len(r.Skipped) >= MaxSkippedDetails {
+		return
+	}
+	// Errors sometimes contain input-derived labels. Bound each retained string
+	// independently, without retaining a large backing subscription string.
+	if len(typ) > 64 {
+		typ = "unknown"
+	}
+	if len(reason) > 256 {
+		reason = "unsupported or invalid entry parameter"
+	}
 	if n, ok := cleanName(name); ok {
 		name = n
 	} else {
-		name = fmt.Sprintf("#%d", len(r.Nodes)+len(r.Skipped)+1)
+		name = fmt.Sprintf("#%d", len(r.Nodes)+r.SkippedTotal)
 	}
-	r.Skipped = append(r.Skipped, Skipped{Name: name, Type: typ, Reason: reason})
+	r.Skipped = append(r.Skipped, Skipped{Name: strings.Clone(name), Type: strings.Clone(typ), Reason: strings.Clone(reason)})
 }
 
 // dedupe renames later duplicates within one provider: "name#2", "name#3", ...

@@ -66,6 +66,7 @@ func (rejectOutbound) ListenPacket(context.Context) (outbound.PacketConn, error)
 
 // routingRuntime owns every outbound, group and the rule engine of a Server.
 type routingRuntime struct {
+	probeDeps *probeDependencies           // immutable graph and in-flight work for this routing generation
 	nodes     map[string]outbound.Outbound // includes built-in direct and reject
 	outbounds []outbound.Outbound          // protocol outbounds, dependency order
 	groups    []group.Group                // dependency order
@@ -124,7 +125,7 @@ func (s *Server) buildRouting() (*routingRuntime, error) {
 	if c.UDPBindIPv6 != "" {
 		b6, _ = netip.ParseAddr(c.UDPBindIPv6)
 	}
-	do := direct.Options{DisableIPv6: c.IPv6Disabled(), Resolve: s.directLookup, BindIPv4: b4.Unmap(), BindIPv6: b6, Timeout: c.Limits.DialTimeout.value()}
+	do := direct.Options{BlockTCP: s.blockOwnCarrier, DisableIPv6: c.IPv6Disabled(), Resolve: s.directLookup, BindIPv4: b4.Unmap(), BindIPv6: b6, Timeout: c.Limits.DialTimeout.value()}
 	if s.guardActive() {
 		do.Guard = s.directGuard
 	}
@@ -155,6 +156,7 @@ func (s *Server) buildRouting() (*routingRuntime, error) {
 	for _, g := range c.Groups {
 		groups[g.Name] = group.Options(g)
 	}
+	rt.probeDeps = newProbeDependencies(outs, groups)
 	for _, name := range c.topoOrder() {
 		if o, ok := outs[name]; ok {
 			via := o.Via
@@ -193,7 +195,7 @@ func (s *Server) buildRouting() (*routingRuntime, error) {
 		if g.Probe != nil {
 			p := *g.Probe
 			p.Prepare = func(ctx context.Context, name string) error {
-				return s.prepareProbeDependencies(ctx, rt, name)
+				return s.prepareProbeDependencies(ctx, rt, name, true)
 			}
 			if c.clientProbe != nil {
 				p.ClientHead = true

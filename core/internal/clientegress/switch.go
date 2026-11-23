@@ -98,7 +98,10 @@ func (s *Switch) Fail() {
 	}
 }
 func (s *Switch) Control(ctx context.Context, n, a string, c syscall.RawConn) error {
-	p := s.policy()
+	p, _, frozen := s.PolicySnapshot()
+	if frozen {
+		return errors.New("physical egress fenced")
+	}
 	if p == nil {
 		return nil
 	}
@@ -181,7 +184,7 @@ func (s *Switch) DialContext(ctx context.Context, n, a string) (net.Conn, error)
 	if snapshot == nil {
 		stale = stale || s.epoch != epoch || s.current != p || (p != nil && !p.Ready())
 	} else {
-		stale = stale || s.snapshot == nil || s.snapshot.Epoch != snapshot.Epoch || ownership.LUID != 0 && !s.snapshot.valid(ownership) || s.generation < generation
+		stale = stale || !s.current.Ready() || s.snapshot == nil || s.snapshot.Epoch != snapshot.Epoch || ownership.LUID != 0 && !s.snapshot.valid(ownership) || s.generation < generation
 	}
 	if stale {
 		s.mu.Unlock()
@@ -250,7 +253,10 @@ func (s *Switch) PacketRelease(c *net.UDPConn) {
 	s.mu.Unlock()
 }
 func (s *Switch) Bootstrap(ctx context.Context, n, h string) ([]netip.Addr, error) {
-	p := s.policy()
+	p, _, frozen := s.PolicySnapshot()
+	if frozen {
+		return nil, errors.New("physical egress fenced")
+	}
 	if p == nil {
 		return net.DefaultResolver.LookupNetIP(ctx, n, h)
 	}

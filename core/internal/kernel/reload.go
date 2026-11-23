@@ -585,6 +585,11 @@ func (s *Server) reloadCandidateLockedContext(ctx context.Context, trigger strin
 	} else {
 		// Never reuse prepared Config pointers or read a half-written user file.
 		c, e = decodeConfig(prev.cfg.raw)
+		// raw is the pre-projection document: keep the accepted desktop URL
+		// and its trust boundary across resource/provider-generated rebuilds.
+		if e == nil && prev.cfg.clientProbe != nil {
+			restoreClientProbes(&c, prev.cfg)
+		}
 		if e == nil {
 			if prev.cfg.defaults != [2]string{} {
 				c.ApplyDefaultPaths(prev.cfg.defaults[0], prev.cfg.defaults[1])

@@ -1,8 +1,11 @@
 package kernel
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"io"
+	"iter"
 	"net"
 	"net/netip"
 	"strings"
@@ -199,24 +202,87 @@ func forwardSniffed(ctx context.Context, out io.Writer, b []byte) error {
 
 // ---- UDP (QUIC) ----
 
-// udpSniffer sniffs QUIC per association and target. Every datagram to a
-// target uses the same result, so a QUIC connection is routed consistently.
-// While a ClientHello spans several Initial packets the target's datagrams
-// are held, bounded by the sniff timeout, a count and a byte budget.
+// A single UDP association/peer can multiplex independent QUIC connections.
+// Never reuse SNI on the basis of the remote endpoint alone. Keep only a
+// bounded number of CID tuples and hold only identifiable handshake traffic.
 type udpSniffer struct {
 	opt     *SniffOptions
-	targets map[Address]*udpSniffState
+	targets map[Address][]*udpSniffState
+	count   int
 	held    int // bytes held over all targets
 	timer   *time.Timer
 }
 
 type udpSniffState struct {
+	key       quicConnectionID
+	serverCID string // observed on a uniquely attributable subsequent long header
+
 	res     *sniffResult // decided; nil while sniffing
 	q       *sniff.QUIC
 	quic    bool // at least one Initial was decrypted
 	held    []packet
 	expires time.Time
 	last    time.Time
+}
+
+type quicConnectionID struct {
+	version    uint32
+	dcid, scid string
+}
+
+func quicIDs(p []byte) (quicConnectionID, bool) {
+	if len(p) < 7 || p[0]&0xc0 != 0xc0 {
+		return quicConnectionID{}, false
+	}
+	d := int(p[5])
+	if d == 0 || d > 20 || len(p) < 7+d {
+		return quicConnectionID{}, false
+	}
+	n := int(p[6+d])
+	if n > 20 || len(p) < 7+d+n {
+		return quicConnectionID{}, false
+	}
+	return quicConnectionID{binary.BigEndian.Uint32(p[1:5]), string(p[6 : 6+d]), string(p[7+d : 7+d+n])}, true
+}
+func (u *udpSniffer) states() iter.Seq[*udpSniffState] {
+	return func(yield func(*udpSniffState) bool) {
+		for _, bucket := range u.targets {
+			for _, st := range bucket {
+				if !yield(st) {
+					return
+				}
+			}
+		}
+	}
+}
+func (u *udpSniffer) connection(peer Address, p []byte, id quicConnectionID, long, initial bool, now time.Time, idle time.Duration) *udpSniffState {
+	var found *udpSniffState
+	short := len(p) > 1 && p[0]&0xc0 == 0x40
+	for _, st := range u.targets[peer] {
+		if st.res != nil && now.Sub(st.last) > idle {
+			continue
+		}
+		k := st.key
+		var match bool
+		switch {
+		case initial:
+			match = id == k // distinct Initial gets its own ClientHello reassembly
+		case long:
+			match = id.version == k.version && id.scid == k.scid && (id.scid != "" || id.dcid == k.dcid || id.dcid == st.serverCID)
+		case short:
+			match = bytes.HasPrefix(p[1:], []byte(k.dcid)) || st.serverCID != "" && bytes.HasPrefix(p[1:], []byte(st.serverCID))
+		}
+		if match {
+			if found != nil {
+				return nil
+			}
+			found = st
+		}
+	}
+	if found != nil && long && !initial && id.dcid != found.key.dcid {
+		found.serverCID = id.dcid
+	}
+	return found
 }
 
 const (
@@ -234,7 +300,7 @@ func (a *udpAssociation) newUDPSniffer() *udpSniffer {
 	if !im.sniff.OverrideDestination && !a.server.networkPolicy() {
 		return nil
 	}
-	return &udpSniffer{opt: im.sniff, targets: map[Address]*udpSniffState{}}
+	return &udpSniffer{opt: im.sniff, targets: map[Address][]*udpSniffState{}}
 }
 
 func (u *udpSniffer) timerC() <-chan time.Time {
@@ -250,7 +316,9 @@ func (u *udpSniffer) packet(a *udpAssociation, p packet, idle time.Duration) {
 		return
 	}
 	now := time.Now()
-	st := u.targets[p.target]
+	key, long := quicIDs(p.payload)
+	initial := long && sniff.IsInitial(p.payload)
+	st := u.connection(p.target, p.payload, key, long, initial, now, idle)
 	if st != nil && st.res != nil {
 		st.last = now
 		a.send(withSniff(a.ctx, st.res), p, idle)
@@ -259,22 +327,23 @@ func (u *udpSniffer) packet(a *udpAssociation, p packet, idle time.Duration) {
 	if st == nil {
 		// Only a client Initial starts sniffing: anything else (a QUIC
 		// connection that predates the association, other UDP) is not held.
-		if !sniff.IsInitial(p.payload) {
+		if !initial {
 			a.send(a.ctx, p, idle)
 			return
 		}
-		if len(u.targets) >= maxUDPSniffTargets {
+		if u.count >= maxUDPSniffTargets {
 			u.gc(now, idle)
 		}
-		if len(u.targets) >= maxUDPSniffTargets {
+		if u.count >= maxUDPSniffTargets {
 			a.send(a.ctx, p, idle)
 			return
 		}
-		st = &udpSniffState{q: &sniff.QUIC{}, expires: now.Add(u.opt.Timeout.value()), last: now}
-		u.targets[p.target] = st
+		st = &udpSniffState{key: key, q: &sniff.QUIC{}, expires: now.Add(u.opt.Timeout.value()), last: now}
+		u.targets[p.target] = append(u.targets[p.target], st)
+		u.count++
 	}
 	st.last = now
-	if sniff.IsInitial(p.payload) {
+	if initial {
 		_, rawHost, status := st.q.AddRaw(p.payload)
 		switch status {
 		case sniff.Done:
@@ -319,7 +388,7 @@ func (u *udpSniffer) decide(a *udpAssociation, st *udpSniffState, r *sniffResult
 // expire gives up sniffing on targets past their timeout.
 func (u *udpSniffer) expire(a *udpAssociation, now time.Time, idle time.Duration) {
 	u.timer = nil
-	for _, st := range u.targets {
+	for st := range u.states() {
 		if st.res == nil && !now.Before(st.expires) {
 			u.decide(a, st, u.fallback(st), packet{}, idle)
 		}
@@ -330,7 +399,7 @@ func (u *udpSniffer) expire(a *udpAssociation, now time.Time, idle time.Duration
 // arm (re)starts the timer for the earliest pending target.
 func (u *udpSniffer) arm(now time.Time) {
 	var next time.Time
-	for _, st := range u.targets {
+	for st := range u.states() {
 		if st.res == nil && (next.IsZero() || st.expires.Before(next)) {
 			next = st.expires
 		}
@@ -351,11 +420,23 @@ func (u *udpSniffer) arm(now time.Time) {
 
 // gc drops decided targets idle for longer than udp_idle.
 func (u *udpSniffer) gc(now time.Time, idle time.Duration) {
-	for k, st := range u.targets {
-		if st.res != nil && now.Sub(st.last) > idle {
+	for k, bucket := range u.targets {
+		keep := bucket[:0]
+		for _, st := range bucket {
+			if st.res != nil && now.Sub(st.last) > idle {
+				u.count--
+				continue
+			}
+			keep = append(keep, st)
+		}
+		clear(bucket[len(keep):])
+		if len(keep) == 0 {
 			delete(u.targets, k)
+		} else {
+			u.targets[k] = keep
 		}
 	}
+
 }
 
 // sniffTCP sniffs a TCP stream before its destination is dialed. early, when

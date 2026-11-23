@@ -457,7 +457,20 @@ func (p *providerRT) fetchRequest(ctx context.Context, do func(*http.Client, *ht
 	defer cancel()
 	tr := &http.Transport{Proxy: nil, DialContext: dial, DisableKeepAlives: true, MaxResponseHeaderBytes: 64 << 10, ForceAttemptHTTP2: true}
 	defer tr.CloseIdleConnections()
-	client := &http.Client{Transport: tr}
+	client := &http.Client{Transport: tr, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("provider redirect limit")
+		}
+		// net/http otherwise forwards arbitrary custom headers across origins.
+		for _, prev := range via {
+			if !provider.SameOrigin(req.URL, prev.URL) {
+				req.Header = make(http.Header)
+				req.Header.Set("User-Agent", defaultProviderUA)
+				break
+			}
+		}
+		return nil
+	}}
 	req, e := http.NewRequestWithContext(ctx, http.MethodGet, p.cfg.URL, nil)
 	if e != nil {
 		return nil, e
@@ -493,10 +506,10 @@ func (p *providerRT) fetchRequest(ctx context.Context, do func(*http.Client, *ht
 }
 
 func skippedLines(name string, res provider.Result) []string {
-	if len(res.Skipped) == 0 && len(res.Renamed) == 0 {
+	if res.SkippedTotal == 0 && len(res.Renamed) == 0 {
 		return nil
 	}
-	return []string{"kat event=provider_entries_report provider=" + name + " skipped=" + strconv.Itoa(len(res.Skipped)) + " renamed=" + strconv.Itoa(len(res.Renamed))}
+	return []string{"kat event=provider_entries_report provider=" + name + " skipped=" + strconv.Itoa(res.SkippedTotal) + " renamed=" + strconv.Itoa(len(res.Renamed))}
 
 }
 
@@ -549,7 +562,7 @@ func (k *core) syncProviders(c *Config, reread bool) *providerPlan {
 			pl.notes = append(pl.notes, skippedLines(pc.Name, rejected)...)
 			pl.notes = append(pl.notes, "kat event=provider_load_failed provider="+pc.Name+" action=keep_previous nodes="+strconv.Itoa(kept)+" reason=load_failed")
 		} else if res, ok := p.snapshot(); ok && (!hadPrev || prevHash != p.hash) {
-			pl.notes = append(pl.notes, "kat event=provider_loaded provider="+pc.Name+" source="+p.source+" format="+res.Format+" nodes="+strconv.Itoa(len(res.Nodes))+" skipped="+strconv.Itoa(len(res.Skipped)))
+			pl.notes = append(pl.notes, "kat event=provider_loaded provider="+pc.Name+" source="+p.source+" format="+res.Format+" nodes="+strconv.Itoa(len(res.Nodes))+" skipped="+strconv.Itoa(res.SkippedTotal))
 			pl.notes = append(pl.notes, skippedLines(pc.Name, res)...)
 		} else if !ok && pc.Type == "http" {
 			pl.notes = append(pl.notes, "kat event=provider_empty provider="+pc.Name+" reason=no_cache action=fetch")
@@ -794,7 +807,7 @@ func (k *core) providerViews() []ProviderView {
 	out := []ProviderView{}
 	for _, p := range list {
 		p.mu.Lock()
-		out = append(out, ProviderView{Name: p.cfg.Name, Type: p.cfg.Type, Source: p.source, Format: p.res.Format, Nodes: len(p.res.Nodes), Skipped: len(p.res.Skipped),
+		out = append(out, ProviderView{Name: p.cfg.Name, Type: p.cfg.Type, Source: p.source, Format: p.res.Format, Nodes: len(p.res.Nodes), Skipped: p.res.SkippedTotal,
 			Updated: p.updated, Attempt: p.attempt, Updates: p.updates, Failures: p.failures, LastErr: p.lastErr})
 		p.mu.Unlock()
 	}
@@ -808,6 +821,7 @@ type ProviderReport struct {
 	Source       string // file | cache | none
 	Format       string
 	Nodes        []string
+	SkippedTotal int
 	Skipped      []provider.Skipped
 	Renamed      [][2]string
 	Ignored      []string // "node: field" accepted without effect
@@ -837,8 +851,10 @@ func CheckProviders(c Config) ([]ProviderReport, []GroupReport, error) {
 		rep := ProviderReport{Name: pc.Name, Type: pc.Type, Source: "none"}
 		if rejected, e := p.loadLocal(); e != nil {
 			rep.Error = e.Error()
+			rep.SkippedTotal = rejected.SkippedTotal
 			rep.Format, rep.Skipped, rep.Renamed = rejected.Format, rejected.Skipped, rejected.Renamed
 		} else if res, ok := p.snapshot(); ok {
+			rep.SkippedTotal = res.SkippedTotal
 			rep.Source, rep.Format, rep.Skipped, rep.Renamed = p.source, res.Format, res.Skipped, res.Renamed
 			for _, n := range res.Nodes {
 				rep.Nodes = append(rep.Nodes, n.Options.Name)

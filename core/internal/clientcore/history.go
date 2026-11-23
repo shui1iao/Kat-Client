@@ -259,6 +259,9 @@ func (h *Host) loadHistory() error {
 	if json.Unmarshal(b, &h.history) != nil || len(h.history.Daily) > 31 {
 		return errors.New("invalid history")
 	}
+	if h.history.Daily == nil {
+		h.history.Daily = []daily{}
+	}
 	last := ""
 	for _, d := range h.history.Daily {
 		if _, e := time.Parse("2006-01-02", d.Date); e != nil || d.Date <= last {

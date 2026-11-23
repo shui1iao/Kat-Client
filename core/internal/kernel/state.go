@@ -44,10 +44,10 @@ func (k *core) openState(c *Config) {
 	release, e := stats.Lock(path)
 	switch {
 	case errors.Is(e, stats.ErrLocked):
-		k.notice(levelWarn, "kat event=stats_persist_disabled reason=file_in_use file="+eventToken(path, 256))
+		k.notice(levelWarn, "kat event=stats_persist_disabled reason=file_in_use")
 		return
 	case e != nil:
-		k.notice(levelWarn, "kat event=stats_persist_disabled reason=lock_failed file="+eventToken(path, 256))
+		k.notice(levelWarn, "kat event=stats_persist_disabled reason=lock_failed")
 		return
 	}
 	k.statsMu.Lock()

@@ -136,7 +136,7 @@ func TestStage4PolicyAndPhysicalEpochIsolation(t *testing.T) {
 		cfg.Routing = &RoutingOptions{Rules: []RouteRule{{DstPort: strconv.Itoa(b.LocalAddr().(*net.UDPAddr).Port), Action: "direct"}}, Final: "direct"}
 		cfg.SetClientEgress(&ClientEgress{UDPBinding: func(bool) (uint64, string, error) { return epoch.Load(), "owner:14/4/2", nil }})
 	})
-	p := c50Link(t, c50Ingress(t, s), func() bool { return true }, func() uint64 { return 112 })
+	p := c50Link(t, c50Ingress(t, s), func() bool { return true }, epoch.Load)
 	inner := stage4UDP(t, p, false)
 	send := func(sock *net.UDPConn) netip.AddrPort {
 		_, e := inner.WriteTo([]byte("x"), sock.LocalAddr())

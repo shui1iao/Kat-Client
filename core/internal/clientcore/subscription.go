@@ -71,6 +71,20 @@ type fullSnapshot struct {
 	GeoIP     json.RawMessage   `json:"geoip,omitempty"`
 	ASN       json.RawMessage   `json:"asn,omitempty"`
 }
+
+// Only new subscription snapshots use [] for empty lists. Do not normalize
+// decoded snapshots: reading a preexisting source must not rewrite its bytes.
+func newFullSnapshot() fullSnapshot {
+	return fullSnapshot{Outbounds: []json.RawMessage{}, Groups: []json.RawMessage{}, Rules: []json.RawMessage{}, RuleSets: []json.RawMessage{}}
+}
+
+func sameSnapshotRules(a, b []json.RawMessage) bool {
+	if len(a) == 0 && len(b) == 0 {
+		return true // nil in older accepted documents
+	}
+	return sameJSON(rawJSON(a), rawJSON(b))
+}
+
 type subscriptionPending struct {
 	Token, Base, Text, Dir string
 	ID                     string
@@ -357,7 +371,7 @@ func (h *Host) previewSubscription(ctx context.Context, raw json.RawMessage) (an
 	// rejects aliases/duplicates, a full policy MUST NOT fall back to nodes-only.
 	keys := map[string]bool{}
 	var header yaml.Node
-	if yaml.Unmarshal(b, &header) == nil && len(header.Content) == 1 && header.Content[0].Kind == yaml.MappingNode {
+	if !provider.BeginsURIList(b) && yaml.Unmarshal(b, &header) == nil && len(header.Content) == 1 && header.Content[0].Kind == yaml.MappingNode {
 		n := header.Content[0]
 		for i := 0; i+1 < len(n.Content); i += 2 {
 			keys[n.Content[i].Value] = true
@@ -382,8 +396,8 @@ func (h *Host) previewSubscription(ctx context.Context, raw json.RawMessage) (an
 	for _, k := range []string{"proxies", "proxy-groups", "rules", "rule-providers", "proxy-providers"} {
 		full = full || keys[k]
 	}
-	if !full && old == nil && conversion == nil {
-		if p.FullOnly {
+	if !full && conversion == nil {
+		if p.FullOnly || old != nil {
 			return nil, fail("subscription_format_unsupported", "subscription", "A complete Clash configuration is required")
 		}
 		v, e := h.importParse(ctx, rawJSON(map[string]string{"text": string(b)}))
@@ -448,7 +462,7 @@ func (h *Host) previewSubscription(ctx context.Context, raw json.RawMessage) (an
 	if old != nil && p.Text != nil {
 		subURL = old.URL
 	}
-	sub := fullSubscription{ID: id, Name: name, URL: subURL, Interval: interval, Updated: time.Now().Unix(), Names: map[string]string{}, SetNames: map[string]string{}}
+	sub := fullSubscription{Snapshot: newFullSnapshot(), ID: id, Name: name, URL: subURL, Interval: interval, Updated: time.Now().Unix(), Names: map[string]string{}, SetNames: map[string]string{}}
 	if old != nil {
 		sub.UseSystemProxy = old.UseSystemProxy
 		sub.UserInfo = old.UserInfo
@@ -1015,7 +1029,7 @@ func (h *Host) previewSubscription(ctx context.Context, raw json.RawMessage) (an
 		preview.Changes = append(preview.Changes, "未导入本机/其它非路由字段："+strings.Join(f.Ignored, ", "))
 	}
 	preview.NeedsConfirmation = old == nil || selectionChanged
-	if old != nil && !sameJSON(rawJSON(old.Snapshot.Rules), rawJSON(sub.Snapshot.Rules)) && len(rules) > len(sub.Snapshot.Rules) {
+	if old != nil && len(rules) > len(sub.Snapshot.Rules) && !sameSnapshotRules(old.Snapshot.Rules, sub.Snapshot.Rules) {
 		preview.NeedsConfirmation = true
 	}
 	// A stable in-place refresh does not change manual precedence. Name remaps,
@@ -1435,43 +1449,37 @@ func subscriptionSetNeeds(s route.RuleSetOptions, b []byte) (bool, bool, error) 
 		lines = p.Payload
 	}
 	country, asn := false, false
-	scanLine := func(l string) {
-		l = strings.TrimSpace(l)
-		if l == "" || strings.HasPrefix(l, "#") || strings.HasPrefix(l, ";") || strings.HasPrefix(l, "//") {
+	scanLine := func(line []byte) {
+		typ, _, ok := bytes.Cut(bytes.TrimSpace(line), []byte(","))
+		if !ok {
 			return
 		}
-		if !strings.Contains(l, "GEOIP") && !strings.Contains(l, "IP-ASN") {
+		typ = bytes.TrimSpace(typ)
+		// Avoid running a regex over ordinary domain lines. The runtime also
+		// accepts mixed-case classical/logical operators in mihomo text.
+		switch string(bytes.ToUpper(typ)) {
+		case "GEOIP", "SRC-GEOIP", "IP-ASN", "SRC-IP-ASN", "AND", "OR", "NOT":
+		default:
 			return
 		}
-		for _, m := range subscriptionSetNeedsRx.FindAllStringSubmatch(l, -1) {
-			if strings.Contains(m[1], "ASN") {
+		for _, m := range subscriptionSetNeedsRx.FindAllSubmatch(line, -1) {
+			if bytes.EqualFold(m[1], []byte("IP-ASN")) || bytes.EqualFold(m[1], []byte("SRC-IP-ASN")) {
 				asn = true
-			} else if !strings.EqualFold(m[2], "LAN") && !strings.EqualFold(m[2], "private") {
+			} else if val := bytes.TrimSpace(m[2]); !bytes.EqualFold(val, []byte("LAN")) && !bytes.EqualFold(val, []byte("private")) {
 				country = true
 			}
 		}
 	}
 	if lines != nil {
 		for _, l := range lines {
-			scanLine(l)
+			scanLine([]byte(l))
 			if country && asn {
 				break
 			}
 		}
 	} else {
-		for rem := b; len(rem) > 0; {
-			var line []byte
-			if idx := bytes.IndexByte(rem, '\n'); idx >= 0 {
-				line = rem[:idx]
-				rem = rem[idx+1:]
-			} else {
-				line = rem
-				rem = nil
-			}
-			if !bytes.Contains(line, []byte("GEOIP")) && !bytes.Contains(line, []byte("IP-ASN")) {
-				continue
-			}
-			scanLine(string(line))
+		for l := range bytes.Lines(b) {
+			scanLine(l)
 			if country && asn {
 				break
 			}
@@ -1486,11 +1494,17 @@ func subscriptionItems(f provider.Full) map[string]any {
 	}
 	groups := []map[string]any{}
 	for _, g := range f.Groups {
+		if g.Members == nil {
+			g.Members = []string{}
+		}
 		groups = append(groups, map[string]any{"name": g.Name, "type": g.Type, "members": g.Members})
 	}
 	sets := []string{}
 	for _, s := range f.RuleSets {
 		sets = append(sets, s.Name)
+	}
+	if f.Rules == nil {
+		f.Rules = []route.Rule{}
 	}
 	return map[string]any{"nodes": nodes, "groups": groups, "rules": f.Rules, "rule_sets": sets, "final": f.Final}
 }
@@ -1527,7 +1541,7 @@ func subscriptionSetIssues(index int, err error) []string {
 var (
 	defaultFullSubscriptionNameRx = regexp.MustCompile(`^完整配置 [0-9a-f]{6}$`)
 	quotedNameRx                  = regexp.MustCompile(`"[^"\n]*"`)
-	subscriptionSetNeedsRx        = regexp.MustCompile(`(?:^|[,(])\s*(GEOIP|SRC-GEOIP|IP-ASN|SRC-IP-ASN)\s*,\s*([^,)]+)`)
+	subscriptionSetNeedsRx        = regexp.MustCompile(`(?i)(?:^|[,(])\s*(GEOIP|SRC-GEOIP|IP-ASN|SRC-IP-ASN)\s*,\s*([^,)]+)`)
 	subscriptionRuleTypeRx        = regexp.MustCompile(`^[A-Z][A-Z0-9-]{0,40}$`)
 )
 

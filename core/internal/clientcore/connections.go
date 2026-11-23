@@ -147,15 +147,18 @@ func sameConnGroup(a, b kernel.ConnInfo) bool {
 	}
 	return a.ProcessName == b.ProcessName || a.ProcessName == "" || b.ProcessName == ""
 }
-func mergeActiveConns(in []kernel.ConnInfo) []kernel.ConnInfo {
-	if len(in) <= 1 {
-		return in
-	}
-	out := make([]kernel.ConnInfo, 0, len(in))
+
+type activeConnection struct {
+	kernel.ConnInfo
+	MemberIDs []uint64 `json:"member_ids"`
+}
+
+func mergeActiveConns(in []kernel.ConnInfo) []activeConnection {
+	out := make([]activeConnection, 0, len(in))
 	for _, c := range in {
 		found := -1
 		for i := range out {
-			if sameConnGroup(out[i], c) {
+			if sameConnGroup(out[i].ConnInfo, c) {
 				found = i
 				break
 			}
@@ -166,6 +169,7 @@ func mergeActiveConns(in []kernel.ConnInfo) []kernel.ConnInfo {
 					out[found].Target = sub
 				}
 			}
+			out[found].MemberIDs = append(out[found].MemberIDs, c.ID)
 			out[found].Up += c.Up
 			out[found].Down += c.Down
 			if out[found].ProcessName == "" && c.ProcessName != "" {
@@ -179,7 +183,7 @@ func mergeActiveConns(in []kernel.ConnInfo) []kernel.ConnInfo {
 			}
 			continue
 		}
-		out = append(out, c)
+		out = append(out, activeConnection{ConnInfo: c, MemberIDs: []uint64{c.ID}})
 	}
 	return out
 }
@@ -252,16 +256,16 @@ func (h *Host) listConnections(raw json.RawMessage) (any, *Error) {
 				rememberObservedIPHost(closed[i].DestIP, closed[i].Host)
 			}
 		}
-		active = mergeActiveConns(active)
 		closed = mergeClosedConns(closed)
 		total = h.server.TotalConnections()
 	}
-	return map[string]any{"active": active, "closed": closed, "total": total}, nil
+	return map[string]any{"connection_instance": h.connectionInstance, "active": mergeActiveConns(active), "closed": closed, "total": total}, nil
 }
 
 func (h *Host) closeConnections(raw json.RawMessage) (any, *Error) {
 	var p struct {
-		IDs []uint64 `json:"ids"`
+		IDs      []uint64 `json:"ids"`
+		Instance string   `json:"connection_instance"`
 	}
 	if e := decodeParams(raw, &p); e != nil {
 		return nil, e
@@ -278,30 +282,12 @@ func (h *Host) closeConnections(raw json.RawMessage) (any, *Error) {
 	defer h.mu.Unlock()
 	n := 0
 	if h.server != nil {
-		active, _ := h.server.ClientConnections(0)
-		wanted := make(map[uint64]bool, len(p.IDs))
-		var targets []kernel.ConnInfo
-		for _, id := range p.IDs {
-			wanted[id] = true
+		if p.Instance == "" {
+			return nil, fail("invalid_params", "params.connection_instance", "Expected captured connection instance")
 		}
-		for _, c := range active {
-			if wanted[c.ID] {
-				targets = append(targets, c)
-			}
+		if p.Instance == h.connectionInstance {
+			n = h.server.ClientCloseConnections(p.IDs)
 		}
-		ids := append([]uint64(nil), p.IDs...)
-		for _, c := range active {
-			if !wanted[c.ID] {
-				for _, t := range targets {
-					if sameConnGroup(t, c) {
-						wanted[c.ID] = true
-						ids = append(ids, c.ID)
-						break
-					}
-				}
-			}
-		}
-		n = h.server.ClientCloseConnections(ids)
 	}
 	return map[string]int{"closed": n}, nil
 }

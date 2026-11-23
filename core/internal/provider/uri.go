@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"bytes"
 	"encoding/json"
 	"net"
 	"net/url"
@@ -8,6 +9,39 @@ import (
 
 	"github.com/shui1iao/Kat/internal/outbound"
 )
+
+// BeginsURIList recognizes a leading share link without feeding a whole URI list to YAML.
+func BeginsURIList(b []byte) bool {
+	for line := range bytes.Lines(b) {
+		line = bytes.TrimSpace(line)
+		if len(line) == 0 || line[0] == '#' || bytes.HasPrefix(line, []byte("//")) {
+			continue
+		}
+		scheme, _, ok := bytes.Cut(line, []byte("://"))
+		if !ok || len(scheme) == 0 || len(scheme) > 32 {
+			return false
+		}
+		for _, c := range scheme {
+			if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '+' || c == '.' || c == '-') {
+				return false
+			}
+		}
+		// A share link can itself be a plain YAML key. Let the strict full
+		// decoder see ambiguous block mappings rather than demoting a policy.
+		for rest := b; len(rest) > 0; {
+			i := bytes.IndexByte(rest, ':')
+			if i < 0 {
+				break
+			}
+			rest = rest[i+1:]
+			if len(rest) == 0 || rest[0] == ' ' || rest[0] == '\r' || rest[0] == '\n' || rest[0] == '\t' {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
 
 // parseURIBody parses a URI list, optionally base64 encoded as a whole.
 func parseURIBody(b []byte) (Result, error) {
@@ -22,13 +56,20 @@ func parseURIBody(b []byte) (Result, error) {
 	}
 	r := Result{Format: format}
 	entries := 0
-	for _, line := range strings.Split(s, "\n") {
+	for line := range strings.Lines(s) {
 		line = strings.TrimSpace(strings.TrimSuffix(line, "\r"))
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
 			continue
 		}
 		entries++
-		parseURI(&r, line)
+		switch {
+		case entries > MaxURIEntries:
+			r.skip("", "", "URI entry limit reached")
+		case len(line) > MaxURIBytes:
+			r.skip("", "", "URI line exceeds size limit")
+		default:
+			parseURI(&r, line)
+		}
 	}
 	if entries == 0 {
 		return Result{}, ErrFormat

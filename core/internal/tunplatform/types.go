@@ -94,6 +94,7 @@ type Device interface {
 }
 type DataPlane interface {
 	Quiesce()
+	DrainUDP(context.Context) error
 	Resume() error
 	Failed() <-chan struct{}
 	Err() error
@@ -126,6 +127,14 @@ type Physical struct {
 	DNS        []clientegress.DNSEndpoint
 	Options    clientegress.Options
 }
+type physicalEgress interface {
+	PolicySnapshot() (*clientegress.Policy, uint64, bool)
+	Reconcile(clientegress.EgressSnapshot) error
+	RetireObserved([]clientegress.OwnerState)
+	FreezeNew()
+	ReleasePhysical()
+}
+
 type Config struct {
 	Launch  Launch
 	Broker  Broker

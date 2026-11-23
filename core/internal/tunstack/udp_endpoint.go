@@ -30,6 +30,7 @@ type udpMessage struct {
 }
 type sourceConn struct {
 	r        *Runtime
+	cancel   context.CancelFunc
 	key      sourceKey
 	first    netip.AddrPort
 	mu       sync.Mutex
@@ -88,12 +89,17 @@ func (r *Runtime) udpPacket(id stack.TransportEndpointID, pkt *stack.PacketBuffe
 			r.mu.Unlock()
 			return true
 		}
-		c = &sourceConn{r: r, key: k, first: f.Destination, queue: make(chan udpMessage, udpSourceQueueSize), closed: make(chan struct{}), changed: make(chan struct{})}
+		life, cancel := context.WithCancel(r.ctx)
+		c = &sourceConn{r: r, cancel: cancel, key: k, first: f.Destination, queue: make(chan udpMessage, udpSourceQueueSize), closed: make(chan struct{}), changed: make(chan struct{})}
 		r.udpSources[k] = c
 		r.active[c] = struct{}{}
 		r.pending++
 		r.wg.Add(1)
-		go func() { defer r.release(c); _ = r.cfg.Ingress.HandleUDP(r.ctx, f, c) }()
+		if r.udpHandlers == 0 {
+			r.udpDrained = make(chan struct{})
+		}
+		r.udpHandlers++
+		go func() { defer r.release(c); _ = r.cfg.Ingress.HandleUDP(life, f, c) }()
 	}
 	buf := pkt.Data().ToBuffer()
 	data := append([]byte(nil), buf.Flatten()...)
@@ -106,6 +112,27 @@ func (r *Runtime) udpPacket(id stack.TransportEndpointID, pkt *stack.PacketBuffe
 	}
 	r.mu.Unlock()
 	return true
+}
+
+// DatagramCurrent fences a second queue (the kernel sender) as well as DNS.
+func (c *sourceConn) DatagramCurrent() bool {
+	c.r.mu.Lock()
+	defer c.r.mu.Unlock()
+	return c.currentLocked()
+}
+func (c *sourceConn) currentLocked() bool {
+	return !c.r.stopping && !c.r.paused && c.r.udpSources[c.key] == c && c.r.cfg.Admitting() && c.r.cfg.Epoch() == c.key.epoch
+}
+func (c *sourceConn) takeDatagram(b []byte, p udpMessage) (int, netip.AddrPort, error) {
+	c.r.mu.Lock()
+	c.r.udpQueuedBytes -= int64(len(p.data))
+	valid := c.currentLocked()
+	c.r.mu.Unlock()
+	if !valid {
+		c.r.dropped.Add(1)
+		return 0, netip.AddrPort{}, net.ErrClosed
+	}
+	return copy(b, p.data), p.target, nil
 }
 func (c *sourceConn) ReadDatagram(b []byte) (int, netip.AddrPort, error) {
 	// Fast path: check closed/canceled/expired first, then pop any queued packet without allocating a timer.
@@ -124,10 +151,7 @@ func (c *sourceConn) ReadDatagram(b []byte) (int, netip.AddrPort, error) {
 	}
 	select {
 	case p := <-c.queue:
-		c.r.mu.Lock()
-		c.r.udpQueuedBytes -= int64(len(p.data))
-		c.r.mu.Unlock()
-		return copy(b, p.data), p.target, nil
+		return c.takeDatagram(b, p)
 	default:
 	}
 
@@ -187,10 +211,7 @@ func (c *sourceConn) ReadDatagram(b []byte) (int, netip.AddrPort, error) {
 			c.mu.Lock()
 			c.waiters--
 			c.mu.Unlock()
-			c.r.mu.Lock()
-			c.r.udpQueuedBytes -= int64(len(p.data))
-			c.r.mu.Unlock()
-			return copy(b, p.data), p.target, nil
+			return c.takeDatagram(b, p)
 		}
 	}
 }
@@ -202,7 +223,7 @@ func (c *sourceConn) WriteFrom(b []byte, peer netip.AddrPort) (int, error) {
 	c.r.writeMu.Lock()
 	defer c.r.writeMu.Unlock()
 	c.r.mu.Lock()
-	valid := !c.r.stopping && !c.r.paused && c.r.udpSources[c.key] == c && c.r.cfg.Admitting() && c.r.cfg.Epoch() == c.key.epoch
+	valid := c.currentLocked()
 	c.r.mu.Unlock()
 	select {
 	case <-c.closed:
@@ -231,6 +252,9 @@ func (c *sourceConn) WriteFrom(b []byte, peer netip.AddrPort) (int, error) {
 func (c *sourceConn) Close() error {
 	c.once.Do(func() {
 		c.r.mu.Lock()
+		if c.cancel != nil {
+			c.cancel()
+		}
 		if c.r.udpSources[c.key] == c {
 			delete(c.r.udpSources, c.key)
 		}

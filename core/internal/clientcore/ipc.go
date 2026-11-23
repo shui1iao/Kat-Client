@@ -75,6 +75,26 @@ func (h *Host) Serve(ctx context.Context, in io.Reader, out io.Writer) error {
 	return h.ServeTransport(ctx, in, out, TransportStdio)
 }
 
+// ipcEpoch owns the cancellable parent of background work between update barriers.
+type ipcEpoch struct {
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+// A nil context is a closed admission barrier. Duplicate resumes keep the
+// same parent; no live cancel function is ever overwritten.
+func (e *ipcEpoch) resume(parent context.Context) {
+	if e.ctx == nil {
+		e.ctx, e.cancel = context.WithCancel(parent)
+	}
+}
+func (e *ipcEpoch) pause() {
+	if e.cancel != nil {
+		e.cancel()
+		e.ctx, e.cancel = nil, nil
+	}
+}
+
 // ServeTransport owns request cancellation, not the Host lifetime. EOF cancels
 // all child requests and joins bounded workers. The reader, including any bytes
 // buffered during native activation, is consumed directly without replacement.
@@ -93,9 +113,9 @@ func (h *Host) ServeTransport(ctx context.Context, in io.Reader, out io.Writer, 
 	defer stopInput()
 	var wg sync.WaitGroup
 	// Scanner-owned admission barrier; these private methods are not WebView methods.
-	updatePaused := false
-	reqCtx, cancelReqs := context.WithCancel(ctx)
-	defer cancelReqs()
+	var epoch ipcEpoch
+	epoch.resume(ctx)
+	defer epoch.pause()
 	var writeMu sync.Mutex
 	var writeErr error
 	slots := make(chan struct{}, 16)
@@ -242,30 +262,26 @@ func (h *Host) ServeTransport(ctx context.Context, in io.Reader, out io.Writer, 
 		if r.Method == "host.prepare-update" || r.Method == "host.resume-update" {
 			// This runs on the scanner, not a worker: every earlier admitted
 			// request (including workers not scheduled yet) finishes first.
-			updatePaused = true
 			if r.Method == "host.prepare-update" {
-				cancelReqs()
+				epoch.pause()
 			}
 			wg.Wait()
 			rctx, stop := context.WithTimeout(ctx, requestBudget(r.Method))
 			result, err := h.Request(rctx, r.Method, r.Params)
 			stop()
 			if err != nil {
-				if r.Method == "host.prepare-update" {
-					reqCtx, cancelReqs = context.WithCancel(ctx)
-				}
+				epoch.pause() // Failed lifecycle commands leave admission closed.
 				write(Response{ID: r.ID, Error: err}, nil)
 			} else {
 				write(Response{ID: r.ID, OK: true, Result: result}, nil)
 				if r.Method == "host.resume-update" {
-					reqCtx, cancelReqs = context.WithCancel(ctx)
-					updatePaused = false
+					epoch.resume(ctx)
 				}
 			}
 			release()
 			continue
 		}
-		if updatePaused {
+		if epoch.ctx == nil {
 			write(Response{ID: r.ID, Error: fail("update_prepared", "", "Core requests are paused for update")}, nil)
 			release()
 			continue
@@ -273,7 +289,7 @@ func (h *Host) ServeTransport(ctx context.Context, in io.Reader, out io.Writer, 
 		if r.Method == "logs.get" {
 			started := time.Now()
 			timing := &ipcLogTiming{admission: started.Sub(decoded)}
-			rctx, stop := context.WithTimeout(reqCtx, requestBudget(r.Method))
+			rctx, stop := context.WithTimeout(epoch.ctx, requestBudget(r.Method))
 			result, err := h.Request(rctx, r.Method, r.Params)
 			stop()
 			timing.handler = time.Since(started)
@@ -284,7 +300,7 @@ func (h *Host) ServeTransport(ctx context.Context, in io.Reader, out io.Writer, 
 		}
 		parentCtx := ctx
 		if isBackgroundIPCMethod(r.Method) {
-			parentCtx = reqCtx
+			parentCtx = epoch.ctx
 		}
 		wg.Add(1)
 		go func() {

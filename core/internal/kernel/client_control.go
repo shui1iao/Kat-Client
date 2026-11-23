@@ -65,6 +65,7 @@ type ManualProbePolicy struct {
 	flights map[manualProbeKey]*manualProbeFlight
 }
 type manualProbeKey struct {
+	publicDirectOnly    bool
 	generation          *Server
 	name, url, expected string
 	timeout             time.Duration
@@ -106,7 +107,7 @@ func (s *Server) probeOutboundWithStatus(ctx context.Context, m outbound.Outboun
 		setProbeFailure(&r, "queue", err)
 		return r, 0, err
 	}
-	key := manualProbeKey{s, m.Name(), url, expected, policy.timeout, policy.unified}
+	key := manualProbeKey{outbound.PublicTargetOnly(ctx), s, m.Name(), url, expected, policy.timeout, policy.unified}
 	policy.mu.Lock()
 	if policy.flights == nil {
 		policy.flights = map[manualProbeKey]*manualProbeFlight{}
@@ -114,6 +115,9 @@ func (s *Server) probeOutboundWithStatus(ctx context.Context, m outbound.Outboun
 	f := policy.flights[key]
 	if f == nil {
 		work, cancel := context.WithCancel(policy.epoch)
+		if key.publicDirectOnly {
+			work = outbound.WithPublicTarget(work)
+		}
 		f = &manualProbeFlight{done: make(chan struct{}), cancel: cancel}
 		policy.flights[key] = f
 		go func() {
@@ -188,7 +192,7 @@ func (s *Server) probeOutboundMeasured(ctx context.Context, m outbound.Outbound,
 		// Preparation has only the caller's bounded round budget. In particular a
 		// cold Via url-test keeps its full first-round selection rule; a healthy
 		// candidate is not used prematurely just to fit a target HTTP timeout.
-		if err := s.prepareManualProbe(ctx, m.Name()); err != nil {
+		if err := s.prepareManualProbe(outbound.CarrierTargetContext(ctx), m.Name()); err != nil {
 			r.At = time.Now()
 			setProbeFailure(&r, "dependency", err)
 			return r, 0, err
@@ -310,6 +314,12 @@ func (s *Server) ProbeGroupRoundWithPolicy(ctx context.Context, name, url string
 	}
 	if target == nil {
 		return nil, errors.New("unknown group")
+	}
+	for _, g := range g.cfg.Groups {
+		if g.Name == name && g.Probe != nil && g.Probe.PublicDirectOnly && g.Probe.URL == url {
+			ctx = outbound.WithPublicTarget(ctx)
+			break
+		}
 	}
 	names := target.Members()
 	expected := targetProbeExpected(g.cfg.Groups, name)
@@ -540,6 +550,22 @@ func (s *Server) RuleTargets() map[string]string {
 	return out
 }
 
+func restoreClientProbes(c *Config, previous Config) {
+	probes := map[string]*group.ProbeOptions{}
+	for _, g := range previous.Groups {
+		if g.Probe != nil {
+			probes[g.Name] = g.Probe
+		}
+	}
+	for i, g := range c.Groups {
+		if p := probes[g.Name]; g.Probe != nil && p != nil {
+			v := *g.Probe
+			v.URL = p.URL
+			v.PublicDirectOnly = p.PublicDirectOnly
+			c.Groups[i].Probe = &v
+		}
+	}
+}
 func targetProbeURL(groups []GroupConfig, name string) string {
 	for _, g := range groups {
 		if g.Name == name && g.Probe != nil {

@@ -33,7 +33,7 @@ func udpUnavailable(e error) bool {
 
 // sendProxy forwards one datagram through the named outbound/group. Any
 // failure drops only this datagram (counted and reported by fixed category).
-func (a *udpAssociation) sendProxy(name string, dst Address, payload []byte, target Address, rule int) {
+func (a *udpAssociation) sendProxy(name string, dst Address, payload []byte, target Address, rule int, allowed []netip.AddrPort) {
 	s := a.server
 	ses := a.proxySessionFor(name)
 	if ses == nil {
@@ -41,6 +41,25 @@ func (a *udpAssociation) sendProxy(name string, dst Address, payload []byte, tar
 			a.flow.udpFailure(target, rule, []string{name}, "udp_setup_failed")
 		}
 		return
+	}
+	if name == "direct" {
+		// The router already evaluated each resolved IP. Never pass the domain
+		// to the session's independent resolver/cache, including on sniff override.
+		selector, ok := ses.pc.(interface {
+			SelectCandidate([]netip.AddrPort) (netip.AddrPort, error)
+		})
+		if !ok {
+			a.flow.udpFailure(target, rule, []string{name}, "udp_setup_failed")
+			s.counters.Dropped.Add(1)
+			return
+		}
+		ap, e := selector.SelectCandidate(allowed)
+		if e != nil {
+			a.flow.udpFailure(target, rule, []string{name}, dialResult(e), e)
+			s.counters.Dropped.Add(1)
+			return
+		}
+		dst = Address{ap.Addr().String(), ap.Port()}
 	}
 	chain := ses.chain
 	memberName := ""

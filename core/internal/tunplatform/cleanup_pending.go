@@ -203,8 +203,8 @@ func (m *Manager) startCleanupWorkerLocked() {
 				m.state.State = "off"
 				m.state.Code = ""
 				m.state.Failure = nil
-				if m.config.Egress != nil {
-					m.config.Egress.ReleasePhysical()
+				if m.egress != nil {
+					m.egress.ReleasePhysical()
 				}
 			}
 			m.publish()

@@ -221,7 +221,11 @@ func (h *Host) fetchKernelAsset(ctx context.Context, raw string, limit int64) ([
 	ctx = child
 	// Use the existing loopback SOCKS entry: the kernel makes the same routing,
 	// DNS, nested-group and controlled egress decisions as ordinary connections.
-	d, e := proxy.SOCKS5("tcp", portAddress(port), nil, &iconSOCKSForward{})
+	resource, _ := ctx.Value(resourceKernelKey{}).(bool)
+	if resource && !validImportURL(raw) {
+		return nil, dl("url_check", "address_refused")
+	}
+	d, e := proxy.SOCKS5("tcp", portAddress(port), nil, &iconSOCKSForward{publicTarget: resource})
 	if e != nil {
 		return nil, e
 	}
@@ -242,7 +246,7 @@ func (h *Host) fetchKernelAsset(ctx context.Context, raw string, limit int64) ([
 			transportStage.Store(2)
 		}
 	}}))
-	req.Header.Set("User-Agent", "clash.meta")
+	setSubscriptionRequestHeaders(req)
 	resp, e := cl.Do(req)
 	if e != nil {
 		stage := "connect"
@@ -412,7 +416,7 @@ func (h *Host) getIcon(ctx context.Context, raw json.RawMessage) (any, *Error) {
 // bridge's existing unforgeable in-process registry. The origin is this actual
 // socket, so normal OS owner/epoch checks identify the real core executable;
 // no WebView field, proxy header, claimed name or permission bypass is involved.
-type iconSOCKSForward struct{}
+type iconSOCKSForward struct{ publicTarget bool }
 
 func (f *iconSOCKSForward) Dial(network, address string) (net.Conn, error) {
 	return f.DialContext(context.Background(), network, address)
@@ -421,6 +425,9 @@ func (f *iconSOCKSForward) DialContext(ctx context.Context, network, address str
 	c, e := (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, address)
 	if e != nil {
 		return nil, e
+	}
+	if f.publicTarget {
+		return procattr.RegisterPublicTarget(c), nil
 	}
 	return procattr.RegisterHTTP(c, procattr.NewOrigin(c.LocalAddr(), c.RemoteAddr())), nil
 }

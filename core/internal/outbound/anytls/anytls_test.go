@@ -187,19 +187,11 @@ func TestWritePaddedFraming(t *testing.T) {
 	}
 }
 
-func katFixture(t *testing.T, cfg A.Config) (testCert, *katServer) {
-	cert := newTestCert(t)
-	if cfg.Password == "" {
-		cfg.Password = testPassword
-	}
-	return cert, startKatServer(t, cert, cfg)
-}
-
-// Kat's own server, in process: TCP echo; 8 concurrent streams on 8 distinct
+// Kat-Server process: TCP echo; 8 concurrent streams on 8 distinct
 // sessions; idle reuse after close (no new under dial); UoT on an exclusive
 // session to two targets, whose session returns to the pool afterwards.
 func TestKatServerTCPConcurrentReuseUDP(t *testing.T) {
-	cert, ks := katFixture(t, A.Config{})
+	cert, ks := katFixture(t)
 	echo := tcpEchoServer(t)
 	under := &countingDialer{}
 	o := newTestOutbound(t, baseOptions(ks.addr, testPassword, &outbound.TLSOptions{PinSHA256: cert.pin}), under)
@@ -233,8 +225,8 @@ func TestKatServerTCPConcurrentReuseUDP(t *testing.T) {
 		t.Fatal(e)
 	}
 	c2.Close()
-	if n, d, a := o.sessionsCreated.Load(), under.n.Load(), ks.accepted.Load(); n != 8 || d != 8 || a != 8 {
-		t.Fatalf("reuse: sessions=%d under dials=%d server accepts=%d, want 8/8/8", n, d, a)
+	if n, d := o.sessionsCreated.Load(), under.n.Load(); n != 8 || d != 8 {
+		t.Fatalf("reuse: sessions=%d under dials=%d, want 8/8", n, d)
 	}
 	t.Logf("tcp: echo + 8 concurrent on 8 sessions + idle reuse; sessions=%d under dials=%d", o.sessionsCreated.Load(), under.n.Load())
 
@@ -247,8 +239,6 @@ func TestKatServerTCPConcurrentReuseUDP(t *testing.T) {
 	udpRoundTrip(t, pc, u1, []byte("datagram-1"), "one:")
 	udpRoundTrip(t, pc, u2, []byte("datagram-2"), "two:")
 	udpRoundTrip(t, pc, u1, pattern(9, 1400), "one:")
-	// Domain source addresses round-trip through the UoT address encoding.
-	udpRoundTrip(t, pc, outbound.Addr{Host: "echo.test", Port: 5353}, []byte("domain"), "")
 	if busy, _ := o.sessionCount(); busy != 1 {
 		t.Fatal("UoT must own one session exclusively", busy)
 	}
@@ -295,7 +285,7 @@ func waitIdle(t *testing.T, o *Outbound, want int) {
 }
 
 func TestTLSModesAgainstSelfSigned(t *testing.T) {
-	cert, ks := katFixture(t, A.Config{})
+	cert, ks := katFixture(t)
 	echo := tcpEchoServer(t)
 	for _, m := range []struct {
 		name string
@@ -327,7 +317,7 @@ func TestTLSModesAgainstSelfSigned(t *testing.T) {
 }
 
 func TestWrongPasswordFailsFast(t *testing.T) {
-	cert, ks := katFixture(t, A.Config{})
+	cert, ks := katFixture(t)
 	o := newTestOutbound(t, baseOptions(ks.addr, "wrong-password", &outbound.TLSOptions{PinSHA256: cert.pin}), &countingDialer{})
 	start := time.Now()
 	_, e := o.DialTCP(ctxTimeout(t, 5*time.Second), tcpEchoServer(t))
@@ -349,7 +339,7 @@ func TestWrongPasswordFailsFast(t *testing.T) {
 // Session killed under live streams: they error promptly; the next dial builds
 // a new session.
 func TestSessionFailureRecovery(t *testing.T) {
-	cert, ks := katFixture(t, A.Config{})
+	cert, ks := katFixture(t)
 	echo := tcpEchoServer(t)
 	under := &countingDialer{}
 	o := newTestOutbound(t, baseOptions(ks.addr, testPassword, &outbound.TLSOptions{PinSHA256: cert.pin}), under)
@@ -402,7 +392,7 @@ func TestSessionFailureRecovery(t *testing.T) {
 
 func TestSYNACKRefusal(t *testing.T) {
 	// Server-wide limit of one stream: the second (on its own session) is refused.
-	cert, ks := katFixture(t, A.Config{MaxTotalStreams: 1})
+	cert, ks := katFixture(t, map[string]any{"max_streams": 1, "session_streams": 1})
 	echo := tcpEchoServer(t)
 	o := newTestOutbound(t, baseOptions(ks.addr, testPassword, &outbound.TLSOptions{PinSHA256: cert.pin}), &countingDialer{})
 	c, e := o.DialTCP(ctxTimeout(t, 5*time.Second), echo)
@@ -441,7 +431,7 @@ func TestSYNACKRefusal(t *testing.T) {
 // A reader that stops reading only stalls its own session; buffered memory is
 // bounded and nothing is lost once it reads again.
 func TestSlowReaderBoundedAndIsolated(t *testing.T) {
-	cert, ks := katFixture(t, A.Config{})
+	cert, ks := katFixture(t)
 	const total = 8 << 20
 	ln, e := net.Listen("tcp", "127.0.0.1:0")
 	if e != nil {
@@ -499,7 +489,7 @@ func TestSlowReaderBoundedAndIsolated(t *testing.T) {
 // Deadlines act on the stream, never on the physical connection: the session
 // survives a timeout and the stream is usable after refreshing the deadline.
 func TestDeadlinesAreStreamScoped(t *testing.T) {
-	cert, ks := katFixture(t, A.Config{})
+	cert, ks := katFixture(t)
 	echo := tcpEchoServer(t)
 	o := newTestOutbound(t, baseOptions(ks.addr, testPassword, &outbound.TLSOptions{PinSHA256: cert.pin}), &countingDialer{})
 	c1, e := o.DialTCP(ctxTimeout(t, 5*time.Second), echo)
@@ -536,18 +526,16 @@ func TestDeadlinesAreStreamScoped(t *testing.T) {
 	}
 }
 
-func TestHeartbeatAndPaddingUpdate(t *testing.T) {
+func TestServerPaddingUpdate(t *testing.T) {
 	custom := "stop=3\n0=10-20\n1=50-60\n2=100-120"
-	cert, ks := katFixture(t, A.Config{PaddingScheme: custom})
+	cert, ks := katFixture(t, map[string]any{"padding_scheme": custom})
 	o := newTestOutbound(t, baseOptions(ks.addr, testPassword, &outbound.TLSOptions{PinSHA256: cert.pin}), &countingDialer{})
-	c, e := o.DialTCP(ctxTimeout(t, 5*time.Second), outbound.Addr{Host: "ping.test", Port: 1})
+	c, e := o.DialTCP(ctxTimeout(t, 5*time.Second), tcpEchoServer(t))
 	if e != nil {
 		t.Fatal(e)
 	}
-	c.SetReadDeadline(time.Now().Add(5 * time.Second))
-	b := make([]byte, 4)
-	if _, e = io.ReadFull(c, b); e != nil || string(b) != "pong" {
-		t.Fatalf("server heartbeat not answered: %q %v", b, e)
+	if e = echoRoundTrip(c, []byte("padding")); e != nil {
+		t.Fatal(e)
 	}
 	if o.paddingUpdates.Load() != 1 || o.scheme.Load().raw != custom {
 		t.Fatal("padding scheme update not applied")
@@ -620,7 +608,7 @@ func TestAlertAndWasteFrames(t *testing.T) {
 		t.Fatal(string(b), e)
 	}
 	_, e = c.Read(b)
-	if e == nil || !strings.Contains(e.Error(), "server alert: test alert?") {
+	if !errors.Is(e, errServerAlert) || SafeFailure(e) != "protocol" || strings.Contains(e.Error(), "test alert") {
 		t.Fatalf("alert: %v", e)
 	}
 	t.Logf("alert surfaced: %v", e)
@@ -629,7 +617,7 @@ func TestAlertAndWasteFrames(t *testing.T) {
 // Idle sessions expire after idle_timeout; the pool is bounded by idle_sessions;
 // Close ends every background goroutine.
 func TestIdleExpiryBoundAndCloseNoLeak(t *testing.T) {
-	cert, ks := katFixture(t, A.Config{})
+	cert, ks := katFixture(t)
 	echo := tcpEchoServer(t)
 	base := runtime.NumGoroutine()
 	opt := baseOptions(ks.addr, testPassword, &outbound.TLSOptions{PinSHA256: cert.pin})
@@ -710,8 +698,8 @@ func TestIdleExpiryBoundAndCloseNoLeak(t *testing.T) {
 // Chain: the outer outbound reaches its server through an inner anytls
 // outbound (TCP and UoT); only the counting stub touches the network.
 func TestChainThroughUnder(t *testing.T) {
-	cert1, ks1 := katFixture(t, A.Config{})
-	cert2, ks2 := katFixture(t, A.Config{})
+	cert1, ks1 := katFixture(t)
+	cert2, ks2 := katFixture(t)
 	echo := tcpEchoServer(t)
 	stub := &countingDialer{}
 	inner := newTestOutbound(t, baseOptions(ks1.addr, testPassword, &outbound.TLSOptions{PinSHA256: cert1.pin}), stub)
@@ -729,8 +717,8 @@ func TestChainThroughUnder(t *testing.T) {
 	}
 	udpRoundTrip(t, pc, udpEchoServer(t, "chain:"), []byte("uot over chain"), "chain:")
 	// Two concurrent outer sessions, each carried by its own inner session.
-	if stub.n.Load() != 2 || ks1.accepted.Load() != 2 || ks2.accepted.Load() != 2 {
-		t.Fatalf("stub dials=%d server1 accepts=%d server2 accepts=%d, want 2/2/2", stub.n.Load(), ks1.accepted.Load(), ks2.accepted.Load())
+	if stub.n.Load() != 2 || inner.sessionsCreated.Load() != 2 || outer.sessionsCreated.Load() != 2 {
+		t.Fatalf("stub dials=%d inner sessions=%d outer sessions=%d, want 2/2/2", stub.n.Load(), inner.sessionsCreated.Load(), outer.sessionsCreated.Load())
 	}
 	pc.Close()
 	c.Close()
@@ -743,7 +731,7 @@ func TestChainThroughUnder(t *testing.T) {
 		t.Fatal(e)
 	}
 	c.Close()
-	if stub.n.Load() != 2 || ks2.accepted.Load() != 2 {
+	if stub.n.Load() != 2 || outer.sessionsCreated.Load() != 2 {
 		t.Fatal("idle outer session not reused through the chain")
 	}
 	stub.mu.Lock()
@@ -757,7 +745,7 @@ func TestChainThroughUnder(t *testing.T) {
 
 // Every server connection goes through under.DialTCP.
 func TestAllServerConnectionsUseUnder(t *testing.T) {
-	cert, ks := katFixture(t, A.Config{})
+	cert, ks := katFixture(t)
 	echo := tcpEchoServer(t)
 	stub := &countingDialer{}
 	o := newTestOutbound(t, baseOptions(ks.addr, testPassword, &outbound.TLSOptions{PinSHA256: cert.pin}), stub)
@@ -774,8 +762,8 @@ func TestAllServerConnectionsUseUnder(t *testing.T) {
 		t.Fatal(e)
 	}
 	udpRoundTrip(t, pc, udpEchoServer(t, ""), []byte("u"), "")
-	if d, a, s := stub.n.Load(), ks.accepted.Load(), o.sessionsCreated.Load(); d != 4 || a != 4 || s != 4 {
-		t.Fatalf("under dials=%d server accepts=%d sessions=%d, want 4/4/4", d, a, s)
+	if d, s := stub.n.Load(), o.sessionsCreated.Load(); d != 4 || s != 4 {
+		t.Fatalf("under dials=%d sessions=%d, want 4/4", d, s)
 	}
 	pc.Close()
 	for _, c := range conns {
@@ -786,7 +774,7 @@ func TestAllServerConnectionsUseUnder(t *testing.T) {
 // Pooled sessions that died while idle (server restart) are skipped: the next
 // dial still succeeds, on a fresh session.
 func TestDeadIdleSessionsSkipped(t *testing.T) {
-	cert, ks := katFixture(t, A.Config{})
+	cert, ks := katFixture(t)
 	echo := tcpEchoServer(t)
 	under := &countingDialer{}
 	o := newTestOutbound(t, baseOptions(ks.addr, testPassword, &outbound.TLSOptions{PinSHA256: cert.pin}), under)

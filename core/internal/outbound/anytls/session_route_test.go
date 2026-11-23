@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	A "github.com/shui1iao/Kat/internal/anytls"
 	"github.com/shui1iao/Kat/internal/outbound"
 )
 
@@ -35,7 +34,7 @@ func TestSessionRouteSuccessfulBranchesOnly(t *testing.T) {
 // Validating a route can call a group event sink which reenters an outbound.
 // It must never run with the AnyTLS pool lock held.
 func TestSessionRouteValidationOutsidePoolLock(t *testing.T) {
-	cert, ks := katFixture(t, A.Config{})
+	cert, ks := katFixture(t)
 	o := newTestOutbound(t, baseOptions(ks.addr, testPassword, &outbound.TLSOptions{PinSHA256: cert.pin}), &countingDialer{})
 	dst := tcpEchoServer(t)
 	c, e := o.DialTCP(ctxTimeout(t, 5*time.Second), dst)

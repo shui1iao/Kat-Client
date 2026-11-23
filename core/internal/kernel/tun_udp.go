@@ -224,6 +224,10 @@ func (u *tunUDPState) output(b []byte, peer netip.AddrPort) error {
 }
 func (u *tunUDPState) send(ctx context.Context, p packet, idle time.Duration) {
 	a, s := u.a, u.a.server
+	if c, ok := u.c.(interface{ DatagramCurrent() bool }); ctx.Err() != nil || ok && !c.DatagramCurrent() {
+		s.counters.Dropped.Add(1)
+		return
+	}
 	u.dnsBusy.Store(true)
 	maxActivity(a)
 	if idle > 0 {
@@ -377,6 +381,13 @@ func (u *tunUDPState) send(ctx context.Context, p packet, idle time.Duration) {
 	}
 }
 func (u *tunUDPState) binding(name string) (uint64, string, error) {
+	epoch, binding, err := u.currentBinding(name)
+	if err == nil && epoch != u.t.Epoch {
+		return 0, "", errors.New("TUN UDP ingress epoch superseded")
+	}
+	return epoch, binding, err
+}
+func (u *tunUDPState) currentBinding(name string) (uint64, string, error) {
 	e := u.a.server.cfg.clientEgress
 	if e != nil {
 		if name != "direct" && e.UDPAssociationBinding != nil {
@@ -406,13 +417,14 @@ func (u *tunUDPState) session(ctx context.Context, key tunNATKey, target Address
 		return old, nil
 	}
 	s := u.a.server
-	if !s.udpSlots.try() {
+	putSlot, ok := claimTUNMapping(ctx, s.udpSlots)
+	if !ok {
 		return nil, errors.New("TUN_UDP_ASSOCIATION_LIMIT")
 	}
 	release := true
 	defer func() {
 		if release {
-			s.udpSlots.release()
+			putSlot()
 		}
 	}()
 	if s.rt == nil || s.rt.nodes[key.name] == nil {
@@ -450,7 +462,7 @@ func (u *tunUDPState) session(ctx context.Context, key tunNATKey, target Address
 	release = false
 	go func() {
 		defer u.pcWG.Done()
-		defer s.udpSlots.release()
+		defer putSlot()
 		stop := context.AfterFunc(fctx, v.close)
 		defer stop()
 		defer v.close()

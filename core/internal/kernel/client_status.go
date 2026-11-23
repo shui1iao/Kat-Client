@@ -109,7 +109,7 @@ func (s *Server) TrafficBreakdown() (up, down, directUp, directDown uint64) {
 
 // DomainTraffic returns cumulative per-domain traffic counters for the running core.
 func (s *Server) DomainTraffic() []DomainTrafficView {
-	var out []DomainTrafficView
+	out := []DomainTrafficView{}
 	s.core.domainStats.Range(func(key, value any) bool {
 		name, _ := key.(string)
 		ds, _ := value.(*domainStat)
