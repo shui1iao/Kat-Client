@@ -134,7 +134,7 @@ mod tests {
  }
  #[test]fn invalid_length_and_partial_body_never_report_a_complete_frame(){
   for length in [0,(PIPE_LIMIT+1)as u32]{let(server,client)=pair();exact_timeout(client.0,&mut length.to_le_bytes(),true,1000,None).unwrap();assert_eq!(read_timeout(server.0,100).unwrap_err().code,"PIPE_LIMIT");}
-  let(server,client)=pair();exact_timeout(client.0,&mut 8u32.to_le_bytes(),true,1000,None).unwrap();exact_timeout(client.0,&mut *b"abc",true,1000,None).unwrap();
+  let(server,client)=pair();exact_timeout(client.0,&mut 8u32.to_le_bytes(),true,1000,None).unwrap();let mut partial=*b"abc";exact_timeout(client.0,&mut partial,true,1000,None).unwrap();
   let before=Instant::now();assert_eq!(read_timeout(server.0,100).unwrap_err().code,"PIPE_TIMEOUT");assert!(before.elapsed()<Duration::from_secs(2));
  }
  #[test]fn nonclosing_peer_times_out_and_extra_request_is_rejected(){

@@ -103,7 +103,7 @@ pub fn service_grant_safe(owner:&str,sid:&str,mask:u32)->bool{
 }
 
 #[cfg(test)]mod software_parent_tests{use super::*;
- #[test]fn actual_software_parent_acl_passes_without_treating_CO_as_a_real_writer(){
+ #[test]fn actual_software_parent_acl_passes_without_treating_co_as_a_real_writer(){
   let v:serde_json::Value=serde_json::from_str(include_str!("../tests/fixtures/hklm-software-parent-20261029.json")).unwrap();
   let owner=v["owner_sid"].as_str().unwrap();assert_eq!(owner,"S-1-5-32-544");assert_eq!(v["protected"],true);
   let aces=v["aces"].as_array().unwrap();assert_eq!(aces.len(),6);
@@ -113,7 +113,7 @@ pub fn service_grant_safe(owner:&str,sid:&str,mask:u32)->bool{
   }
   assert!(!trusted_owner("S-1-3-0"));assert!(!authority_grant_safe(owner,"S-1-3-0",0xF003F,false));
  }
- #[test]fn SOFTWARE_parent_exception_never_allows_real_unprivileged_writers(){
+ #[test]fn software_parent_exception_never_allows_real_unprivileged_writers(){
   for sid in ["S-1-5-32-545","S-1-5-11","S-1-1-0","S-1-15-2-1"]{
    assert!(authority_allow_safe("S-1-5-32-544",sid,0x20019,2,false));
    for mask in [0xF003F,0x10000000,0x40000000,0x40000,0x80000,0x10000,2,4,0x20]{
@@ -121,7 +121,7 @@ pub fn service_grant_safe(owner:&str,sid:&str,mask:u32)->bool{
    }
   }
  }
- #[test]fn leaf_and_malformed_CO_templates_stay_rejected(){
+ #[test]fn leaf_and_malformed_co_templates_stay_rejected(){
   let owner="S-1-5-32-544";
   assert!(!authority_allow_safe(owner,"S-1-3-0",0xF003F,2,true));
   assert!(!authority_allow_safe(owner,"S-1-3-0",0xF003F,0,true));

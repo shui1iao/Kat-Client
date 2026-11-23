@@ -1,5 +1,4 @@
-use std::time::Duration;
-use kat_host::{elevation_launch::*,error::{Error,Result}};
+use kat_host::{elevation_launch::*,error::Error};
 #[test]fn exit_abi_and_safe_schema(){
  for (i,c) in CODES.iter().enumerate(){assert_eq!(helper_exit(&Err(Error::new(c,"secret"))),16+i as u32);assert_eq!(helper_error(16+i as u32).code,*c);}
  assert_eq!(helper_exit(&Err(Error::new("SECRET","secret"))),255);assert_eq!(helper_error(255).code,"HELPER_EXIT_UNKNOWN");
@@ -10,7 +9,7 @@ use kat_host::{elevation_launch::*,error::{Error,Result}};
 }
 
 #[cfg(unix)]mod actual_entry{
- use super::*;use serde_json::{Value,json};
+ use super::*;use std::time::Duration;use kat_host::error::Result;use serde_json::{Value,json};
  use std::{path::PathBuf,io::{BufRead,Write},process::{Command,Stdio,Child},sync::{Arc,atomic::{AtomicUsize,Ordering}}};
  use tokio::{io::{AsyncBufReadExt,AsyncWriteExt,BufReader},net::{UnixListener,UnixStream}};
  fn rpc(w:&mut impl Write,r:&mut impl BufRead,method:&str,params:Value)->Value{writeln!(w,"{}",json!({"id":"h1","method":method,"params":if params.is_null(){json!({})}else{params}})).unwrap();w.flush().unwrap();let mut line=String::new();r.read_line(&mut line).unwrap();serde_json::from_str(&line).unwrap()}

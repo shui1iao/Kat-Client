@@ -6,7 +6,9 @@ Example (all paths selected explicitly by the caller):
   sign-update-manifest.py --kind core --manifest /issuer/kat-client-core-update.json \
     --private-key /explicit/issuer-key --signature /issuer/kat-client-core-update.json.sig
   sign-update-manifest.py --kind package --manifest /issuer/kat-package-auth.json \
-    --private-key /explicit/issuer-key --signature /issuer/kat-package-auth.json.sig
+    --private-key /explicit/issuer-key --signature /issuer/kat-package-auth.sig
+  sign-update-manifest.py --kind setup --manifest /issuer/kat-setup-auth.json \
+    --private-key /explicit/issuer-key --signature /issuer/kat-setup-auth.sig
 
 PEM/DER Ed25519 or raw 32-byte seed / 64-byte seed+public / 64-char hex seed accepted.
 Encrypted keys are unsupported: no prompts, passwords, private-key output, or key temp files.
@@ -26,7 +28,12 @@ KEY_ID = "0afa646ee76f17d8"
 PUBLIC_KEY = bytes([41, 70, 129, 235, 51, 84, 134, 28, 155, 40, 162, 162, 46, 247, 214, 86,
                     86, 96, 103, 249, 12, 185, 146, 22, 47, 101, 58, 253, 135, 229, 40, 63])
 MAX_JSON = 64 * 1024
-ROLES = {"kat-desktop.exe", "kat-install-helper.exe", "kat-network-service.exe", "kat-client-core.exe"}
+ROLES = {"kat-desktop.exe", "kat-install-helper.exe", "kat-network-service.exe", "kat-client-core.exe",
+         "kat-elevate-helper.exe", "kat-proxy-watchdog.exe"}
+ASSETS = {"Kat-Uninstall.exe", "Restore-User-Proxy.cmd", "network/wintun.dll", "network/WINTUN-LICENSE.txt",
+          "network/THIRD-PARTY-NOTICES.txt", "network/manifest.json", "README-WINDOWS.txt", "RUST-THIRD-PARTY-NOTICES.txt",
+          "THIRD-PARTY-SOURCE.zip", "GO-THIRD-PARTY-NOTICES.txt", "YAML-README.md", "kat-client.example.yaml",
+          "FRONTEND-THIRD-PARTY-NOTICES.txt", "BUILD-IDENTITY.json"}
 U64 = 2**64 - 1
 
 
@@ -77,13 +84,17 @@ def version(value):
 def validate(data, kind):
     obj = json.loads(data.decode("utf-8"), object_pairs_hook=unique,
                      parse_constant=lambda _: (_ for _ in ()).throw(Invalid("invalid number")))
+    if kind == "setup":
+        exact(obj, "schema product bridge assets")
+        need(type(obj["schema"]) is int and obj["schema"] == 2 and obj["product"] == "kat-client-setup")
+        need(type(obj["assets"]) is dict and set(obj["assets"]) == ASSETS | {"kat-package-auth.json", "kat-package-auth.sig"})
+        need(all(sha(value) for value in obj["assets"].values()))
+        obj, kind = obj["bridge"], "package"
     if kind == "package":
         exact(obj, "schema product key_id os arch app_version stdio_protocol service_protocol record_schema workspace_schema source_revision components")
         need(obj["product"] == "kat-client-package" and version(obj["app_version"]))
         need(type(obj["workspace_schema"]) is int and obj["workspace_schema"] == 1)
-        components = obj["components"]
-        need(type(components) is dict and ROLES <= set(components) <= ROLES | {"kat-proxy-watchdog.exe"})
-        need(all(sha(value) for value in components.values()))
+        need(type(obj["components"]) is dict and set(obj["components"]) == ROLES and all(sha(value) for value in obj["components"].values()))
     else:
         exact(obj, "schema product owner repo release version sequence os arch asset gui_compatibility stdio_protocol required_capabilities service_protocol record_schema workspace_read_compatibility workspace_write_compatibility source_revision key_id")
         product, repo = ("kat-client", "Kat-Client") if kind == "client" else ("kat-client-core", "Kat-Server")
@@ -151,7 +162,7 @@ class QuietParser(argparse.ArgumentParser):
 
 def main():
     parser = QuietParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--kind", choices=("client", "core", "package"), required=True)
+    parser.add_argument("--kind", choices=("client", "core", "package", "setup"), required=True)
     parser.add_argument("--manifest", required=True, help="absolute path to exact existing JSON bytes")
     parser.add_argument("--private-key", required=True, help="explicit absolute Ed25519 key path; never searched or generated")
     parser.add_argument("--signature", required=True, help="absolute NEW detached signature path; never overwritten")

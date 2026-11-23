@@ -1,4 +1,4 @@
-//! Exact stale-owner adapter removal, only reached by fresh authenticated Begin.
+//! Exact stale-owner adapter removal, only reached from an authenticated previous journal.
 //! No Wintun load/private exports, wildcard device IDs, route/DNS writes or driver removal.
 use super::{native,journal::LaunchIdentity};
 use crate::{error::{Error,Result},tun_diagnostics::{failure,Stage}};
@@ -16,35 +16,6 @@ fn reg_string(key:HKEY,name:&str)->Result<String>{unsafe{
  let mut b=vec![0u16;(n/2)as usize];let size=n;let k=RegQueryValueExW(key,wide(name).as_ptr(),std::ptr::null(),&mut kind,b.as_mut_ptr().cast(),&mut n);
  if k!=0{return Err(os(k))}if kind!=REG_SZ||n!=size||b.last()!=Some(&0){return Err(refuse())}
  b.pop();if b.contains(&0){return Err(refuse())}String::from_utf16(&b).map_err(|_|refuse())
-}}
-/// The service has one serialized Launch; attach retires its predecessor only
-/// after exact exit. Fresh Begin has no WAL/device ownership. Also reject ANY
-/// other live high Kat core (query failures never imply absent/medium).
-pub(super) fn no_other_high_core(caller:&LaunchIdentity)->Result<()>{unsafe{
- let snap=Handle(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0));if snap.0==INVALID_HANDLE_VALUE{return Err(os(GetLastError()))}
- let mut e=PROCESSENTRY32W::default();e.dwSize=size_of::<PROCESSENTRY32W>()as u32;
- let mut more=Process32FirstW(snap.0,&mut e);let mut count=0;let mut current=false;
- while more!=0{
-  count+=1;if count>65536{return Err(refuse())}
-  let end=e.szExeFile.iter().position(|&n|n==0).ok_or_else(refuse)?;
-  let name=String::from_utf16(&e.szExeFile[..end]).map_err(|_|refuse())?;
-  if name.eq_ignore_ascii_case("kat-client-core.exe"){
-   let h=Handle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION|SYNCHRONIZE,0,e.th32ProcessID));if h.0.is_null(){return Err(os(GetLastError()))}
-   let wait=WaitForSingleObject(h.0,0);if wait!=WAIT_OBJECT_0{
-    if wait!=WAIT_TIMEOUT{return Err(os(GetLastError()))}
-    if e.th32ProcessID==caller.core_pid{
-     if identity::process_stamp(h.0)?!=caller.core_created{return Err(refuse())}current=true;
-    }else{
-     let mut t=std::ptr::null_mut();if OpenProcessToken(h.0,TOKEN_QUERY,&mut t)==0{return Err(os(GetLastError()))}let t=Handle(t);
-     let mut elev=TOKEN_ELEVATION::default();let mut n=0;
-     if GetTokenInformation(t.0,TokenElevation,(&mut elev as *mut TOKEN_ELEVATION).cast(),size_of::<TOKEN_ELEVATION>()as u32,&mut n)==0{return Err(os(GetLastError()))}
-     if n!=size_of::<TOKEN_ELEVATION>()as u32||elev.TokenIsElevated!=0{return Err(refuse())}
-    }
-   }
-  }
-  more=Process32NextW(snap.0,&mut e);
- }
- if GetLastError()!=ERROR_NO_MORE_FILES{return Err(os(GetLastError()))}if !current{return Err(refuse())}Ok(())
 }}
 /// Used by `recover_after_exit` after the journal high core has exited: verifies
 /// the journal exact core is not alive and no other elevated Kat core is running.
@@ -76,13 +47,13 @@ unsafe fn pnp_devnode_absent(guid:&str)->bool{
  let mut dev=0u32;
  CM_Locate_DevNodeW(&mut dev,instance.as_ptr(),CM_LOCATE_DEVNODE_PHANTOM)==CR_NO_SUCH_DEVNODE
 }
-pub(super) fn remove(alias:&str,guard:impl Fn()->Result<()>)->Result<()>{remove_inner(alias,None,guard)}
-pub(super) fn remove_recovering(a:&super::journal::Adapter,guard:impl Fn()->Result<()>)->Result<()>{remove_inner(&a.alias,Some(a),guard)}
-fn remove_inner(alias:&str,owned:Option<&super::journal::Adapter>,guard:impl Fn()->Result<()>)->Result<()>{
+pub(super) fn remove_recovering(owned:&super::journal::Adapter,guard:impl Fn()->Result<()>)->Result<()>{
+ let alias=&owned.alias;
  let mut stage=Stage::AliasGuard;
  let result=(||{unsafe{
   let Some(row)=native::alias_row(alias)?else{return Ok(())};
-  if !super::journal::stale_down(row.oper,row.adapter.luid,row.index) && !(row.oper==6&&row.index!=0&&owned==Some(&row.adapter)&&native::stack_missing(&row.adapter)?){return Err(refuse())}
+  if &row.adapter!=owned{return Err(refuse())}
+  if !super::journal::stale_down(row.oper,row.adapter.luid,row.index) && !(row.oper==6&&row.index!=0&&native::stack_missing(&row.adapter)?){return Err(refuse())}
   guard()?;
   // Resolve the exact GUID's Connection mapping; do not infer from a WMI row or name prefix.
   let keypath=format!(r"SYSTEM\CurrentControlSet\Control\Network\{{4D36E972-E325-11CE-BFC1-08002BE10318}}\{{{}}}\Connection",row.adapter.guid);

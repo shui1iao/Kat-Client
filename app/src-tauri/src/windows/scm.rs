@@ -55,7 +55,7 @@ pub(super) fn failure_actions(service:&ScHandle)->Result<FailureActions>{unsafe{
  let value=FailureActions{reset:r.dwResetPeriod,reboot:string(r.lpRebootMsg)?,command:string(r.lpCommand)?,actions};value.validate()?;Ok(value)
 }}
 pub(super) fn set_failure_actions(service:&ScHandle,value:&FailureActions)->Result<()>{unsafe{
- value.validate()?;let mut actions:Vec<SC_ACTION>=value.actions.iter().map(|&(Type,Delay)|SC_ACTION{Type,Delay}).collect();
+ value.validate()?;let mut actions:Vec<SC_ACTION>=value.actions.iter().map(|&(kind,delay)|SC_ACTION{Type:kind,Delay:delay}).collect();
  // Non-NULL with cActions=0 deletes the list, whereas NULL means unchanged.
  let mut sentinel=SC_ACTION{Type:SC_ACTION_NONE,Delay:0};
  let mut reboot=value.reboot.clone();let mut command=value.command.clone();

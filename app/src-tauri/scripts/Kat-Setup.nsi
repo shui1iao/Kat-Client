@@ -36,9 +36,11 @@ ManifestSupportedOS all
 !define MUI_PAGE_CUSTOMFUNCTION_SHOW FinishShow
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE FinishLeave
 !insertmacro MUI_PAGE_FINISH
+!ifdef CAPTURE_ONLY
 !define MUI_UNCONFIRMPAGE_TEXT_TOP "卸载 Kat 程序和网络服务。请先在 Kat 中正常退出并恢复网络。默认保留当前用户的配置、偏好、流量和历史；非 Kat 文件及已被外部修改的快捷方式不会被删除。"
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
+!endif
 !insertmacro MUI_LANGUAGE "SimpChinese"
 Var Existing
 Var ProbeRoot
@@ -63,7 +65,9 @@ Function ${PREFIX}RequireNormal
 FunctionEnd
 !macroend
 !insertmacro NormalFunction ""
+!ifdef CAPTURE_ONLY
 !insertmacro NormalFunction "un."
+!endif
  ; The bridge never displays a window while ExecWait blocks the wizard. Its
  ; bounded normal-token UTF16 output is display-only, not installation authority.
 !macro FeedbackFunction PREFIX
@@ -98,14 +102,20 @@ Function ${PREFIX}ShowBridgeFeedback
 FunctionEnd
 !macroend
 !insertmacro FeedbackFunction ""
+!ifdef CAPTURE_ONLY
 !insertmacro FeedbackFunction "un."
+!endif
 Function .onInit
  Call RequireNormal
  SetRegView 64
  InitPluginsDir
  SetOutPath "$PLUGINSDIR\payload"
+ !ifdef CAPTURE_ONLY
+ ; Seed compilation only. This Setup is discarded, never run or shipped.
+ WriteUninstaller "$PLUGINSDIR\seed-uninstaller.exe"
+ !else
  !include "${PAYLOAD_INCLUDE}"
- WriteUninstaller "$PLUGINSDIR\payload\Kat-Uninstall.exe"
+ !endif
 FunctionEnd
 ; A real wizard HWND exists before any bridge feedback can be shown.
 Function SetupGUIInit
@@ -194,6 +204,7 @@ Function FinishRun
  Call ShowBridgeFeedback
  run_done:
 FunctionEnd
+!ifdef CAPTURE_ONLY
 Function un.onInit
  Call un.RequireNormal
  SetRegView 64
@@ -230,3 +241,4 @@ Section "Uninstall"
  DetailPrint "程序和网络服务已卸载，用户配置、偏好和历史已保留。"
 SectionEnd
 !uninstfinalize 'python3 "${CAPTURE_SCRIPT}" "%1" "${UNINSTALLER_TEMPLATE}"' = 0
+!endif

@@ -40,10 +40,8 @@ class Finish(unittest.TestCase):
   leave=mui.split('Function "${LEAVE}"',1)[1];self.assertLess(leave.index('MUI_PAGE_FUNCTION_CUSTOM LEAVE'),leave.index('MUI_FINISHPAGE_RUN'))
   self.assertIn('MUI_PAGE_CUSTOMFUNCTION_LEAVE FinishLeave',n);self.assertIn('${NSD_GetState} $mui.FinishPage.ShowReadme $DesktopChoice',n)
 if __name__=='__main__':
- parser=argparse.ArgumentParser();parser.add_argument('--compile-runner',action='store_true');args=parser.parse_args()
+ parser=argparse.ArgumentParser();parser.add_argument('--compile-runner',action='store_true');parser.add_argument('--payload',type=Path);parser.add_argument('--output',type=Path);parser.add_argument('--nsis-debs',type=Path);args=parser.parse_args()
  result=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(Finish));assert result.wasSuccessful()
  if args.compile_runner:
-  E=Path('/opt/kat-ui-next-20261101/candidate16/installer-tests');E.mkdir(parents=True,exist_ok=True)
-  payload=E/'payload';shutil.copytree(R/'deliverables/payload',payload,dirs_exist_ok=True);shutil.copy2(R/'deliverables/bin/kat-install-helper.exe',payload/'kat-install-helper.exe')
-  subprocess.run(['python3',str(S/'scripts/build-setup.py'),'--payload',str(payload),'--output',str(E/'Kat-Setup-compile-only.exe'),'--uninstaller',str(E/'Kat-Uninstall-compile-only.exe')],check=True)
-  (E/'RESULTS.json').write_text(json.dumps({'portable_passed':result.testsRun,'full_NSIS_compiled':True,'Windows_runtime':'NOTRUN; compile only, old payload not a deliverable'},indent=2)+'\n')
+  if not (args.payload and args.output and args.nsis_debs):parser.error('full compile requires --payload (signed v2), --output and --nsis-debs')
+  subprocess.run(['python3',str(S/'scripts/build-setup.py'),'pack','--payload',str(args.payload),'--output',str(args.output),'--nsis-debs',str(args.nsis_debs)],check=True)

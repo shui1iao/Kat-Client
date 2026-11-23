@@ -219,8 +219,8 @@ pub fn verify(bytes: &[u8], signature_hex: &[u8], expected: &ExpectedRelease, cu
     Ok(VerifiedManifest { manifest, manifest_bytes: bytes.to_vec(), signature_hex,
         digest: hex::encode(digest.finalize()), disposition })
 }
-/// Inner Setup descriptor: no Setup self-hash. Caller binds peer identity and actual component bytes.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+/// Schema 1: the IPC/rollback peer identity understood by v0.2.28. NOT Setup authorization.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PackageAuth {
     pub schema: u32,
@@ -234,33 +234,64 @@ pub struct PackageAuth {
     pub record_schema: u32,
     pub workspace_schema: u32,
     pub source_revision: String,
-    #[serde(deserialize_with = "unique_components")]
+    #[serde(deserialize_with = "unique_roles")]
     pub components: BTreeMap<String, String>,
 }
-// Five required executable roles plus the already-authorized optional watchdog.
-const MAX_PACKAGE_COMPONENTS: usize = 6;
-fn unique_components<'de, D>(deserializer: D) -> Result<BTreeMap<String, String>, D::Error>
-where D: serde::Deserializer<'de> {
-    struct Components;
-    impl<'de> serde::de::Visitor<'de> for Components {
+/// Distinct product, schema, shape and filenames. Never installed in either live root.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SetupAuth {
+    pub schema: u32,
+    pub product: String,
+    pub bridge: PackageAuth,
+    // Every non-role installed file, including the exact bytes of BOTH signed IPC identity files.
+    #[serde(deserialize_with = "unique_assets")]
+    pub assets: BTreeMap<String, String>,
+}
+pub const BRIDGE_AUTH_FILES: &[&str] = &["kat-package-auth.json", "kat-package-auth.sig"];
+pub const SETUP_AUTH_FILES: &[&str] = &["kat-setup-auth.json", "kat-setup-auth.sig"];
+pub const PACKAGE_ROLES: &[&str] = &[
+    "kat-desktop.exe", "kat-install-helper.exe", "kat-network-service.exe", "kat-client-core.exe",
+    "kat-elevate-helper.exe", "kat-proxy-watchdog.exe",
+];
+pub const PACKAGE_ASSETS: &[&str] = &[
+    "Kat-Uninstall.exe", "Restore-User-Proxy.cmd", "network/wintun.dll", "network/WINTUN-LICENSE.txt",
+    "network/THIRD-PARTY-NOTICES.txt", "network/manifest.json", "README-WINDOWS.txt",
+    "RUST-THIRD-PARTY-NOTICES.txt", "THIRD-PARTY-SOURCE.zip", "GO-THIRD-PARTY-NOTICES.txt",
+    "YAML-README.md", "kat-client.example.yaml", "FRONTEND-THIRD-PARTY-NOTICES.txt", "BUILD-IDENTITY.json",
+];
+fn unique_roles<'de, D: serde::Deserializer<'de>>(d: D) -> Result<BTreeMap<String,String>,D::Error> {
+    unique_hashes(d, PACKAGE_ROLES.len())
+}
+fn unique_assets<'de, D: serde::Deserializer<'de>>(d: D) -> Result<BTreeMap<String,String>,D::Error> {
+    unique_hashes(d, PACKAGE_ASSETS.len()+BRIDGE_AUTH_FILES.len())
+}
+fn unique_hashes<'de, D: serde::Deserializer<'de>>(d: D, max: usize) -> Result<BTreeMap<String,String>,D::Error> {
+    struct Hashes(usize);
+    impl<'de> serde::de::Visitor<'de> for Hashes {
         type Value = BTreeMap<String, String>;
-        fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str("unique component roles") }
+        fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { f.write_str("unique fixed hash entries") }
         fn visit_map<M: serde::de::MapAccess<'de>>(self, mut map: M) -> Result<Self::Value, M::Error> {
             let mut result = BTreeMap::new();
             while let Some((key, value)) = map.next_entry::<String, String>()? {
-                if result.len() >= MAX_PACKAGE_COMPONENTS || result.insert(key, value).is_some() {
-                    return Err(serde::de::Error::custom("duplicate or excessive component roles"));
+                if result.len() >= self.0 || result.insert(key, value).is_some() {
+                    return Err(serde::de::Error::custom("duplicate or excessive hash entries"));
                 }
             }
             Ok(result)
         }
     }
-    deserializer.deserialize_map(Components)
+    d.deserialize_map(Hashes(max))
 }
+/// Peer authentication only. Installation callers must use verify_setup_package instead.
 pub fn verify_package(bytes: &[u8], signature_hex: &[u8]) -> Result<PackageAuth, UpdateError> {
     verified_signature(bytes, signature_hex)?;
     let auth: PackageAuth = serde_json::from_slice(bytes)
         .map_err(|_| UpdateError::new("package_schema", "包身份描述符结构无效或存在未知/重复字段"))?;
+    validate_package(&auth)?;
+    Ok(auth)
+}
+fn validate_package(auth: &PackageAuth) -> Result<(), UpdateError> {
     require(auth.schema == 1 && auth.product == "kat-client-package" && auth.key_id == crate::update_key::KEY_ID
         && auth.os == "windows" && auth.arch == "amd64", "package_schema", "包身份、平台或签名密钥标识不受支持")?;
     stable_version(&auth.app_version)?;
@@ -268,11 +299,28 @@ pub fn verify_package(bytes: &[u8], signature_hex: &[u8]) -> Result<PackageAuth,
         "compatibility", "包内协议或数据兼容版本不受支持")?;
     require(lower_hex(&auth.source_revision, 20) || lower_hex(&auth.source_revision, 32),
         "source_revision", "包身份必须包含完整源码 revision")?;
-    const REQUIRED: [&str; 5] = ["kat-desktop.exe", "kat-install-helper.exe", "kat-network-service.exe", "kat-client-core.exe", "kat-elevate-helper.exe"];
-    require(REQUIRED.iter().all(|name| auth.components.contains_key(*name)) && auth.components.iter().all(|(name, hash)|
-        (REQUIRED.contains(&name.as_str()) || name == "kat-proxy-watchdog.exe") && lower_hex(hash, 32)),
-        "package_components", "包身份缺少必需组件，或包含未知角色/无效 SHA-256")?;
-    Ok(auth)
+    // Preserve the historical optional watchdog only at the old peer boundary.
+    require(PACKAGE_ROLES.iter().filter(|n| **n != "kat-proxy-watchdog.exe").all(|n| auth.components.contains_key(*n))
+        && auth.components.iter().all(|(n,h)| PACKAGE_ROLES.contains(&n.as_str()) && lower_hex(h, 32)),
+        "package_components", "无效的交接组件角色或 SHA-256")
+}
+/// The install boundary always verifies TWO independent signatures and the exact same release.
+/// No fallback from absent/invalid schema 2 to a valid peer identity.
+pub fn verify_setup_package(setup_bytes:&[u8],setup_sig:&[u8],bridge_bytes:&[u8],bridge_sig:&[u8]) -> Result<SetupAuth,UpdateError> {
+    verified_signature(setup_bytes,setup_sig)?;
+    let setup:SetupAuth=serde_json::from_slice(setup_bytes)
+        .map_err(|_|UpdateError::new("setup_schema","完整安装授权描述无效或存在未知/重复字段"))?;
+    require(setup.schema==2 && setup.product=="kat-client-setup", "setup_schema", "不是完整安装授权描述")?;
+    let bridge=verify_package(bridge_bytes,bridge_sig)?;
+    // Equality covers version, revision, key, platform, compatibility and every role hash.
+    require(setup.bridge==bridge && bridge.components.len()==PACKAGE_ROLES.len(),
+        "setup_bridge", "安装授权与完整交接身份不匹配")?;
+    require(setup.assets.len()==PACKAGE_ASSETS.len()+BRIDGE_AUTH_FILES.len() && PACKAGE_ASSETS.iter().chain(BRIDGE_AUTH_FILES).all(|n|setup.assets.get(*n).is_some_and(|h|lower_hex(h,32))),
+        "setup_assets", "安装授权必须包含每个固定资源的 SHA-256")?;
+    for (name,bytes) in BRIDGE_AUTH_FILES.iter().zip([bridge_bytes,bridge_sig]) {
+        require(setup.assets[*name]==hex::encode(Sha256::digest(bytes)), "setup_bridge", "交接描述或签名的原始字节不匹配")?;
+    }
+    Ok(setup)
 }
 
 /// Validates forward/rollback package transitions against the protected metadata floor.

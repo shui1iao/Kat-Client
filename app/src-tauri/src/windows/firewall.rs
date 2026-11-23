@@ -337,12 +337,7 @@ impl FirewallStore for ComFirewallStore {
                 let mut vg = VariantGuard::new();
                 let mut fetched: u32 = 0;
                 let hr = next_fn(enum_var.0, 1, &mut vg.0, &mut fetched);
-                if hr == S_FALSE || fetched == 0 {
-                    break;
-                }
-                if hr < 0 {
-                    return Err(FirewallRuleError::new(FirewallStage::RulesEnum, Some(hr)));
-                }
+                if !crate::firewall_rule::enum_has_rule(hr,fetched)? { break; }
                 if (vg.0.vt == VT_DISPATCH || vg.0.vt == VT_UNKNOWN) && !vg.0.ptr.is_null() {
                     let disp = std::mem::ManuallyDrop::new(ComPtr(vg.0.ptr));
                     let rule = disp.query_interface(&IID_INET_FW_RULE, FirewallStage::RuleInspect)?;
@@ -351,7 +346,7 @@ impl FirewallStore for ComFirewallStore {
                         let spec = read_rule_spec(&rule, FirewallStage::RuleInspect)?;
                         out.push((rule, spec));
                     }
-                }
+                } else { return Err(FirewallRuleError::new(FirewallStage::RuleInspect, None)); }
             }
             Ok(out)
         }

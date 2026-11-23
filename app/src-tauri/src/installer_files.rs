@@ -62,6 +62,19 @@ pub fn installed_size_kib(app:&Path,runtime:&Path)->Result<u32>{
   total=total.checked_add(bytes/1024+u64::from(bytes%1024!=0)).ok_or_else(||Error::new("INSTALL_APPS_REGISTRATION","Installed size exceeds registry range"))?;
  }}u32::try_from(total).map_err(|_|Error::new("INSTALL_APPS_REGISTRATION","Installed size exceeds registry range"))
 }
+/// Copy only the bytes whose digest we compute. Never reopen the input by name.
+fn copy_verified(mut input:impl std::io::Read,size:u64,expected:&str,mut output:impl std::io::Write)->Result<()> {
+    use sha2::{Digest,Sha256};
+    let bad=||Error::new("INSTALL_PACKAGE","Installer payload size or SHA-256 differs from authorization");
+    if size==0 || size>256*1024*1024 {return Err(bad());}
+    // One bounded private buffer for this file only. No destination bytes are written
+    // until the entire authorized length and digest have been established.
+    let mut bytes=Vec::new();bytes.try_reserve_exact(size as usize).map_err(|_|bad())?;
+    bytes.resize(size as usize,0);
+    input.read_exact(&mut bytes).map_err(|e|if e.kind()==std::io::ErrorKind::UnexpectedEof{bad()}else{io(e)})?;
+    if input.read(&mut [0u8;1]).map_err(io)?!=0 || hex::encode(Sha256::digest(&bytes))!=expected{return Err(bad());}
+    output.write_all(&bytes).map_err(io)
+}
 struct Changed { name: &'static str, old_moved: bool, new_live: bool }
 pub struct FileUpdate { root: PathBuf, work: PathBuf, changed: Vec<Changed>, names: &'static[&'static str] }
 impl FileUpdate {
@@ -71,17 +84,32 @@ impl FileUpdate {
     pub fn stage(source: &Path, root: &Path, work: &Path) -> Result<Self> {
         Self::stage_with(source,root,work,|p|std::fs::create_dir(p).map_err(io),|p|std::fs::OpenOptions::new().write(true).create_new(true).open(p).map_err(io))
     }
+    #[cfg(test)]
     pub fn stage_with(source: &Path, root: &Path, work: &Path,
         mut mkdir: impl FnMut(&Path)->Result<()>, mut create: impl FnMut(&Path)->Result<std::fs::File>) -> Result<Self> {
         Self::stage_selected(source,root,work,FILES,&mut mkdir,&mut create)
     }
-    pub fn stage_selected(source:&Path,root:&Path,work:&Path,names:&'static[&'static str],mut mkdir:impl FnMut(&Path)->Result<()>,mut create:impl FnMut(&Path)->Result<std::fs::File>)->Result<Self>{
+    // Fixture adapter only. Shipping code must supply ordinary-token handles and trusted hashes.
+    #[cfg(test)]
+    fn stage_selected(source:&Path,root:&Path,work:&Path,names:&'static[&'static str],mkdir:impl FnMut(&Path)->Result<()>,create:impl FnMut(&Path)->Result<std::fs::File>)->Result<Self>{
+        Self::stage_verified(root,work,names,mkdir,create,|name| {
+            use sha2::{Digest,Sha256};
+            let path=source.join(name);
+            if !regular_if_present(&path)? {return Err(Error::new("INSTALL_PACKAGE","Missing test input"));}
+            let bytes=std::fs::read(path).map_err(io)?;
+            let size=bytes.len() as u64;let hash=hex::encode(Sha256::digest(&bytes));
+            Ok((std::io::Cursor::new(bytes),size,hash))
+        })
+    }
+    pub fn stage_verified<R:std::io::Read>(root:&Path,work:&Path,names:&'static[&'static str],
+        mut mkdir:impl FnMut(&Path)->Result<()>,mut create:impl FnMut(&Path)->Result<std::fs::File>,
+        mut approved_input:impl FnMut(&str)->Result<(R,u64,String)>)->Result<Self>{
         if std::fs::read_dir(work).map_err(io)?.next().is_some() {
             return Err(Error::new("INSTALL_COPY", "Installer work directory is not empty"));
         }
         // Parent directories are part of the fixed source/target shape too: rejecting
         // only the leaf would still follow a network-directory junction/symlink.
-        for dir in [source.to_path_buf(), source.join("network"), root.to_path_buf(), root.join("network"), work.to_path_buf()] {
+        for dir in [root.to_path_buf(), root.join("network"), work.to_path_buf()] {
             let m = std::fs::symlink_metadata(&dir).map_err(io)?;
             #[cfg(windows)]
             let reparse = { use std::os::windows::fs::MetadataExt; m.file_attributes() & 0x400 != 0 };
@@ -92,12 +120,11 @@ impl FileUpdate {
         let update = Self { root: root.into(), work: work.into(), changed: Vec::new(),names };
         for side in ["new", "old"] { mkdir(&work.join(side))?; mkdir(&work.join(side).join("network"))?; }
         for &name in names {
-            if !regular_if_present(&source.join(name))? { return Err(Error::new("INSTALL_PACKAGE", "Complete fixed package is required for service installation")); }
             regular_if_present(&root.join(name))?;
-            // Only bytes, never source ACLs/attributes from Win32 CopyFile.
-            let mut input=std::fs::File::open(source.join(name)).map_err(io)?;
-            let mut output=create(&work.join("new").join(name))?;
-            std::io::copy(&mut input,&mut output).map_err(io)?;output.sync_all().map_err(io)?;
+            let (input, size, expected) = approved_input(name)?;
+            let mut output = create(&work.join("new").join(name))?;
+            copy_verified(input, size, &expected, &mut output)?;
+            output.sync_all().map_err(io)?;
         }
         Ok(update)
     }
@@ -211,6 +238,21 @@ mod tests {
     impl Drop for Fixture { fn drop(&mut self) {let _=std::fs::remove_dir_all(&self.base);} }
     #[test]fn original_second_destination_failure_keeps_the_first_old_executable(){let f=Fixture::new();std::fs::remove_file(f.root.join(FILES[1])).unwrap();std::fs::create_dir(f.root.join(FILES[1])).unwrap();assert!(FileUpdate::stage(&f.source,&f.root,&f.work).is_err());assert_eq!(std::fs::read(f.root.join(FILES[0])).unwrap(),b"old");for &n in &FILES[2..]{assert_eq!(std::fs::read(f.root.join(n)).unwrap(),b"old");}}
     #[test]fn source_copy_failure_never_changes_live_files(){let f=Fixture::new();std::fs::remove_file(f.source.join(FILES[1])).unwrap();assert!(FileUpdate::stage(&f.source,&f.root,&f.work).is_err());f.unchanged();}
+    #[test]
+    fn mismatched_ancillary_or_runtime_input_cannot_return_an_activatable_stage() {
+        use sha2::{Digest,Sha256};
+        let good=hex::encode(Sha256::digest(b"new"));let wrong=hex::encode(Sha256::digest(b"old"));
+        for name in ["Kat-Uninstall.exe", "Restore-User-Proxy.cmd", "network/wintun.dll", "BUILD-IDENTITY.json"] {
+            let f=Fixture::new();
+            let result=FileUpdate::stage_verified(&f.root,&f.work,FILES,
+                |p|std::fs::create_dir(p).map_err(io),prepare_order_create,|n| {
+                    let input=std::fs::File::open(f.source.join(n)).map_err(io)?;
+                    Ok((input,3,if n==name{wrong.clone()}else{good.clone()}))
+                });
+            assert!(matches!(result,Err(e) if e.code=="INSTALL_PACKAGE"));
+            assert_eq!(std::fs::metadata(f.work.join("new").join(name)).unwrap().len(),0);f.unchanged();
+        }
+    }
     #[test]fn every_post_rename_acl_failure_restores_all_previous_bytes(){for fail in 0..FILES.len(){let f=Fixture::new();let mut u=f.stage();let mut i=0;assert!(u.activate(|_|{let at=i;i+=1;if at==fail{Err(Error::new("ACL_SET","Injected ACL failure"))}else{Ok(())}}).is_err());u.restore().unwrap();f.unchanged();u.cleanup().unwrap();}}
     #[test]fn failed_new_rename_restores_the_displaced_old_file(){let f=Fixture::new();let mut u=f.stage();std::fs::remove_file(u.staged_root().join(FILES[1])).unwrap();assert!(u.activate(|_|Ok(())).is_err());u.restore().unwrap();f.unchanged();}
     #[test]fn failed_binding_or_service_start_restores_promoted_files(){for phase in ["binding","service-config","service-start","service-running-check"]{let f=Fixture::new();let mut u=f.stage();u.activate(|_|Ok(())).unwrap();let failure=Error::new("SCM_START",phase);assert_eq!(failure.code,"SCM_START");u.restore().unwrap();f.unchanged();}}
@@ -272,7 +314,7 @@ mod tests {
             println!("NEW_ORDER_PASS: actual production helper; existing_service={existing_service}; all {} payloads staged",FILES.len());
         }
         let windows=include_str!("windows/installer.rs");
-        assert!(windows.contains("FileUpdate::stage_selected(&self.source,&self.root,&work,crate::installer_files::APP_FILES,"));
+        assert!(windows.contains("FileUpdate::stage_verified(&self.root,&work,crate::installer_files::APP_FILES,"));
         assert!(windows.contains("crate::installer_files::RUNTIME_FILES,|p|"));
         assert!(windows.contains("serde_json::to_vec(acl.original())"));
     }
@@ -395,4 +437,24 @@ mod tests {
   let arp=include_str!("windows/installed_app.rs");assert!(arp.contains("\"DisplayIcon\",\"EstimatedSize\""));assert!(arp.contains("root.join(\"kat-desktop.exe\")"));assert!(arp.contains("(\"EstimatedSize\",estimated)"));assert!(arp.contains("installed_size_kib(root,runtime)?"));
   let install=include_str!("windows/installer.rs");assert!(install.contains("super::installed_app::register(&self.root,&self.runtime)?"));assert!(install.contains("super::installed_app::restore(&super::installed_app::Snapshot(None))?"));assert!(install.contains("super::installed_app::restore(&apps)?"));
  }
+}
+
+#[cfg(test)]
+mod payload_integrity_tests {
+    use super::*;
+    use sha2::{Digest,Sha256};
+    #[test] fn full_setup_authorization_covers_all_installed_paths_but_is_not_itself_installed() {
+        use crate::update_manifest::{PACKAGE_ASSETS,PACKAGE_ROLES,BRIDGE_AUTH_FILES,SETUP_AUTH_FILES};
+        assert!(SETUP_AUTH_FILES.iter().all(|n|!FILES.contains(n)));
+        let mut covered=[PACKAGE_ASSETS,PACKAGE_ROLES,BRIDGE_AUTH_FILES].concat();
+        covered.sort_unstable();let mut files=FILES.to_vec();files.sort_unstable();assert_eq!(covered,files);
+    }
+    #[test] fn single_pass_requires_exact_length_and_expected_digest() {
+        let data = vec![42u8; 90000]; let hash=hex::encode(Sha256::digest(&data));
+        let mut out=Vec::new();copy_verified(&data[..],90000,&hash,&mut out).unwrap();assert_eq!(out,data);
+        for (size,expected) in [(0,hash.as_str()),(89999,&hash),(90001,&hash),(90000,""),(256*1024*1024+1,&hash)] {
+            let mut rejected=Vec::new();assert!(copy_verified(&data[..],size,expected,&mut rejected).is_err());
+            assert!(rejected.is_empty(),"no staging bytes before successful verification");
+        }
+    }
 }

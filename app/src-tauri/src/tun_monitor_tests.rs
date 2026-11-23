@@ -184,6 +184,10 @@ mod inner {
 }
 use inner::NetworkController;
 
+#[tokio::test]async fn clean_session_reports_no_ownership_or_pending_recovery(){
+ let c=NetworkController::fixture(false,false);assert!(!c.has_owned_tun_session());
+ c.recover_failed_core().await.unwrap();assert!(!c.tun_poll_cleanup_pending().await.unwrap());
+}
 fn drive_to_pending<F:Future>(f:Pin<&mut F>){
  let mut cx=Context::from_waker(Waker::noop());assert!(matches!(f.poll(&mut cx),Poll::Pending),"must stop at the actual pending barrier/operation mutex");
 }

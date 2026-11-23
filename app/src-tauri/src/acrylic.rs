@@ -3,6 +3,7 @@
 //! Tauri 2.12.5 discards window-vibrancy's native result, so set_effects() alone
 //! must never be treated as evidence that Acrylic was enabled.
 
+#[cfg(all(windows,feature="desktop"))]
 pub(crate) const MAIN_WINDOW_HIDDEN_EVENT: &str = "main-window-hidden";
 
 fn allowed(transparency: Option<u32>, high_contrast: Option<bool>, composition: Option<bool>, supported: bool) -> bool {
@@ -33,7 +34,7 @@ pub(crate) fn take_hidden_change(last_hidden: &mut Option<bool>, hidden: bool) -
 struct Snapshot { enabled: bool, focused: bool, theme: &'static str, reason: &'static str }
 
 #[derive(Default)]
-struct State { dark: bool, ready: bool, hidden: bool, pending_force: bool, applied_dark: Option<bool>, last: Option<Snapshot> }
+struct State { dark: bool, ready: bool, hidden: bool, pending_force: bool, #[cfg(all(windows,feature="desktop"))] applied_dark: Option<bool>, last: Option<Snapshot> }
 
 impl State {
     fn request_theme(&mut self, dark: bool) {

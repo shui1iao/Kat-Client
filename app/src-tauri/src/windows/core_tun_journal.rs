@@ -325,14 +325,12 @@ pub fn recover_filtered_set(j:&Journal,adapter_absent:bool,include:impl Fn(&Chan
  }
 }
 
-/// A fresh authenticated launch cannot own a pre-existing adapter before Begin.
-/// A complete predecessor is admissible only after separate disk/OS verification.
-pub fn fresh_stale_begin(j:Option<&Journal>,caller:&LaunchIdentity)->bool{j.is_none_or(|j|j.phase=="complete"&&j.launch!=*caller)}
+/// A fresh Begin has not acquired a device. Even a completed predecessor journal
+/// proves retirement, not ownership of a newly discovered same-name adapter.
+pub fn check_fresh_alias(present:bool)->Result<()>{if present{Err("LEGACY_ADAPTER_PRESENT")}else{Ok(())}}
 pub fn stale_down(oper:i32,luid:u64,index:u32)->bool{oper==2&&luid!=0&&index!=0}
-#[cfg(test)]mod stale_policy_tests{
- use super::*;
- fn caller()->LaunchIdentity{LaunchIdentity{schema:2,engine:ENGINE.into(),epoch:"a".repeat(32),core_pid:2,core_created:7,owner_sid:"S-1-5-21-1".into(),session:1,package_sha256:"b".repeat(64),core_sha256:"c".repeat(64)}}
- #[test]fn only_fresh_begin_and_strict_down(){let c=caller();assert!(fresh_stale_begin(None,&c));let mut j=Journal{schema:2,engine:ENGINE.into(),launch:c.clone(),adapter:Adapter{alias:alias(&c.owner_sid),guid:"11111111-1111-1111-1111-111111111111".into(),luid:7,compartment:1},seq:1,phase:"complete".into(),changes:vec![],last_request:"a".repeat(32),last_digest:"b".repeat(64)};assert!(!fresh_stale_begin(Some(&j),&c));j.launch.epoch="d".repeat(32);assert!(fresh_stale_begin(Some(&j),&c));for phase in ["active","recovering","broken"]{j.phase=phase.into();assert!(!fresh_stale_begin(Some(&j),&c));}for oper in 0..8{assert_eq!(stale_down(oper,7,10),oper==2);}assert!(!stale_down(2,0,10));assert!(!stale_down(2,7,0));assert_ne!(alias("S-1-5-21-1"),alias("S-1-5-21-2"));}
+#[cfg(test)]mod stale_policy_tests{use super::*;
+ #[test]fn fresh_begin_preserves_foreign_device(){assert_eq!(check_fresh_alias(true),Err("LEGACY_ADAPTER_PRESENT"));assert_eq!(check_fresh_alias(false),Ok(()));for oper in 0..8{assert_eq!(stale_down(oper,7,10),oper==2);}assert!(!stale_down(2,0,10));assert!(!stale_down(2,7,0));assert_ne!(alias("S-1-5-21-1"),alias("S-1-5-21-2"));}
 }
 
 /// Validates whether an existing v2 journal on disk can be cleared by the trusted v2

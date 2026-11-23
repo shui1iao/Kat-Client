@@ -129,7 +129,7 @@ pub fn request_timeout(method:&str)->std::time::Duration{std::time::Duration::fr
   use super::*;for m in ["subscription.migrate","probe.all","connections.close"]{assert!(validate_public(m,&serde_json::json!({})).is_ok());}
   assert!(validate_public("provider.refresh",&serde_json::json!({})).is_err());assert_eq!(request_timeout("probe.all").as_secs(),310);
   let network=include_str!("windows/network.rs");assert!(network.find("next.ensure_enabled()?").unwrap()<network.find("let egress_before").unwrap());
-  let front=include_str!("../../src/client/useClient.ts");assert!(front.contains("await acceptSubscription(doc,p,revision)"));assert!(front.contains("core<SubscriptionPreview>('subscription.migrate'"));
+  let front=include_str!("../../src/client/useClient.ts");assert!(front.contains("await acceptSubscription(doc,p,revision)"));assert!(front.contains("('subscription.migrate',{name})"));
   let sup=include_str!("supervisor.rs");assert!(sup.contains("\"connections.close\"|\"resources.refresh\"|\"subscription.preview\"|\"subscription.migrate\""));
  }
 }

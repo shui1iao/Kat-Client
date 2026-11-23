@@ -80,7 +80,7 @@ impl DiagnosticReply{pub async fn from_core(&mut self,c:&crate::supervisor::Supe
  #[test]fn recent_icon_failure_survives_api_churn_and_safe_export(){
  let rows=tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(read_latest_core_events(|p,_|{
  let after=p["after"].as_u64().unwrap();let entries:Vec<_>=(after+1..=(after+500).min(900)).map(|seq|if seq==1{serde_json::json!({"seq":seq,"time":"2026-10-31T12:00:00Z","level":"warn","event":"icon_connect_failed","code":"timeout","group":"HK"})}else{serde_json::json!({"seq":seq,"time":"2026-10-31T12:00:00Z","level":"info","event":"api_request"})}).collect();std::future::ready(Ok(serde_json::json!({"entries":entries,"next_seq":(after+500).min(900),"dropped":0})))
- })).unwrap();let mut d=DiagnosticReply::new(vec![]);d.core_events=rows;let bytes=serde_json::to_string(&d).unwrap();assert!(bytes.contains("icon_connect_failed")&&bytes.contains("timeout")&&bytes.contains("HK"));assert!(!bytes.contains("https://"));assert_eq!(d.core_events.len(),201);
+ })).unwrap();let mut d=DiagnosticReply::new(vec![]);d.core_events=rows;assert!(d.core_events.iter().any(|e|e.group.as_deref()==Some("HK")));d.bound_export();let bytes=serde_json::to_string(&d).unwrap();assert!(bytes.contains("icon_connect_failed")&&bytes.contains("timeout")&&!bytes.contains("HK"));assert!(!bytes.contains("https://"));assert_eq!(d.core_events.len(),201);
  }
 }
 
@@ -105,6 +105,10 @@ fn drain_to_budget(entries:&mut Vec<LogEntry>,len:&mut usize,limit:usize)->bool{
  if drop_count>0{entries.drain(..drop_count);true}else{false}
 }
 impl DiagnosticReply{pub fn bound_export(&mut self){
+ // Group labels are useful in the local viewer, never in the exported copy.
+ for entry in self.host_events.iter_mut().chain(&mut self.core_events)
+   .chain(self.history.iter_mut().flat_map(|s|&mut s.entries))
+   .chain(self.service_history.iter_mut().flat_map(|s|&mut s.entries)){entry.group=None;}
  const LIMIT:usize=900*1024;
  loop{
   let Some(mut len)=encoded_len(self) else{break;};

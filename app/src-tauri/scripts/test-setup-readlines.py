@@ -68,9 +68,10 @@ class Regression(unittest.TestCase):
     def test_06_size_is_actual_payload_not_zero_or_constant(self):
         build=(S/'scripts/build-setup.py').read_text()
         self.assertIn('AddSize ${PAYLOAD_SIZE_KIB}',script)
-        self.assertIn("sum((r['bytes']+1023)//1024 for r in rows if r['path'] in names)",build)
-        self.assertIn('payload_kib(first_uninstaller_bytes)',build)
-        self.assertIn("a.uninstaller.stat().st_size==first_uninstaller_bytes",build)
+        self.assertIn("sum((r['bytes'] + 1023)//1024 for r in rows if r['path'] in FILES)",build)
+        self.assertIn("rows = snapshot(args.payload, tmp/'payload')",build)
+        self.assertIn('for name in INPUTS:',build)
+        self.assertNotIn('WriteUninstaller "$PLUGINSDIR\\payload',script)
     def test_07_uninstall_retry_and_phase_are_distinct(self):
         feedback=(S/'src/setup_feedback.rs').read_text()
         self.assertIn('然后重新运行卸载程序',feedback)

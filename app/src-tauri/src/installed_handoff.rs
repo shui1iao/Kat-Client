@@ -49,7 +49,7 @@ pub(crate) struct ShortcutPending{changes:Vec<(std::path::PathBuf,Option<Vec<u8>
 impl ShortcutPending{
  pub fn new()->Self{Self{changes:vec![],committed:false}}
  pub fn record(&mut self,path:std::path::PathBuf,before:Option<Vec<u8>>,after:Option<Vec<u8>>){assert!(self.changes.len()<4);self.changes.push((path,before,after));}
- pub fn commit(&mut self){self.committed=true;}
+ #[cfg(windows)]pub fn commit(&mut self){self.committed=true;}
  pub fn rollback(&mut self)->crate::error::Result<()>{
   use crate::error::Error;let mut failed=false;
   for (path,before,after) in self.changes.iter().rev(){

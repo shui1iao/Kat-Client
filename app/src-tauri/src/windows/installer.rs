@@ -78,7 +78,80 @@ pub(super) fn secure_create(path:&std::path::Path,directory:bool,users_read:bool
  else{let h=CreateFileW(name.as_ptr(),GENERIC_WRITE,0,&sa,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,std::ptr::null_mut());LocalFree(sd);if h==INVALID_HANDLE_VALUE{return Err(Error::new("INSTALL_COPY","Cannot create protected installer file"));}Ok(Some(std::fs::File::from_raw_handle(h)))}
 }}
 fn private_file(p:&std::path::Path)->Result<std::fs::File>{secure_create(p,false,false)?.ok_or_else(||Error::new("INSTALL_COPY","Cannot create staging file"))}
-fn sha256_file(path:&std::path::Path,code:&str)->Result<String>{use std::io::Read;use sha2::{Digest,Sha256};let mut f=std::fs::File::open(path).map_err(|e|Error::io(code,&e))?;let mut sha=Sha256::new();let mut buf=[0u8;65536];loop{let n=f.read(&mut buf).map_err(|e|Error::io(code,&e))?;if n==0{break;}sha.update(&buf[..n]);}Ok(hex::encode(sha.finalize()))}
+fn package_error()->Error{Error::new("INSTALL_PACKAGE","Installer input is missing, unsafe or not authorized")}
+// The temporary NSIS tree is ordinary-user data. Obtain ALL read authority as the verified
+// non-elevated caller. Pin ancestors while acquiring handles; no FILE_SHARE_WRITE/DELETE on
+// leaves. Never convert a validated pathname back into a fresh elevated file open.
+fn open_payload_object(p:&std::path::Path,dir:bool)->Result<(std::fs::File,u64)>{
+  use std::{os::windows::{ffi::OsStrExt,io::FromRawHandle},path::Path};
+  use windows_sys::Win32::Storage::FileSystem::*;
+  unsafe{
+   let w:Vec<_>=p.as_os_str().encode_wide().chain(Some(0)).collect();
+   let h=Handle(CreateFileW(w.as_ptr(),if dir{FILE_READ_ATTRIBUTES}else{GENERIC_READ},
+    if dir{FILE_SHARE_READ|FILE_SHARE_WRITE}else{FILE_SHARE_READ},std::ptr::null(),OPEN_EXISTING,
+    FILE_FLAG_OPEN_REPARSE_POINT|SECURITY_SQOS_PRESENT|SECURITY_IDENTIFICATION|if dir{FILE_FLAG_BACKUP_SEMANTICS}else{0},std::ptr::null_mut()));
+   let mut info=BY_HANDLE_FILE_INFORMATION::default();
+   if h.0==INVALID_HANDLE_VALUE || GetFileType(h.0)!=FILE_TYPE_DISK || GetFileInformationByHandle(h.0,&mut info)==0 ||
+      info.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT!=0 || (info.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY!=0)!=dir || (!dir && info.nNumberOfLinks!=1){return Err(package_error());}
+   let mut final_name=vec![0u16;32768];let len=GetFinalPathNameByHandleW(h.0,final_name.as_mut_ptr(),final_name.len()as u32,0)as usize;
+   if len==0 || len>=final_name.len() || p.to_str().is_none(){return Err(package_error());}
+   let final_path=String::from_utf16(&final_name[..len]).map_err(|_|package_error())?;
+   if !security::same_path(p,Path::new(&final_path)){return Err(package_error());}
+   let file=std::fs::File::from_raw_handle(h.0);std::mem::forget(h);
+   Ok((file,(u64::from(info.nFileSizeHigh)<<32)|u64::from(info.nFileSizeLow)))
+  }}
+
+struct Payload {
+ inputs: std::collections::BTreeMap<String,(Box<dyn std::io::Read>,u64)>,
+ hashes: std::collections::BTreeMap<String,String>,
+}
+impl Payload {
+ fn open(root:&std::path::Path,token:&Handle)->Result<Self>{
+  use std::{io::{Cursor,Read},path::{Component,Prefix}};
+  use crate::update_manifest::{BRIDGE_AUTH_FILES,SETUP_AUTH_FILES,PACKAGE_ROLES,MAX_MANIFEST_BYTES,MAX_SIGNATURE_BYTES};
+  use windows_sys::Win32::Storage::FileSystem::*;
+  struct Revert;
+  impl Drop for Revert{fn drop(&mut self){if unsafe{RevertToSelf()}==0{std::process::abort();}}}
+  if unsafe{ImpersonateLoggedOnUser(token.0)}==0{return Err(package_error());}let _revert=Revert;
+  let disk=match root.components().next(){Some(Component::Prefix(p))=>match p.kind(){Prefix::Disk(d)|Prefix::VerbatimDisk(d)=>d,_=>return Err(package_error())},_=>return Err(package_error())};
+  if !root.is_absolute() || unsafe{GetDriveTypeW(wide(&format!("{}:\\",disk as char)).as_ptr())}!=3{return Err(package_error());}
+  let mut ancestors=root.ancestors().collect::<Vec<_>>();ancestors.reverse();let network=root.join("network");ancestors.push(&network);
+  let _pins=ancestors.into_iter().map(|p|open_payload_object(p,true)).collect::<Result<Vec<_>>>()?;
+  // When staging the helper itself, this is the executing image's fixed name. It is
+  // opened once, held deny-write/delete, hash checked against the issuer like every role.
+  let exe=std::env::current_exe().map_err(|_|package_error())?;
+  if !security::same_path(&exe,&root.join("kat-install-helper.exe")){return Err(package_error());}
+  let mut inputs=std::collections::BTreeMap::<String,(Box<dyn Read>,u64)>::new();
+  let mut metadata=std::collections::BTreeMap::new();let mut total=0u64;
+  for &name in crate::installer_files::FILES.iter().chain(SETUP_AUTH_FILES) {
+   let path=name.split('/').fold(root.to_path_buf(),|p,n|p.join(n));let (file,size)=open_payload_object(&path,false)?;
+   let descriptor=BRIDGE_AUTH_FILES.contains(&name)||SETUP_AUTH_FILES.contains(&name);
+   let limit=if descriptor{if name.ends_with(".json"){MAX_MANIFEST_BYTES as u64}else{MAX_SIGNATURE_BYTES as u64}}
+      else if PACKAGE_ROLES.contains(&name){128*1024*1024}else{256*1024*1024};
+   if size==0 || size>limit{return Err(package_error());}total+=size;if total>1024*1024*1024{return Err(package_error());}
+   if descriptor{
+    let mut b=Vec::new();file.take(size+1).read_to_end(&mut b).map_err(|_|package_error())?;
+    if b.len()as u64!=size{return Err(package_error());}metadata.insert(name,b);
+   }else{inputs.insert(name.into(),(Box::new(file),size));}
+  }
+  let setup=crate::update_manifest::verify_setup_package(
+      &metadata[SETUP_AUTH_FILES[0]],&metadata[SETUP_AUTH_FILES[1]],
+      &metadata[BRIDGE_AUTH_FILES[0]],&metadata[BRIDGE_AUTH_FILES[1]]).map_err(|e|Error::new("INSTALL_PACKAGE",&e.message))?;
+  let auth=setup.bridge;
+  if auth.app_version!=env!("CARGO_PKG_VERSION") || option_env!("KAT_INSTALL_APPROVED_SERVICE_SHA256")!=auth.components.get("kat-network-service.exe").map(String::as_str){return Err(package_error());}
+  let clients=option_env!("KAT_INSTALL_APPROVED_CLIENTS_SHA256").ok_or_else(package_error)?;
+  let expected=["kat-desktop.exe","kat-client-core.exe","kat-proxy-watchdog.exe","kat-elevate-helper.exe"].map(|name|auth.components[name].as_str());
+  if !clients.split(':').eq(expected){return Err(package_error());}
+  let mut hashes=auth.components;hashes.extend(setup.assets);
+  // Only the original IPC pair is installed; the full Setup authorization is transient.
+  for &name in BRIDGE_AUTH_FILES{let b=metadata.remove(name).ok_or_else(package_error)?;
+   let size=b.len()as u64;inputs.insert(name.into(),(Box::new(Cursor::new(b)),size));}
+  if hashes.len()!=inputs.len() || hashes.keys().ne(inputs.keys()){return Err(package_error());}Ok(Self{inputs,hashes})
+ }
+ fn take(&mut self,name:&str)->Result<(Box<dyn std::io::Read>,u64,String)>{
+  let (f,n)=self.inputs.remove(name).ok_or_else(package_error)?;Ok((f,n,self.hashes.get(name).ok_or_else(package_error)?.clone()))
+ }
+}
 struct WindowsUpdate{
  gui_pid:u32,gui_stamp:u64,caller_session:u32,
  journal:Option<super::update_install::Journal>,
@@ -101,8 +174,7 @@ impl crate::installer_update::UpdateSteps for WindowsUpdate{
  fn prepare(&mut self)->Result<()>{
   self.old_registration=super::install_location::read()?;super::install_location::preflight()?;self.old_apps=super::installed_app::snapshot(&self.root)?;
   validate_owned_root(&self.root,self.old_registration.as_ref())?;
-  security::no_reparse(&self.source)?;security::no_reparse(&self.source.join("network"))?;
-  for &n in crate::installer_files::FILES{let p=self.source.join(n);security::no_reparse(&p)?;if !p.is_file(){return Err(Error::new("INSTALL_PACKAGE","Complete fixed package is required for service installation"));}}
+  let mut payload=Payload::open(&self.source,&self.read_token)?;
   for p in [&self.dir]{if p.exists(){security::verify_protected(p).map_err(|_|runtime_failure())?;}}
   let binding=self.dir.join("binding.json");if binding.exists(){security::verify_protected(&binding)?;}self.old_binding=ownership::load(&binding)?;
   let sid=identity::current()?.sid;if let Some(b)=&self.old_binding{if b.schema!=1||b.sid!=sid{return Err(Error::new("INSTALL_BINDING","Service is bound to another user"));}}else if !self.service.0.is_null(){return Err(Error::new("INSTALL_BINDING","Existing binding missing"));}
@@ -125,25 +197,15 @@ impl crate::installer_update::UpdateSteps for WindowsUpdate{
   // service-security.json privately only AFTER staging the empty work directory.
   let service_security=self.acl_update.as_ref().map(|acl|serde_json::to_vec(acl.original())
    .map_err(|_|Error::new("SCM_ACL","Cannot retain service security snapshot"))).transpose()?;
-  let files=crate::installer_files::FileUpdate::stage_selected(&self.source,&self.root,&work,crate::installer_files::APP_FILES,
-   |p|{secure_create(p,true,false)?;Ok(())},private_file)?;
+  let files=crate::installer_files::FileUpdate::stage_verified(&self.root,&work,crate::installer_files::APP_FILES,
+   |p|{secure_create(p,true,false)?;Ok(())},private_file,|name|payload.take(name))?;
   self.files=Some(files);
   if let Some(bytes)=service_security{use std::io::Write;let mut f=private_file(&work.join("service-security.json"))?;f.write_all(&bytes).and_then(|_|f.sync_all()).map_err(|e|Error::io("SCM_ACL",&e))?;}
   let rw=self.journal.as_ref().unwrap().work(true);secure_create(&rw,true,false)?;self.runtime_work=Some(rw.clone());
-  let rf=crate::installer_files::FileUpdate::stage_selected(&self.source,&self.runtime,&rw,crate::installer_files::RUNTIME_FILES,|p|{secure_create(p,true,false)?;Ok(())},private_file)?;
+  let rf=crate::installer_files::FileUpdate::stage_verified(&self.runtime,&rw,crate::installer_files::RUNTIME_FILES,|p|{secure_create(p,true,false)?;Ok(())},private_file,|name|payload.take(name))?;
   security::verify_vendor(&rf.staged_root())?;
-  let service_hash=sha256_file(&rf.staged_root().join("kat-network-service.exe"),"INSTALL_PACKAGE")?;
-  if option_env!("KAT_INSTALL_APPROVED_SERVICE_SHA256")!=Some(service_hash.as_str()){return Err(Error::new("INSTALL_PACKAGE","The service payload is not approved by this installer build"));}
-  let mut hashes=std::collections::BTreeMap::new();
-  hashes.insert("kat-network-service.exe".to_string(),service_hash);
-  for (names,staged) in [(crate::installer_files::APP_FILES,self.files.as_ref().unwrap().staged_root()),(crate::installer_files::RUNTIME_FILES,rf.staged_root())]{for &n in names{if n=="kat-network-service.exe"{continue;}hashes.insert(n.to_string(),sha256_file(&staged.join(n),"INSTALL_COPY")?);}}
-  let clients=option_env!("KAT_INSTALL_APPROVED_CLIENTS_SHA256").ok_or_else(||Error::new("INSTALL_PACKAGE","Installer approval of ordinary client components missing"))?;
-  let approved_clients=clients.split(':').collect::<Vec<_>>();if approved_clients.len()!=4||["kat-desktop.exe","kat-client-core.exe","kat-proxy-watchdog.exe","kat-elevate-helper.exe"].iter().zip(approved_clients).any(|(n,h)|hashes.get(*n).map(String::as_str)!=Some(h)){return Err(Error::new("INSTALL_PACKAGE","Client components differ from the installer build approval"));}
-  let staged=self.files.as_ref().unwrap().staged_root();
-  let auth=crate::update_manifest::verify_package(&std::fs::read(staged.join("kat-package-auth.json")).map_err(|e|Error::io("INSTALL_PACKAGE",&e))?,&std::fs::read(staged.join("kat-package-auth.sig")).map_err(|e|Error::io("INSTALL_PACKAGE",&e))?).map_err(|e|Error::new("INSTALL_PACKAGE",&e.message))?;
-  if auth.app_version!=env!("CARGO_PKG_VERSION")||auth.components.iter().any(|(n,h)|hashes.get(n)!=Some(h)){return Err(Error::new("INSTALL_PACKAGE","Signed package components differ from private stage"));}
-  let helper=std::env::current_exe().map_err(|e|Error::io("INSTALL_PACKAGE",&e))?;
-  if hashes.get("kat-install-helper.exe")!=Some(&sha256_file(&helper,"INSTALL_PACKAGE")?){return Err(Error::new("INSTALL_PACKAGE","Staged helper differs from executing trusted installer"));}
+  if !payload.inputs.is_empty(){return Err(package_error());}
+  let hashes=payload.hashes;
   self.journal.as_mut().unwrap().prepared_setup(&self.dir,&hashes)?;
   self.approved=Some(hashes);self.runtime_files=Some(rf);
   if !self.service.0.is_null(){self.journal.as_mut().unwrap().snapshot_failure_actions(&self.dir,&self.service)?;}
@@ -282,3 +344,22 @@ pub fn finish_update(gui_pid:u32,gui_stamp:u64,tx:&str,healthy:bool)->Result<()>
  r
 }
 pub fn recover_update(gui_pid:u32,gui_stamp:u64)->Result<()>{crate::installer_result::fw_error_clear();require_elevated()?;let _installation=InstallLock::acquire()?;super::update_install::recover_installed(gui_pid,gui_stamp,&security::journal_dir()?)}
+
+#[cfg(test)]
+mod payload_handle_tests {
+    use super::*;
+    #[test]
+    fn handle_reader_accepts_regular_disk_files_but_not_directories_or_multi_link_inputs() {
+        use std::io::Read;
+        let dir=std::env::temp_dir().join(format!("kat-payload-handle-test-{}",std::process::id()));
+        std::fs::create_dir(&dir).unwrap();
+        let dir=std::fs::canonicalize(dir).unwrap();let p=dir.join("sample.txt");
+        std::fs::write(&p,b"fixture").unwrap();
+        assert!(open_payload_object(&dir,false).is_err());assert!(open_payload_object(&p,true).is_err());
+        let (mut f,size)=open_payload_object(&p,false).unwrap();let mut text=String::new();
+        f.read_to_string(&mut text).unwrap();assert_eq!(text,"fixture");assert_eq!(size,7);drop(f);
+        let link=dir.join("second-name.txt");std::fs::hard_link(&p,&link).unwrap();
+        assert!(open_payload_object(&p,false).is_err());std::fs::remove_file(link).unwrap();
+        std::fs::remove_file(p).unwrap();std::fs::remove_dir(dir).unwrap();
+    }
+}

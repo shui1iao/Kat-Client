@@ -234,15 +234,21 @@ fn stage5_same_package_signing_and_exact_manifest_retirement() {
  std::fs::write(app_root.join("user-custom-note.txt"), b"keep-app-unknown").unwrap();
  std::fs::write(runtime_root.join("network/custom-profile.dat"), b"keep-rt-unknown").unwrap();
 
- let mut app_update = FileUpdate::stage_selected(
-  &source, &app_root, &app_work, APP_FILES,
+ let input = |n:&str| {
+  use sha2::{Digest,Sha256};
+  Ok((std::fs::File::open(source.join(n)).unwrap(), 7, hex::encode(Sha256::digest(b"new-c50"))))
+ };
+ let mut app_update = FileUpdate::stage_verified(
+  &app_root, &app_work, APP_FILES,
   |p| std::fs::create_dir(p).map_err(|e| kat_host::error::Error::io("DIR", &e)),
   |p| std::fs::OpenOptions::new().write(true).create_new(true).open(p).map_err(|e| kat_host::error::Error::io("FILE", &e)),
+  input,
  ).unwrap();
- let mut rt_update = FileUpdate::stage_selected(
-  &source, &runtime_root, &rt_work, RUNTIME_FILES,
+ let mut rt_update = FileUpdate::stage_verified(
+  &runtime_root, &rt_work, RUNTIME_FILES,
   |p| std::fs::create_dir(p).map_err(|e| kat_host::error::Error::io("DIR", &e)),
   |p| std::fs::OpenOptions::new().write(true).create_new(true).open(p).map_err(|e| kat_host::error::Error::io("FILE", &e)),
+  input,
  ).unwrap();
 
  rt_update.activate(|_| Ok(())).unwrap();

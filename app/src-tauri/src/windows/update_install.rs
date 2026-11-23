@@ -3,7 +3,7 @@ use crate::{
     error::{Error, Result},
     install_location::Record,
     update_handoff_protocol::{
-        evaluate_process_ownership, evaluate_residual_kill, ResidualCandidate,
+        evaluate_residual_kill, ResidualCandidate,
         ResidualTargetPolicy, ServiceCoreOwnership, MANAGED_CLIENT_ROLES,
     },
 };
@@ -30,8 +30,8 @@ fn versions(m:&Metadata)->crate::update_manifest::CurrentVersions{crate::update_
 #[derive(Clone,Debug,serde::Serialize,serde::Deserialize)]#[serde(deny_unknown_fields)]
 pub struct UpdateStatus{pub schema:u32,pub tx:String,pub phase:String,pub core_version:String,pub core_sha256:String,pub app_version:String,pub kind:String}
 pub fn pending_update()->Result<Option<UpdateStatus>>{let r=super::install_location::read()?.ok_or_else(bad)?;let v:Option<UpdateStatus>=read_protected(&Path::new(&r.root).join(STATUS),8192)?;if v.as_ref().is_some_and(|s|s.schema!=1||!lower_hex(&s.tx,32)){return Err(bad());}Ok(v)}
-#[derive(Clone,Copy,Debug,PartialEq,Eq,serde::Serialize,serde::Deserialize)]#[serde(rename_all="snake_case")]
-pub enum Phase{Preparing,Prepared,Stopping,Replacing,Configuring,Starting,AwaitingHealth,Finalizing,Committed,RollingBack,RolledBack}
+pub(super) use crate::installer_update::Phase;
+use crate::installer_update::ResumeAction;
 #[derive(Clone,Copy,PartialEq,Eq,serde::Serialize,serde::Deserialize)]enum Kind{Setup,Core}
 #[derive(Clone,Copy,PartialEq,Eq,serde::Serialize,serde::Deserialize)]enum Area{App,Runtime}
 #[derive(Clone,serde::Serialize,serde::Deserialize)]#[serde(deny_unknown_fields)]struct FileState{area:Area,name:String,old:Option<String>,new:Option<String>,sd:Option<Vec<u64>>}
@@ -143,6 +143,7 @@ impl Journal{
   Ok(())
  }
  fn cleanup(&self,dir:&Path,committed:bool)->Result<()>{
+  if self.phase!=if committed{Phase::Committed}else{Phase::RolledBack}{return Err(bad());}
   for rt in [false,true]{if rt&&self.kind==Kind::Core{continue;}let w=self.work(rt);if w.exists(){security::verify_protected(&w)?;security::no_reparse(&w)?;std::fs::remove_dir_all(&w).map_err(io)?;}}
   remove_regular(&Path::new(&self.root).join(STATUS))?;
   if !committed{for d in self.directories.iter().rev().filter(|d|d.sd.is_none()&&matches!(d.which,Directory::AppNetwork|Directory::RuntimeNetwork|Directory::Tmp)){let p=self.directory(d.which);if p.exists(){security::no_reparse(&p)?;match std::fs::remove_dir(&p){Ok(())=>{},Err(e)if e.kind()==std::io::ErrorKind::DirectoryNotEmpty=>{},Err(e)=>return Err(io(e))}}}}
@@ -272,48 +273,49 @@ fn terminate_residual_processes(j:&Journal,dir:&Path,caller_session:u32,skip_pid
 /// Non-destructive verification used by normal install/update/uninstall AFTER smooth handoff.
 /// Never opens `PROCESS_TERMINATE` or calls `TerminateProcess`; fails closed if any owned
 /// target process has not exited cleanly within the bounded grace window.
-pub(super) fn ensure_target_processes_stopped(root:&Path,dir:&Path,sid:&str,caller_session:u32,skip_pid:u32)->Result<()>{unsafe{
+pub(super) fn ensure_target_processes_stopped(root:&Path,_dir:&Path,_sid:&str,_caller_session:u32,skip_pid:u32)->Result<()>{unsafe{
  use windows_sys::Win32::System::Diagnostics::ToolHelp::*;
- if !root.exists(){return Ok(());}
- let policy=ResidualTargetPolicy{
-  target_root:root.to_string_lossy().into_owned(),
-  target_sid:sid.to_owned(),
-  caller_session,
-  approved_role_hashes:BTreeMap::new(),
-  service_core:service_core_ownership(dir),
- };
+ if !root.try_exists().map_err(io)?{return Ok(());}
  let self_pid=std::process::id();
- let snap=Handle(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0));if snap.0==INVALID_HANDLE_VALUE{return Ok(());}
- let mut e=PROCESSENTRY32W{dwSize:std::mem::size_of::<PROCESSENTRY32W>()as u32,..Default::default()};
- let mut more=Process32FirstW(snap.0,&mut e);
- let mut waiting=Vec::new();
- while more!=0{
-  let pid=e.th32ProcessID;
-  let n=identity::string(e.szExeFile.as_ptr()).to_ascii_lowercase();
-  if pid!=0&&pid!=self_pid&&pid!=skip_pid&&MANAGED_CLIENT_ROLES.contains(&n.as_str()){
-   if let Some((query,cand))=inspect_candidate(pid,self_pid,skip_pid,&n,root,false){
-    if evaluate_process_ownership(&cand,&policy,false){
-     waiting.push(query);
-    }
-   }
+ let failed=|n|Error::new("PROCESS_IDENTITY","Cannot verify that all target processes have stopped").native(n);
+ let snap=Handle(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0));if snap.0==INVALID_HANDLE_VALUE{return Err(failed(GetLastError()));}
+ let mut entry=PROCESSENTRY32W{dwSize:std::mem::size_of::<PROCESSENTRY32W>()as u32,..Default::default()};
+ let mut first=true;let mut waiting=Vec::new();
+ loop{
+  let found=if first{first=false;Process32FirstW(snap.0,&mut entry)}else{Process32NextW(snap.0,&mut entry)};
+  if found==0{let err=GetLastError();if err==ERROR_NO_MORE_FILES{break;}return Err(failed(err));}
+  let pid=entry.th32ProcessID;
+  let end=entry.szExeFile.iter().position(|&w|w==0).ok_or_else(bad)?;
+  let name=String::from_utf16_lossy(&entry.szExeFile[..end]).to_ascii_lowercase();
+  if pid!=0&&pid!=self_pid&&pid!=skip_pid&&MANAGED_CLIENT_ROLES.contains(&name.as_str()){
+   let process=Handle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION|SYNCHRONIZE,0,pid));
+   if process.0.is_null(){return Err(failed(GetLastError()));}
+   else{match WaitForSingleObject(process.0,0){
+    WAIT_OBJECT_0=>{},WAIT_TIMEOUT=>{
+     let path=security::image(process.0)?;
+     // Read-only quiescence proof, not kill authority. A live image from this
+     // root in another logon session also prevents replacing its files.
+     if security::same_path(&path,&root.join(&name)){waiting.push(process);}
+    },_=>return Err(failed(GetLastError())),}}
   }
-  more=Process32NextW(snap.0,&mut e);
  }
- for h in waiting{
-  if WaitForSingleObject(h.0,5000)!=WAIT_OBJECT_0{
-   return Err(crate::installer_update::gui_running());
-  }
- }
+ let deadline=std::time::Instant::now()+std::time::Duration::from_secs(5);
+ for h in waiting{match WaitForSingleObject(h.0,deadline.saturating_duration_since(std::time::Instant::now()).as_millis()as u32){WAIT_OBJECT_0=>{},WAIT_TIMEOUT=>return Err(crate::installer_update::gui_running()),_=>return Err(failed(GetLastError())),}}
  Ok(())
 }}
 
+fn resume_journal(j:&mut Journal,dir:&Path,token:&Handle)->Result<()>{match j.phase.resume_action(){
+ ResumeAction::FinishCommit=>{j.mark(dir,Phase::Committed)?;j.cleanup(dir,true)},
+ ResumeAction::CleanCommit=>j.cleanup(dir,true),ResumeAction::CleanRollback=>j.cleanup(dir,false),
+ ResumeAction::Rollback=>j.rollback(dir,token),
+}}
 /// Recovered request terminates; never automatically continue with a new transaction.
 pub(super) fn recover_before_new(dir:&Path,token:&Handle,caller_session:u32)->Result<()>{
  if !dir.exists(){return Ok(());}security::verify_protected(dir)?;let Some(mut j)=load(dir)?else{return Ok(())};
  terminate_residual_processes(&j,dir,caller_session,0);
  let _app=super::install_location::validate_target(Path::new(&j.root))?;
  let _runtime=if Path::new(&j.runtime).exists(){super::install_location::pin_runtime_chain(Path::new(&j.runtime),true)?}else{vec![]};
- if matches!(j.phase,Phase::Committed|Phase::Finalizing|Phase::AwaitingHealth){j.mark(dir,Phase::Committed)?;j.cleanup(dir,true)?;}else if j.phase==Phase::RolledBack{j.cleanup(dir,false)?;}else{j.rollback(dir,token)?;}
+ resume_journal(&mut j,dir,token)?;
  Err(Error::new("UPDATE_RECOVERY_COMPLETED","Previous transaction recovered; restart the ordinary-user handshake"))
 }
 pub(super) fn clear_or_recover_before_setup(dir:&Path,token:&Handle,caller_session:u32,skip_pid:u32)->Result<()>{
@@ -321,7 +323,7 @@ pub(super) fn clear_or_recover_before_setup(dir:&Path,token:&Handle,caller_sessi
  terminate_residual_processes(&j,dir,caller_session,skip_pid);
  let _app=super::install_location::validate_target(Path::new(&j.root))?;
  let _runtime=if Path::new(&j.runtime).exists(){super::install_location::pin_runtime_chain(Path::new(&j.runtime),true)?}else{vec![]};
- if matches!(j.phase,Phase::Committed|Phase::Finalizing|Phase::AwaitingHealth){j.mark(dir,Phase::Committed)?;j.cleanup(dir,true)?;}else if j.phase==Phase::RolledBack{j.cleanup(dir,false)?;}else{j.rollback(dir,token)?;}
+ resume_journal(&mut j,dir,token)?;
  Ok(())
 }
 // All privileged fixed modes require the approved installed helper AND approved GUI,

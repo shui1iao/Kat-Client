@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""NSIS !uninstfinalize hook: retain the exact generated uninstall image, do not execute it."""
+"""NSIS !uninstfinalize hook: capture exact bytes in the private seed build, never execute."""
 from pathlib import Path
-import sys,shutil
-source,target=map(Path,sys.argv[1:]);assert source.is_file() and source.read_bytes()[:2]==b'MZ';target.parent.mkdir(exist_ok=True,parents=True);shutil.copy2(source,target)
+import shutil
+import sys
+
+source, target = map(Path, sys.argv[1:])
+with source.open('rb') as f, target.open('xb') as out:
+    if f.read(2) != b'MZ':
+        raise ValueError('expected NSIS uninstaller image')
+    out.write(b'MZ')
+    shutil.copyfileobj(f, out)

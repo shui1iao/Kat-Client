@@ -156,6 +156,15 @@ pub struct RemoveOutcome {
     pub removed: usize,
 }
 
+/// IEnumVARIANT::Next(1) must either return exactly one value or clean EOF.
+#[cfg(any(windows,test))]
+pub(crate) fn enum_has_rule(hr:i32,fetched:u32)->Result<bool,FirewallRuleError>{
+    match (hr,fetched) { (0,1)=>Ok(true),(1,0)=>Ok(false),_=>Err(FirewallRuleError::new(FirewallStage::RulesEnum,Some(hr))) }
+}
+#[cfg(test)]#[test]fn enum_failure_is_not_empty_inventory(){
+    assert_eq!(enum_has_rule(0,1),Ok(true));assert_eq!(enum_has_rule(1,0),Ok(false));
+    for (hr,n) in [(-1,0),(-1,1),(0,0),(1,1),(0,2)] {assert_eq!(enum_has_rule(hr,n).unwrap_err().stage,FirewallStage::RulesEnum);}
+}
 pub trait FirewallStore {
     type RuleHandle;
     fn list_candidate_rules(&mut self) -> Result<Vec<(Self::RuleHandle, FirewallRuleSpec)>, FirewallRuleError>;
@@ -199,7 +208,7 @@ pub fn ensure_core_udp_inbound<S: FirewallStore>(
         }
         1 => {
             let (mut handle, existing) = owned_handles.pop().unwrap();
-            if existing.matches_readback(&expected) && existing.description == expected.description {
+            if expected.matches_readback(&existing) && existing.description == expected.description {
                 return Ok(EnsureOutcome {
                     created: false,
                     updated: false,
@@ -389,6 +398,19 @@ mod tests {
         assert_eq!(store.rules.len(), 2);
         assert_eq!(store.rules[0], foreign_other);
         assert_eq!(store.rules[1], expected_core_udp_rule(Path::new(r"D:\tool\Kat")).unwrap());
+    }
+
+    #[test]
+    fn same_path_single_field_drift_is_repaired() {
+        let root=Path::new(r"C:\Kat");
+        let expected=expected_core_udp_rule(root).unwrap();
+        for field in ["enabled","protocol","direction"] {
+            let mut store=FakeFirewallStore::default(); let mut actual=expected.clone();
+            match field {"enabled"=>actual.enabled=false,"protocol"=>actual.protocol=NET_FW_IP_PROTOCOL_TCP,_=>actual.direction=NET_FW_RULE_DIR_OUT}
+            store.rules.push(actual);
+            assert!(ensure_core_udp_inbound(&mut store,root).unwrap().updated);
+            assert_eq!(store.rules,vec![expected.clone()]);
+        }
     }
 
     #[test]

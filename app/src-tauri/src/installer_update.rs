@@ -83,7 +83,9 @@ pub fn rollback_details(error:&Error)->String{
 /// reboot/command strings are retained byte-for-byte as UTF-16 (including NULL).
 #[derive(Clone,Debug,PartialEq,Eq,serde::Serialize,serde::Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(any(windows,test))]
 pub(crate) struct FailureActions{pub reset:u32,pub reboot:Option<Vec<u16>>,pub command:Option<Vec<u16>>,pub actions:Vec<(i32,u32)>}
+#[cfg(any(windows,test))]
 impl FailureActions{
  pub(crate) fn validate(&self)->Result<()>{if self.actions.len()>64||self.actions.iter().any(|(t,_)|!matches!(*t,0..=3))||[&self.reboot,&self.command].iter().any(|s|s.as_ref().is_some_and(|v|v.len()>32768||v.last()!=Some(&0)||v[..v.len().saturating_sub(1)].contains(&0))){return Err(Error::new("SCM_RECOVERY","Invalid failure actions snapshot"))}Ok(())}
  pub(crate) fn suppressed(&self)->Self{Self{actions:vec![(0,0)],..self.clone()}}
@@ -108,4 +110,20 @@ impl FailureActions{
  #[test]fn restore_failure_retains_snapshot_and_is_never_success(){let old=original();let mut i=Install{old:old.clone(),current:old.clone(),durable:None,fail:"restore-actions",events:vec![]};assert!(matches!(run(&mut i),Err(UpdateFailure::Recovery{..})));assert_eq!(i.current,old.suppressed());assert!(i.durable.is_some());i.fail="none";i.recover().unwrap();assert_eq!(i.current,old);}
  #[test]fn interrupted_transaction_reenters_saved_restore_even_if_network_rollback_fails(){let old=original();let mut i=Install{old:old.clone(),current:old.clone(),durable:None,fail:"none",events:vec![]};i.prepare().unwrap();i.stop().unwrap();let raw=i.durable.clone();let mut restarted=Install{old:serde_json::from_slice(raw.as_ref().unwrap()).unwrap(),current:i.current,durable:raw,fail:"rollback-network",events:vec![]};assert!(restarted.recover().is_err());assert_eq!(restarted.current,old);}
  #[test]fn native_transaction_checkpoint_and_finally_restore_order(){let inst=include_str!("windows/installer.rs");let tx=include_str!("windows/update_install.rs");let scm=include_str!("windows/scm.rs");let stop=inst.split("fn stop(&mut self)").nth(1).unwrap().split("fn replace").next().unwrap();assert!(stop.find("mark(&self.dir").unwrap()<stop.find("suppress_failure_actions").unwrap());assert!(stop.find("suppress_failure_actions").unwrap()<stop.find("stop_release").unwrap());let start=inst.split("fn start(&mut self)").nth(1).unwrap().split("fn recover").next().unwrap();assert!(start.find("restore_failure_actions").unwrap()<start.find("commit_setup").unwrap());assert!(tx.contains("self.old_failure_actions=Some(scm::failure_actions(service)?);self.save(dir)"));assert!(tx.contains("let restored=if !service.0.is_null(){self.restore_failure_actions(&service)}"));assert!(tx.contains("match (operation,restored)"));assert!(scm.contains("External failure actions change retained"));assert!(scm.contains("failure_actions(service)?!=*value"));assert!(!scm.contains("SERVICE_CONFIG_FAILURE_ACTIONS_FLAG"));}
+}
+
+// These values are on disk: only a persisted Finalizing decision may be replayed
+// into Committed. AwaitingHealth carries no authorization to discard old files.
+#[cfg(any(windows,test))]
+#[derive(Clone,Copy,Debug,PartialEq,Eq,serde::Serialize,serde::Deserialize)]#[serde(rename_all="snake_case")]
+pub enum Phase{Preparing,Prepared,Stopping,Replacing,Configuring,Starting,AwaitingHealth,Finalizing,Committed,RollingBack,RolledBack}
+#[cfg(any(windows,test))]
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]pub(crate) enum ResumeAction{FinishCommit,CleanCommit,CleanRollback,Rollback}
+#[cfg(any(windows,test))]
+impl Phase{pub(crate) fn resume_action(self)->ResumeAction{match self{
+ Self::Finalizing=>ResumeAction::FinishCommit,Self::Committed=>ResumeAction::CleanCommit,Self::RolledBack=>ResumeAction::CleanRollback,
+ Self::Preparing|Self::Prepared|Self::Stopping|Self::Replacing|Self::Configuring|Self::Starting|Self::AwaitingHealth|Self::RollingBack=>ResumeAction::Rollback,
+}}}
+#[cfg(test)]mod interrupted_update_tests {use super::*;
+ #[test]fn pending_health_is_not_commit_authority(){for p in [Phase::Preparing,Phase::Prepared,Phase::Stopping,Phase::Replacing,Phase::Configuring,Phase::Starting,Phase::AwaitingHealth,Phase::RollingBack]{assert_eq!(p.resume_action(),ResumeAction::Rollback);}assert_eq!(Phase::Finalizing.resume_action(),ResumeAction::FinishCommit);assert_eq!(Phase::Committed.resume_action(),ResumeAction::CleanCommit);assert_eq!(Phase::RolledBack.resume_action(),ResumeAction::CleanRollback);}
 }

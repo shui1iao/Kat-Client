@@ -12,7 +12,7 @@ struct Inner {
     write: mpsc::Sender<Write>, control: mpsc::Sender<()>, life: watch::Sender<Life>,
     #[cfg(windows)] stamp:u64, checkpoint:Mutex<Option<crate::elevated_protocol::Checkpoint>>,
     pid: u32, exited: watch::Sender<bool>, exit: watch::Sender<Option<ChildExit>>,
-    update: AtomicBool, update_prepare_sent: AtomicBool, update_closing: AtomicBool, transport_closed: AtomicBool,
+    update: AtomicBool, update_prepare_sent: AtomicBool, update_closing: AtomicBool, transport_closed: AtomicBool, unexpected_eof: AtomicBool,
     mutation: Mutex<Option<Arc<MutationFlight>>>, reconcile: tokio::sync::Mutex<()>,
     #[cfg(windows)] _job: Option<crate::windows::identity::Handle>,
 }
@@ -48,8 +48,8 @@ impl Inner {
         if err.transport.is_none(){if let Some(d)=crate::transport_diagnostics::fallback(&err){err=err.transport(d);}}
         let mut p = self.pending.lock().unwrap();
         let previous=self.life.borrow().clone();
+        let planned_eof=expected_eof&&err.code=="CORE_EOF";
         let err=if let Life::Exited(first)=previous{first}else{
-            let planned_eof=expected_eof&&err.code=="CORE_EOF";
             if err.code!="CORE_EXITED"&&!planned_eof{let mut sample=self.recent.lock().unwrap().clone().unwrap_or_else(||{let mut s=crate::safe_log::RuntimeEvidence::new("ipc_read","unknown",self.transport);s.snapshot_unavailable=Some(true);s});sample.category=crate::safe_log::error_category(&err.code).into();sample.inflight=Some(p.len()as u64);sample.queued=Some((MAX_INFLIGHT-self.write.capacity())as u64);sample.native=err.os_error;sample.response_bytes=err.transport.as_ref().and_then(|d|d.frame_len);sample.transport=err.transport.clone();if let Some(d)=&err.transport{sample.stage=match d.branch{crate::transport_diagnostics::Branch::Read|crate::transport_diagnostics::Branch::TruncatedEof|crate::transport_diagnostics::Branch::Eof=>"ipc_read",crate::transport_diagnostics::Branch::Write=>"ipc_write",_=>"ipc_response"}.into();}if let Some(t)=sample.sampled_unix_ms{sample.age_ms=Some(unix_ms().saturating_sub(t));}let id=crate::safe_log::process_evidence(crate::log_context::Component::Core,self.component_instance.load(Ordering::Acquire),None,Some(&err.code),crate::safe_log::ProcessEvidence::Transport{os_error:err.os_error},Some(sample));self.primary.store(id,Ordering::Release);}
             self.life.send_replace(Life::Exited(err.clone()));err
         };
@@ -59,7 +59,7 @@ impl Inner {
         // close stdin before the explicit persistence acknowledgement.
         if !self.update.load(Ordering::Acquire) {
             let _ = self.write.try_send(Write::Close);
-            if !self.remote_owned { let _ = self.control.try_send(()); }
+            if !self.remote_owned && !planned_eof { let _ = self.control.try_send(()); }
         }
     }
 }
@@ -102,15 +102,16 @@ async fn terminal_error(mut marker:watch::Receiver<Option<bool>>,fallback:Error)
  if conflict{Error::new("CONFIGURATION_CONFLICT","kat-client.json/.yaml/.yml 多个配置并存，请保留一个后重试")}else{fallback}
 }
 impl Supervisor {
-    // Production caller must use fixed sibling path; executable override exists only in test binaries.
-    pub async fn spawn_fixed(executable: &Path, workspace: &Path) -> Result<Self> {
+    /// Both the desktop lifecycle owner and direct callers launch the identical fixed core.
+    pub(crate) fn fixed_command(executable: &Path, workspace: &Path) -> Result<Command> {
         if !executable.is_file() { return Err(Error::new("CORE_MISSING", "Installed Kat core was not found")); }
         if !workspace.is_absolute() { return Err(Error::new("WORKSPACE_INVALID", "Core workspace must be absolute")); }
         let mut cmd = Command::new(executable);
-        cmd.arg("--workspace").arg(workspace);
-        // Crash diagnostics only: retain all Go goroutine traces, still bounded by the host private slot.
-        cmd.env("GOTRACEBACK","all");
-        Self::spawn(cmd).await
+        cmd.arg("--workspace").arg(workspace).env("GOTRACEBACK","all");
+        Ok(cmd)
+    }
+    pub async fn spawn_fixed(executable: &Path, workspace: &Path) -> Result<Self> {
+        Self::spawn(Self::fixed_command(executable,workspace)?).await
     }
     pub async fn spawn(mut cmd: Command) -> Result<Self> {Self::spawn_command(&mut cmd).await}
     pub(crate) async fn spawn_command(cmd: &mut Command) -> Result<Self> {
@@ -131,7 +132,7 @@ impl Supervisor {
         let (exited,_) = watch::channel(false);
         let (exit,_) = watch::channel(None);
         let (stderr_result,stderr_done)=watch::channel(None);
-        let inner = Arc::new(Inner { transport:"stdio",remote_owned:false,#[cfg(windows)] stamp,checkpoint:Mutex::new(None),component_instance:AtomicU64::new(0),primary:AtomicU64::new(0),recent:Mutex::new(None),pending: Mutex::new(HashMap::new()), permits: Arc::new(Semaphore::new(MAX_INFLIGHT)), log_permits: Arc::new(Semaphore::new(2)), probe_permits:Arc::new(Semaphore::new(MAX_INFLIGHT-4)), next: AtomicU64::new(1), write, control, life, pid, exited, exit, update:AtomicBool::new(false), update_prepare_sent:AtomicBool::new(false), update_closing:AtomicBool::new(false), transport_closed:AtomicBool::new(false), mutation:Mutex::new(None), reconcile:tokio::sync::Mutex::new(()), #[cfg(windows)] _job: Some(job) });
+        let inner = Arc::new(Inner { transport:"stdio",remote_owned:false,#[cfg(windows)] stamp,checkpoint:Mutex::new(None),component_instance:AtomicU64::new(0),primary:AtomicU64::new(0),recent:Mutex::new(None),pending: Mutex::new(HashMap::new()), permits: Arc::new(Semaphore::new(MAX_INFLIGHT)), log_permits: Arc::new(Semaphore::new(2)), probe_permits:Arc::new(Semaphore::new(MAX_INFLIGHT-4)), next: AtomicU64::new(1), write, control, life, pid, exited, exit, update:AtomicBool::new(false), update_prepare_sent:AtomicBool::new(false), update_closing:AtomicBool::new(false), transport_closed:AtomicBool::new(false),unexpected_eof:AtomicBool::new(false), mutation:Mutex::new(None), reconcile:tokio::sync::Mutex::new(()), #[cfg(windows)] _job: Some(job) });
         let i = inner.clone();
         let marker=stderr_done.clone();
         tokio::spawn(async move {
@@ -158,7 +159,7 @@ impl Supervisor {
                         }
                         Err(e) => {let mut d=crate::safe_log::RuntimeEvidence::new("ipc_parse",crate::safe_log::error_category(&e.code),"stdio");d.response_bytes=Some(frame.len()as u64);i.fail(e);let p=i.primary.load(Ordering::Acquire);crate::safe_log::runtime_event_at(i.component_instance.load(Ordering::Acquire),crate::log_context::Component::Core,"core.transport",(p>0).then_some(p),d);break; }
                     },
-                    Ok(None) => { let expected_eof = i.transport_closed.load(Ordering::Acquire); i.fail_with_expected_eof(terminal_error(marker.clone(),Error::new("CORE_EOF", "Core output closed")).await, expected_eof); break; }
+                    Ok(None) => { let expected_eof = i.transport_closed.load(Ordering::Acquire); if !expected_eof{i.unexpected_eof.store(true,Ordering::Release);} i.fail_with_expected_eof(terminal_error(marker.clone(),Error::new("CORE_EOF", "Core output closed")).await, expected_eof); break; }
                     Err(e) => { i.fail(e); break; }
                 }
             }
@@ -182,20 +183,26 @@ impl Supervisor {
                     // Strict update never converts a transport error into a kill.
                     if i.update.load(Ordering::Acquire) {
                         (child.wait().await,false)
+                    } else if let Ok(Some(status))=child.try_wait() {
+                        (Ok(status),false)
                     } else {
                         let primary=i.primary.load(Ordering::Acquire);let instance=i.component_instance.load(Ordering::Acquire);
                         crate::safe_log::core_evidence(instance,(primary>0).then_some(primary),None,crate::safe_log::ProcessEvidence::TerminateRequested);
                         let killed=child.kill().await;
                         crate::safe_log::core_evidence(instance,(primary>0).then_some(primary),None,crate::safe_log::ProcessEvidence::TerminateResult{ok:killed.is_ok(),os_error:killed.as_ref().err().and_then(|e|e.raw_os_error()).map(|n|n as u32)});
-                        (child.wait().await,true)
+                        (child.wait().await,killed.is_ok())
                     }
                 }
             };
             let primary=i.primary.load(Ordering::Acquire);
             crate::safe_log::core_evidence(i.component_instance.load(Ordering::Acquire),(primary>0).then_some(primary),None,crate::safe_log::ProcessEvidence::Exit{code:result.as_ref().ok().and_then(|s|s.code()).map(|n|n as u32),wait_failed:result.is_err(),os_error:result.as_ref().err().and_then(|e|e.raw_os_error()).map(|n|n as u32),termination_requested:forced});
+            // Publish the terminal diagnosis BEFORE releasing terminate() waiters. The reader
+            // may already have seen an unsolicited EOF but still be draining the stderr marker.
+            let mut failure=terminal_error(stderr_done,Error::new("CORE_EXITED", "Core process exited")).await;
+            if failure.code=="CORE_EXITED" && i.unexpected_eof.load(Ordering::Acquire){failure=Error::new("CORE_EOF","Core output closed");}
+            i.fail(failure);
             i.exit.send_replace(Some(ChildExit { code:result.as_ref().ok().and_then(|s|s.code()), forced, wait_failed:result.is_err() }));
             i.exited.send_replace(true);
-            i.fail(terminal_error(stderr_done,Error::new("CORE_EXITED", "Core process exited")).await);
         });
         Ok(Self(inner))
     }
@@ -310,7 +317,8 @@ impl Supervisor {
             let _=self.0.control.try_send(());
             tokio::time::timeout(Duration::from_secs(3),async{while !*exited.borrow(){exited.changed().await.map_err(|_|Error::new("CORE_EXIT_WAIT","Core waiter ended"))?;}Ok::<(),Error>(())}).await.map_err(|_|Error::new("CORE_EXIT_TIMEOUT","Owned core has not exited"))??;
         }
-        self.0.fail(Error::new("CORE_STOPPED","Core supervisor stopped"));Ok(!graceful)
+        let exit=self.0.exit.borrow().clone().filter(|e|!e.wait_failed).ok_or_else(||Error::new("CORE_EXIT_WAIT","Cannot confirm exact core exit"))?;
+        self.0.fail(Error::new("CORE_STOPPED","Core supervisor stopped"));Ok(exit.forced)
     }
     /// A single bounded strict attempt. On any error after admission freezes,
     /// leave the child owned and unforced; only explicit recovery may unfreeze it.
@@ -418,13 +426,26 @@ pub fn sibling_core() -> Result<PathBuf> {
   assert!(!forced);
   assert_eq!(sup.0.primary.load(Ordering::Acquire), 0, "planned close followed by EOF must not record CORE_EOF transport failure");
  }
+ #[tokio::test]async fn planned_eof_allows_post_stdout_cleanup_before_exit(){
+  let mut cmd=Command::new("/bin/sh");
+  cmd.arg("-c").arg("cat >/dev/null; exec 1>&- 2>&-; sleep 0.15; exit 17");
+  let sup=Supervisor::spawn(cmd).await.unwrap();
+  assert!(!sup.terminate(Duration::from_secs(3)).await.unwrap());
+  assert_eq!(sup.0.exit.borrow().as_ref().unwrap().code,Some(17));
+ }
+ #[tokio::test]async fn unplanned_stop_reports_prior_force_even_after_waiter_finished(){
+  let mut cmd=Command::new("/bin/sh");cmd.arg("-c").arg("exec 1>&- 2>&-; exec sleep 30");
+  let sup=Supervisor::spawn(cmd).await.unwrap();
+  tokio::time::timeout(Duration::from_secs(5),sup.wait_update_exit()).await.unwrap().unwrap();
+  assert!(sup.terminate(Duration::from_secs(1)).await.unwrap());
+ }
  #[tokio::test]async fn unexpected_eof_before_terminate_retains_transport_error_evidence(){
-  // Close stdout immediately (triggering EOF) while keeping stderr open for 250ms
-  // so terminal_error() is awaiting stderr drain when terminate() runs at 40ms.
+  // Child keeps stderr open until the parent closes stdin. Synchronize on the
+  // actual reader observation, not a guess about scheduler timing.
   let mut cmd = Command::new("/bin/sh");
-  cmd.arg("-c").arg("exec 1>&-; sleep 0.25");
+  cmd.arg("-c").arg("exec 1>&-; cat >/dev/null");
   let sup = Supervisor::spawn(cmd).await.unwrap();
-  tokio::time::sleep(Duration::from_millis(40)).await;
+  tokio::time::timeout(Duration::from_secs(3),async{while !sup.0.unexpected_eof.load(Ordering::Acquire){tokio::task::yield_now().await;}}).await.unwrap();
   let _ = sup.terminate(Duration::from_secs(3)).await.unwrap();
   assert!(sup.0.primary.load(Ordering::Acquire) > 0, "unexpected EOF prior to terminate must record CORE_EOF transport failure");
   assert!(matches!(&*sup.0.life.borrow(), Life::Exited(e) if e.code == "CORE_EOF"));

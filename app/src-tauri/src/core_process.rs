@@ -44,9 +44,7 @@ async fn verify_update_http(port:u16)->Result<()> {
 }
 impl CoreProcess{
  pub async fn spawn_fixed(executable:&Path,workspace:&Path)->Result<Self>{
-  if !executable.is_file(){return Err(Error::new("CORE_MISSING","Installed Kat core was not found"));}
-  if !workspace.is_absolute(){return Err(Error::new("WORKSPACE_INVALID","Core workspace must be absolute"));}
-  let mut cmd=Command::new(executable);cmd.arg("--workspace").arg(workspace);Self::spawn(cmd).await
+  Self::spawn(Supervisor::fixed_command(executable,workspace)?).await
  }
  pub async fn spawn(mut cmd:Command)->Result<Self>{
   let core=Supervisor::spawn_command(&mut cmd).await?;let(life,_)=watch::channel(Life::Ready);

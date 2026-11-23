@@ -87,7 +87,7 @@ impl Broker {
  // Never parse/delete an old engine's account. CONTROL must complete legacy
  // recovery and remove its adapter/bridge before this capability is granted.
  stage=crate::tun_diagnostics::Stage::JournalLegacy;for n in ["network-journal.json","network-journal.next","network-journal.json.next"]{match std::fs::symlink_metadata(self.root.join(n)){Ok(_)=>return Err(bad("LEGACY_RECOVERY_REQUIRED")),Err(e)if e.kind()==std::io::ErrorKind::NotFound=>{},Err(e)=>return Err(Error::io("JOURNAL_READ",&e))}}
- stage=crate::tun_diagnostics::Stage::JournalAlias;let alias=alias(&caller.launch.owner_sid);if native::alias_present(&alias)?{self.remove_stale_alias(caller,&alias)?;}
+ stage=crate::tun_diagnostics::Stage::JournalAlias;let alias=alias(&caller.launch.owner_sid);pure(check_fresh_alias(native::alias_present(&alias)?))?;
  stage=crate::tun_diagnostics::Stage::JournalGuid;let guid=new_guid()?;
  let j=Journal{schema:SCHEMA,engine:ENGINE.into(),launch:caller.launch.clone(),adapter:Adapter{alias,guid,luid:0,compartment:1},seq:1,phase:"active".into(),changes:vec![],last_request:r.request_id,last_digest:d};
  stage=crate::tun_diagnostics::Stage::JournalSave;self.save(j)?;return Ok(self.journal.as_ref().unwrap().state())
@@ -104,24 +104,6 @@ impl Broker {
  n.seq=n.seq.checked_add(1).ok_or_else(||bad("JOURNAL_SEQUENCE"))?;n.last_request=r.request_id;n.last_digest=d;self.save(n)?;Ok(self.journal.as_ref().unwrap().state())
  
  })();result.map_err(|e|crate::tun_diagnostics::failure(e,stage))
- }
- fn remove_stale_alias(&self,caller:&VerifiedCore,alias:&str)->Result<()>{
-  let guard=||->Result<()>{
-   if alias!=journal::alias(&caller.launch.owner_sid){return Err(bad("LEGACY_ADAPTER_PRESENT"))}
-   let owner=self.core.as_ref().ok_or_else(||bad("CORE_IDENTITY"))?;
-   if owner.launch!=caller.launch||!matches!(retained_core_exited(owner),Ok(false)){return Err(bad("CORE_IDENTITY"))}
-   // Only a fresh Begin: this exact launch has never acquired an adapter/WAL.
-   if !fresh_stale_begin(self.journal.as_ref(),&caller.launch){return Err(bad("LEGACY_ADAPTER_PRESENT"))}
-   for n in ["network-journal.json","network-journal.next","network-journal.json.next","core-tun-journal-v2.next","core-tun-journal-v2.json.next"]{
-    match std::fs::symlink_metadata(self.root.join(n)){Ok(_)=>return Err(bad("LEGACY_ADAPTER_PRESENT")),Err(e)if e.kind()==std::io::ErrorKind::NotFound=>{},Err(e)=>return Err(Error::io("JOURNAL_READ",&e))}
-   }
-   let disk=Self::open()?;
-   if disk.journal!=self.journal{return Err(bad("LEGACY_ADAPTER_PRESENT"))}
-   if let Some(j)=&disk.journal{if j.phase!="complete"{return Err(bad("LEGACY_ADAPTER_PRESENT"))}verify_complete(j)?;}
-   stale::no_other_high_core(&caller.launch)
-  };
-  guard().map_err(|e|crate::tun_diagnostics::failure(e,crate::tun_diagnostics::Stage::AliasGuard))?;
-  stale::remove(alias,guard)
  }
  pub fn status(&self)->RecoveryReport {
  if let Some(j)=&self.journal {let conflicts=j.changes.iter().filter(|c|c.state=="conflict").count() as u32;let pending=j.changes.iter().filter(|c|c.state!="restored").count() as u32;

@@ -173,7 +173,7 @@ mod tests {
   let i=include_str!("windows/installer.rs");let flow=include_str!("installer_update.rs");
   let run=flow.split("pub fn run(").nth(1).unwrap().split("#[cfg(test)]").next().unwrap();
   assert!(run.find("steps.prepare()").unwrap()<run.find("steps.stop()").unwrap());assert!(run.contains("steps.recover()"));
-  let prep=i.split("fn prepare(").nth(1).unwrap().split("fn stop(").next().unwrap();assert!(prep.contains("FileUpdate::stage_selected"));assert!(prep.contains("security::verify_vendor(&rf.staged_root())?"));assert!(!prep.contains("scm::stop"));
+  let prep=i.split("fn prepare(").nth(1).unwrap().split("fn stop(").next().unwrap();assert!(prep.find("Payload::open(&self.source,&self.read_token)?").unwrap()<prep.find("FileUpdate::stage_verified").unwrap());assert_eq!(prep.matches("FileUpdate::stage_verified").count(),2);assert!(prep.contains("security::verify_vendor(&rf.staged_root())?"));assert!(!prep.contains("scm::stop"));
   assert!(i.contains("CREATE_NEW"));assert!(i.contains("lpSecurityDescriptor:sd,bInheritHandle:0"));assert!(i.contains("secure_create(&work,true,false)?"));assert!(!i.contains("InstallGuard"));
   assert!(i.contains("InstallLock::acquire()?"));assert!(i.contains("error==ERROR_ALREADY_EXISTS"));
   assert!(i.find("Initiating GUI must belong to this package").unwrap()<i.find("let _installation=InstallLock::acquire()").unwrap());
