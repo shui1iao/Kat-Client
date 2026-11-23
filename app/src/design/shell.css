@@ -636,18 +636,18 @@
 .mode-seg > button.on.m-direct { color: var(--text); }
 
 .global-group-pill {
+  position: relative;
   width: 100%;
   height: 28px;
-  padding: 0 9px 0 10px;
+  padding: 0 24px;
   border-radius: 8px;
   background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
   color: var(--accent-text);
   font-size: var(--fs-meta);
   font-weight: 550;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 6px;
   min-width: 0;
   transition: background-color var(--t-fast) var(--ease);
@@ -659,11 +659,12 @@
 
 .global-group-pill.is-open,
 .global-group-pill.is-open:hover {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  box-shadow: inset 0 0 0 1.5px var(--accent-line);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .global-group-pill svg {
+  position: absolute;
+  right: 8px;
   flex: none;
   transition: transform var(--t-fast) var(--ease);
 }
@@ -681,8 +682,10 @@
 .global-opt-copy {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
 }
 
@@ -718,6 +721,8 @@
 .global-opt-more {
   color: var(--text-2);
   font-size: var(--fs-meta);
+  justify-content: center;
+  gap: 4px;
 }
 
 /* System Proxy & TUN — clean stacked sidebar toggle rows */
@@ -755,7 +760,7 @@
 }
 
 .net-switch:hover:not(:disabled) .ns-thumb {
-  box-shadow: 0 1.5px 3.5px rgba(0, 0, 0, 0.30), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1.5px 3.5px rgba(0, 0, 0, 0.24);
 }
 
 .net-switch.on:hover:not(:disabled) .ns-track {
@@ -792,7 +797,7 @@
   height: 12px;
   border-radius: 50%;
   background: #FFFFFF;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.26), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
   transition: transform 200ms var(--ease-spring), width 120ms var(--ease);
 }
 

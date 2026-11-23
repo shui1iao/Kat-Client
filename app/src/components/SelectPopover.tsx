@@ -138,7 +138,7 @@ export function SelectPopover() {
   if (!open) return null;
   const selected = open.el.selectedIndex;
   return createPortal(
-    <div ref={list} className={'kat-pop' + (open.up ? ' up' : '') + (!(open.el.closest('.modal') && !open.el.classList.contains('sm')) ? ' centered' : '')} role="listbox" aria-label={open.label}
+    <div ref={list} className={'kat-pop centered' + (open.up ? ' up' : '')} role="listbox" aria-label={open.label}
       style={{ left: open.left, top: open.top, bottom: open.bottom, width: open.width, minWidth: open.width, maxHeight: open.maxHeight, maxWidth: window.innerWidth - open.left - 10 }}>
       {open.options.map((o, i) => (
         <button key={i} type="button" tabIndex={-1} role="option" aria-selected={i === selected} disabled={o.disabled} title={o.label}

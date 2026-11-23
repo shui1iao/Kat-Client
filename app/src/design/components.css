@@ -164,7 +164,6 @@
 
 .btn.is-active {
   background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px var(--accent-line);
   color: var(--accent-text);
 }
 
@@ -232,7 +231,6 @@ input[type="number"]::-webkit-outer-spin-button {
   padding: 0 10px;
   border-radius: var(--r-ctl);
   background-color: var(--card-2);
-  box-shadow: inset 0 0 0 1px var(--line);
   border: 0;
   color: var(--text);
   font-size: var(--fs-body);
@@ -241,15 +239,16 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 :is(input, textarea).inp:hover:not(:disabled):not(:focus) {
-  box-shadow: inset 0 0 0 1px var(--line-2);
+  background-color: var(--hover);
 }
 
 :is(input, textarea).inp:focus {
-  box-shadow: inset 0 0 0 1.5px var(--accent-line);
+  background-color: color-mix(in srgb, var(--accent) 8%, var(--card-2));
 }
 
 :root:not([data-input="pointer"]) select.inp:focus-visible {
-  box-shadow: inset 0 0 0 1.5px var(--accent-line);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .inp:disabled {
@@ -284,7 +283,6 @@ select.inp {
 
 select.inp:hover:not(:disabled) {
   background-color: var(--hover);
-  box-shadow: inset 0 0 0 1px var(--line-2);
 }
 
 select.inp:active:not(:disabled) {
@@ -293,8 +291,8 @@ select.inp:active:not(:disabled) {
 
 select.inp[data-open],
 select.inp[data-open]:hover {
-  background-color: var(--card);
-  box-shadow: inset 0 0 0 1.5px var(--accent-line);
+  background-color: var(--accent-soft);
+  color: var(--accent-text);
 }
 
 /* Compact toolbar & inline selects: stable fixed geometry matching popup width */
@@ -343,7 +341,6 @@ select.inp.sm.conn-proc-select {
   padding: 0 10px;
   border-radius: var(--r-ctl);
   background-color: var(--card-2);
-  box-shadow: inset 0 0 0 1px var(--line);
   color: var(--text-3);
   flex: 1 1 220px;
   width: auto;
@@ -353,11 +350,11 @@ select.inp.sm.conn-proc-select {
 }
 
 .search:hover:not(:focus-within) {
-  box-shadow: inset 0 0 0 1px var(--line-2);
+  background-color: var(--hover);
 }
 
 .search:focus-within {
-  box-shadow: inset 0 0 0 1.5px var(--accent-line);
+  background-color: color-mix(in srgb, var(--accent) 8%, var(--card-2));
 }
 
 .search svg {
@@ -542,7 +539,6 @@ select.inp.sm.conn-proc-select {
   height: 21px;
   border-radius: 999px;
   background: rgba(120, 125, 136, 0.26);
-  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.06);
   flex: none;
   contain: layout paint;
   isolation: isolate;
@@ -552,7 +548,6 @@ select.inp.sm.conn-proc-select {
 
 :root[data-theme="dark"] .sw:not(.on) {
   background: rgba(255, 255, 255, 0.16);
-  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
 }
 
 .sw i {
@@ -563,7 +558,7 @@ select.inp.sm.conn-proc-select {
   height: 17px;
   border-radius: 50%;
   background: #FFFFFF;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.24), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
   will-change: transform;
   backface-visibility: hidden;
   transform: translate3d(0, 0, 0);
@@ -580,12 +575,10 @@ select.inp.sm.conn-proc-select {
 
 .pref-toggle:hover:not(:disabled):not([aria-disabled="true"]) .sw:not(.on) {
   background: rgba(120, 125, 136, 0.34);
-  box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.10);
 }
 
 :root[data-theme="dark"] .pref-toggle:hover:not(:disabled):not([aria-disabled="true"]) .sw:not(.on) {
   background: rgba(255, 255, 255, 0.22);
-  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.10);
 }
 
 .pref-toggle:hover:not(:disabled):not([aria-disabled="true"]) .sw.on {
@@ -593,7 +586,7 @@ select.inp.sm.conn-proc-select {
 }
 
 .pref-toggle:hover:not(:disabled):not([aria-disabled="true"]) .sw i {
-  box-shadow: 0 1.5px 4px rgba(0, 0, 0, 0.28), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1.5px 4px rgba(0, 0, 0, 0.24);
 }
 
 .sw.on {
@@ -718,7 +711,6 @@ select.inp.sm.conn-proc-select {
   padding: 0 5px;
   border-radius: 4px;
   background: var(--card-2);
-  box-shadow: inset 0 0 0 1px var(--line);
   color: var(--text-3);
   font-size: 10px;
   display: inline-flex;
@@ -758,7 +750,6 @@ select.inp.sm.conn-proc-select {
   padding: 8px 12px;
   border-radius: var(--r-ctl);
   background: var(--bad-soft);
-  box-shadow: inset 0 0 0 1px rgba(248, 81, 73, 0.25);
   color: var(--bad);
   font-size: var(--fs-meta);
   line-height: 1.45;
@@ -1114,15 +1105,13 @@ select.inp.sm.conn-proc-select {
 
 .kat-opt.cur {
   background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1.5px var(--accent-line);
   color: var(--accent-text);
   font-weight: 500;
 }
 
 .kat-opt.cur.active,
 .kat-opt.cur:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  box-shadow: inset 0 0 0 1.5px var(--accent);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
   color: var(--accent-text);
 }
 
@@ -1147,7 +1136,6 @@ select.inp.sm.conn-proc-select {
   border-radius: var(--r-tray);
   background: var(--pop);
   backdrop-filter: blur(20px) saturate(200%);
-  border: 1px solid var(--line-2);
   box-shadow: var(--shadow-pop);
   color: var(--text);
   font-size: var(--fs-meta);
@@ -1165,7 +1153,6 @@ select.inp.sm.conn-proc-select {
   border-radius: var(--r-tray);
   background: var(--pop);
   backdrop-filter: blur(20px) saturate(200%);
-  border: 1px solid var(--line-2);
   box-shadow: var(--shadow-pop);
   color: var(--text);
   font-size: var(--fs-micro);

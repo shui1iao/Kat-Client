@@ -943,7 +943,6 @@
   padding: 0 8px;
   border-radius: var(--r-pill);
   background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
   color: var(--accent-text);
   font-size: var(--fs-micro);
   font-weight: 500;
@@ -1270,7 +1269,6 @@
 /* Selected / auto-hit cells: crisp soft tint + hairline ring, zero leading circles */
 .ntile.sel {
   background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .ntile.sel:hover {
@@ -1284,7 +1282,6 @@
 
 .ntile.auto-sel {
   background: color-mix(in srgb, var(--ok) 10%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ok) 28%, transparent);
 }
 
 .ntile.auto-sel:hover {
@@ -1411,7 +1408,6 @@
   min-width: 0;
   border-radius: var(--r-tray);
   background: var(--card-2);
-  box-shadow: inset 0 0 0 1px var(--line);
   padding: 8px 12px;
 }
 
@@ -1471,7 +1467,6 @@
 .pe-members {
   border-radius: var(--r-tray);
   background: var(--card-2);
-  box-shadow: inset 0 0 0 1px var(--line);
   overflow: hidden;
 }
 
@@ -1598,12 +1593,10 @@
 /* Elevated control surfaces inside inset trays (.pe-details / .pe-members) */
 .policy-editor-v2 :is(.pe-details, .pe-members) .inp {
   background-color: rgba(255, 255, 255, 0.065);
-  box-shadow: inset 0 0 0 1px var(--line-2);
 }
 
 .policy-editor-v2 :is(.pe-details, .pe-members) :is(input, textarea).inp:focus {
   background-color: rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 0 0 1.5px var(--accent-line);
 }
 
 .policy-editor-v2 :is(.pe-details, .pe-members) [aria-invalid="true"].inp,
@@ -1613,12 +1606,10 @@
 
 .policy-editor-v2 .pe-details .seg {
   background: rgba(255, 255, 255, 0.065);
-  box-shadow: inset 0 0 0 1px var(--line);
 }
 
 .policy-editor-v2 .pe-details .pick:not(.on) {
   background: rgba(255, 255, 255, 0.065);
-  box-shadow: inset 0 0 0 1px var(--line-2);
   color: var(--text-2);
 }
 
@@ -1629,18 +1620,15 @@
 .policy-editor-v2 .pe-details .pick.on {
   background: var(--accent-soft);
   color: var(--accent-text);
-  box-shadow: inset 0 0 0 1px var(--accent-line);
   font-weight: 500;
 }
 
 :root[data-theme="light"] .policy-editor-v2 :is(.pe-details, .pe-members) .inp {
   background-color: rgba(255, 255, 255, 0.82);
-  box-shadow: inset 0 0 0 1px var(--line-2);
 }
 
 :root[data-theme="light"] .policy-editor-v2 :is(.pe-details, .pe-members) :is(input, textarea).inp:focus {
   background-color: rgba(255, 255, 255, 0.82);
-  box-shadow: inset 0 0 0 1.5px var(--accent-line);
 }
 
 :root[data-theme="light"] .policy-editor-v2 :is(.pe-details, .pe-members) [aria-invalid="true"].inp,
@@ -1650,12 +1638,10 @@
 
 :root[data-theme="light"] .policy-editor-v2 .pe-details .seg {
   background: rgba(28, 36, 48, 0.055);
-  box-shadow: inset 0 0 0 1px var(--line);
 }
 
 :root[data-theme="light"] .policy-editor-v2 .pe-details .pick:not(.on) {
   background: rgba(255, 255, 255, 0.82);
-  box-shadow: inset 0 0 0 1px var(--line-2);
   color: var(--text-2);
 }
 
@@ -1695,9 +1681,8 @@
 }
 
 .sub-card.is-active {
-  background: var(--card);
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent), var(--shadow-card);
+  background: color-mix(in srgb, var(--accent) 8%, var(--card));
+  box-shadow: var(--shadow-card);
 }
 
 .sub-head {
@@ -1850,7 +1835,6 @@
 }
 
 .quick-import-card:focus-within {
-  border-color: var(--line-2);
 }
 
 .qi-head {
@@ -2595,7 +2579,6 @@
   margin: 0 10px 10px 30px;
   border-radius: var(--r-tray);
   background: color-mix(in srgb, var(--card-2) 50%, transparent);
-  box-shadow: inset 0 0 0 1px var(--line);
   overflow: hidden;
 }
 
@@ -2674,7 +2657,6 @@
   padding: 12px 12px 10px 14px;
   border-radius: var(--r-tray);
   background: var(--card-2);
-  box-shadow: inset 0 0 0 1px var(--line);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -3591,7 +3573,6 @@
   margin: 6px 0;
   border-radius: var(--r-tray);
   background: var(--card-2);
-  box-shadow: inset 0 0 0 1px var(--line);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -3667,7 +3648,6 @@
 .dns-policy-block {
   border-radius: var(--r-tray);
   background: var(--card-2);
-  box-shadow: inset 0 0 0 1px var(--line);
   padding: 10px 12px;
 }
 
@@ -3744,7 +3724,6 @@
 .dq-result {
   padding: 10px 12px;
   border-radius: var(--r-tray);
-  box-shadow: inset 0 0 0 1px var(--line);
   background: var(--card-2);
   display: flex;
   flex-direction: column;
@@ -3829,7 +3808,6 @@
   padding: 10px 12px;
   border-radius: var(--r-tray);
   background: var(--card-2);
-  box-shadow: inset 0 0 0 1px var(--line);
 }
 
 .kernel-info dt {
@@ -3998,7 +3976,6 @@
   padding: 8px 12px;
   border-radius: var(--r-tray);
   background: var(--card-2);
-  box-shadow: inset 0 0 0 1px var(--line);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -4335,7 +4312,6 @@
 .ei-proc-box.is-placeholder {
   background: var(--card-2);
   color: var(--text-3);
-  box-shadow: inset 0 0 0 1px var(--line);
 }
 
 
@@ -4402,7 +4378,6 @@
   padding: 12px 14px;
   border-radius: var(--r-tray);
   background: var(--card-2);
-  box-shadow: inset 0 0 0 1px var(--line);
   max-height: 240px;
   overflow-y: auto;
 }
@@ -4458,7 +4433,6 @@
   padding: 12px 14px;
   border-radius: 10px;
   background: var(--card-2);
-  box-shadow: inset 0 0 0 1px var(--line-2);
   max-height: 260px;
   overflow-y: auto;
 }
@@ -4654,7 +4628,6 @@
   padding: 12px 14px;
   border-radius: var(--r-tray);
   background: var(--expand-lv1);
-  box-shadow: inset 0 0 0 1px var(--line);
   margin-block: 4px 8px;
 }
 

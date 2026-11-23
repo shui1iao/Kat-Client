@@ -192,7 +192,7 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
         createPortal(
           <div
             ref={popRef}
-            className={'kat-pop global-pop' + (menuPos.up ? ' up' : '')}
+            className={'kat-pop global-pop centered' + (menuPos.up ? ' up' : '')}
             role="listbox"
             aria-label="全局策略组"
             onKeyDown={onPopKey}
