@@ -7,6 +7,7 @@ import {hydrateIcons,cachedIcon} from './iconCache';
 import {originalNames} from './names';
 import { acceptSubscription, backgroundSubscription, dueSubscriptions } from './subscription';
 import { core, hasHost, host } from './ipc';
+import { normalizeConnections, normalizePreview, normalizeStatus } from './normalize';
 import { errorText, isMutationUncertain, subscriptionFailureText } from '../lib/errors';
 import { updatePreferences } from './daily';
 import { DocumentSession } from './session';
@@ -28,11 +29,22 @@ export function appendSample(old: readonly Sample[], sample: Sample, now = sampl
   return out;
 }
 export const MAIN_WINDOW_HIDDEN_EVENT = 'main-window-hidden';
+export const MAIN_WINDOW_SHOWN_EVENT = 'kat-main-window-shown';
 export function applyMainWindowHidden(hidden: unknown, root: { dataset?: DOMStringMap | Record<string, string | undefined> } | null = typeof document !== 'undefined' ? document.documentElement : null) {
   if (typeof hidden !== 'boolean' || !root?.dataset) return;
+  const wasHidden = root.dataset.katWindowHidden === 'true';
   if (hidden && root.dataset.view !== 'tray-menu') root.dataset.katWindowHidden = 'true';
   else delete root.dataset.katWindowHidden;
+  // Lets the polling loop refresh at once when the window comes back.
+  if (wasHidden && root.dataset.katWindowHidden !== 'true' && typeof window !== 'undefined') window.dispatchEvent(new Event(MAIN_WINDOW_SHOWN_EVENT));
 }
+/** True while the main window is hidden to the tray or the page is not visible. */
+export function mainWindowHidden(): boolean {
+  if (typeof document === 'undefined') return false;
+  return document.hidden || document.documentElement.dataset.katWindowHidden === 'true';
+}
+/** Hidden windows keep a slow status heartbeat (tray snapshot, auto-recovery) instead of the 2 s poll. */
+export const HIDDEN_POLL_MS = 10000;
 export function watchMainWindowHidden(subscribe: typeof listen = listen, root?: { dataset?: DOMStringMap | Record<string, string | undefined> } | null) {
   applyMainWindowHidden(false, root);
   let live = true, stop: (() => void) | undefined;
@@ -59,6 +71,9 @@ export function useClient() {
   const [desktop, setDesktop] = useState<DesktopSettingsReply | null>(null);
   const [network, setNetwork] = useState<NetworkStatus | null>(null);
   const [error, setErrorState] = useState('');
+  // Last failure to read core status (unreachable core, invalid reply). Empty
+  // after any successful read; kept separate from a healthy core that is stopped.
+  const [statusError, setStatusError] = useState('');
   const [errorQueue,setErrorQueue]=useState<string[]>([]);
 
   const selectionSequence=useRef(0);
@@ -99,25 +114,26 @@ export function useClient() {
   async function refreshStatus() {
     const request=++statusRequest.current, life=lifetime.current;let s:CoreStatus;
     try {
-      s=await core<CoreStatus>('status');
+      s=normalizeStatus(await core<unknown>('status'));
       if(s.runtime.state==='running'){
         if(!coreReachable.current&&active(life)&&request===statusRequest.current){coreReachable.current=true;setStatus(s);}
-        try { s=withConnectionSnapshot(s,await core<ConnectionsReply>('connections.list',{closed_limit:1})); }
+        try { s=withConnectionSnapshot(s,normalizeConnections(await core<ConnectionsReply>('connections.list',{closed_limit:1}))); }
         catch(e) {
           if(active(life)&&request===statusRequest.current)observeUncertain(e);
           // A supplemental connection read is not the runtime/measurement
           // snapshot. Reconfirm actual status rather than clearing valid probes
           // or retaining an old Running value if the core really stopped/exited.
-          s=await core<CoreStatus>('status');
+          s=normalizeStatus(await core<unknown>('status'));
         }
       }
-    } catch(e) { if(active(life)&&request===statusRequest.current){observeUncertain(e);coreReachable.current=false;setStatus(null);}throw e; }
+    } catch(e) { if(active(life)&&request===statusRequest.current){observeUncertain(e);coreReachable.current=false;setStatus(null);const text=errorText(e);setStatusError(old=>old===text?old:text);}throw e; }
     if(!active(life)||request!==statusRequest.current)return s;
     const next={at:Date.now(),items:s.runtime.state==='running'?s.connections.items:[]};
     const nextRates=connectionRates(lastConnections.current,next);
     setConnectionSpeeds(old=>Object.keys(old).length===0&&Object.keys(nextRates).length===0?old:nextRates);lastConnections.current=next;
     coreReachable.current=true;
     setStatus(s);
+    setStatusError(old=>old?'':old);
     if (s.traffic?.down_rate != null && s.traffic?.up_rate != null) setSamples(old => {
       const now = Date.now();
       return appendSample(old, { at: now, down: s.traffic.down_rate!, up: s.traffic.up_rate! }, now, 12 * 3600000, 21601);
@@ -227,8 +243,13 @@ export function useClient() {
       }, 200);
     };
     scheduleBurst();
-    const id = setInterval(async () => {
-      if (!live || polling) return; polling = true;
+    let lastPoll = 0;
+    const poll = async (force = false) => {
+      if (!live || polling) return;
+      // Hidden to tray: keep a slow heartbeat (tray snapshot, recovery) instead
+      // of the 2 s foreground poll; showing the window refreshes at once.
+      if (!force && mainWindowHidden() && Date.now() - lastPoll < HIDDEN_POLL_MS) return;
+      polling = true; lastPoll = Date.now();
       try {
         await Promise.allSettled([refreshStatus(), refreshNetwork()]);
         if(!live)return;
@@ -236,8 +257,12 @@ export function useClient() {
         if(live&&coreReachable.current&&doc.uncertain)void reconcileAccepted().catch(()=>{ /* keep gate and draft; next existing poll may read again */ });
         else if(live&&coreReachable.current&&doc.saved===null&&!jobs.current.has('connect'))void connect();
       } finally { polling = false; }
-    }, 2000);
-    return () => { live = false;mounted.current=false;lifetime.current++;statusRequest.current++;networkRequest.current++;window.clearTimeout(burstTimer);clearInterval(id); };
+    };
+    const id = setInterval(() => { void poll(); }, 2000);
+    const shown = () => { if (!mainWindowHidden()) void poll(true); };
+    window.addEventListener(MAIN_WINDOW_SHOWN_EVENT, shown);
+    document.addEventListener('visibilitychange', shown);
+    return () => { live = false;mounted.current=false;lifetime.current++;statusRequest.current++;networkRequest.current++;window.clearTimeout(burstTimer);clearInterval(id);window.removeEventListener(MAIN_WINDOW_SHOWN_EVENT, shown);document.removeEventListener('visibilitychange', shown); };
   }, []);
   useEffect(()=> {
     if (!hasHost()) return;
@@ -258,7 +283,7 @@ export function useClient() {
   async function migrateOne(name:string){
     if(doc.dirty||doc.draftFilename||doc.editing||doc.saving||doc.uncertain)throw new Error('请先关闭编辑并保存或取消草稿');
     const revision=doc.revision;let p:SubscriptionPreview|undefined;
-    try{p=await core<SubscriptionPreview>('subscription.migrate',{name});await acceptSubscription(doc,p,revision);setLegacyNotices(old=>{const n={...old};delete n[name];return n;});}
+    try{p=normalizePreview(await core<unknown>('subscription.migrate',{name}));await acceptSubscription(doc,p,revision);setLegacyNotices(old=>{const n={...old};delete n[name];return n;});}
     catch(e){setLegacyNotices(old=>({...old,[name]:errorText(e)}));observeUncertain(e,revision);}
     finally{if(p?.token)await core('subscription.cancel',{token:p.token});}
   }
@@ -283,11 +308,12 @@ export function useClient() {
       }
     }finally{if(mounted.current)setProbingAll(false);}
   },reportOperationError);
-  const probeAllProgress=status?.probe_round??(probingAll?{done:0,total:status?.nodes.filter(n=>!['direct','reject'].includes(n.type)).length??0,names:status?.nodes.map(n=>n.name)??[]}:null);
+  const statusNodes=status?.nodes??[];
+  const probeAllProgress=status?.probe_round??(probingAll?{done:0,total:statusNodes.filter(n=>!['direct','reject'].includes(n.type)).length,names:statusNodes.map(n=>n.name)}:null);
   const probeGroupProgress:NonNullable<CoreStatus['probe_group_rounds']>=status?.probe_group_rounds??{};
   // Frozen Policies interface: a group operation never globally locks peers.
   const groupProbing=(name:string)=>busy.has('probe.group:'+name)||!!probeGroupProgress[name];
-  const probingNames=new Set<string>(probeAllProgress?.names);for(const k of Object.keys(probeGroupProgress))for(const n of probeGroupProgress[k].names)probingNames.add(n);
+  const probingNames=new Set<string>(probeAllProgress?.names);for(const k of Object.keys(probeGroupProgress))for(const n of probeGroupProgress[k]?.names??[])probingNames.add(n);
   const memberProbing=(name:string)=>busy.has('probe.node:'+name)||probingNames.has(name);
   const probeLocked=status?.runtime.state!=='running'||!!probeAllProgress||doc.installing||kernelRestarting||appRestarting;
   const probe = (kind: 'node' | 'group', name: string) => run(`probe.${kind}:${name}`, async () => {
@@ -335,7 +361,7 @@ export function useClient() {
     const work=subscriptionTail.current.then(async()=>{
      if(automatic&&!coreReachable.current){skippedUnavailable=true;return;}
      const approved=confirm?reviewRef.current[key]:undefined;
-     const r=await backgroundSubscription(doc,{preview:p=>core<SubscriptionPreview>('subscription.preview',p),cancel:token=>core('subscription.cancel',{token})},params,approved);
+     const r=await backgroundSubscription(doc,{preview:async p=>normalizePreview(await core<unknown>('subscription.preview',p)),cancel:token=>core('subscription.cancel',{token})},params,approved);
      result=r;
      setSubscriptionReviews(old=>{const n={...old};if(r.confirmation)n[key]=r.confirmation;else delete n[key];return n;});
      setSubscriptionNotices(old=>{const n={...old};if(r.confirmation)n[key]='订阅变化需要确认；请点击编辑查看';else delete n[key];return n;});
@@ -366,7 +392,7 @@ export function useClient() {
    return r?.confirmation?'confirmation':'done';
   }
   async function selectSubscription(id:string,patch:Record<string,unknown>={}){
-   return run('subscription:'+id,async()=>{const revision=doc.revision;let p:SubscriptionPreview|undefined;try{p=await core<SubscriptionPreview>('subscription.select',{id,...patch});await acceptSubscription(doc,p,revision);await refreshStatus();}finally{if(p?.token)await core('subscription.cancel',{token:p.token}).catch(()=>{});}},showSubscriptionFailure);
+   return run('subscription:'+id,async()=>{const revision=doc.revision;let p:SubscriptionPreview|undefined;try{p=normalizePreview(await core<unknown>('subscription.select',{id,...patch}));await acceptSubscription(doc,p,revision);await refreshStatus();}finally{if(p?.token)await core('subscription.cancel',{token:p.token}).catch(()=>{});}},showSubscriptionFailure);
   }
   async function updateAllSubscriptions(){for(const sub of [...(doc.source?.subscriptions??[])]){if(sub.url&&!jobs.current.has('subscription:'+sub.id))await startSubscription({id:sub.id,download_mode:sub.download_mode??'auto',full_only:true},sub.id);}}
   // Optimistic per-group projection; never writes source/drafts before native
@@ -388,7 +414,7 @@ export function useClient() {
       if(kernel.groups){kernel.groups=[...kernel.groups];for(const [group,p]of Object.entries(selections)){const i=kernel.groups.findIndex(g=>g.name===group);if(i>=0){const g={...kernel.groups[i]};if(p.unpin)delete g.fixed;else if(g.type==='select')g.selected=p.member;else g.fixed=p.member;kernel.groups[i]=g;}}}
       projectedSource={...projectedSource,kernel};
     }
-    if(projectedStatus)projectedStatus={...projectedStatus,groups:projectedStatus.groups.map(g=>{const p=selections[g.name];return p&&!p.unpin?{...g,current:p.member}:g;})};
+    if(projectedStatus)projectedStatus={...projectedStatus,groups:(projectedStatus.groups??[]).map(g=>{const p=selections[g.name];return p&&!p.unpin?{...g,current:p.member}:g;})};
   }
   const labels=useMemo(()=>originalNames(doc.source),[doc.source]),label=(name:string|null|undefined)=>name?labels.get(name)??name:'—';
   // Host owns its app-restarting flag. Do not echo our own accepted restart as
@@ -438,6 +464,6 @@ export function useClient() {
     return()=>{live=false;trayListenerReady.current=false;for(const stop of stops.splice(0))stop();void host('tray_sync',{listener_ready:false}).catch(()=>{});};
   },[]);
   useEffect(()=>{if(hasHost())void host('tray_sync',{snapshot:trayPayload,listener_ready:trayListenerReady.current}).catch(()=>{/* native tray errors must not alter confirmed configuration */});},[trayState]);
-  return { selectMember,kernelRestarting,appRestarting,quitCleanupPending,restartCore,restartApp,reportOperationError, subscriptionResults,showSubscriptionFailure,selectSubscription,updateAllSubscriptions, connectionSpeeds,label, startSubscription,subscriptionReviews,clearSubscriptionReview,errorQueue,dismissError, updateSubscription,legacyNotices, migrate, probeAll, probeAllProgress, probeGroupProgress, groupProbing, memberProbing, probeLocked, cancelProbeGroup, pauseSubscriptions, subscriptionNotices, desktop, refreshDesktop, setPreferences, doc, source: projectedSource, status:projectedStatus, network, busy, error:doc.uncertain?errorText('CORE_MUTATION_UNCERTAIN'):error, samples, hasHost: hasHost(), connected: doc.saved !== null, edit, save, run, probe, os, control, connect, setError, refreshStatus, refreshNetwork };
+  return { selectMember,kernelRestarting,appRestarting,quitCleanupPending,restartCore,restartApp,reportOperationError, subscriptionResults,showSubscriptionFailure,selectSubscription,updateAllSubscriptions, connectionSpeeds,label, startSubscription,subscriptionReviews,clearSubscriptionReview,errorQueue,dismissError, updateSubscription,legacyNotices, migrate, probeAll, probeAllProgress, probeGroupProgress, groupProbing, memberProbing, probeLocked, cancelProbeGroup, pauseSubscriptions, subscriptionNotices, desktop, refreshDesktop, setPreferences, doc, source: projectedSource, status:projectedStatus, network, busy, error:doc.uncertain?errorText('CORE_MUTATION_UNCERTAIN'):error, statusError, coreUnreachable:hasHost()&&!status&&(!!statusError||(doc.saved===null&&!!error&&!busy.has('connect'))), samples, hasHost: hasHost(), connected: doc.saved !== null, edit, save, run, probe, os, control, connect, setError, refreshStatus, refreshNetwork };
 }
 export type Client = ReturnType<typeof useClient>;

@@ -7,9 +7,10 @@ import { Segmented, StableText } from '../components/ui';
 import { KState, KTag } from '../components/labels';
 import { tip } from '../components/Tooltip';
 import { core } from '../client/ipc';
+import { normalizeDNSLogs } from '../client/normalize';
 import { clockStr } from '../client/display';
 import { errorText } from '../lib/errors';
-import type { DNSCacheItem, DNSCacheListReply, DNSLogEntry, DNSLogsReply } from '../client/types';
+import type { DNSCacheItem, DNSCacheListReply, DNSLogEntry } from '../client/types';
 import type { Client } from '../client/useClient';
 
 const POLL_MS = 1000;
@@ -100,12 +101,13 @@ export function Dns({
 
   const pullNow = async () => {
     try {
-      const r = await core<DNSLogsReply>('logs.dns', {
-        instance: instance.current,
-        after: cursor.current,
-        limit: 500,
-      });
-      if (!r) return;
+      const r = normalizeDNSLogs(
+        await core<unknown>('logs.dns', {
+          instance: instance.current,
+          after: cursor.current,
+          limit: 500,
+        }),
+      );
       const reset = instance.current !== r.instance;
       instance.current = r.instance;
       cursor.current = r.next_seq ?? 0;

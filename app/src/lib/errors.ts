@@ -89,6 +89,14 @@ export function resourceRefreshError(error: unknown, _subscriptionOwned = false)
  if(code==='resource_source_changed')return '资源来源或配置已变化，原数据已保留，请重新载入后再更新';
  return errorText(error);
 }
+/** Short, display-safe reason for a resource row in `error`/`missing` state. */
+export function resourceStateReason(code?: string | null): string {
+ if (!code) return '';
+ const known: Record<string, string> = { core_not_running: '内核未运行', unsupported: '无可靠更新来源', resource_source_changed: '来源已变化，请重新载入', invalid_format: '格式无效' };
+ if (known[code]) return known[code];
+ const safe = code.replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 48);
+ return safe ? '错误码 ' + safe : '';
+}
 export function errorLocation(error: unknown, text?: string): { line?: number; column?: number; position?: number } {
   const e = error as any, msg = typeof error === 'string' ? error : typeof e?.message === 'string' ? e.message : '';
   const yaml = e?.linePos?.[0];

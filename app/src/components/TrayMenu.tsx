@@ -19,6 +19,10 @@ export interface TrayMenuNode { id: string; title: string; enabled: boolean; che
 interface PopupGeometry { epoch: string; layout: string; phase: 'preparing' | 'visible'; client_width: number; client_height: number; max_width: number; max_height: number }
 export interface TrayMenuState { revision: string; nodes: TrayMenuNode[]; theme: 'light' | 'dark' | 'system'; popup?: PopupGeometry | null }
 export const TRAY_MENU_DISMISS = '__dismiss';
+/** Popup preparing/visible: fast geometry handshake + 1 s state refresh. */
+export const TRAY_ACTIVE_TICK_MS = 50, TRAY_ACTIVE_POLL_MS = 1000;
+/** No popup: slow heartbeat only; native `kat-tray-prepare` wakes the page instantly. */
+export const TRAY_IDLE_TICK_MS = 2000, TRAY_IDLE_POLL_MS = 5000;
 
 const glyph = (d: ReactNode) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>;
 const ICONS: Record<string, ReactNode> = {
@@ -147,7 +151,10 @@ export function TrayMenuWindow() {
   const root = useRef<HTMLDivElement>(null), confirmed = useRef<TrayMenuState | null>(null);
   const inFlight = useRef(false), sent = useRef({ key: '', count: 0 });
   const prewarmSeeded = useRef('');
-  const receive = useCallback((next: TrayMenuState) => {
+  const receive = useCallback((raw: TrayMenuState) => {
+    if (!raw || typeof raw !== 'object') return;
+    const fix = (ns: unknown): TrayMenuNode[] => (Array.isArray(ns) ? ns : []).filter(n => n && typeof n === 'object').map(n => ({ ...n, children: fix(n.children) }));
+    const next: TrayMenuState = { ...raw, nodes: fix(raw.nodes) };
     confirmed.current = next;
     setState(old => old?.revision === next.revision && old.theme === next.theme &&
       JSON.stringify(old.popup) === JSON.stringify(next.popup) ? old : next);
@@ -201,26 +208,36 @@ export function TrayMenuWindow() {
   }, [receive]);
   useTrayTheme(state?.theme);
   useEffect(() => {
-    let stopped = false, ticking = false, lastPoll = 0;
-    const wake = () => {
-      sent.current = { key: '', count: 0 }; lastPoll = 0;
-      setResetSignal(x => x + 1);
-      void refresh().then(() => { if (!stopped) void measure(); });
-    };
-    wake();
-    const sizing = window.setInterval(() => {
-      if (stopped || ticking) return;
-      if (!confirmed.current?.popup && document.visibilityState !== 'visible') return;
+    let stopped = false, ticking = false, lastPoll = 0, timer = 0;
+    // Native evaluates `kat-tray-prepare` on every open (prepare) and hide, so the
+    // fast 50 ms geometry handshake and 1 s state poll only run while a popup is
+    // being prepared/shown. Idle (including a hidden WebView2 that still reports
+    // `visible`) falls back to a slow heartbeat that keeps the prewarm size fresh.
+    const schedule = (ms: number) => { window.clearTimeout(timer); if (!stopped) timer = window.setTimeout(tick, ms); };
+    const tick = () => {
+      if (stopped) return;
+      if (ticking) { schedule(TRAY_ACTIVE_TICK_MS); return; }
+      const active = !!confirmed.current?.popup;
+      if (!active && document.visibilityState !== 'visible') { schedule(TRAY_IDLE_TICK_MS); return; }
       ticking = true;
       void (async () => {
         try {
-          if ((confirmed.current?.popup || document.visibilityState === 'visible') && Date.now() - lastPoll >= 1000) {
+          if (Date.now() - lastPoll >= (active ? TRAY_ACTIVE_POLL_MS : TRAY_IDLE_POLL_MS)) {
             await refresh(); lastPoll = Date.now();
           }
           if (!stopped) await measure();
-        } finally { ticking = false; }
+        } finally {
+          ticking = false;
+          schedule(confirmed.current?.popup ? TRAY_ACTIVE_TICK_MS : TRAY_IDLE_TICK_MS);
+        }
       })();
-    }, 50);
+    };
+    const wake = () => {
+      sent.current = { key: '', count: 0 }; lastPoll = 0;
+      setResetSignal(x => x + 1);
+      void refresh().then(() => { if (!stopped) { void measure(); lastPoll = Date.now(); schedule(confirmed.current?.popup ? TRAY_ACTIVE_TICK_MS : TRAY_IDLE_TICK_MS); } });
+    };
+    wake();
     const observer = new ResizeObserver(() => { void measure(); });
     if (root.current) observer.observe(root.current);
     const changed = () => { if (document.visibilityState === 'visible') wake(); };
@@ -229,7 +246,7 @@ export function TrayMenuWindow() {
     window.addEventListener('resize', wake);
     document.addEventListener('visibilitychange', changed);
     return () => {
-      stopped = true; window.clearInterval(sizing); observer.disconnect();
+      stopped = true; window.clearTimeout(timer); observer.disconnect();
       window.removeEventListener('kat-tray-prepare', wake); window.removeEventListener('focus', wake);
       window.removeEventListener('resize', wake); document.removeEventListener('visibilitychange', changed);
     };

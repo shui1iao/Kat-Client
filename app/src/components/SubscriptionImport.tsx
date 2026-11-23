@@ -300,7 +300,7 @@ export function SubscriptionImport({
         <div className="sub-review">
           <b>订阅变化需要确认</b>
           <ul>
-            {review.changes.map((s, i) => (
+            {(review.changes ?? []).map((s, i) => (
               <li key={i}>{s}</li>
             ))}
           </ul>

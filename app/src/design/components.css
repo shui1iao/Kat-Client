@@ -1244,6 +1244,67 @@ select.inp.sm.conn-proc-select {
   transform: translateY(0);
 }
 
+/* ---------- Rendering fault fallback (page-scoped, shell stays alive) ---------- */
+.page-fault {
+  align-self: center;
+  width: min(520px, 100%);
+  margin: 56px auto 0;
+  padding: 26px 28px 24px;
+  align-items: flex-start;
+  gap: 8px;
+  flex: none;
+}
+.page-fault-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+.page-fault h2 {
+  font-size: var(--fs-section);
+  font-weight: 600;
+  color: var(--text);
+}
+.page-fault p {
+  font-size: var(--fs-body);
+  color: var(--text-2);
+  line-height: 1.55;
+}
+.page-fault .page-fault-detail {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: var(--r-inner);
+  background: var(--recess-bg);
+  box-shadow: var(--recess-shadow);
+  color: var(--text-3);
+  font: 400 var(--fs-meta)/1.5 var(--mono, ui-monospace, monospace);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.page-fault-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.app-fault-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 22px;
+  display: flex;
+  flex-direction: column;
+}
+
 /* Forced Colors High-Contrast Overrides (loaded after component rules) */
 @media (forced-colors: active) {
   select,

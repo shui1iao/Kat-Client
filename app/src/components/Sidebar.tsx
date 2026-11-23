@@ -87,7 +87,15 @@ export function Sidebar({
           aria-controls="kat-sidebar"
         >
           {collapsed ? (
-            <img className="brand-icon" src="./kat-icon.svg" alt="" aria-hidden="true" draggable={false} />
+            <>
+              <img className="brand-icon" src="./kat-icon.svg" alt="" aria-hidden="true" draggable={false} />
+              {/* Hover/keyboard focus swaps the logo for the expand glyph so the entry is discoverable. */}
+              <svg className="sidebar-expand-glyph" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M9 4v16" />
+                <path d="M13 9l3 3-3 3" />
+              </svg>
+            </>
           ) : (
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <rect x="3" y="4" width="18" height="16" rx="2" />

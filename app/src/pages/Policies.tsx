@@ -73,7 +73,7 @@ export function Policies({
     });
 
   const editMember = (name: string, member: string, unpin = false) => void c.selectMember(name, member, unpin);
-  const runningGroups = c.status?.runtime.state === 'running' ? c.status.groups : [];
+  const runningGroups = c.status?.runtime.state === 'running' ? c.status.groups ?? [] : [];
   const runtimeGroupByName = new Map((c.status?.groups ?? []).map((s) => [s.name, s]));
   const runtimeNodeNames = (c.status?.nodes ?? []).map((n) => n.name);
   const groupNames = groups.map((g) => g.name);

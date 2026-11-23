@@ -24,9 +24,9 @@ export interface ProbeResult {cold_ms?:number|null; name: string; probe_ms: numb
 export interface FlowDetails {process_name?:string;process_path?:string;domain_suffix?:string;flow_id?:string;inbound_kind?:'tun'|'system_proxy'|'socks'|'http';source_addr?:string;dest_host?:string;sniffed?:boolean;dest_ip?:string;dest_ips?:string[];remote_dns?:boolean;error_text?:string;error_stage?:'dns'|'connect'|'tls'|'proxy_handshake'|'rule_reject'|'canceled'|'process'}
 export interface KernelLogEntry {seq:number;time:string;level:'debug'|'info'|'warn'|'error';message:string}
 export interface KernelLogsReply { instance:number;entries:KernelLogEntry[];next_seq:number;dropped:number}
-export interface ConnectionInfo extends FlowDetails { process_name?:string; id:number; network:string; inbound:string; source:string; target:string; host?:string; rule:string; chain:string[]; start:string; duration_ms:number; up:number; down:number }
+export interface ConnectionInfo extends FlowDetails { process_name?:string; id:number; member_ids?:number[]; network:string; inbound:string; source:string; target:string; host?:string; rule:string; chain:string[]; start:string; duration_ms:number; up:number; down:number }
 export interface ClosedConnection extends ConnectionInfo { end:string }
-export interface ConnectionsReply { active:ConnectionInfo[]; closed:ClosedConnection[]; total:number|null }
+export interface ConnectionsReply { connection_instance?:string; active:ConnectionInfo[]; closed:ClosedConnection[]; total:number|null }
 export interface RuleHits { name:string; hits:number; up:number; down:number }
 export interface SniffSettings { enabled:boolean; override_destination:boolean; tcp_ports?:string; udp_ports?:string; timeout?:string; skip_domain?:string[] }
 export interface ConnLogEntry extends FlowDetails { start?:string;end?:string;up?:number;down?:number;duration_ms?:number;ended?:boolean; seq:number; time:string; network:string; source:string; target:string; host?:string; rule:string; chain:string[]; outcome:'ok'|'error'|'rejected'|'idle'; code?:string }

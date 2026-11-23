@@ -3,6 +3,7 @@ import {Modal,LocalError} from './Editors';
 import {StableText} from './ui';
 import {Icon} from './Icon';
 import {core,errorText} from '../client/ipc';
+import {normalizeTargetPreview} from '../client/normalize';
 import type {Client} from '../client/useClient';
 
 type TargetPreview={
@@ -20,7 +21,7 @@ export function TargetRulePreview({c,close}:{c:Client;close:()=>void}){
  async function preview(){
   const input=target.trim();if(!input||busy||!c.hasHost)return;
   const id=++request.current;setBusy(true);setError('');setResult(null);
-  try{const reply=await core<TargetPreview>('routing.previewTarget',{target:input});if(request.current===id)setResult(reply);}
+  try{const reply=normalizeTargetPreview<TargetPreview>(await core<unknown>('routing.previewTarget',{target:input}));if(request.current===id)setResult(reply);}
   catch(e){if(request.current===id)setError(errorText(e));}
   finally{if(request.current===id)setBusy(false);}
  }

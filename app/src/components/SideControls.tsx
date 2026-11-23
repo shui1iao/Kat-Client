@@ -73,7 +73,11 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
       setMenuPos(null);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMenuPos(null);
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setMenuPos(null);
+        pillRef.current?.focus({ preventScroll: true });
+      }
     };
     const close = () => setMenuPos(null);
     document.addEventListener('mousedown', onDown, true);
@@ -87,6 +91,27 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
       window.removeEventListener('blur', close);
     };
   }, [menuPos]);
+
+  // Keyboard model of a listbox popup: focus enters the current option, arrows
+  // move, Home/End jump, Enter/Space choose (native button), Tab/Escape close.
+  useEffect(() => {
+    if (!menuPos) return;
+    const pop = popRef.current;
+    const target = pop?.querySelector<HTMLElement>('.kat-opt[aria-selected="true"]') ?? pop?.querySelector<HTMLElement>('.kat-opt');
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: 'nearest' });
+  }, [!!menuPos]);
+  const onPopKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = [...(popRef.current?.querySelectorAll<HTMLElement>('.kat-opt:not(:disabled)') ?? [])];
+    if (!items.length) return;
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    const go = (n: number) => { e.preventDefault(); items[(n + items.length) % items.length].focus(); };
+    if (e.key === 'ArrowDown') go(i + 1);
+    else if (e.key === 'ArrowUp') go(i < 0 ? items.length - 1 : i - 1);
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(items.length - 1);
+    else if (e.key === 'Tab') { e.preventDefault(); setMenuPos(null); pillRef.current?.focus({ preventScroll: true }); }
+  };
 
   const toggleGlobalMenu = () => {
     if (menuPos) {
@@ -106,6 +131,7 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
 
   const selectGlobalGroup = (name: string) => {
     setMenuPos(null);
+    pillRef.current?.focus({ preventScroll: true });
     if (name === c.source?.client.global_group || c.doc.saving) return;
     void c.edit((d) => {
       d.client.global_group = name;
@@ -141,6 +167,12 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
           aria-expanded={!!menuPos}
           disabled={!c.connected}
           onClick={toggleGlobalMenu}
+          onKeyDown={(e) => {
+            if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !menuPos) {
+              e.preventDefault();
+              toggleGlobalMenu();
+            }
+          }}
           {...tip(
             globalGroup
               ? `全局出口：${c.label(globalGroup)}${resolvedGlobalNode ? ' → ' + c.label(resolvedGlobalNode) : ''}`
@@ -163,6 +195,7 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
             className={'kat-pop global-pop' + (menuPos.up ? ' up' : '')}
             role="listbox"
             aria-label="全局策略组"
+            onKeyDown={onPopKey}
             style={{ left: menuPos.left, top: menuPos.top, bottom: menuPos.bottom, width: menuPos.width, minWidth: menuPos.width, maxHeight: menuPos.maxHeight }}
           >
             {groups.map((g) => {
@@ -176,6 +209,7 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
                   aria-selected={cur}
                   className={'kat-opt' + (cur ? ' cur' : '')}
                   onClick={() => selectGlobalGroup(g.name)}
+                  {...tip(c.label(g.name) + (leaf ? ' → ' + c.label(leaf) : ''), true)}
                 >
                   <span className="global-opt-copy">
                     <b>{c.label(g.name)}</b>

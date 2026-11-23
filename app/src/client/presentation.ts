@@ -13,7 +13,7 @@ export function policyColor(name:string,status:CoreStatus|null,label:(n:string)=
  }
  return cached.colors.get(label(name))??'#64748B';
 }
-export function connectionRates(previous:{at:number;items:ConnectionInfo[]}|null,next:{at:number;items:ConnectionInfo[]}){const result:Record<number,number|null>={};const old=new Map(previous?.items.map(x=>[x.id,x])??[]),dt=previous?(next.at-previous.at)/1000:0;for(const c of next.items){const p=old.get(c.id);result[c.id]=p&&p.start===c.start&&dt>0&&c.up>=p.up&&c.down>=p.down?((c.up-p.up)+(c.down-p.down))/dt:null;}return result;}
+export function connectionRates(previous:{at:number;items:ConnectionInfo[]}|null,next:{at:number;items:ConnectionInfo[]}){const result:Record<number,number|null>={};const old=new Map((previous?.items??[]).map(x=>[x.id,x])),dt=previous?(next.at-previous.at)/1000:0;for(const c of next.items??[]){const p=old.get(c.id);result[c.id]=p&&p.start===c.start&&dt>0&&c.up>=p.up&&c.down>=p.down?((c.up-p.up)+(c.down-p.down))/dt:null;}return result;}
 export function topConnections(items:ConnectionInfo[],rates:Record<number,number|null>,limit=5){return [...items].sort((a,b)=>(rates[b.id]??0)-(rates[a.id]??0)||(b.up+b.down)-(a.up+a.down)||(Date.parse(b.start)||0)-(Date.parse(a.start)||0)).slice(0,limit);}
 export function ruleKindLabel(kind:string,payload=''){return ({final:'MATCH',ip_cidr:payload.includes(':')?'IP-CIDR6':'IP-CIDR',ip_asn:'IP-ASN',src_ip_cidr:'SRC-IP',dst_port:'DST-PORT',process_name:'PROCESS-NAME'} as Record<string,string>)[kind]??kind.toUpperCase().replaceAll('_','-');}
 export function ruleType(r:SourceObject){const f=simpleMatch(r);return f?ruleKindLabel(f,String(r[f])):'COMPLEX';}
@@ -21,7 +21,7 @@ export function ruleType(r:SourceObject){const f=simpleMatch(r);return f?ruleKin
 export function parseConnectionRule(raw:string){const m=/^([a-z][a-z0-9_]*)(?::(.*))?->(.+)$/.exec(raw);if(!m||!(m[1]==='final'||MATCH_FIELDS.includes(m[1])))return null;return {type:ruleKindLabel(m[1],m[2]??''),payload:m[1]==='final'?'':m[2]??''};}
 // status.items is opt-in kernel diagnostics; the client list is the authoritative
 // connection snapshot already used by the Connections page (no kernel flag changes).
-export function withConnectionSnapshot(s:CoreStatus,r:ConnectionsReply):CoreStatus{return {...s,connections:{active:r.active.length,total:r.total,tcp:r.active.filter(x=>x.network!=='udp').length,udp:r.active.filter(x=>x.network==='udp').length,items:r.active}};}
+export function withConnectionSnapshot(s:CoreStatus,r:ConnectionsReply):CoreStatus{const active=Array.isArray(r?.active)?r.active:[];return {...s,connections:{active:active.length,total:r?.total??null,tcp:active.filter(x=>x.network!=='udp').length,udp:active.filter(x=>x.network==='udp').length,items:active}};}
 
 export function ruleColor(type:string){return type.startsWith('DOMAIN')?'#3B82F6':['IP-CIDR','IP-CIDR6','GEOIP','IP-ASN','SRC-IP'].includes(type)?'#CA8A35':type.startsWith('PROCESS-')?'#DE5B5B':type==='RULE-SET'?'#5C7CFA':'#64748B';}
 function conditionKey(r:SourceObject):string{if(r.and)return 'and('+r.and.map(conditionKey).join(',')+')';if(r.or)return 'or('+r.or.map(conditionKey).join(',')+')';if(r.not)return 'not('+conditionKey(r.not)+')';const f=simpleMatch(r);return f?f+':'+r[f]+(r.no_resolve&&['ip_cidr','ip_suffix','ip_asn','geoip','rule_set'].includes(f)?',no_resolve':''):'unknown';}

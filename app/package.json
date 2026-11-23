@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1420 --strictPort",
     "typecheck": "tsc --noEmit -p .",
-    "build": "tsc --noEmit -p . && node build.mjs"
+    "build": "tsc --noEmit -p . && node build.mjs",
+    "test": "node tests-ui/run-unit.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",

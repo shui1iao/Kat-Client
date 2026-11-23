@@ -95,6 +95,28 @@
   height: 25px;
 }
 
+/* Collapsed: the logo is the expand button; hovering or keyboard focus reveals
+   the expand glyph in the same cell (no extra chrome in the 62px rail). */
+.sidebar-collapsed .sidebar-toggle > * {
+  grid-area: 1 / 1;
+  transition: opacity var(--t-fast) var(--ease), transform var(--t-fast) var(--ease);
+}
+.sidebar-expand-glyph {
+  opacity: 0;
+  transform: scale(0.85);
+  color: var(--text-2);
+}
+.sidebar-collapsed .sidebar-toggle:hover .brand-icon,
+.sidebar-collapsed .sidebar-toggle:focus-visible .brand-icon {
+  opacity: 0;
+  transform: scale(0.85);
+}
+.sidebar-collapsed .sidebar-toggle:hover .sidebar-expand-glyph,
+.sidebar-collapsed .sidebar-toggle:focus-visible .sidebar-expand-glyph {
+  opacity: 1;
+  transform: none;
+}
+
 /* Source-List Navigation */
 .nav-list {
   flex: 1;
@@ -342,10 +364,17 @@
   background: var(--warn);
   box-shadow: 0 0 0 2.5px var(--warn-soft);
 }
-.side-status[data-state="error"] .ss-dot,
-.side-status[data-state="stopped"] .ss-dot {
+.side-status[data-state="error"] .ss-dot {
   background: var(--bad);
   box-shadow: 0 0 0 2.5px var(--bad-soft);
+}
+/* A deliberately stopped core is a neutral state, not a fault. */
+.side-status[data-state="stopped"] .ss-dot {
+  background: var(--text-3);
+  box-shadow: 0 0 0 2.5px var(--track);
+}
+.side-status[data-state="error"] .ss-state {
+  color: var(--bad);
 }
 
 .ss-state {
@@ -663,13 +692,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
-  flex: 0 1 auto;
+  /* The group name keeps its width (up to ~60% of the row); the resolved node
+     on the right is what gets ellipsised first. */
+  flex: 0 0 auto;
+  max-width: 62%;
 }
 
 .global-opt-copy em {
   font-style: normal;
   font-size: var(--fs-micro);
   color: var(--text-3);
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -862,6 +896,50 @@
 
 .main:has(.page-overview) {
   padding-inline: 0;
+}
+
+/* Core unreachable banner (never shown for a deliberately stopped core) */
+.core-fault {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin: 0 0 12px;
+  padding: 7px 8px 7px 14px;
+  border-radius: var(--r-ctl);
+  background: var(--bad-soft);
+  font-size: var(--fs-body);
+}
+.page-overview > .core-fault {
+  margin: 4px 30px 4px 14px; /* bento padding 22px + 8px scrollbar gutter */
+}
+.core-fault-dot {
+  width: 7.5px;
+  height: 7.5px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--bad);
+}
+.core-fault-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.core-fault-text b {
+  flex: none;
+  font-weight: 600;
+  color: var(--bad);
+}
+.core-fault-reason {
+  min-width: 0;
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Subtle macOS page transition on navigation */

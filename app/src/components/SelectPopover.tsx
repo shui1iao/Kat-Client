@@ -2,9 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 /**
- * Legacy fallback for engines without customizable native <select>. Modern
- * Chromium/WebView2 uses CSS appearance:base-select with no event interception.
- * On legacy engines this draws the open state to match the app. The <select> element itself stays the source of
+ * App-drawn open state for every <select> (the app does not use CSS
+ * `appearance: base-select`; `select.inp` is `appearance: none`), so the list
+ * matches the Kat popover style on WebView2. The <select> element itself stays the source of
  * truth: value, disabled state, labels, form semantics and closed-state keyboard
  * (Home/End/arrows) are untouched. Only the gestures that would open the native
  * popup (primary mouse press, Space/Enter/F4/Alt+Arrow) are redirected here, and a

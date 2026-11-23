@@ -7,10 +7,12 @@ export function byteAxis(values: number[], rate = false) {
   let index = 0, unit = 1;
   while (index < units.length - 1 && maximum >= unit * 1024) { unit *= 1024; index++; }
   const ceiling = maximum > 0 ? maximum / unit * 1.08 : 1;
-  const step = niceStep(ceiling / 4);
+  // Whole bytes only: a byte count never has a fractional tick (no "0.5 B").
+  const step = index === 0 ? Math.max(1, niceStep(ceiling / 4)) : niceStep(ceiling / 4);
   const top = Math.ceil(ceiling / step) * step;
   const ticks = Array.from({ length: Math.round(top / step) + 1 }, (_, i) => i * step);
-  return { unit, label: units[index], top, ticks };
+  // `empty`: no positive sample; callers draw the grid but no value labels.
+  return { unit, label: units[index], top, ticks, empty: maximum === 0 };
 }
 export const axisLabel = (value: number) => Number(value.toPrecision(3)).toString();
 

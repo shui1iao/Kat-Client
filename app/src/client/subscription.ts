@@ -13,7 +13,7 @@ export function assertSubscriptionWritable(doc:DocumentSession) {
 export async function acceptSubscription(doc:DocumentSession,p:SubscriptionPreview,revision:number) {
  assertSubscriptionWritable(doc);
  if(doc.revision!==revision)throw new Error('配置或草稿已变化，请重新预览');
- if(!p.token||!p.text||!p.format||p.issues.length)throw new Error('没有可接纳的完整候选');
+ if(!p.token||!p.text||!p.format||(p.issues??[]).length)throw new Error('没有可接纳的完整候选');
  await doc.save(p.text,p.format);
 }
 export function dueSubscriptions(source:DocumentSource|null,now:number,attempts:Map<string,number>,statuses:Record<string,SubscriptionStatus>={},busy:Set<string>=new Set()) {
@@ -42,7 +42,7 @@ export async function backgroundSubscription(doc:DocumentSession,api:Subscriptio
    if(doc.revision!==revision){if(attempt===0)continue;throw new Error('配置再次变化，请重新更新订阅；原配置已保留');}
    if(p.kind==='native')throw {code:'subscription_native_config'};
    if(p.kind&&p.kind!=='full')throw {code:'subscription_format_unsupported'};
-   if(p.issues.length)throw new Error(p.issues[0]);
+   if(p.issues?.length)throw new Error(p.issues[0]);
    if(p.needs_confirmation&&!(approved?.preview===p&&approved.revision===revision)){const review={preview:p,revision};p=undefined;return {confirmation:review};}
    if(!p.token||!p.text||!p.format)throw new Error('没有可接纳的完整候选');
    if(doc.installing||doc.uncertain)throw new Error('请等待安装或配置核对完成后重新更新');

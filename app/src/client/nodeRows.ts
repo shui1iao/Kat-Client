@@ -2,7 +2,7 @@ import type { CoreStatus, DocumentSource } from './types';
 
 // Subscription snapshots own the materialized outbounds in kernel.outbounds.
 // Match their exact internal IDs, never display names or naming conventions.
-export function nodeRows(source: DocumentSource | null, runtime: CoreStatus['nodes'] = []) {
+export function nodeRows(source: DocumentSource | null, runtime: CoreStatus['nodes'] | null = []) {
   const configured = source?.kernel.outbounds ?? [];
   const ownerByName = new Map<string, string>();
   for (const s of source?.subscriptions ?? []) {
@@ -26,7 +26,7 @@ export function nodeRows(source: DocumentSource | null, runtime: CoreStatus['nod
   });
   return [
     ...rows,
-    ...runtime
+    ...(Array.isArray(runtime) ? runtime : [])
       .filter((n) => !configuredNames.has(n.name))
       .map((n) => ({ ...n, address: undefined, manual: undefined, copy: undefined })),
   ];

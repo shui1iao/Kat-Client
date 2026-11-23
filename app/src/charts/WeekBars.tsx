@@ -35,7 +35,7 @@ export function WeekBars({
   const [ref, { w, h }] = useSize<HTMLDivElement>();
   const height = fixed ?? Math.max(88, h);
   const [hover, setHover] = useState<{ index: number; anchor: TipAnchor } | null>(null);
-  const { unit, label, top, ticks } = byteAxis(data.map((d) => totalOf(d) ?? NaN));
+  const { unit, label, top, ticks, empty } = byteAxis(data.map((d) => totalOf(d) ?? NaN));
   const yMax = Math.max(1, top * unit);
   const ih = Math.max(10, height - PAD.t - PAD.b);
   const iw = Math.max(10, w - PAD.l - PAD.r);
@@ -79,7 +79,7 @@ export function WeekBars({
             return (
               <g key={t}>
                 <line x1={PAD.l} x2={w - PAD.r} y1={gy} y2={gy} className={t === 0 ? 'axis' : 'grid'} />
-                {t > 0 && (
+                {t > 0 && !empty && (
                   <text x={w - PAD.r} y={gy - 3.5} className="ylab" textAnchor="end">
                     {axisLabel(t)} {label}
                   </text>

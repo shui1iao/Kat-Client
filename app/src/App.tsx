@@ -23,6 +23,8 @@ import { SelectPopover } from './components/SelectPopover';
 import { TooltipHost } from './components/Tooltip';
 import { installInputModality } from './lib/inputModality';
 import { EditorSessionContext } from './components/Editors';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { CoreFaultBanner } from './components/CoreFault';
 
 function parseRouteHash(): {
   page: PageId;
@@ -105,7 +107,7 @@ export default function App() {
   const subsCount = c.source?.subscriptions?.length ?? 0;
   const chain = exitChain(c.status, c.source).map(c.label);
   const running = c.status?.runtime.state === 'running';
-  const activeCount = running ? c.status?.connections.active ?? c.status?.connections.items.length ?? 0 : 0;
+  const activeCount = running ? c.status?.connections?.active ?? c.status?.connections?.items?.length ?? 0 : 0;
 
   const meta: Record<PageId, string> = {
     overview: '',
@@ -160,6 +162,8 @@ export default function App() {
             <TitleBar c={c} title={PAGE_LABEL[page]} meta={meta[page]} />
             <main className="main">
               <div className={'content page-' + page}>
+                <CoreFaultBanner c={c} />
+                <ErrorBoundary scope="page" resetKey={page} onHome={page === 'overview' ? undefined : () => go('overview')}>
                 {page === 'overview' && (
                   <Dashboard
                     c={c}
@@ -197,6 +201,7 @@ export default function App() {
                     onSection={setSettingsSection}
                   />
                 )}
+                </ErrorBoundary>
               </div>
             </main>
           </div>

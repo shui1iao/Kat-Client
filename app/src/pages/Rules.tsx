@@ -10,11 +10,12 @@ import { Field, LocalError, Modal } from '../components/Editors';
 import { names } from '../client/operations';
 import { editRule, MATCH_FIELDS, simpleMatch, targetOf } from '../client/rules';
 import { core } from '../client/ipc';
-import { errorText, resourceRefreshError } from '../lib/errors';
+import { normalizeResources, normalizeTargetPreview } from '../client/normalize';
+import { errorText, resourceRefreshError, resourceStateReason } from '../lib/errors';
 import { countStr, showBytes } from '../client/display';
 import { updateResources } from '../client/resources';
 import type { Client } from '../client/useClient';
-import type { DocumentReply, ResourceItem, ResourcesReply, SourceObject } from '../client/types';
+import type { DocumentReply, ResourceItem, SourceObject } from '../client/types';
 
 interface Draft {
   index: number | null;
@@ -85,7 +86,8 @@ export function Rules({
     if (c.hasHost && c.connected) {
       setResLoading(true);
       setResErrors([]);
-      void core<ResourcesReply>('resources.list')
+      void core<unknown>('resources.list')
+        .then(normalizeResources)
         .then((r) => {
           if (active()) setResItems(r.items);
         })
@@ -140,7 +142,7 @@ export function Rules({
             messages.push(resourceRefreshError(e));
           }
           try {
-            const r = await core<ResourcesReply>('resources.list');
+            const r = normalizeResources(await core<unknown>('resources.list'));
             if (active()) setResItems(r.items);
           } catch (e) {
             messages.push(resourceRefreshError(e, false));
@@ -183,7 +185,7 @@ export function Rules({
     setJudgeError('');
     setJudgeResult(null);
     try {
-      const reply = await core<TargetPreview>('routing.previewTarget', { target: input });
+      const reply = normalizeTargetPreview<TargetPreview>(await core<unknown>('routing.previewTarget', { target: input }));
       if (judgeReq.current === id) {
         setJudgeResult(reply);
         // Auto-scroll to the matched rule row; if current filter hides it, clear filters so the user sees it immediately
@@ -580,9 +582,16 @@ export function Rules({
                     <span>
                       <KTag label={RES_KIND[x.kind]} color={x.kind === 'rule_set' ? '#8B5CF6' : '#B7791F'} />
                     </span>
-                    <b className="res-name" {...tip(x.name, true)}>
-                      {x.name}
-                    </b>
+                    <span className="res-name-cell">
+                      <b className="res-name" {...tip(x.name, true)}>
+                        {x.name}
+                      </b>
+                      {x.state === 'error' && resourceStateReason(x.code) && (
+                        <small className="res-reason" {...tip(resourceStateReason(x.code), true)}>
+                          {resourceStateReason(x.code)}
+                        </small>
+                      )}
+                    </span>
                     <span>
                       <KState
                         tone={x.state === 'ok' ? 'ok' : x.state === 'pending' ? 'warn' : 'bad'}

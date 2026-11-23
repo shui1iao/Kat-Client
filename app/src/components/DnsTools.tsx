@@ -3,6 +3,7 @@ import { Icon } from './Icon';
 import { Card, SettingSwitch, StableText } from './ui';
 import { LocalError } from './Editors';
 import { core } from '../client/ipc';
+import { normalizeDNSQuery } from '../client/normalize';
 import { errorText } from '../lib/errors';
 import { KTag } from './labels';
 import {
@@ -31,7 +32,7 @@ export function DnsQuery({ c }: { c: Client }) {
       setError('');
       setReply(null);
       try {
-        setReply(await core<DNSQueryReply>('dns.query', { name: name.trim(), type }));
+        setReply(normalizeDNSQuery(await core<unknown>('dns.query', { name: name.trim(), type })));
       } catch (e) {
         setError(errorText(e));
       }

@@ -41,8 +41,13 @@ export function SideStatus({ c }: { c: Client; current?: boolean; onOpen?: () =>
   const state = s?.runtime.state;
   const running = state === 'running';
   const starting = c.kernelRestarting || c.busy.has('core') || state === 'starting';
-  const failed = !starting && state !== 'running';
-  const label = starting ? '重启中…' : failed ? '已停止' : stateLabel(state);
+  // An unreachable core (no status, IPC failure) or a core reporting `error` is a
+  // fault; a healthy core that is simply stopped is not.
+  const unreachable = !starting && c.coreUnreachable;
+  const faulted = !starting && (unreachable || state === 'error');
+  const stopped = !starting && !faulted && state !== 'running';
+  const label = starting ? '重启中…' : unreachable ? '无法连接内核' : faulted ? '内核错误' : stopped ? '已停止' : stateLabel(state);
+  const reason = unreachable ? c.statusError || c.error : '';
   const disabled = !c.hasHost || starting;
   const uptime = running ? showUptime(s?.runtime.uptime_ms) : '—';
   const memory = running ? showBytes(s?.runtime.memory_bytes) : '—';
@@ -57,10 +62,10 @@ export function SideStatus({ c }: { c: Client; current?: boolean; onOpen?: () =>
   return (
     <section
       className="side-status"
-      data-state={starting ? 'starting' : failed ? 'error' : state ?? 'stopped'}
-      aria-label={'内核：' + label}
+      data-state={starting ? 'starting' : faulted ? 'error' : stopped ? 'stopped' : state ?? 'stopped'}
+      aria-label={'内核：' + label + (reason ? '（' + reason + '）' : '')}
     >
-      <div className="ss-capsule">
+      <div className="ss-capsule" {...(reason ? tip(reason) : {})}>
         <div className="ss-l1">
           <i className="ss-dot" />
           <span className="ss-state">{label}</span>

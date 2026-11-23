@@ -11,6 +11,7 @@ import { ProcessIcon } from '../components/EntityIcons';
 import { Modal } from '../components/Editors';
 import { Segmented, StableText } from '../components/ui';
 import { core } from '../client/ipc';
+import { captureCloseTargets, normalizeConnections } from '../client/normalize';
 import { errorText } from '../lib/errors';
 import { clockStr, durationStr, showBytes, showRate } from '../client/display';
 import { parseConnectionRule, ruleColor } from '../client/presentation';
@@ -60,7 +61,7 @@ export function Connections({
   const [paused, setPaused] = useState(false);
   const [closing, setClosing] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
-  const [confirmation, setConfirmation] = useState<{ ids: number[]; label?: string; matched: boolean } | null>(null);
+  const [confirmation, setConfirmation] = useState<{ connection_instance: string; ids: number[]; rowCount: number; label?: string; matched: boolean } | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
   const activeSelectedId = selectedId !== undefined ? selectedId : localSelectedId;
@@ -79,11 +80,12 @@ export function Connections({
     });
   };
 
-  async function closeIds(ids: number[]) {
+  async function closeCaptured(target: { connection_instance: string; ids: number[] } | null) {
+    if (!target || !target.connection_instance || !target.ids.length) return;
     setClosing(true);
     try {
-      await core('connections.close', { ids });
-      const r = await core<ConnectionsReply>('connections.list', { closed_limit: 500 });
+      await core('connections.close', { connection_instance: target.connection_instance, ids: target.ids });
+      const r = normalizeConnections(await core<unknown>('connections.list', { closed_limit: 500 }));
       setData(r);
       setError('');
       setConfirmation(null);
@@ -109,7 +111,7 @@ export function Connections({
     let timer = 0;
     const tick = async () => {
       try {
-        const r = await core<ConnectionsReply>('connections.list', { closed_limit: 500 });
+        const r = normalizeConnections(await core<unknown>('connections.list', { closed_limit: 500 }));
         if (alive) {
           const now = Date.now();
           const prev = prevSnap.current;
@@ -145,7 +147,7 @@ export function Connections({
     return null;
   };
 
-  const active = running ? data?.active ?? c.status?.connections.items ?? [] : [];
+  const active = running ? data?.active ?? c.status?.connections?.items ?? [] : [];
   const closed = running ? data?.closed ?? [] : [];
   const list: (ConnectionInfo | ClosedConnection)[] = tab === 'active' ? active : closed;
 
@@ -424,16 +426,19 @@ export function Connections({
                 >
                   <StableText current={copiedId === x.id ? '已复制' : '复制目标'} items={['复制目标', '已复制']} />
                 </button>
-                {tab === 'active' && (
-                  <button
-                    type="button"
-                    className="btn sm danger"
-                    disabled={closing}
-                    onClick={() => void closeIds([x.id])}
-                  >
-                    断开连接
-                  </button>
-                )}
+                {tab === 'active' && (() => {
+                  const captured = captureCloseTargets(data, [x]);
+                  return (
+                    <button
+                      type="button"
+                      className="btn sm danger"
+                      disabled={closing || !captured}
+                      onClick={() => void closeCaptured(captured)}
+                    >
+                      断开连接
+                    </button>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -517,13 +522,16 @@ export function Connections({
           <button
             type="button"
             className="btn sm danger conn-close-btn"
-            disabled={tab !== 'active' || !running || closing || !sorted.length}
-            onClick={() =>
+            disabled={tab !== 'active' || !running || closing || !captureCloseTargets(data, sorted)}
+            onClick={() => {
+              const captured = captureCloseTargets(data, sorted);
+              if (!captured) return;
               setConfirmation({
-                ids: sorted.map((x) => x.id),
+                ...captured,
+                rowCount: sorted.length,
                 matched: !!needle || process !== '*',
-              })
-            }
+              });
+            }}
           >
             <StableText
               current={tab === 'active' && (needle || process !== '*') ? `关闭匹配 ${sorted.length}` : '关闭全部'}
@@ -532,7 +540,7 @@ export function Connections({
           </button>
           <button
             type="button"
-            className="btn sm"
+            className="btn sm conn-pause-btn"
             onClick={() => setPaused((p) => !p)}
             disabled={!running}
             aria-pressed={paused}
@@ -625,11 +633,15 @@ export function Connections({
                             type="button"
                             className="ib ib-xs danger conn-proc-kill"
                             aria-label={`断开 ${b.name} 的全部连接`}
+                            disabled={closing || !captureCloseTargets(data, b.items)}
                             {...tip(`断开 ${b.name} (${b.items.length})`)}
                             onClick={(ev) => {
                               ev.stopPropagation();
+                              const captured = captureCloseTargets(data, b.items);
+                              if (!captured) return;
                               setConfirmation({
-                                ids: b.items.map((it) => it.id),
+                                ...captured,
+                                rowCount: b.items.length,
                                 label: `${b.name} 的 ${b.items.length} 个活跃连接`,
                                 matched: true,
                               });
@@ -683,14 +695,14 @@ export function Connections({
             confirmation.label
               ? `关闭 ${confirmation.label}？`
               : confirmation.matched
-                ? `关闭匹配的 ${confirmation.ids.length} 个连接？`
-                : `关闭全部 ${confirmation.ids.length} 个活跃连接？`
+                ? `关闭匹配的 ${confirmation.rowCount} 个连接？`
+                : `关闭全部 ${confirmation.rowCount} 个活跃连接？`
           }
           saveLabel="关闭"
           danger
           busy={closing}
           close={() => setConfirmation(null)}
-          save={() => void closeIds(confirmation.ids)}
+          save={() => void closeCaptured(confirmation)}
         >
           <span>仅关闭所选活跃连接，不影响其它连接。</span>
         </Modal>

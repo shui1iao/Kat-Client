@@ -10,11 +10,12 @@ import { Icon } from '../components/Icon';
 import { Segmented, StableText } from '../components/ui';
 import { Diagnostics } from '../components/Diagnostics';
 import { core } from '../client/ipc';
+import { normalizeConnLogs, normalizeConnections, normalizeKernelLogs } from '../client/normalize';
 import { errorText } from '../lib/errors';
 import { clockStr, showBytes } from '../client/display';
 import { parseConnectionRule, ruleColor } from '../client/presentation';
 import { mergeConnectionLogs, flowLog } from '../client/logDetails';
-import type { ConnLogEntry, ConnLogsReply, ConnectionsReply, KernelLogEntry, KernelLogsReply } from '../client/types';
+import type { ConnLogEntry, ConnectionsReply, KernelLogEntry } from '../client/types';
 import type { Client } from '../client/useClient';
 
 const POLL_MS = 1000;
@@ -109,12 +110,12 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
       try {
         if (!document.hidden) {
           const [r, f] = await Promise.all([
-            core<ConnLogsReply>('logs.connections', {
+            core<unknown>('logs.connections', {
               instance: instance.current,
               after: cursor.current,
               limit: 500,
-            }),
-            core<ConnectionsReply>('connections.list', { closed_limit: 500 }),
+            }).then(normalizeConnLogs),
+            core<unknown>('connections.list', { closed_limit: 500 }).then(normalizeConnections),
           ]);
           if (!alive) return;
           const reset = instance.current !== r.instance;
@@ -149,7 +150,7 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
           e.process_name,
           e.rule,
           e.error_text,
-          ...e.chain.map(c.label),
+          ...(e.chain ?? []).map(c.label),
         ].some((x) => x?.toLowerCase().includes(needle))),
   );
 
@@ -338,11 +339,13 @@ function KernelLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
     const tick = async () => {
       try {
         if (!document.hidden) {
-          const r = await core<KernelLogsReply>('logs.kernel', {
-            instance: instance.current,
-            after: cursor.current,
-            limit: 500,
-          });
+          const r = normalizeKernelLogs(
+            await core<unknown>('logs.kernel', {
+              instance: instance.current,
+              after: cursor.current,
+              limit: 500,
+            }),
+          );
           if (!alive) return;
           const reset = instance.current !== r.instance;
           instance.current = r.instance;

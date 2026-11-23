@@ -132,12 +132,14 @@ export function Nodes({ c }: { c: Client }) {
         ))}
 
         {providers.map((p) => (
-          <Card key={p.name} className="sub-card" title={p.name} extra={<span className="ktag">待转换</span>}>
-            <div className="sub-usage">
-              <div className="sub-usage-summary">
-                <span>旧节点订阅 · {c.legacyNotices[p.name] ?? '等待转换'}</span>
-              </div>
-            </div>
+          <section key={p.name} className="card sub-card legacy-sub-card">
+            <header className="sub-head">
+              <h3 {...tip(p.name, true)}>{p.name}</h3>
+              <span className="ktag">待转换</span>
+            </header>
+            <p className="legacy-sub-note" {...tip('旧节点订阅 · ' + (c.legacyNotices[p.name] ?? '等待转换'), true)}>
+              旧节点订阅 · {c.legacyNotices[p.name] ?? '等待转换'}
+            </p>
             <div className="sub-card-footer">
               <button
                 type="button"
@@ -158,7 +160,7 @@ export function Nodes({ c }: { c: Client }) {
                 <Icon name="trash" size={14} />
               </button>
             </div>
-          </Card>
+          </section>
         ))}
 
         <section className="quick-import-card" aria-label="添加订阅或导入链接">
