@@ -79,4 +79,5 @@ test('unified overlay glass, radius and soft fade CSS rules remain standard-prop
   assert.equal(pages.includes('-webkit-backdrop-filter:'), false);
   assert.match(pages, /\.rule-judge-pop\s*\{[^}]*border-radius:\s*var\(--r-pop\)[^}]*backdrop-filter:\s*blur\(20px\)\s*saturate\(200%\)/s);
   assert.match(pages, /\.dns-float-toast\s*\{[^}]*border-radius:\s*var\(--r-pop\)[^}]*backdrop-filter:\s*blur\(20px\)\s*saturate\(200%\)/s);
+  assert.match(pages, /\.dns-addr-pop\s*\{[^}]*border-radius:\s*var\(--r-pop\)[^}]*backdrop-filter:\s*blur\(20px\)\s*saturate\(200%\)/s);
 });

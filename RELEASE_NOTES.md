@@ -1,20 +1,18 @@
-# Kat-Client v0.2.30 (Windows Core v0.8.18)
+# Kat-Client v0.2.31 (Windows Core v0.8.19)
 
-前端交互与视觉一致性全面打磨发布版（client sequence `1795500000`，沿用内置 Windows Core v0.8.18 `core_sequence 1795420000`；配套 Linux Server v0.8.2 与 Kat-Manager v0.1.3）。
+DNS 多条结果完整查看体验升级 + Windows 内核内存占用深度优化发布版（client sequence `1795525000`，内置 Windows Core v0.8.19 `core_sequence 1795524000`；配套 Linux Server v0.8.2 与 Kat-Manager v0.1.3）。
 
 ## 本版更新
 
-### 1. DNS 快速解析支持网站链接 + 零位移顶部悬浮通知
-- **自动提取网站链接域名**（`dnsInput.ts`、`Dns.tsx`、`DnsTools.tsx`）：支持直接粘贴完整 `http(s)://` / `ws(s)://` / `//` 网址、带端口/路径/参数的链接、末尾点及中文 IDN 域名，提交前自动提取并标准化主机名后再查询 `dns.query`；若输入为 IP 地址（或 URL 主机为 IP），直接给出中文提示，不发无效查询。
-- **零位移顶部居中悬浮通知**：移除原快速解析下方插入文档流的结果条，快速解析栏固定单行定高；解析结果、空记录与错误提示改为窗口顶部偏上居中的磨砂悬浮通知（支持「已提取域名」标记、一键复制 IP、悬停暂停自动消失），表格全程 0 位移。
+### 1. DNS 多条解析结果完整展示与悬浮通知位置优化
+- **快速解析悬浮通知全量展示**（`Dns.tsx`、`pages.css`）：直接逐条列出本次解析返回的全部 `A` / `AAAA` 地址（带记录类型标签、单条点击复制、底部「复制全部」按钮与结果多时内部滚动），修复此前多 IP 被折叠且悬停不触发提示的问题。
+- **「最近解析」与「解析缓存」表格 `+N` 磨砂浮层**：表格行保持单行紧凑，点主 IP 直接复制，点右侧 `+N` 弹出与全站统一规格的高斯模糊浮层（`14px` 圆角、`document.body` Portal）完整展示全部地址并支持逐条/全部复制。
+- **所有悬浮通知调整为「中间偏上」位置**（`floating.ts`）：DNS 快速解析通知、全局 Toast 与软件更新提示统一移至窗口高度 18% 处居中显示，不再紧贴顶边，也不遮挡顶部工具栏与快速解析框。
 
-### 2. 规则判定默认收起 + 固定尺寸磨砂浮层
-- **默认关闭**：进入规则页时规则判定默认不打开，保持规则列表清爽完整。
-- **固定布局无挤压**（`Rules.tsx`、`pages.css`、`floating.ts`）：点击「判定」后以固定尺寸磨砂卡片浮出在规则表上方，打开、输入、判定中、命中规则、走最终路由、报错与关闭全程不推动下方规则表；支持自动聚焦输入框、高亮并定位至命中行，以及不与弹窗/下拉菜单冲突的 `Esc` 关闭。
-
-### 3. 全站浮层/通知/弹窗统一高斯模糊与 14px 圆角 + 全站柔和渐变截断
-- **统一玻璃材质与圆角**（`tokens.css`、`components.css`、`pages.css`、`ui.tsx`、`SoftwareUpdates.tsx`、`Editors.tsx`）：规则判定浮层、DNS 通知、全局 Toast、软件更新提示、下拉菜单（`.kat-pop`）与全部模态弹窗统一采用 `document.body` Portal 挂载 + `var(--pop)` + `backdrop-filter: blur(20px) saturate(200%)` 真实高斯模糊与统一 `--r-pop: 14px` 圆角；所有悬浮通知统一置于窗口顶部偏上居中。
-- **去全站强硬直线分割与滚动硬截断**（`shell.css`、`components.css`、`pages.css`）：移除侧边栏、各表格工具栏、DNS 快速解析栏、配置页分区、弹窗顶/底栏及各吸顶表头的直穿边缘 `1px` 实线；全站吸顶表头改为磨砂半透配下方 `12px` 柔和渐变羽化，列表与分区细线统一改为两端淡出的渐隐细线，全站滚动区域统一接入柔和渐变遮罩截断（`--fade-y` / `--fade-bottom`）。
+### 2. Windows Core v0.8.19 内存占用深度优化
+- **域名规则集与 GeoSite 紧凑无指针存储**（`route/domainset.go`、`setdata.go`、`geosite.go`、`cache.go`）：解析完成后自动压缩入连续无指针字节池 `packedSet`（`data []byte` + `offs []uint32` 二分查找），释放全部 `map[string]struct{}` 哈希表与堆指针；实测 30 万条域名常驻堆内存从 22.55 MiB 降至 9.79 MiB（降约 2.3×）并消除 30 万个 GC 扫描指针；启动期预检缓存强引用缩短至 5 秒。
+- **TUN gVisor TCP 缓冲上限收敛**（`tunstack/stack.go`）：开启 `TCPModerateReceiveBufferOption`，将单连接收发缓冲从默认 1 MiB / 上限 4 MiB 收敛至默认 256 KiB / 上限 1 MiB，通道队列由 4096 调至 1024，在本地 Wintun 低延迟环回下不损吞吐且显著降低多连接内存膨胀。
+- **Go 运行时 GC 与空闲页归还**（`cmd/kat-client-core/main.go`）：未显式设置 `GOGC` 时默认启用 `debug.SetGCPercent(35)`，并在启动 7 秒后及后台每 45 秒检测未归还空闲堆超 6 MiB 时调用 `debug.FreeOSMemory()` 向 Windows 归还已提交空闲页，显著压低常驻 `PrivateUsage`。
 
 ## 边界说明
 - Ed25519 签名为产品包与在线更新身份验证（`key_id 0afa646ee76f17d8`），非 Windows Authenticode 代码签名。Kat 自研代码 source-available、保留所有权利（非 MIT）；第三方原许可保留，见 `RIGHTS.md`。

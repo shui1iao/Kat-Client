@@ -4187,12 +4187,12 @@
   position: fixed;
   transform: translateX(-50%);
   z-index: 950;
-  min-width: 320px;
+  min-width: 356px;
   width: max-content;
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 11px 12px 11px 14px;
+  padding: 11px 12px 12px 13px;
   border-radius: var(--r-pop);
   background: var(--pop);
   backdrop-filter: blur(20px) saturate(200%);
@@ -4215,7 +4215,6 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  margin-top: 6px;
   flex: none;
 }
 
@@ -4239,7 +4238,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 7px;
 }
 
 .dns-toast-head {
@@ -4269,20 +4268,171 @@
   font-weight: 500;
 }
 
-.dns-toast-ips {
+.dns-toast-count,
+.dns-addr-pop-count {
+  flex: none;
+  font-size: 10.5px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--card-2);
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.dns-toast-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 204px;
+  overflow-y: auto;
+  padding-block: 2px;
+  scrollbar-gutter: stable;
+}
+
+.dns-toast-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
+  margin-top: 2px;
   min-width: 0;
 }
 
-.dns-toast-ip-text {
+/* Shared clickable DNS record row (used in both floating toast & +N popover) */
+.dns-rec-row {
+  width: 100%;
+  min-height: 28px;
+  padding: 3px 8px 3px 6px;
+  border: 0;
+  border-radius: var(--r-inner);
+  background: var(--card-2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+  transition: background-color var(--t-fast) var(--ease);
+}
+
+.dns-rec-row:hover {
+  background: var(--hover);
+}
+
+.dns-rec-type {
+  flex: none;
+  min-width: 34px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: var(--hover);
+  color: var(--text-2);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dns-rec-addr {
+  flex: 1;
+  min-width: 0;
   font-size: var(--fs-data);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dns-rec-copy {
+  flex: none;
+  color: var(--text-3);
+  display: inline-flex;
+  align-items: center;
+  opacity: 0.7;
+  transition: opacity var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.dns-rec-row:hover .dns-rec-copy {
+  opacity: 1;
+  color: var(--text);
+}
+
+.dns-rec-copy.is-ok {
+  opacity: 1;
+  color: var(--ok);
+}
+
+/* Interactive +N button in Recent DNS & DNS Cache tables */
+.dns-ip-more-btn {
+  flex: none;
+  height: 20px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--card-2);
+  color: var(--text-2);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.dns-ip-more-btn:hover,
+.dns-ip-more-btn.is-open {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+/* Unified Frosted Glass Popover for +N DNS records */
+.dns-addr-pop {
+  position: fixed;
+  z-index: 945;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 12px 12px;
+  border-radius: var(--r-pop);
+  background: var(--pop);
+  backdrop-filter: blur(20px) saturate(200%);
+  box-shadow: var(--shadow-pop);
+  animation: kat-pop-in 150ms var(--ease-spring);
+}
+
+.dns-addr-pop-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dns-addr-pop-domain {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
   color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dns-pop-close {
+  flex: none;
+  margin-right: -4px;
+}
+
+.dns-addr-pop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 224px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-block: 4px;
+  mask-image: var(--fade-y);
 }
 
 .dns-toast-copy {
@@ -4323,7 +4473,7 @@
 
 .dns-toast-close {
   flex: none;
-  margin-top: -2px;
+  margin-left: auto;
   margin-right: -4px;
 }
 

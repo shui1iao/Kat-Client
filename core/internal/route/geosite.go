@@ -168,6 +168,7 @@ func (db *siteDB) compile(key string) *siteMatcher {
 			}
 		}
 	}
+	sm.dom.compact()
 	return sm
 }
 

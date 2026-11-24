@@ -213,15 +213,7 @@ func (b *setBuilder) finish() (*setData, error) {
 	if b.d.entries == 0 && b.bad > 0 {
 		return nil, errParse
 	}
-	if len(b.d.dom.exact) == 0 {
-		b.d.dom.exact = nil
-	}
-	if len(b.d.dom.suffix) == 0 {
-		b.d.dom.suffix = nil
-	}
-	if len(b.d.dom.sub) == 0 {
-		b.d.dom.sub = nil
-	}
+	b.d.dom.compact()
 	b.d.ip.build()
 	b.d.ipNR.build()
 	return b.d, nil

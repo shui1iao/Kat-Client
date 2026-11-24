@@ -27,7 +27,7 @@ type cacheEntry struct {
 	site    weak.Pointer[siteDB]
 }
 
-const startupCachePinTTL = 15 * time.Second
+const startupCachePinTTL = 5 * time.Second
 
 var parsedCache struct {
 	sync.Mutex

@@ -21,10 +21,29 @@ import (
 	"runtime"
 )
 
+const (
+	tunLinkQueueSize  = 1024
+	tunTCPBufMin      = 4 << 10   // 4 KiB
+	tunTCPBufDefault  = 256 << 10 // 256 KiB (saturates >10 Gbps over <0.2ms local Wintun RTT)
+	tunTCPBufMax      = 1 << 20   // 1 MiB cap instead of gVisor default 4 MiB per connection
+)
+
 func (r *Runtime) initStack() error {
-	r.link = channel.New(4096, MTU, "")
+	r.link = channel.New(tunLinkQueueSize, MTU, "")
 	s := stack.New(stack.Options{NetworkProtocols: []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol}, TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol, icmp.NewProtocol4, icmp.NewProtocol6}})
 	r.stack = s
+	rcvRange := tcpip.TCPReceiveBufferSizeRangeOption{Min: tunTCPBufMin, Default: tunTCPBufDefault, Max: tunTCPBufMax}
+	if e := s.SetTransportProtocolOption(tcp.ProtocolNumber, &rcvRange); e != nil {
+		return fmt.Errorf("tunstack TCP recv buffer: %s", e)
+	}
+	sndRange := tcpip.TCPSendBufferSizeRangeOption{Min: tunTCPBufMin, Default: tunTCPBufDefault, Max: tunTCPBufMax}
+	if e := s.SetTransportProtocolOption(tcp.ProtocolNumber, &sndRange); e != nil {
+		return fmt.Errorf("tunstack TCP send buffer: %s", e)
+	}
+	modOpt := tcpip.TCPModerateReceiveBufferOption(true)
+	if e := s.SetTransportProtocolOption(tcp.ProtocolNumber, &modOpt); e != nil {
+		return fmt.Errorf("tunstack TCP moderate recv: %s", e)
+	}
 	// On Windows local Wintun rings, ACK/SACK timing under RACK triggers
 	// measured recovery storms that collapse download cwnd; use classic
 	// SACK + 3-DupACK + RTO recovery on Windows without claiming every
@@ -35,7 +54,7 @@ func (r *Runtime) initStack() error {
 			return fmt.Errorf("tunstack TCP recovery: %s", e)
 		}
 	}
-	tf := tcp.NewForwarder(s, 0, 256, func(req *tcp.ForwarderRequest) {
+	tf := tcp.NewForwarder(s, tunTCPBufDefault, 256, func(req *tcp.ForwarderRequest) {
 		if !r.reserve() {
 			req.Complete(true)
 			return

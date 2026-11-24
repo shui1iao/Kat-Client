@@ -44,7 +44,7 @@ export function useTopNoticeAnchor(active: boolean): TopNoticePos | null {
     const update = () => {
       const r = getAppRect();
       const next: TopNoticePos = {
-        top: Math.round(r.top + 14),
+        top: Math.round(r.top + Math.max(96, Math.min(168, r.height * 0.18))),
         left: Math.round(r.left + r.width / 2),
         maxWidth: Math.max(260, Math.min(440, Math.round(r.width - 40))),
       };

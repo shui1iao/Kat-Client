@@ -9,12 +9,45 @@ import (
 	"github.com/shui1iao/Kat/internal/userio"
 	"os"
 	"os/signal"
+	"runtime"
 	"runtime/debug"
+	"time"
 )
+
+func startMemoryTrimmer(ctx context.Context) {
+	go func() {
+		// Reclaim startup / rule-set parsing burst spans right after cache pin drops.
+		first := time.NewTimer(7 * time.Second)
+		defer first.Stop()
+		select {
+		case <-ctx.Done():
+			return
+		case <-first.C:
+			debug.FreeOSMemory()
+		}
+		tk := time.NewTicker(45 * time.Second)
+		defer tk.Stop()
+		var ms runtime.MemStats
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tk.C:
+				runtime.ReadMemStats(&ms)
+				if ms.HeapIdle > ms.HeapReleased+(6<<20) {
+					debug.FreeOSMemory()
+				}
+			}
+		}
+	}()
+}
 
 func main() {
 	if os.Getenv("GOTRACEBACK") == "" {
 		debug.SetTraceback("all")
+	}
+	if os.Getenv("GOGC") == "" {
+		debug.SetGCPercent(35)
 	}
 	fs := flag.NewFlagSet("kat-client-core", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -28,6 +61,7 @@ func main() {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
+	startMemoryTrimmer(ctx)
 	var h *clientcore.Host
 	var e error
 	var session *elevated.Session

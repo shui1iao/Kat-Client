@@ -1786,7 +1786,7 @@ dependencies = [
 
 [[package]]
 name = "kat-windows-host"
-version = "0.2.30"
+version = "0.2.31"
 dependencies = [
  "ed25519-dalek",
  "hex",
