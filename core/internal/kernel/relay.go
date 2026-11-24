@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -31,6 +32,45 @@ func (p *bufferPool) put(b []byte) {
 	case p.free <- b[:p.size]:
 	default:
 	}
+}
+func (p *bufferPool) drain() int {
+	if p == nil {
+		return 0
+	}
+	dropped := 0
+	for {
+		select {
+		case <-p.free:
+			dropped++
+		default:
+			return dropped
+		}
+	}
+}
+
+// TrimBuffers drops idle relay buffers cached in the generation pool so long
+// idle periods return their spans to the OS.
+func (s *Server) TrimBuffers() int {
+	if s == nil {
+		return 0
+	}
+	cur := s.current()
+	if cur == nil || cur.pool == nil {
+		return 0
+	}
+	return cur.pool.drain()
+}
+
+const (
+	smallRelayBufSize      = 8 << 10
+	smallRelayDemoteThresh = 4 << 10
+)
+
+var smallRelayBufPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, smallRelayBufSize)
+		return &b
+	},
 }
 
 type readOnly struct{ io.Reader }
@@ -62,10 +102,13 @@ func (s *Server) copyM(dst, src net.Conn, m meter) error {
 			}
 		}
 	}
-	b := s.pool.get()
-	defer s.pool.put(b)
-	_, e := io.CopyBuffer(writeOnly{m.writer(dst)}, readOnly{src}, b)
-	return e
+	if s.pool.size <= smallRelayBufSize {
+		b := s.pool.get()
+		defer s.pool.put(b)
+		_, e := io.CopyBuffer(writeOnly{m.writer(dst)}, readOnly{src}, b)
+		return e
+	}
+	return copyAdaptive(dst, src, m, s.pool)
 }
 func closeWrite(c net.Conn) error {
 	if v, ok := c.(interface{ CloseWrite() error }); ok {
@@ -176,4 +219,54 @@ func (s *Server) relayIdle(ctx context.Context, a, b net.Conn, idle time.Duratio
 		err = ctx.Err()
 	}
 	return err
+}
+
+// copyAdaptive starts with the full pool buffer (preserving single-write bulk
+// framing such as 64 KiB SS2022 records) and demotes idle/small-frame streams
+// (<= 4 KiB read) to an 8 KiB pooled buffer while blocked in Read, promoting
+// immediately back to the full buffer as soon as a read fills 8 KiB.
+func copyAdaptive(dst, src net.Conn, m meter, pool *bufferPool) error {
+	w := m.writer(dst)
+	large := pool.get()
+	var smallPtr *[]byte
+	cur := large
+	defer func() {
+		if large != nil {
+			pool.put(large)
+		}
+		if smallPtr != nil {
+			clear(*smallPtr)
+			smallRelayBufPool.Put(smallPtr)
+		}
+	}()
+	for {
+		nr, er := src.Read(cur)
+		if nr > 0 {
+			nw, ew := w.Write(cur[:nr])
+			if ew != nil {
+				return ew
+			}
+			if nr != nw {
+				return io.ErrShortWrite
+			}
+		}
+		if er != nil {
+			if er == io.EOF {
+				return nil
+			}
+			return er
+		}
+		if large != nil && nr <= smallRelayDemoteThresh {
+			pool.put(large)
+			large = nil
+			smallPtr = smallRelayBufPool.Get().(*[]byte)
+			cur = *smallPtr
+		} else if large == nil && nr == len(cur) {
+			clear(*smallPtr)
+			smallRelayBufPool.Put(smallPtr)
+			smallPtr = nil
+			large = pool.get()
+			cur = large
+		}
+	}
 }

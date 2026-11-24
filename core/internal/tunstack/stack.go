@@ -19,6 +19,7 @@ import (
 	"gvisor.dev/gvisor/pkg/waiter"
 	"net/netip"
 	"runtime"
+	"time"
 )
 
 const (
@@ -43,6 +44,10 @@ func (r *Runtime) initStack() error {
 	modOpt := tcpip.TCPModerateReceiveBufferOption(true)
 	if e := s.SetTransportProtocolOption(tcp.ProtocolNumber, &modOpt); e != nil {
 		return fmt.Errorf("tunstack TCP moderate recv: %s", e)
+	}
+	twOpt := tcpip.TCPTimeWaitTimeoutOption(15 * time.Second)
+	if e := s.SetTransportProtocolOption(tcp.ProtocolNumber, &twOpt); e != nil {
+		return fmt.Errorf("tunstack TCP time_wait: %s", e)
 	}
 	// On Windows local Wintun rings, ACK/SACK timing under RACK triggers
 	// measured recovery storms that collapse download cwnd; use classic

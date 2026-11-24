@@ -25,17 +25,23 @@ type processMemoryCountersEx struct {
 
 var procGetProcessMemoryInfo = windows.NewLazySystemDLL("kernel32.dll").NewProc("K32GetProcessMemoryInfo")
 
-// processMemoryBytes reports this core process private bytes, the figure closest
-// to Task Manager memory for a Go process. ok=false when the API is unavailable.
-func processMemoryBytes() (uint64, bool) {
+// processMemorySnapshot reports this core process private bytes and working set.
+func processMemorySnapshot() (privateBytes, workingSetBytes uint64, ok bool) {
 	if procGetProcessMemoryInfo.Find() != nil {
-		return 0, false
+		return 0, 0, false
 	}
 	var c processMemoryCountersEx
 	c.cb = uint32(unsafe.Sizeof(c))
 	r, _, _ := procGetProcessMemoryInfo.Call(uintptr(windows.CurrentProcess()), uintptr(unsafe.Pointer(&c)), uintptr(c.cb))
 	if r == 0 {
-		return 0, false
+		return 0, 0, false
 	}
-	return uint64(c.privateUsage), true
+	return uint64(c.privateUsage), uint64(c.workingSetSize), true
+}
+
+// processMemoryBytes reports this core process private bytes, the figure closest
+// to Task Manager memory for a Go process. ok=false when the API is unavailable.
+func processMemoryBytes() (uint64, bool) {
+	priv, _, ok := processMemorySnapshot()
+	return priv, ok
 }

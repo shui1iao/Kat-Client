@@ -1249,7 +1249,7 @@ func validateSubscriptionResources(c kernel.Config, owners ...fullSubscription) 
 		return tasks[0]()
 	}
 	errs := make([]*Error, len(tasks))
-	workers := min(len(tasks), max(4, min(runtime.GOMAXPROCS(0)*2, 16)))
+	workers := min(len(tasks), max(1, min(runtime.GOMAXPROCS(0), 4)))
 	jobs := make(chan int, len(tasks))
 	for i := range tasks {
 		jobs <- i

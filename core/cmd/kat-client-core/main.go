@@ -9,32 +9,55 @@ import (
 	"github.com/shui1iao/Kat/internal/userio"
 	"os"
 	"os/signal"
-	"runtime"
 	"runtime/debug"
+	"runtime/metrics"
+	"sync/atomic"
 	"time"
 )
 
-func startMemoryTrimmer(ctx context.Context) {
+func unreturnedHeapFreeBytes() uint64 {
+	s := [1]metrics.Sample{{Name: "/memory/classes/heap/free:bytes"}}
+	metrics.Read(s[:])
+	if s[0].Value.Kind() == metrics.KindUint64 {
+		return s[0].Value.Uint64()
+	}
+	return 0
+}
+
+func startMemoryTrimmer(ctx context.Context, host *atomic.Pointer[clientcore.Host]) {
 	go func() {
 		// Reclaim startup / rule-set parsing burst spans right after cache pin drops.
-		first := time.NewTimer(7 * time.Second)
+		first := time.NewTimer(6 * time.Second)
 		defer first.Stop()
 		select {
 		case <-ctx.Done():
 			return
 		case <-first.C:
+			if h := host.Load(); h != nil {
+				h.TrimMemory()
+			}
 			debug.FreeOSMemory()
 		}
-		tk := time.NewTicker(45 * time.Second)
+		tk := time.NewTicker(20 * time.Second)
 		defer tk.Stop()
-		var ms runtime.MemStats
+		ticks := 0
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-tk.C:
-				runtime.ReadMemStats(&ms)
-				if ms.HeapIdle > ms.HeapReleased+(6<<20) {
+				ticks++
+				free := unreturnedHeapFreeBytes()
+				if ticks%3 == 0 {
+					// Periodic 60s sweep: drain idle slab/relay pools and return spans.
+					dropped := 0
+					if h := host.Load(); h != nil {
+						dropped = h.TrimMemory()
+					}
+					if dropped > 0 || free > (2<<20) {
+						debug.FreeOSMemory()
+					}
+				} else if free > (4<<20) {
 					debug.FreeOSMemory()
 				}
 			}
@@ -47,7 +70,7 @@ func main() {
 		debug.SetTraceback("all")
 	}
 	if os.Getenv("GOGC") == "" {
-		debug.SetGCPercent(35)
+		debug.SetGCPercent(25)
 	}
 	fs := flag.NewFlagSet("kat-client-core", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -61,7 +84,8 @@ func main() {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-	startMemoryTrimmer(ctx)
+	var activeHost atomic.Pointer[clientcore.Host]
+	startMemoryTrimmer(ctx, &activeHost)
 	var h *clientcore.Host
 	var e error
 	var session *elevated.Session
@@ -104,6 +128,7 @@ func main() {
 		}
 		os.Exit(1)
 	}
+	activeHost.Store(h)
 	if session != nil {
 		// This typed compatibility entry is supplied by the LOG owner. The old Serve
 		// entry remains stdio, including its original timing/admission observations.
@@ -112,6 +137,7 @@ func main() {
 		go func() { <-ctx.Done(); os.Stdin.Close() }()
 		e = h.Serve(ctx, os.Stdin, os.Stdout)
 	}
+	activeHost.Store(nil)
 	ce := h.Close()
 	if e != nil || ce != nil {
 		fmt.Fprintln(os.Stderr, "kat-client-core: closed after input or drain failure")

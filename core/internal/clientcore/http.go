@@ -18,16 +18,59 @@ import (
 
 func portAddress(n int) string { return net.JoinHostPort("127.0.0.1", strconv.Itoa(n)) }
 
-var httpBridgeBufPool = sync.Pool{New: func() any { b := make([]byte, 65536); return &b }}
+var (
+	httpBridgeBufPool      = sync.Pool{New: func() any { b := make([]byte, 65536); return &b }}
+	httpBridgeSmallBufPool = sync.Pool{New: func() any { b := make([]byte, 8192); return &b }}
+)
 
 type httpReadOnly struct{ io.Reader }
 type httpWriteOnly struct{ io.Writer }
 
 func copyHTTPBridge(dst io.Writer, src io.Reader) error {
-	bp := httpBridgeBufPool.Get().(*[]byte)
-	defer httpBridgeBufPool.Put(bp)
-	_, err := io.CopyBuffer(httpWriteOnly{dst}, httpReadOnly{src}, *bp)
-	return err
+	largePtr := httpBridgeBufPool.Get().(*[]byte)
+	var smallPtr *[]byte
+	cur := *largePtr
+	defer func() {
+		if largePtr != nil {
+			clear(*largePtr)
+			httpBridgeBufPool.Put(largePtr)
+		}
+		if smallPtr != nil {
+			clear(*smallPtr)
+			httpBridgeSmallBufPool.Put(smallPtr)
+		}
+	}()
+	for {
+		nr, er := src.Read(cur)
+		if nr > 0 {
+			nw, ew := dst.Write(cur[:nr])
+			if ew != nil {
+				return ew
+			}
+			if nr != nw {
+				return io.ErrShortWrite
+			}
+		}
+		if er != nil {
+			if er == io.EOF {
+				return nil
+			}
+			return er
+		}
+		if largePtr != nil && nr <= 4096 {
+			clear(*largePtr)
+			httpBridgeBufPool.Put(largePtr)
+			largePtr = nil
+			smallPtr = httpBridgeSmallBufPool.Get().(*[]byte)
+			cur = *smallPtr
+		} else if largePtr == nil && nr == len(cur) {
+			clear(*smallPtr)
+			httpBridgeSmallBufPool.Put(smallPtr)
+			smallPtr = nil
+			largePtr = httpBridgeBufPool.Get().(*[]byte)
+			cur = *largePtr
+		}
+	}
 }
 
 type httpBufferedConn struct {

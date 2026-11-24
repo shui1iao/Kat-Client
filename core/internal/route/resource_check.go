@@ -299,33 +299,11 @@ func ValidateSubscriptionASNAt(path string, b []byte) error {
 			break
 		}
 	}
-	if !valid {
-		networks := db.r.Networks()
-		for networks.Next() {
-			var rec asnRecord
-			_, err := networks.Network(&rec)
-			if err != nil {
-				db.r.Close()
-				return err
-			}
-			if rec.ASN != 0 {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			if err := networks.Err(); err != nil {
-				db.r.Close()
-				return err
-			}
-			db.r.Close()
-			return errors.New("MMDB has no compatible autonomous_system_number fields")
-		}
+	if !valid && len(db.table.v4) == 0 && len(db.table.v6) == 0 {
+		return errors.New("MMDB has no compatible autonomous_system_number fields")
 	}
 	if path != "" {
 		cachePut(path, key, db)
-	} else {
-		db.r.Close()
 	}
 	return nil
 }
@@ -359,13 +337,10 @@ func ValidateSubscriptionGeoIPAt(path string, b []byte) error {
 		}
 	}
 	if !found {
-		db.r.Close()
 		return errors.New("MMDB has no compatible country fields")
 	}
 	if path != "" {
 		cachePut(path, key, db)
-	} else {
-		db.r.Close()
 	}
 	return nil
 }

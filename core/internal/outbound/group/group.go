@@ -60,7 +60,7 @@ const (
 	maxFailedTimesLimit    = 100
 	lbDefaultMaxFailed     = 5
 	maxAttempts            = 3 // members tried per connection before giving up
-	probeConcurrency       = 100
+	probeConcurrency       = 16
 	defaultInterval        = 10 * time.Minute // server fallback / load-balance
 	defaultURLTestInterval = time.Minute
 	defaultSmartInterval   = 5 * time.Minute

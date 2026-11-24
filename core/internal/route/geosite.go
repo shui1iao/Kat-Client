@@ -31,8 +31,9 @@ type siteSource struct {
 // siteDB keeps the raw file and the byte range of every category; a
 // category (with its attribute filter) is compiled on first use.
 type siteDB struct {
-	index    map[string][]byte // lower-case category -> GeoSite message
-	compiled sync.Map          // key (category[@attr...]) -> *siteMatcher
+	index      map[string][]byte // lower-case category -> GeoSite message (nil after prune)
+	categories int               // total categories in source DB
+	compiled   sync.Map          // key (category[@attr...]) -> *siteMatcher
 }
 
 type siteMatcher struct {
@@ -113,6 +114,22 @@ func parseGeositeDB(b []byte) (*siteDB, error) {
 	if len(db.index) == 0 {
 		return nil, errParse
 	}
+	db.categories = len(db.index)
+	return db, nil
+}
+
+// parseGeositeDBForRefs parses geosite.dat, precompiles only the referenced
+// category keys, and releases the raw protobuf index so unused categories do
+// not pin the entire geosite.dat file in memory.
+func parseGeositeDBForRefs(b []byte, refs []string) (*siteDB, error) {
+	db, err := parseGeositeDB(b)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range refs {
+		_ = db.matcher(r)
+	}
+	db.index = nil
 	return db, nil
 }
 
@@ -264,7 +281,9 @@ type asnSource struct {
 	db  atomic.Pointer[asnDB]
 }
 
-type asnDB struct{ r *maxminddb.Reader }
+type asnDB struct {
+	table mmdbTable
+}
 
 type asnRecord struct {
 	ASN uint32 `maxminddb:"autonomous_system_number"`
@@ -280,26 +299,38 @@ func parseASNDB(b []byte) (db *asnDB, err error) {
 	if e != nil || r.Metadata.NodeCount == 0 || r.Metadata.IPVersion != 4 && r.Metadata.IPVersion != 6 {
 		return nil, errParse
 	}
+	defer r.Close()
 	for _, p := range []string{"1.1.1.1", "8.8.8.8"} {
 		var rec asnRecord
 		if r.Lookup(net.ParseIP(p), &rec) != nil {
 			return nil, errParse
 		}
 	}
-	return &asnDB{r: r}, nil
+	out := &asnDB{}
+	it := r.Networks(maxminddb.SkipAliasedNetworks)
+	for it.Next() {
+		var rec asnRecord
+		nw, e := it.Network(&rec)
+		if e != nil {
+			return nil, errParse
+		}
+		if rec.ASN == 0 {
+			continue
+		}
+		out.table.addNet(nw, rec.ASN)
+	}
+	if it.Err() != nil {
+		return nil, errParse
+	}
+	out.table.finalize()
+	return out, nil
 }
 
-func (a *asnDB) lookup(ip netip.Addr) (n uint32) {
-	defer func() {
-		if recover() != nil {
-			n = 0
-		}
-	}()
-	var rec asnRecord
-	if a.r.Lookup(net.IP(ip.AsSlice()), &rec) != nil {
+func (a *asnDB) lookup(ip netip.Addr) uint32 {
+	if a == nil {
 		return 0
 	}
-	return rec.ASN
+	return a.table.lookup(ip)
 }
 
 // LookupASN returns the Autonomous System Number for ip if the ASN database is loaded.

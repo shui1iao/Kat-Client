@@ -388,7 +388,7 @@ func createNativeDevice(a Adapter) (dev Device, err error) {
 		return fail(errors.New("WINTUN_GUID"))
 	}
 	stage = "adapter_session"
-	d.session, _, callErr = syscall.SyscallN(start, d.adapter, 8<<20)
+	d.session, _, callErr = syscall.SyscallN(start, d.adapter, 4<<20)
 	if d.session == 0 {
 		return fail(At(stage, "WINTUN_SESSION", callErr))
 	}

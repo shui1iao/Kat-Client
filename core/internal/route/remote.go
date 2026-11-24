@@ -223,7 +223,7 @@ func (e *Engine) loadSources(previous *Engine, kind, name string) {
 			preloaded[idx] = preloadLocal(e.sources[idx])
 		}
 	} else {
-		workers := min(len(toLoad), max(4, min(runtime.GOMAXPROCS(0)*2, 16)))
+		workers := min(len(toLoad), max(1, min(runtime.GOMAXPROCS(0), 4)))
 		jobs := make(chan int, len(toLoad))
 		for _, idx := range toLoad {
 			jobs <- idx

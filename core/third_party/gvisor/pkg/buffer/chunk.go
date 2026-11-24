@@ -182,3 +182,29 @@ func (c *chunk) Clone() *chunk {
 	copy(cpy.data, c.data)
 	return cpy
 }
+
+// TrimWinChunkPools drops idle pooled chunks on Windows so long-running
+// desktop sessions do not pin multi-MiB slab arrays when idle. Active chunks
+// remain untouched.
+func TrimWinChunkPools() int {
+	if !useWinBoundedChunkPool {
+		return 0
+	}
+	dropped := 0
+	for i := range winChunkPools {
+		p := &winChunkPools[i]
+		p.mu.Lock()
+		if n := len(p.slots); n > 0 {
+			for j := range p.slots {
+				if p.slots[j] != nil {
+					p.slots[j].data = nil
+					p.slots[j] = nil
+				}
+			}
+			p.slots = nil
+			dropped += n
+		}
+		p.mu.Unlock()
+	}
+	return dropped
+}

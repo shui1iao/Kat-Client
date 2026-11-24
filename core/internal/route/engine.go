@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -258,11 +259,22 @@ func NewResourceEngine(o Options, dial func(via string) (func(ctx context.Contex
 			return nil, errf("geosite: url requires a dial function")
 		}
 		refs := geositeRefs(o.Rules)
+		sort.Strings(refs)
+		pruneGeosite := len(o.RuleSets) == 0
+		gsStamp := "geosite"
+		if pruneGeosite {
+			gsStamp = "geosite-pruned|" + strings.Join(refs, ",")
+		}
 		ss := &siteSource{}
 		ss.src = &source{
 			kind: "geosite", path: g.Path, url: g.URL, via: g.Via, maxBytes: g.MaxBytes, interval: g.Interval.Value(),
-			stamp: "geosite",
-			parse: func(b []byte) (any, error) { return parseGeositeDB(b) },
+			stamp: gsStamp,
+			parse: func(b []byte) (any, error) {
+				if pruneGeosite {
+					return parseGeositeDBForRefs(b, refs)
+				}
+				return parseGeositeDB(b)
+			},
 			check: func(any) error { return nil },
 			swap: func(v any) {
 				db := v.(*siteDB)
@@ -275,7 +287,7 @@ func NewResourceEngine(o Options, dial func(via string) (func(ctx context.Contex
 					}
 				}
 				ss.db.Store(db)
-				e.events.Emit("geosite_loaded", "categories", itoa(len(db.index)), "missing", itoa(missing))
+				e.events.Emit("geosite_loaded", "categories", itoa(db.categories), "missing", itoa(missing))
 			},
 		}
 		e.site = ss

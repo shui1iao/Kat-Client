@@ -1,11 +1,11 @@
-# Validation: Kat-Client v0.2.32 / Windows Core v0.8.19
+# Validation: Kat-Client v0.2.33 / Windows Core v0.8.20
 
-- Client version: `0.2.32` (`client_sequence`: `1795535000`, previous `0.2.31` / `1795525000`)
-- Windows Core version: `0.8.19` (`core_sequence`: `1795524000`, unchanged from v0.2.31; `gui_compatibility >=0.2.29, <0.3.0`)
-- Core source fingerprint: `6a72464eba0bfbd8e568b474696ce6162f4ebe8ccc6b12308693dbdc50d763ea`
+- Client version: `0.2.33` (`client_sequence`: `1795550000`, previous `0.2.32` / `1795535000`)
+- Windows Core version: `0.8.20` (`core_sequence`: `1795549000`, previous `0.8.19` / `1795524000`)
+- Core source fingerprint: `39587687863267dbd2a86b38e25f315530fec46b4b159132e0dc18bfd56d15f5`
 
 ## Automated Gates Passed
-1. **Frontend (`app/`)**: `npm run typecheck` (0 errors), `npm test` (152 passed, 0 failed), `npm run build` (verified `.modal` standard `backdrop-filter: blur(28px)` and `kat-mask-in` `background-color` animation in compiled CSS), and headless Chromium light/dark visual verification of modal glass clarity.
-2. **Windows Go Core (`core/`)**: Unchanged byte-for-byte from verified v0.8.19 (`6a72464eba0bfbd8e568b474696ce6162f4ebe8ccc6b12308693dbdc50d763ea`).
-3. **Rust Host (`app/src-tauri/`)**: `cargo test --offline --locked` (324 passed, 0 failed, 2 ignored), `build-windows.sh` (all 5 Windows x64 binaries built + Wintun verified), pinned NSIS 3.11 uninstaller capture + final `Kat-Setup-x64.exe` offline dual-signature product verification gate (schema 1 + schema 2, 22 files) passed.
-4. **Online Update Gate**: Product `update_manifest::verify` verifies `0.2.31 -> 0.2.32` (`Newer`), `0.2.32 -> 0.2.32` (`Current`), and Core v0.8.19 compatibility (`Current`).
+1. **Windows Go Core (`core/`)**: Linux `go vet ./...` (0 issues), Windows amd64 `go vet -tags desktop ./...` (0 issues), full `go test -race -count=1` across all Go packages + `gvisor.dev/gvisor/pkg/buffer` (0 failed, 0 data race, including `TestMMDBTableCoalesceAndBoundaries`, `TestParseGeoIPAndGeositePruned`, `TestCopyAdaptiveDemotesAndPromotes`), and Windows amd64 `go build -tags desktop` succeeded.
+2. **Rust Host (`app/src-tauri/`)**: `cargo test --offline --locked` (325 passed, 0 failed, 2 ignored, including `core_memory_breakdown_keeps_only_numeric_fields`), `build-windows.sh` (all 5 Windows x64 binaries pinned to Core v0.8.20 + Wintun verified), pinned NSIS 3.11 uninstaller capture + final `Kat-Setup-x64.exe` offline dual-signature product verification gate (schema 1 + schema 2, 22 files) passed.
+3. **Frontend (`app/`)**: Unchanged from verified v0.2.32 production bundle (`app/src/` diff empty).
+4. **Online Update Gate**: Product `update_manifest::verify` verifies `0.2.32 -> 0.2.33` (`Newer`), `0.2.33 -> 0.2.33` (`Current`), `0.8.19 -> 0.8.20` (`Newer`), and `0.8.20 -> 0.8.20` (`Current`).

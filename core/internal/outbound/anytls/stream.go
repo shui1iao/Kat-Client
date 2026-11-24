@@ -693,3 +693,20 @@ func (d *deadline) active() bool {
 	defer d.mu.Unlock()
 	return d.hasSet
 }
+
+// TrimRecvBufPool drops idle pooled receive buffers when the desktop core
+// trims memory during quiet intervals.
+func TrimRecvBufPool() int {
+	recvPool.mu.Lock()
+	defer recvPool.mu.Unlock()
+	dropped := 0
+	for i := range recvPool.classes {
+		if n := len(recvPool.classes[i]); n > 0 {
+			clear(recvPool.classes[i])
+			recvPool.classes[i] = nil
+			dropped += n
+		}
+	}
+	recvPool.bytes = 0
+	return dropped
+}

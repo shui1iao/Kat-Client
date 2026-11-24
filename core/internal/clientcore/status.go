@@ -147,6 +147,7 @@ func (h *Host) statusLocked() any {
 	uptime := int64(0)
 	var pid any
 	var memory any
+	var memoryBreakdown any
 	upRate, downRate := float64(0), float64(0)
 	if h.server != nil {
 		v := h.server.ClientStatusView()
@@ -176,9 +177,13 @@ func (h *Host) statusLocked() any {
 		}
 		uptime = v.UptimeMS
 		pid = os.Getpid()
-		if mem, ok := processMemoryBytes(); ok {
-			memory = mem
+		bd := readRuntimeMemoryBreakdown()
+		if priv, ws, ok := processMemorySnapshot(); ok {
+			memory = priv
+			bd["private_bytes"] = priv
+			bd["working_set_bytes"] = ws
 		}
+		memoryBreakdown = bd
 		upRate, downRate = v.UpRate, v.DownRate
 		active = v.TCP + v.UDP
 		tcp, udp = v.TCP, v.UDP
@@ -349,5 +354,5 @@ func (h *Host) statusLocked() any {
 		runtimeDomains = h.server.DomainTraffic()
 		_, _, runtimeDirectUp, runtimeDirectDown = h.server.TrafficBreakdown()
 	}
-	return map[string]any{"probe_round": progress, "probe_group_rounds": groupProgress, "probe_round_result": h.allProbeOutcome, "probe_group_results": h.groupProbeOutcomes, "runtime": map[string]any{"state": h.state, "core_version": kernel.Version, "uptime_ms": uptime, "pid": pid, "memory_bytes": memory}, "mode": h.doc.client.Mode, "groups": groups, "nodes": nodes, "traffic": map[string]any{"up_rate": upRate, "down_rate": downRate, "total_up": h.history.TotalUp, "total_down": h.history.TotalDown, "today_up": todayUp, "today_down": todayDown, "today_direct_up": todayDirectUp, "today_direct_down": todayDirectDown, "today_proxy_up": todayProxyUp, "today_proxy_down": todayProxyDown, "direct_up": runtimeDirectUp, "direct_down": runtimeDirectDown, "hourly": todayHourly, "domains": runtimeDomains, "daily": h.history.Daily, "groups": trafficGroups, "rules": trafficRules, "rule_targets": policyHits, "rules_since": rulesSince}, "connections": map[string]any{"active": active, "items": items, "total": total, "tcp": tcp, "udp": udp}, "providers": providers, "local": map[string]any{"http": map[string]any{"host": "127.0.0.1", "port": h.doc.client.HTTPPort, "ready": h.server != nil && h.localReady}, "socks": map[string]any{"host": "127.0.0.1", "port": h.doc.client.SOCKSPort, "ready": h.server != nil && h.localReady}}}
+	return map[string]any{"probe_round": progress, "probe_group_rounds": groupProgress, "probe_round_result": h.allProbeOutcome, "probe_group_results": h.groupProbeOutcomes, "runtime": map[string]any{"state": h.state, "core_version": kernel.Version, "uptime_ms": uptime, "pid": pid, "memory_bytes": memory, "memory_breakdown": memoryBreakdown}, "mode": h.doc.client.Mode, "groups": groups, "nodes": nodes, "traffic": map[string]any{"up_rate": upRate, "down_rate": downRate, "total_up": h.history.TotalUp, "total_down": h.history.TotalDown, "today_up": todayUp, "today_down": todayDown, "today_direct_up": todayDirectUp, "today_direct_down": todayDirectDown, "today_proxy_up": todayProxyUp, "today_proxy_down": todayProxyDown, "direct_up": runtimeDirectUp, "direct_down": runtimeDirectDown, "hourly": todayHourly, "domains": runtimeDomains, "daily": h.history.Daily, "groups": trafficGroups, "rules": trafficRules, "rule_targets": policyHits, "rules_since": rulesSince}, "connections": map[string]any{"active": active, "items": items, "total": total, "tcp": tcp, "udp": udp}, "providers": providers, "local": map[string]any{"http": map[string]any{"host": "127.0.0.1", "port": h.doc.client.HTTPPort, "ready": h.server != nil && h.localReady}, "socks": map[string]any{"host": "127.0.0.1", "port": h.doc.client.SOCKSPort, "ready": h.server != nil && h.localReady}}}
 }
