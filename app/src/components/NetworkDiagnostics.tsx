@@ -122,9 +122,6 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
               ]}
             />
             <div className="diagnostic-foot-actions">
-              <span className="diagnostic-last num">
-                <StableText current={lastAt} items={['尚未检测', '上次检测 23:59']} />
-              </span>
               <button
                 type="button"
                 className={'btn sm ghost diag-add-btn' + (kind !== 'connectivity' ? ' is-placeholder' : '')}
@@ -136,6 +133,9 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
                 <Icon name="plus" size={12} />
                 添加网址
               </button>
+              <span className="diagnostic-last num">
+                <StableText current={lastAt} items={['尚未检测', '上次检测 23:59']} />
+              </span>
               <button
                 type="button"
                 className={'btn sm diag-run-btn' + (busy === kind ? ' spin' : '')}

@@ -29,6 +29,7 @@
   --btn-bg: rgba(255, 255, 255, 0.075);
   --btn-shadow: none;
   --pop: rgba(28, 32, 40, 0.36);
+  --modal-bg: rgba(40, 44, 52, 0.76);
   --pop-solid: #282C34;
   --hover: rgba(255, 255, 255, 0.068);
   --press: rgba(255, 255, 255, 0.11);
@@ -64,7 +65,7 @@
   --shadow-card: 0 2px 10px rgba(0, 0, 0, 0.18);
   --shadow-pop: 0 14px 38px rgba(0, 0, 0, 0.44);
   --shadow-modal: 0 26px 68px rgba(0, 0, 0, 0.52);
-  --mask: rgba(0, 0, 0, 0.44);
+  --mask: rgba(0, 0, 0, 0.16);
   --scroll: rgba(255, 255, 255, 0.16);
   --scroll-hover: rgba(255, 255, 255, 0.28);
   --tk-k: #6EB5FF;
@@ -90,6 +91,7 @@
   --btn-bg: rgba(15, 23, 42, 0.055);
   --btn-shadow: none;
   --pop: rgba(255, 255, 255, 0.34);
+  --modal-bg: rgba(255, 255, 255, 0.74);
   --pop-solid: #FFFFFF;
   --hover: rgba(15, 23, 42, 0.052);
   --press: rgba(15, 23, 42, 0.088);
@@ -125,7 +127,7 @@
   --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.025);
   --shadow-pop: 0 14px 36px rgba(15, 23, 42, 0.15);
   --shadow-modal: 0 24px 64px rgba(15, 23, 42, 0.18);
-  --mask: rgba(15, 23, 42, 0.24);
+  --mask: rgba(15, 23, 42, 0.06);
   --scroll: rgba(15, 23, 42, 0.16);
   --scroll-hover: rgba(15, 23, 42, 0.28);
   --tk-k: #0066CC;
@@ -213,11 +215,13 @@
   :root[data-theme="dark"] {
     --card: #24272E;
     --pop: #282C34;
+    --modal-bg: #282C34;
     --side-bg: transparent;
   }
   :root[data-theme="light"] {
     --card: #FFFFFF;
     --pop: #FFFFFF;
+    --modal-bg: #FFFFFF;
     --side-bg: transparent;
   }
   :root[data-native-acrylic="enabled"],
@@ -373,8 +377,8 @@ time {
 }
 
 @keyframes kat-mask-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from { background-color: transparent; }
+  to   { background-color: var(--mask); }
 }
 
 @keyframes kat-modal-in {
@@ -411,6 +415,7 @@ time {
     --card: Canvas;
     --card-2: Canvas;
     --pop: Canvas;
+    --modal-bg: Canvas;
     --hover: Highlight;
     --press: Highlight;
   }

@@ -229,7 +229,7 @@ impl BridgeBoundary for SimulatedBridgeHarness {
 
 #[test]
 fn display_version_matches_cargo_pkg_version_0_2_20() {
-    assert_eq!(DISPLAY_VERSION, "0.2.31");
+    assert_eq!(DISPLAY_VERSION, "0.2.32");
     assert_eq!(DISPLAY_VERSION, env!("CARGO_PKG_VERSION"));
 }
 

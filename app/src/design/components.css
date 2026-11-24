@@ -787,8 +787,8 @@ select.inp.sm.conn-proc-select {
 .modal {
   width: min(540px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
-  background: var(--pop);
-  backdrop-filter: blur(20px) saturate(200%);
+  background: var(--modal-bg);
+  backdrop-filter: blur(28px) saturate(200%);
   border-radius: var(--r-pop);
   box-shadow: var(--shadow-modal);
   display: flex;

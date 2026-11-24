@@ -486,7 +486,7 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
         </Modal>
       )}
 
-      {d?.preparing && (
+      {d?.preparing && createPortal(
         <div className="modal-mask" role="status" aria-live="polite">
           <section className="modal modal-md">
             <header>
@@ -504,7 +504,8 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
               )}
             </div>
           </section>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
