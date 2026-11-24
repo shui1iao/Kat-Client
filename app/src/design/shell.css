@@ -125,7 +125,9 @@
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
+  padding-block: 10px;
   scrollbar-width: none;
+  mask-image: var(--fade-y);
 }
 
 .nav-list::-webkit-scrollbar {
@@ -158,7 +160,7 @@
 .sidebar-collapsed .nav-sec + .nav-sec {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid var(--line);
+  background: var(--sep-fade) top / 100% 1px no-repeat;
 }
 
 /* macOS Sequoia Source-List Row: full rounded pill selection, semantic line icons */
@@ -312,8 +314,7 @@
 /* ---------- Kernel Status Foot Tray ---------- */
 .side-status {
   margin-top: auto;
-  padding: 9px 0 0;
-  border-top: 1px solid var(--line);
+  padding: 6px 0 0;
   position: relative;
   flex: none;
 }
@@ -490,9 +491,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  padding-top: 4px;
-  margin-top: 1px;
-  border-top: 1px solid var(--line);
+  padding-top: 5px;
+  margin-top: 2px;
+  background: var(--sep-fade) top / 100% 1px no-repeat;
   font-size: var(--fs-micro);
 }
 
@@ -573,9 +574,8 @@
 /* Sidebar Control Dock: Mode Segmented Control + System Proxy / TUN switches */
 .side-controls {
   margin-top: 0;
-  margin-bottom: 6px;
-  padding: 2px 0 10px;
-  border-bottom: 1px solid var(--line);
+  margin-bottom: 2px;
+  padding: 2px 0 8px;
   display: flex;
   flex-direction: column;
   gap: 8px;

@@ -23,10 +23,11 @@
     "dest dest dest dest dest dest dest dest dest usage usage usage usage usage usage usage usage usage usage usage usage usage usage usage"
     "diag diag diag diag diag diag diag diag diag diag diag diag diag diag diag diag diag diag diag diag diag diag diag diag";
   gap: var(--ov-gap);
-  padding: 4px 22px 16px 14px;
+  padding: 10px 22px 18px 14px;
   scrollbar-gutter: stable;
   overflow-x: hidden;
   overflow-y: auto;
+  mask-image: var(--fade-y);
 }
 
 .ov-speed { grid-area: speed; }
@@ -532,7 +533,7 @@
   align-content: space-evenly;
   column-gap: 34px;
   row-gap: 0;
-  background-image: linear-gradient(var(--line), var(--line));
+  background-image: var(--sep-fade-v);
   background-size: 1px calc(100% - 8px);
   background-position: center center;
   background-repeat: no-repeat;
@@ -848,8 +849,9 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 2px 6px 20px 0;
+  padding: 12px 6px 22px 0;
   scroll-padding-block: 12px;
+  mask-image: var(--fade-y);
 }
 
 /* Every group is its own card — collapsed or open — separated by air,
@@ -1949,7 +1951,6 @@
   height: 48px;
   min-height: 48px;
   padding: 0 10px 0 12px;
-  border-bottom: 1px solid var(--line);
   flex: none;
   flex-wrap: nowrap;
   overflow: hidden;
@@ -2111,6 +2112,7 @@
    4. RULES & RESOURCES (Rules.tsx) — Inline Target Preview + Unified Tabs
    ========================================================================== */
 .rules-page {
+  position: relative;
   flex: 1;
   padding-bottom: 14px;
   min-height: 0;
@@ -2119,49 +2121,178 @@
   flex-direction: column;
 }
 
-/* Inline Instant Rule Judge Bar */
-.rule-judge-bar {
+/* Floating Fixed-Geometry Rule Judge Card (unified Kat frosted glass + radius, zero table displacement) */
+.rule-judge-pop {
+  position: fixed;
+  z-index: 940;
+  height: 204px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
-  min-height: 48px;
-  padding: 8px 16px;
-  background: transparent;
-  border-bottom: 1px solid var(--line);
-  font-size: var(--fs-body);
-  flex: none;
+  padding: 12px 14px 13px;
+  border-radius: var(--r-pop);
+  background: var(--pop);
+  backdrop-filter: blur(20px) saturate(200%);
+  box-shadow: var(--shadow-pop);
+  animation: rule-judge-in 160ms var(--ease-spring);
 }
 
-.rule-judge-label {
+@keyframes rule-judge-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.rule-judge-head {
+  height: 24px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rule-judge-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--accent);
+}
+
+.rule-judge-title {
   font-size: var(--fs-body);
-  font-weight: 500;
-  color: var(--text-2);
-  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.rule-judge-hint {
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+  background: var(--card-2);
+  padding: 2px 7px;
+  border-radius: 999px;
 }
 
 .rule-judge-form {
+  height: 32px;
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex: 0 0 320px;
+  gap: 8px;
 }
 
 .rule-judge-form .inp {
   flex: 1;
+  min-width: 0;
   height: 32px;
   background-color: var(--card-2);
   font-family: var(--mono);
   font-size: var(--fs-body);
 }
 
-.rule-judge-result {
+.rule-judge-submit {
+  flex: none;
+  min-width: 68px;
+}
+
+.rule-judge-slot {
   flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--card-2);
+  overflow: hidden;
+}
+
+.rule-judge-empty {
+  font-size: var(--fs-meta);
+  color: var(--text-3);
+  text-align: center;
+  line-height: 1.45;
+  padding: 0 6px;
+}
+
+.rule-judge-err {
+  font-size: var(--fs-meta);
+  color: var(--bad);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.rule-judge-res-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
   min-width: 0;
+}
+
+.rule-judge-res-top {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.rule-judge-hit-label {
+  font-size: var(--fs-body);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.rule-judge-kv {
+  height: 20px;
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  font-size: var(--fs-meta);
+}
+
+.rule-judge-k {
+  flex: none;
+  width: 28px;
+  color: var(--text-3);
+}
+
+.rule-judge-v {
+  flex: 1;
+  min-width: 0;
   color: var(--text);
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rule-judge-host-pill {
+  flex: none;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--hover);
+  color: var(--text-3);
+  font-size: var(--fs-micro);
+}
+
+.rule-judge-policy-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
 }
 
 .rule-judge-chain {
@@ -2171,9 +2302,13 @@
 }
 
 .rule-judge-dns {
+  flex: none;
   font-family: var(--mono);
   font-size: var(--fs-micro);
   color: var(--text-3);
+  background: var(--hover);
+  padding: 1px 6px;
+  border-radius: 5px;
   white-space: nowrap;
 }
 
@@ -3413,8 +3548,7 @@
   scrollbar-gutter: stable;
   padding-top: 12px;
   padding-bottom: 24px;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0px, #000 12px, #000 100%);
-  mask-image: linear-gradient(to bottom, transparent 0px, #000 12px, #000 100%);
+  mask-image: var(--fade-y);
 }
 
 .settings-stack {
@@ -4013,15 +4147,16 @@
 }
 
 .dns-quick-bar {
+  height: 46px;
+  flex: none;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--line);
+  align-items: center;
+  padding: 0 14px 4px;
   background: transparent;
 }
 
 .dns-quick-form {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -4047,24 +4182,149 @@
   font-size: var(--fs-body);
 }
 
-.dns-quick-feedback {
+/* Floating DNS Quick-Query Toast (unified top-center frosted glass + radius, zero layout shift) */
+.dns-float-toast {
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 950;
+  min-width: 320px;
+  width: max-content;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 12px 11px 14px;
+  border-radius: var(--r-pop);
+  background: var(--pop);
+  backdrop-filter: blur(20px) saturate(200%);
+  box-shadow: var(--shadow-pop);
+  animation: dns-toast-in 170ms var(--ease-spring);
+}
+
+@keyframes dns-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+.dns-toast-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 6px;
+  flex: none;
+}
+
+.dns-toast-dot.is-ok {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px var(--ok-soft);
+}
+
+.dns-toast-dot.is-empty {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px var(--warn-soft);
+}
+
+.dns-toast-dot.is-err {
+  background: var(--bad);
+  box-shadow: 0 0 0 3px var(--bad-soft);
+}
+
+.dns-toast-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dns-toast-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dns-toast-domain {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dns-toast-badge {
+  flex: none;
+  font-size: 10.5px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.dns-toast-ips {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 5px 10px;
-  border-radius: 7px;
-  font-size: var(--fs-meta);
+  min-width: 0;
 }
 
-.dns-quick-feedback.is-ok {
-  background: var(--ok-soft);
+.dns-toast-ip-text {
+  font-size: var(--fs-data);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dns-toast-copy {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--card-2);
+  color: var(--text-2);
+  font-size: var(--fs-micro);
+  cursor: pointer;
+  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.dns-toast-copy:hover {
+  background: var(--hover);
   color: var(--text);
 }
 
-.dns-quick-feedback.is-err {
-  background: var(--bad-soft);
+.dns-toast-detail {
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+  line-height: 1.4;
+}
+
+.dns-float-toast.is-err .dns-toast-detail {
   color: var(--bad);
+}
+
+.dns-toast-meta {
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+}
+
+.dns-toast-close {
+  flex: none;
+  margin-top: -2px;
+  margin-right: -4px;
 }
 
 .dns-log-grid {
@@ -4643,4 +4903,204 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+
+/* ==========================================================================
+   UNIFIED SOFT SEPARATORS, FROSTED STICKY HEADERS & GRADIENT SCROLL FADES
+   Eliminates harsh edge-to-edge straight cutoff lines across every page.
+   ========================================================================== */
+
+/* 1. Major zone separators: zero harsh straight lines (use air + soft gradient fade) */
+.analytics-foot,
+.pc-body,
+.pe-section,
+.pe-details[open] > summary,
+.cfg-doc-box,
+.cfg-actions,
+.cfg-head,
+.dns-query,
+.dns-sniff-section,
+.sparkle-hero,
+.update-last,
+.conn-detail-foot {
+  border-top: 0;
+  border-bottom: 0;
+}
+
+.analytics-foot,
+.pc-body,
+.cfg-actions,
+.dns-query,
+.dns-sniff-section,
+.update-last,
+.conn-detail-foot {
+  background-image: var(--sep-fade);
+  background-size: 100% 1px;
+  background-position: top;
+  background-repeat: no-repeat;
+}
+
+.pe-section,
+.pe-details[open] > summary,
+.cfg-doc-box,
+.sparkle-hero {
+  background-image: var(--sep-fade);
+  background-size: 100% 1px;
+  background-position: bottom;
+  background-repeat: no-repeat;
+}
+
+.pe-section:last-child {
+  background-image: none;
+}
+
+/* 2. All sticky table column headers: frosted translucent bar + soft downward feather (zero straight cutoff) */
+.live-node-head,
+.live-rule-head,
+.conn-grid-head,
+.conn-log-head,
+.kernel-log-head,
+.dns-grid-head,
+.res-th {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  border-bottom: 0;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--card) 92%, var(--card-2)) 0%,
+    color-mix(in srgb, var(--card) 78%, transparent) 100%
+  );
+  backdrop-filter: blur(14px) saturate(160%);
+}
+
+.live-node-head::after,
+.live-rule-head::after,
+.conn-grid-head::after,
+.conn-log-head::after,
+.kernel-log-head::after,
+.dns-grid-head::after,
+.res-th::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 12px;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--card) 56%, transparent) 0%,
+    transparent 100%
+  );
+}
+
+.safe-log-head {
+  border-bottom: 0;
+  background: transparent;
+}
+
+/* 3. All scrollable containers: unified soft gradient edge fade */
+.node-table-scroll,
+.rule-table-scroll,
+.res-list,
+.conn-table-wrap,
+.log-scroll,
+.kernel-log-scroll {
+  padding-bottom: 14px;
+  mask-image: var(--fade-bottom);
+}
+
+.dns-settings-unified,
+.dns-settings-scroll,
+.safe-log-list,
+.cfg-tools,
+.policy-editor-v2 .pe-form-body,
+.sparkle-notes-box,
+.pe-candidates,
+.diag-body {
+  mask-image: var(--fade-y);
+}
+
+.dns-settings-unified {
+  padding-top: 14px;
+  padding-bottom: 24px;
+}
+
+.safe-log-list {
+  padding-top: 8px;
+  padding-bottom: 14px;
+}
+
+/* 4. List & table rows: edge-fading subtle gradient hairlines instead of full-bleed hard strokes */
+.live-node-row,
+.live-rule-row,
+.res-row:not(.res-th),
+.conn-item-row,
+.conn-log-row,
+.kernel-log-row,
+.safe-log,
+.dns-grid-row,
+.conn-proc-bucket,
+.unlock-row,
+.conn-diag-row,
+.exit-row,
+.dns-policy-table th,
+.dns-policy-table td {
+  border-bottom: 0;
+  background-image: var(--sep-fade);
+  background-size: 100% 1px;
+  background-position: bottom;
+  background-repeat: no-repeat;
+}
+
+.live-node-row:last-child,
+.live-rule-row:last-child,
+.live-rule-row.final-route,
+.res-row:last-child,
+.conn-item-row:last-child,
+.conn-log-entry:last-child .conn-log-row,
+.conn-log-entry.is-open .conn-log-row,
+.kernel-log-row:last-child,
+.safe-log:last-child,
+.dns-grid-row:last-child,
+.conn-proc-bucket:last-child,
+.diag-list:not(.diag-grid-2) > :last-child,
+.diag-list.diag-grid-2 > :nth-last-child(1),
+.diag-list.diag-grid-2 > :nth-last-child(2):nth-child(odd),
+.live-node-row:hover,
+.live-rule-row:hover,
+.live-rule-row.is-hit,
+.conn-item-row:hover,
+.conn-log-row:hover,
+.conn-log-row.is-selected,
+.dns-grid-row:hover {
+  background-image: none;
+}
+
+.set-row,
+.update-row,
+.pe-member-row + .pe-member-row,
+.pe-missing-row + .pe-missing-row,
+.sniff-options > .set-row:first-child {
+  border-top: 0;
+  background-image: var(--sep-fade);
+  background-size: 100% 1px;
+  background-position: top;
+  background-repeat: no-repeat;
+}
+
+.card-h + .set-row,
+.set-row:first-child,
+.dns-subsec-title + .set-row,
+.update-row:first-child {
+  background-image: none;
+}
+
+.conn-proc-bucket.is-open > .conn-proc-group-row,
+.conn-log-detail,
+.conn-proc-sub-table {
+  border-top: 0;
+  border-bottom: 0;
 }

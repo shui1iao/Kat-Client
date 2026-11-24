@@ -7,6 +7,7 @@ const suite = [
   "tests-ui/c16-network.test.ts",
   "tests-ui/comprehensive.test.ts",
   "tests-ui/dns-cache.test.ts",
+  "tests-ui/dns-input.test.ts",
   "tests-ui/document.test.ts",
   "tests-ui/import.test.ts",
   "tests-ui/installed-handoff.test.ts",

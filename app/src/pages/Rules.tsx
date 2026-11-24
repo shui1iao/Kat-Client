@@ -3,6 +3,8 @@ import { Segmented, StableText } from '../components/ui';
 import { subscriptionRule } from '../client/subscription';
 import { policyColor, ruleType, ruleKeys, reorderRule, ruleKindLabel } from '../client/presentation';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useCardAnchor } from '../lib/floating';
 import { KState, KTag, RuleTag } from '../components/labels';
 import { Icon } from '../components/Icon';
 import { tip } from '../components/Tooltip';
@@ -59,14 +61,35 @@ export function Rules({
   const [editingFinal, setEditingFinal] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
 
-  // Inline Instant Rule Judge State
-  const [judgeOpen, setJudgeOpen] = useState(true);
+  // Floating Fixed-Geometry Rule Judge State (closed by default)
+  const [judgeOpen, setJudgeOpen] = useState(false);
   const [judgeTarget, setJudgeTarget] = useState('');
   const [judgeBusy, setJudgeBusy] = useState(false);
   const [judgeResult, setJudgeResult] = useState<TargetPreview | null>(null);
   const [judgeError, setJudgeError] = useState('');
   const judgeReq = useRef(0);
+  const judgeInputRef = useRef<HTMLInputElement>(null);
+  const judgeBtnRef = useRef<HTMLButtonElement>(null);
+  const rulesCardRef = useRef<HTMLElement>(null);
   const ruleScrollRef = useRef<HTMLDivElement>(null);
+  const judgePos = useCardAnchor(activeView === 'rules' && judgeOpen, judgeBtnRef, rulesCardRef, 448);
+
+  useEffect(() => {
+    if (activeView !== 'rules' || !judgeOpen) return;
+    requestAnimationFrame(() => judgeInputRef.current?.focus());
+    const onKey = (e: KeyboardEvent) => {
+      if (
+        e.key === 'Escape' &&
+        !e.defaultPrevented &&
+        !e.isComposing &&
+        !document.querySelector('[role="dialog"], .kat-pop')
+      ) {
+        setJudgeOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeView, judgeOpen]);
 
   // External Resources State (read-only on mount, reconciled on refresh)
   const [resItems, setResItems] = useState<ResourceItem[] | null>(null);
@@ -234,17 +257,17 @@ export function Rules({
   );
 
   const hitRuleIdx =
-    judgeResult?.matched.source === 'rule' && judgeResult.matched.index != null
+    judgeOpen && judgeResult?.matched.source === 'rule' && judgeResult.matched.index != null
       ? judgeResult.matched.index - 1
       : null;
-  const hitIsFinal = judgeResult?.matched.source === 'final';
+  const hitIsFinal = judgeOpen && judgeResult?.matched.source === 'final';
   const judgeChainText = judgeResult
     ? (judgeResult.chain.length ? judgeResult.chain : [judgeResult.matched.policy]).map(c.label).join(' → ')
     : '';
 
   return (
     <div className="rules-page">
-      <section className="card table-card rules-card">
+      <section ref={rulesCardRef} className="card table-card rules-card">
         <header className="table-toolbar">
           <Segmented
             size="sm"
@@ -287,6 +310,7 @@ export function Rules({
                 </button>
               )}
               <button
+                ref={judgeBtnRef}
                 type="button"
                 className="btn sm"
                 style={
@@ -335,87 +359,7 @@ export function Rules({
 
         {activeView === 'rules' ? (
           <>
-            {judgeOpen && (
-              <div className="rule-judge-bar" role="region" aria-label="即时规则判定">
-                <span className="rule-judge-label">即时判定</span>
-                <form
-                  className="rule-judge-form"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    void runPreview();
-                  }}
-                >
-                  <input
-                    className="inp"
-                    aria-label="规则判定输入"
-                    placeholder="example.com / 1.1.1.1"
-                    autoComplete="off"
-                    spellCheck={false}
-                    value={judgeTarget}
-                    disabled={judgeBusy || !c.connected}
-                    onChange={(e) => {
-                      setJudgeTarget(e.target.value);
-                      if (!e.target.value.trim()) {
-                        setJudgeResult(null);
-                        setJudgeError('');
-                      }
-                    }}
-                  />
-                  <button
-                    type="submit"
-                    className="btn sm primary"
-                    disabled={judgeBusy || !judgeTarget.trim() || !c.hasHost || !c.connected}
-                  >
-                    <StableText current={judgeBusy ? '判定中…' : '判定'} items={['判定', '判定中…']} />
-                  </button>
-                </form>
 
-                <div className="rule-judge-result" role="status" aria-live="polite">
-                  {judgeError ? (
-                    <span style={{ color: 'var(--bad)' }}>{judgeError}</span>
-                  ) : judgeResult ? (
-                    <>
-                      <span>
-                        →{' '}
-                        {hitIsFinal ? (
-                          <>未命中前置规则 · 走最终路由</>
-                        ) : (
-                          <>
-                            命中第 <b className="num">#{judgeResult.matched.index}</b> 条
-                          </>
-                        )}
-                      </span>
-                      <RuleTag type={hitIsFinal ? 'MATCH' : judgeResult.matched.type} />
-                      {!hitIsFinal && judgeResult.matched.payload && (
-                        <code style={{ fontFamily: 'var(--mono)', fontSize: 11.5, color: 'var(--text-2)' }}>
-                          {judgeResult.matched.payload}
-                        </code>
-                      )}
-                      <span className="rule-judge-chain" {...tip(judgeChainText, true)}>
-                        → <b>{judgeChainText}</b>
-                      </span>
-                      {judgeResult.resolved && judgeResult.target.addresses.length > 0 && (
-                        <span
-                          className="rule-judge-dns"
-                          {...tip('DNS 解析：' + judgeResult.target.addresses.join(' · '))}
-                        >
-                          [{judgeResult.target.addresses[0]}]
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        className="link-btn"
-                        onClick={() => scrollToHitRow(judgeResult, true)}
-                      >
-                        定位
-                      </button>
-                    </>
-                  ) : (
-                    <span className="muted">输入域名、IP 或网址按回车，立即查看首条命中规则与出口链路</span>
-                  )}
-                </div>
-              </div>
-            )}
 
             <div className="rule-table-scroll" ref={ruleScrollRef}>
               <div className="live-rule-head">
@@ -635,6 +579,140 @@ export function Rules({
           </>
         )}
       </section>
+
+      {activeView === 'rules' &&
+        judgeOpen &&
+        judgePos &&
+        createPortal(
+          <aside
+            className="rule-judge-pop"
+            role="region"
+            aria-label="规则判定"
+            style={{ top: judgePos.top, left: judgePos.left, width: judgePos.width }}
+          >
+                <div className="rule-judge-head">
+                  <div className="rule-judge-title-wrap">
+                    <Icon name="target" size={14} />
+                    <span className="rule-judge-title">规则判定</span>
+                    <span className="rule-judge-hint">域名 · IP · 网址</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="ib"
+                    aria-label="关闭规则判定"
+                    onClick={() => setJudgeOpen(false)}
+                  >
+                    <Icon name="x" size={13} />
+                  </button>
+                </div>
+
+                <form
+                  className="rule-judge-form"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void runPreview();
+                  }}
+                >
+                  <input
+                    ref={judgeInputRef}
+                    className="inp"
+                    aria-label="规则判定输入"
+                    placeholder="example.com / 1.1.1.1 / https://..."
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={judgeTarget}
+                    disabled={judgeBusy || !c.connected}
+                    onChange={(e) => {
+                      setJudgeTarget(e.target.value);
+                      if (!e.target.value.trim()) {
+                        setJudgeResult(null);
+                        setJudgeError('');
+                      }
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    className="btn sm primary rule-judge-submit"
+                    disabled={judgeBusy || !judgeTarget.trim() || !c.hasHost || !c.connected}
+                  >
+                    <StableText current={judgeBusy ? '判定中…' : '判定'} items={['判定', '判定中…']} />
+                  </button>
+                </form>
+
+                <div className="rule-judge-slot" role="status" aria-live="polite">
+                  {judgeBusy ? (
+                    <div className="rule-judge-empty">正在判定匹配规则与出口链路…</div>
+                  ) : judgeError ? (
+                    <div className="rule-judge-err">{judgeError}</div>
+                  ) : judgeResult ? (
+                    <div className="rule-judge-res-grid">
+                      <div className="rule-judge-res-top">
+                        <span className="rule-judge-hit-label">
+                          {judgeResult.matched.source === 'final' ? (
+                            <>未命中前置规则 · 最终路由</>
+                          ) : (
+                            <>
+                              命中第 <b className="num">#{judgeResult.matched.index}</b> 条
+                            </>
+                          )}
+                        </span>
+                        <RuleTag type={judgeResult.matched.source === 'final' ? 'MATCH' : judgeResult.matched.type} />
+                        <span className="sp" />
+                        <button
+                          type="button"
+                          className="link-btn"
+                          onClick={() => scrollToHitRow(judgeResult, true)}
+                        >
+                          定位到行
+                        </button>
+                      </div>
+
+                      <div className="rule-judge-kv">
+                        <span className="rule-judge-k">匹配</span>
+                        <span
+                          className="rule-judge-v mono"
+                          {...tip(
+                            judgeResult.matched.source === 'final'
+                              ? '其余全部流量'
+                              : judgeResult.matched.payload || judgeResult.target.host,
+                            true,
+                          )}
+                        >
+                          {judgeResult.matched.source === 'final'
+                            ? '其余全部流量'
+                            : judgeResult.matched.payload || judgeResult.target.host}
+                        </span>
+                        {judgeResult.target.host &&
+                          judgeResult.target.input.trim().toLowerCase() !== judgeResult.target.host.toLowerCase() && (
+                            <span className="rule-judge-host-pill mono" {...tip('提取目标：' + judgeResult.target.host)}>
+                              {judgeResult.target.host}
+                            </span>
+                          )}
+                      </div>
+
+                      <div className="rule-judge-kv">
+                        <span className="rule-judge-k">出口</span>
+                        <span className="rule-judge-policy-dot" style={{ background: policyColor(judgeResult.matched.policy, c.status, c.label) }} />
+                        <span className="rule-judge-v rule-judge-chain" {...tip(judgeChainText, true)}>
+                          <b>{judgeChainText}</b>
+                        </span>
+                        {judgeResult.resolved && judgeResult.target.addresses.length > 0 && (
+                          <span
+                            className="rule-judge-dns"
+                            {...tip('DNS 解析：' + judgeResult.target.addresses.join(' · '))}
+                          >
+                            {judgeResult.target.addresses[0]}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rule-judge-empty">输入域名、IP 或网站链接，按回车查看首条命中规则与出口链路</div>
+                  )}
+                </div>
+          </aside>,
+          document.body,
+        )}
 
       {showOverlay && overlayOwner && (
         <Modal title="订阅规则的本地修改" close={() => setShowOverlay(false)}>

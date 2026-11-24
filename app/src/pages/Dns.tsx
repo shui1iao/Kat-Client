@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useTopNoticeAnchor } from '../lib/floating';
 import { DomainIcon } from '../components/EntityIcons';
 import { canClearDnsCache } from '../client/sniff';
 import { NetworkSettings } from '../components/NetworkSettings';
@@ -7,6 +9,7 @@ import { Segmented, StableText } from '../components/ui';
 import { KState, KTag } from '../components/labels';
 import { tip } from '../components/Tooltip';
 import { core } from '../client/ipc';
+import { parseDnsQueryInput } from '../client/dnsInput';
 import { normalizeDNSLogs } from '../client/normalize';
 import { clockStr } from '../client/display';
 import { errorText } from '../lib/errors';
@@ -567,22 +570,67 @@ export function Dns({
   );
 }
 
+interface QuickNotice {
+  id: number;
+  tone: 'ok' | 'empty' | 'err';
+  title: string;
+  meta?: string;
+  ips?: string[];
+  detail?: string;
+  fromUrl?: boolean;
+}
+
 function QuickQueryStrip({ c, onQueried }: { c: Client; onQueried?: () => void }) {
   const running = c.status?.runtime.state === 'running';
   const [name, setName] = useState('');
   const [type, setType] = useState<'both' | 'A' | 'AAAA'>('both');
-  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [notice, setNotice] = useState<QuickNotice | null>(null);
+  const [hoverNotice, setHoverNotice] = useState(false);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const noticeSeq = useRef(0);
+  const copyTimer = useRef<number | null>(null);
   const busy = c.busy.has('dns-quick-query');
+  const toastPos = useTopNoticeAnchor(!!notice);
 
   useEffect(() => {
-    if (!notice) return;
-    const t = window.setTimeout(() => setNotice(null), 4500);
-    return () => window.clearTimeout(t);
+    if (!notice) setHoverNotice(false);
   }, [notice]);
 
-  const submit = () =>
-    c.run('dns-quick-query', async () => {
-      setNotice(null);
+  useEffect(
+    () => () => {
+      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!notice || hoverNotice) return;
+    const t = window.setTimeout(() => setNotice(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [notice, hoverNotice]);
+
+  const copyNoticeIps = (id: number, ips: string[]) => {
+    const text = ips.join(', ');
+    if (!text) return;
+    void navigator.clipboard?.writeText(text);
+    setCopiedId(id);
+    if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+    copyTimer.current = window.setTimeout(() => setCopiedId((cur) => (cur === id ? null : cur)), 1500);
+  };
+
+  const submit = () => {
+    const parsed = parseDnsQueryInput(name);
+    if (!parsed.ok) {
+      setNotice({
+        id: ++noticeSeq.current,
+        tone: 'err',
+        title: '无法解析输入',
+        detail: parsed.error,
+      });
+      return;
+    }
+
+    void c.run('dns-quick-query', async () => {
       try {
         const res = await core<{
           name: string;
@@ -590,63 +638,121 @@ function QuickQueryStrip({ c, onQueried }: { c: Client; onQueried?: () => void }
           server: string;
           duration_ms: number;
           cached: boolean;
-        }>('dns.query', { name: name.trim(), type });
+        }>('dns.query', { name: parsed.domain, type });
         const list = Array.isArray(res?.addresses) ? res.addresses : [];
-        const ips = list.map((a) => a.addr).filter(Boolean).join(', ');
+        const ips = list.map((a) => a.addr).filter(Boolean);
+        const resolvedName = res?.name || parsed.domain;
+        const meta = `${formatServer(res?.server)}${res?.cached ? ' · 缓存命中' : ` · ${Math.round(res?.duration_ms ?? 0)} ms`}`;
         setNotice({
-          ok: true,
-          text: ips
-            ? `${res.name} → ${ips}（${formatServer(res.server)}${res.cached ? ' · 缓存命中' : ` · ${Math.round(res.duration_ms ?? 0)} ms`}）`
-            : `${res.name}：无匹配记录（${formatServer(res.server)}）`,
+          id: ++noticeSeq.current,
+          tone: ips.length ? 'ok' : 'empty',
+          title: resolvedName,
+          meta,
+          ips,
+          detail: ips.length ? undefined : '上游返回空记录，当前类型无可用地址',
+          fromUrl: parsed.fromUrl,
         });
         onQueried?.();
       } catch (e) {
-        setNotice({ ok: false, text: errorText(e) });
+        setNotice({
+          id: ++noticeSeq.current,
+          tone: 'err',
+          title: parsed.domain,
+          detail: errorText(e),
+          fromUrl: parsed.fromUrl,
+        });
       }
     });
+  };
 
   return (
-    <div className="dns-quick-bar">
-      <form
-        className="dns-quick-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (name.trim()) void submit();
-        }}
-      >
-        <span className="dns-quick-label">快速解析</span>
-        <input
-          className="inp mono dns-quick-inp"
-          aria-label="快速解析测试域名"
-          placeholder={running ? '输入域名立即解析测试，例如 api.github.com' : '内核运行后可发起实时解析测试'}
-          value={name}
-          disabled={!running}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <select
-          className="inp set-inp-sm"
-          aria-label="解析记录类型"
-          value={type}
-          disabled={!running}
-          onChange={(e) => setType(e.target.value as typeof type)}
+    <>
+      <div className="dns-quick-bar">
+        <form
+          className="dns-quick-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (name.trim() && running && !busy) submit();
+          }}
         >
-          <option value="both">A + AAAA</option>
-          <option value="A">仅 A</option>
-          <option value="AAAA">仅 AAAA</option>
-        </select>
-        <button className="btn sm primary dns-quick-submit" type="submit" disabled={!running || !name.trim() || busy}>
-          <Icon name="bolt" size={13} />
-          <StableText current={busy ? '解析中…' : '测试解析'} items={['测试解析', '解析中…']} />
-        </button>
-      </form>
-      {notice && (
-        <div className={'dns-quick-feedback' + (notice.ok ? ' is-ok' : ' is-err')} role="status">
-          <span className="mono">{notice.text}</span>
-          <button type="button" className="ib" aria-label="关闭提示" onClick={() => setNotice(null)}>
-            <Icon name="x" size={12} />
+          <span className="dns-quick-label">快速解析</span>
+          <input
+            className="inp mono dns-quick-inp"
+            aria-label="快速解析测试域名或链接"
+            placeholder={running ? '输入域名或粘贴网站链接，例如 https://api.github.com' : '内核运行后可发起实时解析测试'}
+            value={name}
+            disabled={!running}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <select
+            className="inp set-inp-sm"
+            aria-label="解析记录类型"
+            value={type}
+            disabled={!running}
+            onChange={(e) => setType(e.target.value as typeof type)}
+          >
+            <option value="both">A + AAAA</option>
+            <option value="A">仅 A</option>
+            <option value="AAAA">仅 AAAA</option>
+          </select>
+          <button className="btn sm primary dns-quick-submit" type="submit" disabled={!running || !name.trim() || busy}>
+            <Icon name="bolt" size={13} />
+            <StableText current={busy ? '解析中…' : '测试解析'} items={['测试解析', '解析中…']} />
           </button>
-        </div>
-      )}
-    </div>
+        </form>
+      </div>
+
+      {notice &&
+        toastPos &&
+        createPortal(
+          <aside
+            key={notice.id}
+            className={`dns-float-toast is-${notice.tone}`}
+            style={{ top: toastPos.top, left: toastPos.left, maxWidth: toastPos.maxWidth }}
+            role="status"
+            aria-live="polite"
+            onMouseEnter={() => setHoverNotice(true)}
+            onMouseLeave={() => setHoverNotice(false)}
+          >
+          <span className={`dns-toast-dot is-${notice.tone}`} aria-hidden="true" />
+          <div className="dns-toast-body">
+            <div className="dns-toast-head">
+              <span className="dns-toast-domain mono" {...tip(notice.title, true)}>
+                {notice.title}
+              </span>
+              {notice.fromUrl && <span className="dns-toast-badge">已提取域名</span>}
+            </div>
+            {notice.ips && notice.ips.length > 0 ? (
+              <div className="dns-toast-ips">
+                <span className="dns-toast-ip-text mono" {...tip(notice.ips.join(', '), true)}>
+                  {notice.ips[0]}
+                  {notice.ips.length > 1 ? ` +${notice.ips.length - 1}` : ''}
+                </span>
+                <button
+                  type="button"
+                  className="dns-toast-copy"
+                  onClick={() => copyNoticeIps(notice.id, notice.ips!)}
+                >
+                  <Icon name={copiedId === notice.id ? 'check' : 'copy'} size={12} />
+                  <StableText current={copiedId === notice.id ? '已复制' : '复制'} items={['复制', '已复制']} />
+                </button>
+              </div>
+            ) : (
+              notice.detail && <div className="dns-toast-detail">{notice.detail}</div>
+            )}
+            {notice.meta && <div className="dns-toast-meta">{notice.meta}</div>}
+          </div>
+          <button
+            type="button"
+            className="ib dns-toast-close"
+            aria-label="关闭通知"
+            onClick={() => setNotice(null)}
+          >
+            <Icon name="x" size={13} />
+          </button>
+          </aside>,
+          document.body,
+        )}
+    </>
   );
 }

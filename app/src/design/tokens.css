@@ -158,13 +158,19 @@
   --h-ctl-xs: 26px;     /* inline row controls */
   --h-row: 42px;        /* table row */
   /* Soft Concentric Corner Radii */
-  --r-modal: 16px;
+  --r-modal: 14px;
+  --r-pop: 14px;
   --r-card: 14px;
   --r-tray: 11px;
   --r-ctl: 9px;
   --r-inner: 7px;
   --r-chip: 6px;
   --r-pill: 999px;
+  /* Soft gradient separators & scroll fade masks (zero harsh straight cutoffs) */
+  --sep-fade: linear-gradient(90deg, transparent 0%, var(--line) 8%, var(--line) 92%, transparent 100%);
+  --sep-fade-v: linear-gradient(180deg, transparent 0%, var(--line) 12%, var(--line) 88%, transparent 100%);
+  --fade-y: linear-gradient(to bottom, transparent 0px, #000 12px, #000 calc(100% - 14px), transparent 100%);
+  --fade-bottom: linear-gradient(to bottom, #000 0px, #000 calc(100% - 14px), transparent 100%);
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;

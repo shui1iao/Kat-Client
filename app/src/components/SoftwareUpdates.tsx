@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom';
+import { useTopNoticeAnchor } from '../lib/floating';
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { host } from '../client/ipc';
@@ -324,11 +326,12 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
     ? (d?.rows ?? []).find((r) => r.kind === u.dialogKind && (r.offer || r.notes)) ?? null
     : null;
   const firstOfferRow = availableRows[0] ?? null;
+  const noticePos = useTopNoticeAnchor(Boolean(d?.confirmation.pending || (d?.notice && firstOfferRow)));
 
   return (
     <>
-      {d?.confirmation.pending && (
-        <div className="toast show update-notice" style={{ top: 58, bottom: 'auto', pointerEvents: 'auto', maxWidth: 'calc(100vw - 32px)' }} role="status">
+      {d?.confirmation.pending && noticePos && createPortal(
+        <div className="toast show update-notice" style={{ top: noticePos.top, left: noticePos.left, maxWidth: noticePos.maxWidth }} role="status">
           <Icon name="info" size={16} />
           <span>
             {d.confirmation.message || '需要管理员确认才能完成更新'}
@@ -337,11 +340,12 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
           <button className="btn sm" style={{ flexShrink: 0 }} disabled={d.confirmation.running || u.working} onClick={() => void u.action('update_recover')}>
             <StableText current={d.confirmation.running ? '等待确认…' : '重试确认'} items={['重试确认', '等待确认…']} />
           </button>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {d?.notice && firstOfferRow && (
-        <div className="toast show update-notice" style={{ top: 58, bottom: 'auto', pointerEvents: 'auto', maxWidth: 'calc(100vw - 32px)' }} role="status">
+      {d?.notice && firstOfferRow && noticePos && createPortal(
+        <div className="toast show update-notice" style={{ top: noticePos.top, left: noticePos.left, maxWidth: noticePos.maxWidth }} role="status">
           <Icon name="info" size={16} />
           <span>
             发现新版本 <b>{label(firstOfferRow.kind)} {firstOfferRow.latest}</b>
@@ -368,7 +372,8 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
           <button className="ib" aria-label="关闭更新通知" onClick={() => void u.action('update_dismiss')}>
             <Icon name="x" size={14} />
           </button>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Surge / Sparkle Classic Update Sheet Dialog */}

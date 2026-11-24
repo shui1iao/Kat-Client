@@ -3,6 +3,7 @@ import { Icon } from './Icon';
 import { Card, SettingSwitch, StableText } from './ui';
 import { LocalError } from './Editors';
 import { core } from '../client/ipc';
+import { parseDnsQueryInput } from '../client/dnsInput';
 import { normalizeDNSQuery } from '../client/normalize';
 import { errorText } from '../lib/errors';
 import { KTag } from './labels';
@@ -27,16 +28,23 @@ export function DnsQuery({ c }: { c: Client }) {
   const [reply, setReply] = useState<DNSQueryReply | null>(null);
   const [error, setError] = useState('');
   const busy = c.busy.has('dns-query');
-  const query = () =>
-    c.run('dns-query', async () => {
+  const query = () => {
+    const parsed = parseDnsQueryInput(name);
+    if (!parsed.ok) {
+      setError(parsed.error);
+      setReply(null);
+      return;
+    }
+    void c.run('dns-query', async () => {
       setError('');
       setReply(null);
       try {
-        setReply(normalizeDNSQuery(await core<unknown>('dns.query', { name: name.trim(), type })));
+        setReply(normalizeDNSQuery(await core<unknown>('dns.query', { name: parsed.domain, type })));
       } catch (e) {
         setError(errorText(e));
       }
     });
+  };
   return (
     <div className="dns-query">
       <div className="dq-h">在线解析测试</div>
@@ -50,7 +58,7 @@ export function DnsQuery({ c }: { c: Client }) {
         <input
           className="inp mono"
           aria-label="要查询的域名"
-          placeholder="输入域名测试当前内核 DNS 解析，例如 example.com"
+          placeholder="输入域名或粘贴网站链接测试解析，例如 https://example.com"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />

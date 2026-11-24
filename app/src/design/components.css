@@ -774,7 +774,6 @@ select.inp.sm.conn-proc-select {
   inset: 0;
   z-index: 1000;
   background: var(--mask);
-  backdrop-filter: blur(3px);
   display: grid;
   place-items: center;
   padding: 24px;
@@ -788,8 +787,9 @@ select.inp.sm.conn-proc-select {
 .modal {
   width: min(540px, calc(100vw - 48px));
   max-height: calc(100vh - 48px);
-  background: var(--pop-solid);
-  border-radius: var(--r-modal);
+  background: var(--pop);
+  backdrop-filter: blur(20px) saturate(200%);
+  border-radius: var(--r-pop);
   box-shadow: var(--shadow-modal);
   display: flex;
   flex-direction: column;
@@ -814,8 +814,7 @@ select.inp.sm.conn-proc-select {
   gap: 10px;
   height: 46px;
   padding: 0 10px 0 18px;
-  background: var(--pop-solid);
-  border-bottom: 1px solid var(--line);
+  background: transparent;
   flex: none;
 }
 
@@ -841,10 +840,11 @@ select.inp.sm.conn-proc-select {
   min-height: 0;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  padding: 16px 20px;
+  padding: 14px 20px 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  mask-image: var(--fade-y);
 }
 
 .form-set {
@@ -895,8 +895,7 @@ select.inp.sm.conn-proc-select {
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 14px;
-  background: var(--pop-solid);
-  border-top: 1px solid var(--line);
+  background: transparent;
   flex: none;
 }
 
@@ -1057,7 +1056,7 @@ select.inp.sm.conn-proc-select {
   position: fixed;
   z-index: 1200;
   padding: 5px;
-  border-radius: 12px;
+  border-radius: var(--r-pop);
   background: var(--pop);
   backdrop-filter: blur(20px) saturate(200%);
   box-shadow: var(--shadow-pop);
@@ -1200,21 +1199,24 @@ select.inp.sm.conn-proc-select {
 }
 
 .chart-tip-total {
-  padding-top: 4px;
+  padding-top: 5px;
   margin-top: 2px;
-  border-top: 1px solid var(--line);
+  background: var(--sep-fade) top / 100% 1px no-repeat;
 }
 
 .toast {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
+  top: 56px;
+  left: 50%;
+  right: auto;
+  bottom: auto;
   z-index: 950;
+  max-width: min(460px, calc(100% - 40px));
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-radius: var(--r-tray);
+  padding: 10px 14px;
+  border-radius: var(--r-pop);
   background: var(--pop);
   backdrop-filter: blur(20px) saturate(200%);
   box-shadow: var(--shadow-pop);
@@ -1222,13 +1224,17 @@ select.inp.sm.conn-proc-select {
   color: var(--text);
   opacity: 0;
   pointer-events: none;
-  transform: translateY(6px);
+  transform: translate(-50%, -8px);
   transition: opacity var(--t) var(--ease), transform var(--t) var(--ease);
 }
 
 .toast.show {
   opacity: 1;
-  transform: translateY(0);
+  transform: translate(-50%, 0);
+}
+
+.toast.update-notice {
+  pointer-events: auto;
 }
 
 /* ---------- Rendering fault fallback (page-scoped, shell stays alive) ---------- */

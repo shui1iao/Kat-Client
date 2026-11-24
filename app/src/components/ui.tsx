@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom';
+import { useTopNoticeAnchor } from '../lib/floating';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Icon } from './Icon';
 
@@ -132,17 +134,24 @@ export function Card({ title, extra, className, children }: { title?: ReactNode;
 
 export function Toast({ toast }: { toast: { id: number; text: string } | null }) {
   const [show, setShow] = useState(false);
+  const pos = useTopNoticeAnchor(show);
   useEffect(() => {
     if (!toast) return;
     setShow(true);
     const t = setTimeout(() => setShow(false), 2600);
     return () => clearTimeout(t);
   }, [toast]);
-  return (
-    <div className={'toast' + (show ? ' show' : '')} role="status">
+  if (!show || !pos) return null;
+  return createPortal(
+    <div
+      className="toast show"
+      style={{ top: pos.top, left: pos.left, maxWidth: pos.maxWidth }}
+      role="status"
+    >
       <Icon name="info" size={16} />
       <span>{toast?.text}</span>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
