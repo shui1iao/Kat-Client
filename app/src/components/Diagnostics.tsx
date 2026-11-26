@@ -3,7 +3,7 @@ import { tip } from './Tooltip';
 import { diagnosticEvents, tunDiagnosticText } from '../client/daily';
 import { KTag } from './labels';
 import { Icon } from './Icon';
-import { Card, StableText } from './ui';
+import { Card, StableText, ThumbBar } from './ui';
 import { host } from '../client/ipc';
 import { errorText } from '../lib/errors';
 import { showUptime } from '../client/display';
@@ -101,7 +101,7 @@ export function Diagnostics({
           onChange={(e) => setSearch(e.target.value)}
         />
       </label>
-      <div className="pill-bar" role="radiogroup" aria-label="日志等级筛选">
+      <ThumbBar selected={level} role="radiogroup" aria-label="日志等级筛选">
         {(['all', 'info', 'warn', 'error', 'debug'] as const).map((l) => (
           <button
             type="button"
@@ -114,7 +114,7 @@ export function Diagnostics({
             {l === 'all' ? '全部' : l}
           </button>
         ))}
-      </div>
+      </ThumbBar>
       <span className="sp" />
       <span className="muted num toolbar-count">{events.length} 条</span>
       <button
@@ -284,7 +284,8 @@ export function Diagnostics({
                       <span>
                         <KTag
                           label={e.level}
-                          color={e.level === 'error' ? '#F85149' : e.level === 'warn' ? '#D29922' : '#7D8794'}
+                          className={'log-level is-' + e.level}
+                          color={e.level === 'error' ? 'var(--bad)' : e.level === 'warn' ? 'var(--warn)' : 'var(--text-3)'}
                         />
                       </span>
                       <span {...tip(e.source, true)}>{e.source}</span>

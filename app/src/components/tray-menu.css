@@ -25,7 +25,7 @@
   max-width: max(0px, calc(var(--tm-available-width, 100vw) - 24px));
   max-height: max(0px, calc(var(--tm-available-height, 100vh) - 24px));
   padding: 6px;
-  border-radius: 14px;
+  border-radius: var(--r-modal);
   background: var(--pop-solid);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.36);
   color: var(--text);
@@ -80,7 +80,7 @@
   gap: 6px;
   margin: 2px 4px 4px;
   padding: 6px 8px;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   background: var(--accent-soft);
   color: var(--text-2);
   font: 500 12px/16px var(--font);
@@ -91,25 +91,27 @@
   color: var(--accent);
 }
 
-/* Mode Segmented Bar */
+/* Mode Segmented Bar — identical recessed track & sliding thumb as the main window */
 .tm-seg {
   position: relative;
   isolation: isolate;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  height: 30px;
+  height: var(--h-ctl-sm);
   padding: 2px;
   margin: 2px 4px 6px;
-  border-radius: 8px;
-  background: var(--card-2);
+  border-radius: var(--r-ctl);
+  background: var(--recess-bg);
+  box-shadow: var(--recess-shadow);
 }
 
 .tm-seg > .seg-thumb {
   position: absolute;
   z-index: -1;
-  border-radius: 6px;
-  background: var(--accent);
-  transition: left var(--t) var(--ease), width var(--t) var(--ease);
+  border-radius: var(--r-inner);
+  background: var(--hig-thumb);
+  box-shadow: var(--hig-thumb-shadow);
+  transition: left 200ms var(--ease), width 200ms var(--ease);
 }
 
 .tm-seg > .seg-thumb.instant {
@@ -121,18 +123,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 26px;
-  border-radius: 6px;
-  font: 500 12.5px/1 var(--font);
-  color: var(--text-2);
+  height: calc(var(--h-ctl-sm) - 4px);
+  border-radius: var(--r-inner);
+  font: 500 var(--fs-meta)/1 var(--font);
+  color: var(--text-3);
+  transition: color var(--t-fast) var(--ease);
 }
 
 .tm-seg > button.on {
-  color: var(--on-accent);
+  color: var(--text);
 }
 
 .tm-seg > button:hover:not(.on):not(:disabled) {
-  color: var(--text);
+  color: var(--text-2);
 }
 
 .tm-seg > button:disabled:not(.on) {
@@ -147,7 +150,7 @@
   width: 100%;
   height: 32px;
   padding: 0 8px;
-  border-radius: 8px;
+  border-radius: var(--r-ctl);
   color: var(--text);
   text-align: left;
   font: 400 13px/18px var(--font);
@@ -204,21 +207,8 @@
 }
 
 .tm-toggle > .sw {
-  width: 32px;
-  height: 18px;
   margin-left: auto;
   flex: none;
-}
-
-.tm-toggle > .sw i {
-  top: 2px;
-  left: 2px;
-  width: 14px;
-  height: 14px;
-}
-
-.tm-toggle > .sw.on i {
-  transform: translateX(14px);
 }
 
 .tm-sep {
@@ -245,7 +235,7 @@
   gap: 2px;
   height: 28px;
   padding: 0 8px 0 4px;
-  border-radius: 6px;
+  border-radius: var(--r-inner);
   font: 500 12.5px/1 var(--font);
   color: var(--accent);
   flex: none;

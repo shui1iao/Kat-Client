@@ -90,15 +90,18 @@ export function SpeedChart({
                     y2={gy}
                     className={'speed-grid-line' + (t === 0 ? ' speed-zero-line' : ' dashed')}
                   />
-                  <text
-                    x={PAD.l - 8}
-                    y={gy + 3.5}
-                    className="speed-axis-text"
-                    textAnchor="end"
-                    style={t < 0 ? { fill: 'var(--down)' } : t > 0 ? { fill: 'var(--up)' } : undefined}
-                  >
-                    {t === 0 ? '0' : `${axisLabel(Math.abs(t) * axis.top)} ${axis.label}`}
-                  </text>
+                  {Math.abs(t) === 1 && (
+                    // Only the two scale ends are labelled: download max above, upload max below.
+                    <text
+                      x={PAD.l - 8}
+                      y={t < 0 ? gy + 9 : gy - 1}
+                      className="speed-axis-text"
+                      textAnchor="end"
+                      style={t < 0 ? { fill: 'var(--down)' } : { fill: 'var(--up)' }}
+                    >
+                      {`${axisLabel(axis.top)} ${axis.label}`}
+                    </text>
+                  )}
                 </g>
               );
             })}

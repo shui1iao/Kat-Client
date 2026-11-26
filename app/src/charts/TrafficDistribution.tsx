@@ -1,3 +1,4 @@
+import { Icon } from '../components/Icon';
 import { DomainIcon, PolicyMiniIcon } from '../components/EntityIcons';
 import { tip } from '../components/Tooltip';
 import { showBytes, trafficPercent } from '../client/display';
@@ -85,7 +86,15 @@ export function DomainRankList({ items }: { items: DomainRankItem[] }) {
   const totalAll = items.reduce((s, x) => s + x.total, 0);
 
   if (!top.length) {
-    return <div className="empty distribution-empty">暂无域名流量记录</div>;
+    return (
+      <div className="empty distribution-empty">
+        <span className="empty-mark" aria-hidden="true">
+          <Icon name="traffic" size={18} />
+        </span>
+        <b>今天还没有域名流量</b>
+        <small>有流量经过后，这里按用量列出前 5 个域名</small>
+      </div>
+    );
   }
 
   return (

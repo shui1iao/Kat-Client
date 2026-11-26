@@ -60,6 +60,27 @@ func newManager(c Config, backend osBackend) *Manager {
 	return m
 }
 func (m *Manager) Status() Status       { m.mu.Lock(); defer m.mu.Unlock(); return m.state }
+
+// DataPlaneMemoryStats queries optional numeric memory metrics from the active
+// data plane without coupling tunplatform to tunstack internals.
+func (m *Manager) DataPlaneMemoryStats() (tcpNATEntries, udpSources, udpQueuedBytes uint64, ok bool) {
+	if m == nil {
+		return 0, 0, 0, false
+	}
+	m.mu.Lock()
+	p := m.plane
+	m.mu.Unlock()
+	if p == nil {
+		return 0, 0, 0, false
+	}
+	if st, has := p.(interface {
+		MemoryStats() (uint64, uint64, uint64)
+	}); has {
+		a, b, c := st.MemoryStats()
+		return a, b, c, true
+	}
+	return 0, 0, 0, false
+}
 func (m *Manager) Events() <-chan Event { return m.events }
 func (m *Manager) publish() {
 	m.state.Epoch = m.epoch.Load()

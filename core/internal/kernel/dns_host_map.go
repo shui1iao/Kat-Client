@@ -93,6 +93,16 @@ func (m *dnsHostMap) currentRev() uint64 {
 	return rev
 }
 
+func (m *dnsHostMap) count() uint64 {
+	if m == nil {
+		return 0
+	}
+	m.mu.RLock()
+	n := len(m.entries)
+	m.mu.RUnlock()
+	return uint64(n)
+}
+
 func normalizeDNSHostName(host string) (string, bool) {
 	host = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
 	if host == "" || isECHOuterSNI(host) {

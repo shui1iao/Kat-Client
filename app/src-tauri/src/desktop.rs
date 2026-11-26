@@ -42,9 +42,11 @@ async fn core_request(state: tauri::State<'_, Host>, method: String, params: Opt
     // Endpoint-changing document mutations must first remove our OS redirects. UI re-fetches actual switches.
     if ["core.stop", "document.apply", "core.reload"].contains(&method.as_str()) { let id=state.events.lock().unwrap().begin(&method);let started=std::time::Instant::now();let result=state.network.core_mutation(&method,params,Duration::from_secs(15)).await;state.events.lock().unwrap().operation(crate::safe_log::HostEvent::Core,&method,id,crate::log_context::Phase::Complete,result.as_ref().err().map(|e|e.code.as_str()),started.elapsed().as_millis().min(u64::MAX as u128)as u64,result.as_ref().err().map(|_|id));return result; }
     let timeout = crate::protocol::request_timeout(&method);
-    let operation=if !matches!(method.as_str(),"logs.get"|"logs.connections"|"logs.kernel"|"status"|"document.get"){Some((state.events.lock().unwrap().begin(&method),std::time::Instant::now()))}else{None};
+    let quiet=matches!(method.as_str(),"logs.get"|"logs.connections"|"logs.kernel"|"logs.dns"|"dns.cache.list"|"status"|"document.get"|"connections.list"|"icon.get"|"icon.cached"|"resources.list");
+    let started=std::time::Instant::now();
+    let operation=if !quiet{Some(state.events.lock().unwrap().begin(&method))}else{None};
     let result=core.request_public(&method, params, timeout).await;
-    if let Some((id,started))=operation{state.events.lock().unwrap().operation(crate::safe_log::HostEvent::Core,&method,id,crate::log_context::Phase::Complete,result.as_ref().err().map(|e|e.code.as_str()),started.elapsed().as_millis().min(u64::MAX as u128)as u64,result.as_ref().err().map(|_|id));}result
+    if let Some(id)=operation{state.events.lock().unwrap().operation(crate::safe_log::HostEvent::Core,&method,id,crate::log_context::Phase::Complete,result.as_ref().err().map(|e|e.code.as_str()),started.elapsed().as_millis().min(u64::MAX as u128)as u64,result.as_ref().err().map(|_|id));}else if let Err(ref e)=result{let id=crate::log_context::next();state.events.lock().unwrap().operation(crate::safe_log::HostEvent::Core,&method,id,crate::log_context::Phase::Complete,Some(e.code.as_str()),started.elapsed().as_millis().min(u64::MAX as u128)as u64,Some(id));}result
 }
 #[tauri::command]
 async fn update_recover(app:tauri::AppHandle)->Result<()>{software_updates::recover(&app).await}

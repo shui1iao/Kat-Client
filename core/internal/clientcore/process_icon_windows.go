@@ -594,6 +594,13 @@ func extractProcessIconDataURI(exePath string, procName string) string {
 	return uri
 }
 
+func procIconCacheLen() uint64 {
+	if n := procIconCacheCount.Load(); n > 0 {
+		return uint64(n)
+	}
+	return 0
+}
+
 func cachedProcessIconsInto(out map[string]string, total *int, limit int) {
 	procIconCache.Range(func(k, v any) bool {
 		ks, ok1 := k.(string)

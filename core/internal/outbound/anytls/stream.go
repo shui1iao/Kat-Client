@@ -198,6 +198,7 @@ type stream struct {
 }
 
 func newStream(s *session, id uint32) *stream {
+	activeStreams.Add(1)
 	st := &stream{s: s, id: id, rch: make(chan struct{}, 1), space: make(chan struct{}, 1), closing: make(chan struct{}), wabort: make(chan struct{})}
 	st.rd.init()
 	st.wd.init()
@@ -523,6 +524,7 @@ func (st *stream) detach(sendFIN bool) {
 	}
 	st.detached = true
 	st.mu.Unlock()
+	activeStreams.Add(-1)
 	s := st.s
 	s.detachStream(st.id)
 	if sendFIN {
@@ -1053,6 +1055,21 @@ func (d *deadline) active() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.hasSet
+}
+
+// RecvPoolBytes returns total bytes currently held in AnyTLS idle receive and
+// session frame slab pools.
+func RecvPoolBytes() uint64 {
+	recvPool.mu.Lock()
+	rb := recvPool.bytes
+	recvPool.mu.Unlock()
+	sessionIOPools.mu.Lock()
+	sb := len(sessionIOPools.slabs) * frameSlabSize
+	sessionIOPools.mu.Unlock()
+	if rb < 0 {
+		rb = 0
+	}
+	return uint64(rb + sb)
 }
 
 // TrimRecvBufPool drops idle pooled receive buffers when the desktop core

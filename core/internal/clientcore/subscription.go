@@ -1199,6 +1199,15 @@ func validateSubscriptionResources(c kernel.Config, owners ...fullSubscription) 
 		rs := s
 		envStamp := fmt.Sprintf("%t%t%t", deps.GeoIP, deps.ASN, deps.Geosite)
 		tasks = append(tasks, func() *Error {
+			fi, e := statSubscriptionResource(rs.Path, 16<<20)
+			if e != nil {
+				de := resourceError(context.Background(), "rule_set", ord[1], "cache", "cache_verify", "unknown", e)
+				de.Detail.SubscriptionOrdinal = ord[0]
+				return de
+			}
+			if _, hit, _ := route.ValidateSubscriptionSetFile(route.RuleSetOptions(rs), fi, deps); hit {
+				return nil
+			}
 			b, fi, e := readSubscriptionResourceStat(rs.Path, 16<<20)
 			if e != nil {
 				de := resourceError(context.Background(), "rule_set", ord[1], "cache", "cache_verify", "unknown", e)
@@ -1217,6 +1226,13 @@ func validateSubscriptionResources(c kernel.Config, owners ...fullSubscription) 
 	if c.GeoIP != nil {
 		geoPath := c.GeoIP.Path
 		tasks = append(tasks, func() *Error {
+			fi, e := statSubscriptionResource(geoPath, 64<<20)
+			if e != nil {
+				return resourceError(context.Background(), "geoip", 0, "cache", "cache_verify", "unknown", e)
+			}
+			if hit, _ := route.ValidateSubscriptionGeoIPFile(geoPath, fi); hit {
+				return nil
+			}
 			b, fi, e := readSubscriptionResourceStat(geoPath, 64<<20)
 			if e != nil {
 				return resourceError(context.Background(), "geoip", 0, "cache", "cache_verify", "unknown", e)
@@ -1231,6 +1247,13 @@ func validateSubscriptionResources(c kernel.Config, owners ...fullSubscription) 
 	if c.ASN != nil {
 		asnPath := c.ASN.Path
 		tasks = append(tasks, func() *Error {
+			fi, e := statSubscriptionResource(asnPath, 64<<20)
+			if e != nil {
+				return resourceError(context.Background(), "asn", 0, "cache", "cache_verify", "unknown", e)
+			}
+			if hit, _ := route.ValidateSubscriptionASNFile(asnPath, fi); hit {
+				return nil
+			}
 			b, fi, e := readSubscriptionResourceStat(asnPath, 64<<20)
 			if e != nil {
 				return resourceError(context.Background(), "asn", 0, "cache", "cache_verify", "unknown", e)

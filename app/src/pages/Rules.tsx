@@ -19,6 +19,30 @@ import { updateResources } from '../client/resources';
 import type { Client } from '../client/useClient';
 import type { DocumentReply, ResourceItem, SourceObject } from '../client/types';
 
+// Placeholder examples for the single-field rule editor (purely a typing hint).
+const RULE_EXAMPLE: Record<string, string> = {
+  domain: '例如 www.example.com',
+  domain_suffix: '例如 example.com',
+  domain_keyword: '例如 google',
+  domain_regex: '例如 ^ads?\\.',
+  domain_wildcard: '例如 *.example.com',
+  geosite: '例如 google',
+  geoip: '例如 cn',
+  ip_cidr: '例如 1.1.1.0/24',
+  src_ip_cidr: '例如 192.168.1.0/24',
+  ip_suffix: '例如 .1',
+  ip_asn: '例如 13335',
+  src_ip_asn: '例如 4134',
+  src_geoip: '例如 cn',
+  dst_port: '例如 443 或 8000-9000',
+  src_port: '例如 53',
+  in_port: '例如 7890',
+  process_name: '例如 chrome.exe',
+  network: 'tcp 或 udp',
+  rule_set: '规则集名称',
+  protocol: '例如 quic',
+};
+
 interface Draft {
   index: number | null;
   value: SourceObject;
@@ -312,16 +336,7 @@ export function Rules({
               <button
                 ref={judgeBtnRef}
                 type="button"
-                className="btn sm"
-                style={
-                  judgeOpen
-                    ? {
-                        background: 'var(--accent-soft)',
-                        color: 'var(--accent)',
-                        boxShadow: 'inset 0 0 0 1px var(--accent-line)',
-                      }
-                    : undefined
-                }
+                className={'btn sm' + (judgeOpen ? ' is-on' : '')}
                 disabled={!c.connected}
                 aria-pressed={judgeOpen}
                 onClick={() => setJudgeOpen((v) => !v)}
@@ -921,7 +936,7 @@ export function RuleEditor({ c, draft, close }: { c: Client; draft: Draft; close
             </Field>
           </div>
           <Field label="匹配内容">
-            <input className="inp" value={value} onChange={(e) => setValue(e.target.value)} />
+            <input className="inp" placeholder={RULE_EXAMPLE[field] ?? ''} value={value} onChange={(e) => setValue(e.target.value)} />
           </Field>
           <div className="form-grid rule-options">
             {draft.index === null ? (

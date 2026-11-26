@@ -34,6 +34,7 @@ type siteDB struct {
 	index      map[string][]byte // lower-case category -> GeoSite message (nil after prune)
 	categories int               // total categories in source DB
 	compiled   sync.Map          // key (category[@attr...]) -> *siteMatcher
+	mmapBacked bool
 }
 
 type siteMatcher struct {
@@ -282,7 +283,8 @@ type asnSource struct {
 }
 
 type asnDB struct {
-	table mmdbTable
+	table      mmdbTable
+	mmapBacked bool
 }
 
 type asnRecord struct {

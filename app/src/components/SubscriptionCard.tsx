@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { tip } from './Tooltip';
 import { Icon } from './Icon';
-import { KTag } from './labels';
+import { KState } from './labels';
 import { Modal } from './Editors';
 import { intervalLabel, routeLabel, subscriptionUsage } from '../client/subscription';
 import { showBytes } from '../client/display';
@@ -45,7 +45,7 @@ export function SubscriptionCard({
       <header className="sub-head">
         <h3 {...tip(s.name, true)}>{s.name}</h3>
         {active ? (
-          <KTag label="使用中" color="var(--ok)" />
+          <KState tone="ok" label="使用中" />
         ) : (
           <button
             type="button"

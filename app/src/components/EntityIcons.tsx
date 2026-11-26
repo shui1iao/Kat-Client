@@ -115,9 +115,11 @@ export function PolicyMiniIcon({
 export function ProcessIcon({
   name,
   path,
+  size = 'md',
 }: {
   name?: string;
   path?: string;
+  size?: 'sm' | 'md';
 }) {
   const key = processIconKey(path, name);
   const nameFallbackKey = path && name ? processIconKey(undefined, name) : '';
@@ -151,17 +153,19 @@ export function ProcessIcon({
     };
   }, [path, name, key, nameFallbackKey]);
 
+  const cls = 'ei-proc-box' + (size === 'sm' ? ' is-sm' : '');
+
   if (procSrc) {
     return (
-      <span className="ei-proc-box has-img" aria-hidden="true">
+      <span className={cls + ' has-img'} aria-hidden="true">
         <img className="ei-img" src={procSrc} alt="" onError={() => setProcSrc('')} />
       </span>
     );
   }
 
   return (
-    <span className="ei-proc-box is-placeholder" aria-hidden="true">
-      <Icon name="monitor" size={15} stroke={1.65} />
+    <span className={cls + ' is-placeholder'} aria-hidden="true">
+      <Icon name="monitor" size={size === 'sm' ? 11 : 15} stroke={1.65} />
     </span>
   );
 }

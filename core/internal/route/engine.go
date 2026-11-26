@@ -108,6 +108,58 @@ type geoSource struct {
 	db  atomic.Pointer[geoDB]
 }
 
+// MemoryStats summarizes how many loaded routing sources (rule sets, GeoIP,
+// ASN, geosite) are backed by zero-heap KIDX0003 read-only mmap vs Go heap.
+type MemoryStats struct {
+	MmapSets uint64
+	HeapSets uint64
+}
+
+// MemoryStats returns the current mmap vs Go-heap counts for loaded resources.
+func (e *Engine) MemoryStats() MemoryStats {
+	var st MemoryStats
+	if e == nil {
+		return st
+	}
+	for _, rs := range e.sets {
+		if d := rs.data.Load(); d != nil && d.entries > 0 {
+			if d.mmapBacked {
+				st.MmapSets++
+			} else {
+				st.HeapSets++
+			}
+		}
+	}
+	if e.geo != nil {
+		if db := e.geo.db.Load(); db != nil {
+			if db.mmapBacked {
+				st.MmapSets++
+			} else {
+				st.HeapSets++
+			}
+		}
+	}
+	if e.asn != nil {
+		if db := e.asn.db.Load(); db != nil {
+			if db.mmapBacked {
+				st.MmapSets++
+			} else {
+				st.HeapSets++
+			}
+		}
+	}
+	if e.site != nil {
+		if db := e.site.db.Load(); db != nil {
+			if db.mmapBacked {
+				st.MmapSets++
+			} else {
+				st.HeapSets++
+			}
+		}
+	}
+	return st
+}
+
 // Engine evaluates rules. Decide is safe for concurrent use, including while
 // rule sets and the GeoIP database are being replaced in the background.
 type Engine struct {

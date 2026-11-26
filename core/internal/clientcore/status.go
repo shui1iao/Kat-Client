@@ -3,6 +3,7 @@ package clientcore
 import (
 	"bufio"
 	"github.com/shui1iao/Kat/internal/kernel"
+	anytlsout "github.com/shui1iao/Kat/internal/outbound/anytls"
 	"io"
 	"net"
 	"net/http"
@@ -182,6 +183,41 @@ func (h *Host) statusLocked() any {
 			memory = priv
 			bd["private_bytes"] = priv
 			bd["working_set_bytes"] = ws
+		}
+		ms := h.server.MemoryStats()
+		anySessions, anyStreams := anytlsout.ActiveStats()
+		bd["route_mmap_sets"] = ms.RouteMmapSets
+		bd["route_heap_sets"] = ms.RouteHeapSets
+		bd["live_generations"] = ms.LiveGenerations
+		bd["relay_pool_bytes"] = ms.RelayPoolBytes
+		bd["anytls_recv_pool_bytes"] = anytlsout.RecvPoolBytes()
+		if v.TCP > 0 {
+			bd["active_tcp"] = uint64(v.TCP)
+		} else {
+			bd["active_tcp"] = 0
+		}
+		if v.UDP > 0 {
+			bd["active_udp"] = uint64(v.UDP)
+		} else {
+			bd["active_udp"] = 0
+		}
+		bd["anytls_sessions"] = anySessions
+		bd["anytls_streams"] = anyStreams
+		bd["dns_host_entries"] = ms.DNSHostEntries
+		bd["tracked_hosts"] = ms.TrackedHosts
+		bd["icon_cache_entries"] = procIconCacheLen()
+		bd["icon_miss_entries"] = domainIconMissLen()
+		if n := observedIPHostsCount.Load(); n > 0 {
+			bd["observed_ip_entries"] = uint64(n)
+		} else {
+			bd["observed_ip_entries"] = 0
+		}
+		if h.tun != nil {
+			if natN, udpN, udpQ, ok := h.tun.DataPlaneMemoryStats(); ok {
+				bd["tun_tcp_nat_entries"] = natN
+				bd["tun_udp_sources"] = udpN
+				bd["tun_udp_queued_bytes"] = udpQ
+			}
 		}
 		memoryBreakdown = bd
 		upRate, downRate = v.UpRate, v.DownRate

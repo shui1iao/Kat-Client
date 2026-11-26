@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strings"
 	"unsafe"
 
 	"github.com/shui1iao/Kat/internal/userio"
@@ -84,6 +85,51 @@ func kidxPathFor(s *source) (string, [32]byte, uint32) {
 	stampHash := sha256.Sum256([]byte(s.kind + "|" + s.stamp))
 	nameHash := sha256.Sum256([]byte(abs + "|" + s.kind + "|" + s.stamp))
 	return filepath.Join(dir, hex.EncodeToString(nameHash[:12])+".kidx"), stampHash, kindTag
+}
+
+func kidxVersionedPath(baseIdxPath string, fastHash [32]byte) string {
+	ext := filepath.Ext(baseIdxPath)
+	stem := strings.TrimSuffix(baseIdxPath, ext)
+	return stem + "-" + hex.EncodeToString(fastHash[:6]) + ext
+}
+
+func sweepStaleKidx(baseIdxPath, keepPath string) {
+	dir := filepath.Dir(baseIdxPath)
+	baseName := filepath.Base(baseIdxPath)
+	stem := strings.TrimSuffix(baseName, filepath.Ext(baseName))
+	keepName := filepath.Base(keepPath)
+	entries, err := userio.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	prefix := stem + "-"
+	for _, ent := range entries {
+		if ent.IsDir() {
+			continue
+		}
+		n := ent.Name()
+		if n == keepName {
+			continue
+		}
+		if n == baseName || (strings.HasPrefix(n, prefix) && strings.HasSuffix(n, ".kidx")) {
+			_ = userio.Remove(filepath.Join(dir, n))
+		}
+	}
+}
+
+// promoteToMmap persists val as a zero-heap KIDX0003 read-only index and
+// immediately remaps it so the caller can drop Go-heap tables on the next GC.
+// On any error (unsupported shape or I/O failure) it returns val unchanged.
+func promoteToMmap(s *source, fi os.FileInfo, b []byte, val any) (any, string) {
+	if fi != nil && fi.Mode().IsRegular() && s.path != "" {
+		fh := computeSourceFastHashFromBytes(b)
+		if saveMmapIndex(s, fi, fh, val) {
+			if mv, _, ok := tryLoadMmapIndex(s, fi); ok {
+				return mv, s.kind + "|" + s.stamp + "|kidx|" + hex.EncodeToString(fh[:8])
+			}
+		}
+	}
+	return val, cacheKey(s, b)
 }
 
 // computeSourceFastHash computes a fast content fingerprint: full SHA-256 for
@@ -628,10 +674,11 @@ func saveMmapIndex(s *source, fi os.FileInfo, fastHash [32]byte, val any) bool {
 	if fi == nil || !kidxLittleEndian() || kidxStructTag() == 0 {
 		return false
 	}
-	idxPath, stampHash, kindTag := kidxPathFor(s)
-	if idxPath == "" || kindTag == 0 {
+	baseIdxPath, stampHash, kindTag := kidxPathFor(s)
+	if baseIdxPath == "" || kindTag == 0 {
 		return false
 	}
+	idxPath := kidxVersionedPath(baseIdxPath, fastHash)
 
 	var mw kidxMetaWriter
 	var fb kidxFlatBuilder
@@ -785,6 +832,7 @@ func saveMmapIndex(s *source, fi os.FileInfo, fastHash [32]byte, val any) bool {
 		return false
 	}
 	ok = true
+	sweepStaleKidx(baseIdxPath, idxPath)
 	return true
 }
 
@@ -795,13 +843,24 @@ func tryLoadMmapIndex(s *source, fi os.FileInfo) (any, [32]byte, bool) {
 	if fi == nil || !kidxLittleEndian() || kidxStructTag() == 0 {
 		return nil, zero, false
 	}
-	idxPath, stampHash, kindTag := kidxPathFor(s)
-	if idxPath == "" || kindTag == 0 {
+	baseIdxPath, stampHash, kindTag := kidxPathFor(s)
+	if baseIdxPath == "" || kindTag == 0 {
 		return nil, zero, false
 	}
-	f, err := userio.Open(idxPath)
+	// Compute real source file content hash (head+mid+tail 4 KiB or full <=128 KiB)
+	// so we address the immutable versioned .kidx directly (safe on Windows when
+	// older versions remain memory-mapped during live refresh).
+	fastHash, err := computeSourceFastHashFromFile(s.path, fi.Size())
 	if err != nil {
 		return nil, zero, false
+	}
+	idxPath := kidxVersionedPath(baseIdxPath, fastHash)
+	f, err := userio.Open(idxPath)
+	if err != nil {
+		f, err = userio.Open(baseIdxPath)
+		if err != nil {
+			return nil, zero, false
+		}
 	}
 	defer f.Close()
 	cfi, err := f.Stat()
@@ -829,6 +888,9 @@ func tryLoadMmapIndex(s *source, fi os.FileInfo) (any, [32]byte, bool) {
 	if int64(binary.LittleEndian.Uint64(raw[24:32])) != fi.ModTime().UnixNano() {
 		return fail()
 	}
+	if !bytes.Equal(raw[32:64], fastHash[:]) {
+		return fail()
+	}
 	if !bytes.Equal(raw[64:96], stampHash[:]) {
 		return fail()
 	}
@@ -839,12 +901,6 @@ func tryLoadMmapIndex(s *source, fi os.FileInfo) (any, [32]byte, bool) {
 	}
 	metaBytes := raw[kidxHeaderSize : kidxHeaderSize+int(metaLen)]
 	if crc32.Checksum(metaBytes, castagnoli) != binary.LittleEndian.Uint32(raw[96:100]) {
-		return fail()
-	}
-
-	// Verify real source file content hash (head+mid+tail 4 KiB or full <=128 KiB).
-	fastHash, err := computeSourceFastHashFromFile(s.path, fi.Size())
-	if err != nil || !bytes.Equal(raw[32:64], fastHash[:]) {
 		return fail()
 	}
 
@@ -870,7 +926,7 @@ func tryLoadMmapIndex(s *source, fi os.FileInfo) (any, [32]byte, bool) {
 		if !ok {
 			return fail()
 		}
-		db := &geoDB{table: mmdbTable{v4: v4, v6: v6}, codes: codes}
+		db := &geoDB{table: mmdbTable{v4: v4, v6: v6}, codes: codes, mmapBacked: true}
 		runtime.AddCleanup(db, cleanupMmapRegion, reg)
 		return db, fastHash, true
 
@@ -890,7 +946,7 @@ func tryLoadMmapIndex(s *source, fi os.FileInfo) (any, [32]byte, bool) {
 		if !ok {
 			return fail()
 		}
-		db := &asnDB{table: mmdbTable{v4: v4, v6: v6}}
+		db := &asnDB{table: mmdbTable{v4: v4, v6: v6}, mmapBacked: true}
 		runtime.AddCleanup(db, cleanupMmapRegion, reg)
 		return db, fastHash, true
 
@@ -899,6 +955,7 @@ func tryLoadMmapIndex(s *source, fi os.FileInfo) (any, [32]byte, bool) {
 		if !ok {
 			return fail()
 		}
+		sd.mmapBacked = true
 		runtime.AddCleanup(sd, cleanupMmapRegion, reg)
 		return sd, fastHash, true
 
@@ -907,7 +964,7 @@ func tryLoadMmapIndex(s *source, fi os.FileInfo) (any, [32]byte, bool) {
 		if !ok || nKeys > 1<<16 {
 			return fail()
 		}
-		db := &siteDB{categories: categories}
+		db := &siteDB{categories: categories, mmapBacked: true}
 		for i := uint32(0); i < nKeys; i++ {
 			k, ok := mr.str()
 			if !ok {

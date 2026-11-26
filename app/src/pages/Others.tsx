@@ -137,6 +137,11 @@ export function Settings({
   const [activeSection, setActiveSection] = useState<SettingsSection>(section ?? 'general');
   const scrollRef = useRef<HTMLDivElement>(null);
   const programmaticScrollUntil = useRef(0);
+  // Re-read desktop preferences (autostart etc. can change outside Kat) whenever Settings opens.
+  useEffect(() => {
+    if (c.hasHost) void c.refreshDesktop().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const jumpTo = (target: SettingsSection, instant = false) => {
     setActiveSection(target);
@@ -211,16 +216,7 @@ export function Settings({
         <div className="settings-stack">
           {/* 1. 常规 */}
           <div className="settings-group" data-sec-id="general">
-            <Card title="外观与启动" extra={
-              <button
-                type="button"
-                className="btn sm"
-                disabled={!c.hasHost}
-                onClick={() => void c.run('preferences', () => c.refreshDesktop())}
-              >
-                刷新偏好
-              </button>
-            }>
+            <Card title="外观与启动">
               {!prefs && <div className="empty">未连接</div>}
               <div className="set-row">
                 <span className="set-row-copy">
@@ -319,14 +315,6 @@ export function Settings({
                   <small>退出 Kat 时会自动清理系统代理与 TUN 接管路由</small>
                 </span>
                 <div className="row-actions">
-                  <button
-                    type="button"
-                    className="btn sm"
-                    disabled={!c.hasHost || c.busy.has('window')}
-                    onClick={() => void c.run('window', () => host('window_action', { action: 'show' }))}
-                  >
-                    显示窗口
-                  </button>
                   <button
                     type="button"
                     className="btn sm danger"

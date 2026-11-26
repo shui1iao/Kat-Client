@@ -22,9 +22,14 @@ import { useSidebar } from './lib/sidebar';
 import { SelectPopover } from './components/SelectPopover';
 import { TooltipHost } from './components/Tooltip';
 import { installInputModality } from './lib/inputModality';
+import { installExitGhosts } from './lib/exitGhost';
+import { installScrollFade } from './lib/scrollFade';
 import { EditorSessionContext } from './components/Editors';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CoreFaultBanner } from './components/CoreFault';
+
+// Pages whose content is centred at max-width 1120px; the page title follows that column.
+const CAPPED_PAGES: PageId[] = ['overview', 'policies', 'nodes', 'settings'];
 
 function parseRouteHash(): {
   page: PageId;
@@ -53,6 +58,8 @@ function parseRouteHash(): {
 
 export default function App() {
   useEffect(installInputModality, []);
+  useEffect(installExitGhosts, []);
+  useEffect(installScrollFade, []);
   const initial = parseRouteHash();
   const [page, setPage] = useState<PageId>(initial.page);
   const [rulesTab, setRulesTab] = useState<'rules' | 'resources'>(initial.rulesTab ?? 'rules');
@@ -111,8 +118,13 @@ export default function App() {
 
   const meta: Record<PageId, string> = {
     overview: '',
-    connections: running ? `${activeCount} 个活跃连接` : '',
-    dns: Array.isArray(c.source?.kernel?.dns?.servers) && c.source.kernel.dns.servers.length > 0 && !(c.source.kernel.dns.servers.length === 1 && c.source.kernel.dns.servers[0] === 'system') ? `自定义上游 (${c.source.kernel.dns.servers.length})` : '系统 DNS',
+    connections: '', // count already shown on the 活跃 tab and the sidebar badge
+    dns: (() => {
+      // Same rule as the DNS page: `servers` list, or the legacy single `server`.
+      const d = c.source?.kernel?.dns;
+      const servers: unknown[] = Array.isArray(d?.servers) ? d.servers : typeof d?.server === 'string' && d.server ? [d.server] : [];
+      return servers.length > 0 && !(servers.length === 1 && servers[0] === 'system') ? `自定义上游 (${servers.length})` : '系统 DNS';
+    })(),
     logs: '',
     policies: `${groups.length} 组${chain.at(-1) ? ' · ' + chain.at(-1) : ''}`,
     nodes: `${nodes} 个节点${subsCount ? ` · ${subsCount} 个订阅` : ''}`,
@@ -140,6 +152,7 @@ export default function App() {
             controls={
               <SideControls
                 c={c}
+                collapsed={sidebar.collapsed}
                 onOpenGlobalGroup={(groupName) => {
                   if (groupName) setSelectedGroupName(groupName);
                   go('policies');
@@ -158,7 +171,7 @@ export default function App() {
               />
             }
           />
-          <div className="workspace">
+          <div className={'workspace' + (CAPPED_PAGES.includes(page) ? ' is-capped' + (page === 'overview' ? ' is-flush' : '') : '')}>
             <TitleBar c={c} title={PAGE_LABEL[page]} meta={meta[page]} />
             <main className="main">
               <div className={'content page-' + page}>

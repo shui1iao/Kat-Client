@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 export type SidebarPreference = 'expanded' | 'collapsed' | null;
 export const SIDEBAR_KEY = 'kat.sidebar';
 export const SIDEBAR_QUERY = '(max-width: 960px)';
@@ -11,9 +11,21 @@ export function writeSidebarPreference(value: Exclude<SidebarPreference, null>, 
   try { (storage ?? window.localStorage).setItem(SIDEBAR_KEY, value); return true; } catch { return false; }
 }
 export function sidebarCollapsed(preference: SidebarPreference, narrow: boolean): boolean { return preference === null ? narrow : preference === 'collapsed'; }
+
+let animTimer = 0;
+function markSidebarAnimating() {
+  document.documentElement.dataset.sidebarAnimating = '1';
+  window.clearTimeout(animTimer);
+  animTimer = window.setTimeout(() => {
+    delete document.documentElement.dataset.sidebarAnimating;
+    window.dispatchEvent(new Event('kat-sidebar-settled'));
+  }, 210);
+}
+
 export function useSidebar() {
   const [preference, setPreference] = useState<SidebarPreference>(() => readSidebarPreference());
   const [narrow, setNarrow] = useState(() => window.matchMedia(SIDEBAR_QUERY).matches);
+  const prevCollapsed = useRef<boolean | null>(null);
   useEffect(() => {
     const media = window.matchMedia(SIDEBAR_QUERY);
     const change = () => setNarrow(media.matches);
@@ -21,6 +33,17 @@ export function useSidebar() {
     return () => media.removeEventListener('change', change);
   }, []);
   const collapsed = sidebarCollapsed(preference, narrow);
-  const toggle = () => { const next = collapsed ? 'expanded' : 'collapsed'; setPreference(next); writeSidebarPreference(next); };
+  useEffect(() => {
+    if (prevCollapsed.current !== null && prevCollapsed.current !== collapsed) {
+      markSidebarAnimating();
+    }
+    prevCollapsed.current = collapsed;
+  }, [collapsed]);
+  const toggle = () => {
+    markSidebarAnimating();
+    const next = collapsed ? 'expanded' : 'collapsed';
+    setPreference(next);
+    writeSidebarPreference(next);
+  };
   return { collapsed, toggle };
 }

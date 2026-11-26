@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ServiceIcon } from './ServiceIcon';
 import { Card, Segmented, StableText } from './ui';
 import { Icon } from './Icon';
+import { KState } from './labels';
 import { tip } from './Tooltip';
 import { Field, Modal, LocalError } from './Editors';
 import { core } from '../client/ipc';
@@ -143,7 +144,7 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
                 onClick={() => void detect(kind)}
               >
                 <Icon name="refresh" size={12} />
-                <StableText current={busy === kind ? '检测中…' : kind === 'exit' ? '刷新' : '检测'} items={['检测', '刷新', '检测中…']} />
+                <StableText current={kind === 'exit' ? '刷新' : '检测'} items={['检测', '刷新']} />
               </button>
             </div>
           </>
@@ -163,15 +164,17 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
                   </span>
                   <span className="unlock-region">{regionLabel(x?.region)}</span>
                   {x ? (
-                    <span
-                      className={'diagnostic-result ' + (x.result === 'unknown' || x.result === 'challenge' ? 'failed' : x.result)}
-                      {...tip(x.reason || undefined)}
-                    >
-                      {labels[x.result]}
-                      {x.reason && <span className="sr-only">{'，' + x.reason}</span>}
+                    <span className="diagnostic-result">
+                      <KState
+                        tone={x.result === 'unlocked' || x.result === 'ok' ? 'ok' : x.result === 'originals' ? 'warn' : 'bad'}
+                        label={labels[x.result]}
+                        title={x.reason || undefined}
+                      />
                     </span>
                   ) : (
-                    <span className="diagnostic-pending">未检测</span>
+                    <span className="diagnostic-pending">
+                      <KState tone="muted" label="未检测" />
+                    </span>
                   )}
                 </div>
               ))}
@@ -201,11 +204,12 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
                     <span className="diagnostic-chain" {...tip((x.chain ?? []).map(c.label).join(' → '), true)}>
                       {(x.chain ?? []).map(c.label).join(' → ') || '—'}
                     </span>
-                    <span
-                      className={'diagnostic-result num ' + (x.result === 'failed' ? 'failed' : 'ok')}
-                      {...tip(x.result === 'failed' ? x.reason || '失败' : undefined, true)}
-                    >
-                      {x.result === 'failed' ? x.reason || '失败' : `${x.duration_ms} ms`}
+                    <span className={'diagnostic-result num' + (x.result === 'failed' ? '' : ' ok')}>
+                      {x.result === 'failed' ? (
+                        <KState tone="bad" label={x.reason || '失败'} title={x.reason || undefined} />
+                      ) : (
+                        `${x.duration_ms} ms`
+                      )}
                     </span>
                   </div>
                 ))}
@@ -226,10 +230,10 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
                         {x.node && <span className="exit-node">→ {c.label(x.node)}</span>}
                       </div>
                       <span
-                        className={'exit-address num' + (failed ? ' diagnostic-result failed' : '')}
+                        className="exit-address num"
                         {...tip(failed ? x.reason || '检测失败' : x.ip, true)}
                       >
-                        {failed ? x.reason || '检测失败' : ipBreak(x.ip)}
+                        {failed ? <KState tone="bad" label={x.reason || '检测失败'} /> : ipBreak(x.ip)}
                       </span>
                       <span className="exit-region">{failed ? '—' : regionLabel(x.region)}</span>
                     </div>

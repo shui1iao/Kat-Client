@@ -37,6 +37,7 @@ type setData struct {
 	mono    bool
 	// entries/skipped are reported in rule_set_loaded.
 	entries, skipped int
+	mmapBacked       bool
 }
 
 func (d *setData) hasIP() bool {

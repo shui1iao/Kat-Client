@@ -1,11 +1,14 @@
 package route
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/netip"
+	"os"
 	"strings"
 
+	"github.com/shui1iao/Kat/internal/userio"
 	"gopkg.in/yaml.v3"
 )
 
@@ -93,6 +96,109 @@ func yamlLinePositions(b []byte) []int {
 	return positions
 }
 
+func cachePutValidated(src *source, b []byte, v any) {
+	if src == nil || src.path == "" {
+		return
+	}
+	if fi, err := userio.Stat(src.path); err == nil && fi.Mode().IsRegular() && fi.Size() == int64(len(b)) {
+		live, key := promoteToMmap(src, fi, b, v)
+		cachePutWithStat(src.path, key, fileStatKey(src, fi), len(b), fi.ModTime(), live)
+		return
+	}
+	cachePut(src.path, cacheKey(src, b), v)
+}
+
+// ValidateSubscriptionSetFile validates a local subscription rule-set file
+// directly via its KIDX0003 read-only mmap cache without reading or parsing
+// the full raw source into the Go heap. Returns hit=false on cache miss so the
+// caller falls back to full byte validation.
+func ValidateSubscriptionSetFile(s RuleSetOptions, fi os.FileInfo, deps SubscriptionSetDependencies) (int, bool, error) {
+	if s.Path == "" || fi == nil || !fi.Mode().IsRegular() || fi.Size() > 16<<20 {
+		return 0, false, nil
+	}
+	env := parseEnv{geoip: deps.GeoIP, asn: deps.ASN, geosite: deps.Geosite}
+	src := &source{kind: "rule_set", name: s.Name, path: s.Path, stamp: "rule_set|" + s.Format + "|" + s.Behavior + "|" + env.String()}
+	if v, _, _, ok := cacheGetStat(s.Path, src, fi); ok {
+		if d, ok := v.(*setData); ok && d != nil && d.skipped == 0 && (deps.GeoIP || !setUsesCountryGeoIP(d)) {
+			return d.entries, true, nil
+		}
+	}
+	if v, fh, ok := tryLoadMmapIndex(src, fi); ok {
+		if d, ok := v.(*setData); ok && d != nil && d.skipped == 0 && (deps.GeoIP || !setUsesCountryGeoIP(d)) {
+			kidxKey := src.kind + "|" + src.stamp + "|kidx|" + hex.EncodeToString(fh[:8])
+			cachePutWithStat(s.Path, kidxKey, fileStatKey(src, fi), int(fi.Size()), fi.ModTime(), d)
+			return d.entries, true, nil
+		}
+	}
+	return 0, false, nil
+}
+
+// ValidateSubscriptionGeoIPFile validates a local subscription GeoIP MMDB via
+// its KIDX0003 read-only mmap index without loading raw bytes onto the Go heap.
+func ValidateSubscriptionGeoIPFile(path string, fi os.FileInfo) (bool, error) {
+	if path == "" || fi == nil || !fi.Mode().IsRegular() || fi.Size() > 64<<20 {
+		return false, nil
+	}
+	src := &source{kind: "geoip", path: path, stamp: "geoip"}
+	check := func(db *geoDB) bool {
+		if db == nil {
+			return false
+		}
+		for _, ip := range []string{"223.5.5.5", "114.114.114.114", "1.1.1.1", "8.8.8.8"} {
+			if len(db.country(netip.MustParseAddr(ip))) == 2 {
+				return true
+			}
+		}
+		return false
+	}
+	if v, _, _, ok := cacheGetStat(path, src, fi); ok {
+		if db, ok := v.(*geoDB); ok && check(db) {
+			return true, nil
+		}
+	}
+	if v, fh, ok := tryLoadMmapIndex(src, fi); ok {
+		if db, ok := v.(*geoDB); ok && check(db) {
+			kidxKey := src.kind + "|" + src.stamp + "|kidx|" + hex.EncodeToString(fh[:8])
+			cachePutWithStat(path, kidxKey, fileStatKey(src, fi), int(fi.Size()), fi.ModTime(), db)
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// ValidateSubscriptionASNFile validates a local subscription ASN MMDB via its
+// KIDX0003 read-only mmap index without loading raw bytes onto the Go heap.
+func ValidateSubscriptionASNFile(path string, fi os.FileInfo) (bool, error) {
+	if path == "" || fi == nil || !fi.Mode().IsRegular() || fi.Size() > 64<<20 {
+		return false, nil
+	}
+	src := &source{kind: "asn", path: path, stamp: "asn"}
+	check := func(db *asnDB) bool {
+		if db == nil {
+			return false
+		}
+		for _, ip := range []string{"1.1.1.1", "8.8.8.8", "223.5.5.5"} {
+			if db.lookup(netip.MustParseAddr(ip)) > 0 {
+				return true
+			}
+		}
+		return false
+	}
+	if v, _, _, ok := cacheGetStat(path, src, fi); ok {
+		if db, ok := v.(*asnDB); ok && check(db) {
+			return true, nil
+		}
+	}
+	if v, fh, ok := tryLoadMmapIndex(src, fi); ok {
+		if db, ok := v.(*asnDB); ok && check(db) {
+			kidxKey := src.kind + "|" + src.stamp + "|kidx|" + hex.EncodeToString(fh[:8])
+			cachePutWithStat(path, kidxKey, fileStatKey(src, fi), int(fi.Size()), fi.ModTime(), db)
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func ValidateSubscriptionSetWithDependencies(s RuleSetOptions, b []byte, deps SubscriptionSetDependencies) (int, error) {
 	if len(b) > 16<<20 {
 		return 0, errTooLarge
@@ -120,7 +226,7 @@ func ValidateSubscriptionSetWithDependencies(s RuleSetOptions, b []byte, deps Su
 		if behavior == "domain" || behavior == "ipcidr" || behavior == "classical" {
 			if d, perr := parseLines(behavior, dialMihom, lines, maxSetEntries, env); perr == nil && d != nil && d.skipped == 0 && (deps.GeoIP || !setUsesCountryGeoIP(d)) {
 				if s.Path != "" {
-					cachePut(s.Path, key, d)
+					cachePutValidated(src, b, d)
 				}
 				return d.entries, nil
 			}
@@ -149,7 +255,7 @@ func ValidateSubscriptionSetWithDependencies(s RuleSetOptions, b []byte, deps Su
 		lines = strings.Split(text, "\n")
 		if d, perr := parseLines(behavior, dialect, lines, maxSetEntries, env); perr == nil && d != nil && d.skipped == 0 && (deps.GeoIP || !setUsesCountryGeoIP(d)) {
 			if s.Path != "" {
-				cachePut(s.Path, key, d)
+				cachePutValidated(src, b, d)
 			}
 			return d.entries, nil
 		}
@@ -240,7 +346,7 @@ func ValidateSubscriptionSetWithDependencies(s RuleSetOptions, b []byte, deps Su
 		return 0, &SubscriptionSetValidationError{Issues: []SubscriptionSetIssue{{Resource: s.Name, Code: "invalid_format"}}}
 	}
 	if s.Path != "" {
-		cachePut(s.Path, key, d)
+		cachePutValidated(src, b, d)
 	}
 	return d.entries, nil
 }
@@ -303,7 +409,7 @@ func ValidateSubscriptionASNAt(path string, b []byte) error {
 		return errors.New("MMDB has no compatible autonomous_system_number fields")
 	}
 	if path != "" {
-		cachePut(path, key, db)
+		cachePutValidated(src, b, db)
 	}
 	return nil
 }
@@ -340,7 +446,7 @@ func ValidateSubscriptionGeoIPAt(path string, b []byte) error {
 		return errors.New("MMDB has no compatible country fields")
 	}
 	if path != "" {
-		cachePut(path, key, db)
+		cachePutValidated(src, b, db)
 	}
 	return nil
 }

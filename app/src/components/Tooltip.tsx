@@ -118,6 +118,11 @@ export function TooltipHost() {
     const el = ref.current;
     if (!shown || !el) { setPos(null); return; }
     const r = shown.anchor.getBoundingClientRect(), w = el.offsetWidth, h = el.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
+    // Rail items (collapsed sidebar) get their label beside the icon, never on top of the next icon.
+    if (shown.anchor.closest('.sidebar-collapsed .sidebar')) {
+      setPos({ left: Math.round(r.right + GAP + 2), top: Math.round(Math.max(MARGIN, Math.min(r.top + r.height / 2 - h / 2, vh - h - MARGIN))) });
+      return;
+    }
     const cx = shown.x !== null && r.width > 240 ? shown.x : r.left + r.width / 2;
     const left = Math.max(MARGIN, Math.min(cx - (shown.x !== null && r.width > 240 ? 12 : w / 2), vw - w - MARGIN));
     let top = r.bottom + GAP;

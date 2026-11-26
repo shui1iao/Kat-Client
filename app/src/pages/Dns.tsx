@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { getAppRect, useTopNoticeAnchor } from '../lib/floating';
+import { getAppRect, useCardAnchor } from '../lib/floating';
 import { DomainIcon } from '../components/EntityIcons';
 import { canClearDnsCache } from '../client/sniff';
 import { NetworkSettings } from '../components/NetworkSettings';
 import { Icon } from '../components/Icon';
-import { Segmented, StableText } from '../components/ui';
+import { Segmented, StableText, ThumbBar } from '../components/ui';
 import { KState, KTag } from '../components/labels';
 import { tip } from '../components/Tooltip';
 import { core } from '../client/ipc';
@@ -114,6 +114,9 @@ export function Dns({
   const [paused, setPaused] = useState(false);
   const [copiedSeq, setCopiedSeq] = useState<number | null>(null);
   const [addrPop, setAddrPop] = useState<AddrPopState | null>(null);
+  const [queryOpen, setQueryOpen] = useState(false);
+  const queryBtnRef = useRef<HTMLButtonElement>(null);
+  const dnsCardRef = useRef<HTMLElement>(null);
   const cursor = useRef(0);
   const instance = useRef(0);
 
@@ -266,7 +269,7 @@ export function Dns({
 
   return (
     <div className="dns-page">
-      <section className="card table-card dns-table-card">
+      <section ref={dnsCardRef} className="card table-card dns-table-card">
         <header className="table-toolbar dns-unified-toolbar">
           <Segmented
             size="sm"
@@ -290,7 +293,7 @@ export function Dns({
                   aria-label="搜索最近解析"
                 />
               </label>
-              <div className="pill-bar" role="radiogroup" aria-label="解析筛选">
+              <ThumbBar selected={filter} role="radiogroup" aria-label="解析筛选">
                 {RECENT_PILLS.map((p) => (
                   <button
                     type="button"
@@ -303,9 +306,20 @@ export function Dns({
                     {p.label}
                   </button>
                 ))}
-              </div>
+              </ThumbBar>
               <span className="sp" />
               <span className="muted num toolbar-count">{shownRecent.length} 条</span>
+              <button
+                ref={queryBtnRef}
+                type="button"
+                className={'btn sm' + (queryOpen ? ' is-on' : '')}
+                disabled={!running}
+                aria-pressed={queryOpen}
+                onClick={() => setQueryOpen((v) => !v)}
+              >
+                <Icon name="bolt" size={13} />
+                解析
+              </button>
               <button
                 type="button"
                 className="btn sm"
@@ -379,7 +393,6 @@ export function Dns({
 
         {activeTab === 'recent' && (
           <>
-            <QuickQueryStrip c={c} onQueried={() => void pullNow()} />
             {recentError && (
               <div className="form-error" style={{ margin: '8px 16px 0' }} role="alert">
                 {recentError}
@@ -612,6 +625,15 @@ export function Dns({
           </div>
         )}
       </section>
+      {activeTab === 'recent' && queryOpen && (
+        <DnsQueryPopover
+          c={c}
+          btnRef={queryBtnRef}
+          cardRef={dnsCardRef}
+          close={() => setQueryOpen(false)}
+          onQueried={() => void pullNow()}
+        />
+      )}
       {addrPop && <DnsAddrPopover pop={addrPop} close={() => setAddrPop(null)} />}
     </div>
   );
@@ -762,37 +784,44 @@ function DnsAddrPopover({ pop, close }: { pop: AddrPopState; close: () => void }
   );
 }
 
-function QuickQueryStrip({ c, onQueried }: { c: Client; onQueried?: () => void }) {
+function DnsQueryPopover({
+  c,
+  btnRef,
+  cardRef,
+  close,
+  onQueried,
+}: {
+  c: Client;
+  btnRef: React.RefObject<HTMLElement | null>;
+  cardRef: React.RefObject<HTMLElement | null>;
+  close: () => void;
+  onQueried?: () => void;
+}) {
   const running = c.status?.runtime.state === 'running';
   const [name, setName] = useState('');
   const [type, setType] = useState<'both' | 'A' | 'AAAA'>('both');
   const [notice, setNotice] = useState<QuickNotice | null>(null);
-  const [hoverNotice, setHoverNotice] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const noticeSeq = useRef(0);
   const copyTimer = useRef<number | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const popRef = useRef<HTMLElement>(null);
   const busy = c.busy.has('dns-quick-query');
-  const toastPos = useTopNoticeAnchor(!!notice);
+  const pos = useCardAnchor(true, btnRef, cardRef, 448);
 
   useEffect(() => {
-    if (!notice) {
-      setHoverNotice(false);
-      setCopiedKey(null);
-    }
-  }, [notice]);
-
-  useEffect(
-    () => () => {
+    requestAnimationFrame(() => inputRef.current?.focus());
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented && !e.isComposing && !document.querySelector('[role="dialog"], .kat-pop')) {
+        close();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
       if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (!notice || hoverNotice) return;
-    const t = window.setTimeout(() => setNotice(null), 7500);
-    return () => window.clearTimeout(t);
-  }, [notice, hoverNotice]);
+    };
+  }, [close]);
 
   const copyText = (key: string, text: string) => {
     if (!text) return;
@@ -854,135 +883,115 @@ function QuickQueryStrip({ c, onQueried }: { c: Client; onQueried?: () => void }
     });
   };
 
-  return (
-    <>
-      <div className="dns-quick-bar">
-        <form
-          className="dns-quick-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (name.trim() && running && !busy) submit();
-          }}
-        >
-          <span className="dns-quick-label">快速解析</span>
-          <input
-            className="inp mono dns-quick-inp"
-            aria-label="快速解析测试域名或链接"
-            placeholder={running ? '输入域名或粘贴网站链接，例如 https://api.github.com' : '内核运行后可发起实时解析测试'}
-            value={name}
-            disabled={!running}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <select
-            className="inp set-inp-sm"
-            aria-label="解析记录类型"
-            value={type}
-            disabled={!running}
-            onChange={(e) => setType(e.target.value as typeof type)}
-          >
-            <option value="both">A + AAAA</option>
-            <option value="A">仅 A</option>
-            <option value="AAAA">仅 AAAA</option>
-          </select>
-          <button className="btn sm primary dns-quick-submit" type="submit" disabled={!running || !name.trim() || busy}>
-            <Icon name="bolt" size={13} />
-            <StableText current={busy ? '解析中…' : '测试解析'} items={['测试解析', '解析中…']} />
-          </button>
-        </form>
+  if (!pos) return null;
+  return createPortal(
+    <aside
+      ref={popRef}
+      className="rule-judge-pop dns-query-pop"
+      role="region"
+      aria-label="DNS 解析测试"
+      style={{ top: pos.top, left: pos.left, width: pos.width }}
+    >
+      <div className="rule-judge-head">
+        <div className="rule-judge-title-wrap">
+          <Icon name="bolt" size={14} />
+          <span className="rule-judge-title">DNS 解析测试</span>
+          <span className="rule-judge-hint">域名 · 网址</span>
+        </div>
+        <button type="button" className="ib" aria-label="关闭解析测试" onClick={close}>
+          <Icon name="x" size={13} />
+        </button>
       </div>
 
-      {notice &&
-        toastPos &&
-        createPortal(
-          <aside
-            key={notice.id}
-            className={`dns-float-toast is-${notice.tone}`}
-            style={{ top: toastPos.top, left: toastPos.left, maxWidth: Math.min(468, toastPos.maxWidth + 28) }}
-            role="status"
-            aria-live="polite"
-            onMouseEnter={() => setHoverNotice(true)}
-            onMouseLeave={() => setHoverNotice(false)}
-          >
-            <div className="dns-toast-body">
-              <div className="dns-toast-head">
-                <span className={`dns-toast-dot is-${notice.tone}`} aria-hidden="true" />
-                <span className="dns-toast-domain mono" {...tip(notice.title, true)}>
-                  {notice.title}
-                </span>
-                {notice.fromUrl && <span className="dns-toast-badge">已提取域名</span>}
-                {notice.records && notice.records.length > 1 && (
-                  <span className="dns-toast-count num">{notice.records.length} 条</span>
-                )}
-                <span className="sp" />
+      <form
+        className="rule-judge-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (name.trim() && running && !busy) submit();
+        }}
+      >
+        <input
+          ref={inputRef}
+          className="inp"
+          aria-label="解析测试域名或链接"
+          placeholder="example.com / https://..."
+          autoComplete="off"
+          spellCheck={false}
+          value={name}
+          disabled={!running || busy}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (!e.target.value.trim()) setNotice(null);
+          }}
+        />
+        <select
+          className="inp sm dns-query-type"
+          aria-label="解析记录类型"
+          value={type}
+          disabled={!running || busy}
+          onChange={(e) => setType(e.target.value as typeof type)}
+        >
+          <option value="both">A + AAAA</option>
+          <option value="A">仅 A</option>
+          <option value="AAAA">仅 AAAA</option>
+        </select>
+        <button className="btn sm primary rule-judge-submit" type="submit" disabled={!running || !name.trim() || busy}>
+          <StableText current={busy ? '解析中…' : '解析'} items={['解析', '解析中…']} />
+        </button>
+      </form>
+
+      <div className="rule-judge-slot" role="status" aria-live="polite">
+        {busy ? (
+          <div className="rule-judge-empty">正在通过当前 DNS 链路查询…</div>
+        ) : !notice ? (
+          <div className="rule-judge-empty">输入域名或粘贴网站链接，按回车查看解析地址与上游耗时</div>
+        ) : notice.tone === 'err' ? (
+          <div className="rule-judge-err">{notice.detail}</div>
+        ) : (
+          <div className="dns-pop-res">
+            <div className="rule-judge-res-top">
+              <KState tone={notice.tone === 'ok' ? 'ok' : 'muted'} label={notice.title} />
+              {notice.meta && <span className="dns-toast-meta num">{notice.meta}</span>}
+              <span className="sp" />
+              {notice.records && notice.records.length > 1 && (
                 <button
                   type="button"
-                  className="ib dns-toast-close"
-                  aria-label="关闭通知"
-                  onClick={() => setNotice(null)}
+                  className="link-btn"
+                  onClick={() => copyText(`all:${notice.id}`, notice.records!.map((r) => r.addr).join('\n'))}
                 >
-                  <Icon name="x" size={13} />
+                  {copiedKey === `all:${notice.id}` ? '已复制全部' : '复制全部'}
                 </button>
-              </div>
-
-              {notice.records && notice.records.length > 0 ? (
-                <div className="dns-toast-list">
-                  {notice.records.map((rec, idx) => {
-                    const rowKey = `${notice.id}:${idx}:${rec.addr}`;
-                    const isCopied = copiedKey === rowKey;
-                    return (
-                      <button
-                        key={rowKey}
-                        type="button"
-                        className="dns-rec-row"
-                        onClick={() => copyText(rowKey, rec.addr)}
-                        {...tip(`点击复制 ${rec.addr}`)}
-                      >
-                        <span className="dns-rec-type">{rec.type}</span>
-                        <span className="dns-rec-addr mono">{rec.addr}</span>
-                        <span className={'dns-rec-copy' + (isCopied ? ' is-ok' : '')}>
-                          <Icon name={isCopied ? 'check' : 'copy'} size={12} />
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                notice.detail && <div className="dns-toast-detail">{notice.detail}</div>
-              )}
-
-              {(notice.meta || (notice.records && notice.records.length > 0)) && (
-                <div className="dns-toast-foot">
-                  <span className="dns-toast-meta">{notice.meta || ''}</span>
-                  {notice.records && notice.records.length > 0 && (
-                    <button
-                      type="button"
-                      className="dns-toast-copy"
-                      onClick={() =>
-                        copyText(
-                          `all:${notice.id}`,
-                          notice.records!.map((r) => r.addr).join('\n'),
-                        )
-                      }
-                    >
-                      <Icon name={copiedKey === `all:${notice.id}` ? 'check' : 'copy'} size={12} />
-                      <StableText
-                        current={
-                          copiedKey === `all:${notice.id}`
-                            ? '已复制'
-                            : notice.records.length > 1
-                              ? '复制全部'
-                              : '复制'
-                        }
-                        items={['复制全部', '已复制']}
-                      />
-                    </button>
-                  )}
-                </div>
               )}
             </div>
-          </aside>,
-          document.body,
+            {notice.records && notice.records.length > 0 ? (
+              <div className="dns-pop-records">
+                {notice.records.map((rec, idx) => {
+                  const rowKey = `${notice.id}:${idx}:${rec.addr}`;
+                  const isCopied = copiedKey === rowKey;
+                  return (
+                    <button
+                      key={rowKey}
+                      type="button"
+                      className="dns-rec-row"
+                      onClick={() => copyText(rowKey, rec.addr)}
+                      {...tip(`点击复制 ${rec.addr}`)}
+                    >
+                      <KTag label={rec.type} color="var(--text-2)" />
+                      <span className="dns-rec-addr num">{rec.addr}</span>
+                      <span className={'dns-rec-copy' + (isCopied ? ' is-ok' : '')}>
+                        <Icon name={isCopied ? 'check' : 'copy'} size={12} />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              notice.detail && <div className="rule-judge-empty">{notice.detail}</div>
+            )}
+          </div>
         )}
-    </>
+      </div>
+    </aside>,
+    document.body,
   );
 }

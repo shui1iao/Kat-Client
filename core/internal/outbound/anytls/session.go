@@ -71,6 +71,25 @@ const (
 	maxSessionPool   = 16
 )
 
+var (
+	activeSessions atomic.Int64
+	activeStreams  atomic.Int64
+)
+
+// ActiveStats returns the current count of live AnyTLS client sessions (busy +
+// idle/warm) and active logical streams across the process.
+func ActiveStats() (sessions, streams uint64) {
+	s := activeSessions.Load()
+	if s < 0 {
+		s = 0
+	}
+	st := activeStreams.Load()
+	if st < 0 {
+		st = 0
+	}
+	return uint64(s), uint64(st)
+}
+
 var sessionIOPools struct {
 	mu    sync.Mutex
 	slabs [][]byte
@@ -248,6 +267,7 @@ type session struct {
 }
 
 func newSession(o *Outbound, conn net.Conn, rawWrite *bufferedWriteConn, scheme *paddingScheme, settings []byte) *session {
+	activeSessions.Add(1)
 	return &session{
 		o: o, conn: conn, rawWrite: rawWrite, scheme: scheme, packet: 1, streams: make(map[uint32]*stream),
 		pendingSettings: settings, wake: make(chan struct{}, 1), done: make(chan struct{}), ver: make(chan struct{}),
@@ -278,6 +298,7 @@ func (s *session) cause() error {
 // queued writes complete with the error, and the pool forgets the session.
 func (s *session) fail(err error) {
 	s.failOnce.Do(func() {
+		activeSessions.Add(-1)
 		if err == nil {
 			err = io.ErrUnexpectedEOF
 		}

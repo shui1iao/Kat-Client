@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import { useTopNoticeAnchor } from '../lib/floating';
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react';
 import { Icon } from './Icon';
 
 export function Switch({ on }: { on: boolean }) {
@@ -106,6 +106,17 @@ export function useThumb<T extends HTMLElement>(selected: unknown) {
   return [ref, thumb] as const;
 }
 
+/** Filter pill group with the same sliding thumb as Segmented (selected button carries `.on`). */
+export function ThumbBar({ selected, className = 'pill-bar', children, ...rest }: { selected: unknown; className?: string; children: ReactNode } & Omit<HTMLAttributes<HTMLDivElement>, 'children'>) {
+  const [ref, thumb] = useThumb<HTMLDivElement>(selected);
+  return (
+    <div ref={ref} className={className} {...rest}>
+      {thumb}
+      {children}
+    </div>
+  );
+}
+
 export function Segmented<T extends string>({ value, options, onChange, size }: { value: T; options: { value: T; label: ReactNode }[]; onChange: (v: T) => void; size?: 'sm' }) {
   const [ref, thumb] = useThumb<HTMLDivElement>(value);
   return (
@@ -161,11 +172,25 @@ export function useSize<T extends HTMLElement>() {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const measure = () => setSize({ w: Math.round(el.clientWidth), h: Math.round(el.clientHeight) });
-    measure();
+    const commit = () => {
+      const w = Math.round(el.clientWidth);
+      const h = Math.round(el.clientHeight);
+      setSize((old) => (old.w === w && old.h === h ? old : { w, h }));
+    };
+    const measure = () => {
+      // Skip intermediate frame relayouts while the sidebar width glides;
+      // commit once on 'kat-sidebar-settled' right as the 200ms transition lands.
+      if (document.documentElement.dataset.sidebarAnimating) return;
+      commit();
+    };
+    commit();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
-    return () => ro.disconnect();
+    window.addEventListener('kat-sidebar-settled', commit);
+    return () => {
+      window.removeEventListener('kat-sidebar-settled', commit);
+      ro.disconnect();
+    };
   }, []);
   return [ref, size] as const;
 }

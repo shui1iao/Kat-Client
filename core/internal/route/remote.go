@@ -169,14 +169,7 @@ func preloadLocal(s *source) preloadedSource {
 		}
 		// Compile & save zero-heap binary mmap index, then immediately remap so
 		// even a cold startup releases Go heap tables cleanly on GC.
-		if fi != nil && fi.Mode().IsRegular() {
-			fh := computeSourceFastHashFromBytes(b)
-			if saveMmapIndex(s, fi, fh, v) {
-				if mv, _, ok := tryLoadMmapIndex(s, fi); ok {
-					v = mv
-				}
-			}
-		}
+		v, key = promoteToMmap(s, fi, b, v)
 	}
 	return preloadedSource{b: b, size: len(b), fi: fi, key: key, val: v}
 }
@@ -349,9 +342,18 @@ func (e *Engine) updateWithCommit(ctx context.Context, s *source, commit func(fu
 			e.failed(s, classWrite)
 			return ErrResourceRefresh
 		}
-		cachePut(s.path, cacheKey(s, b), v)
-		s.swap(v)
-		s.loaded(v, len(b), e.now())
+		live := v
+		key := cacheKey(s, b)
+		var statKey string
+		var mtime time.Time
+		if fi, serr := userio.Stat(s.path); serr == nil && fi.Mode().IsRegular() {
+			statKey = fileStatKey(s, fi)
+			mtime = fi.ModTime()
+			live, key = promoteToMmap(s, fi, b, v)
+		}
+		cachePutWithStat(s.path, key, statKey, len(b), mtime, live)
+		s.swap(live)
+		s.loaded(live, len(b), e.now())
 		return nil
 	}
 	if commit != nil {

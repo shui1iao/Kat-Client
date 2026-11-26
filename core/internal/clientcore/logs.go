@@ -3,6 +3,7 @@ package clientcore
 import (
 	"encoding/json"
 	"github.com/shui1iao/Kat/internal/outbound"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -112,7 +113,11 @@ func (r *logRing) recordIcon(e kernel.ClientLogEvent, name string) {
 		g := r.gate[key]
 		window := 10 * time.Second
 		if e.Diagnostic.Category == "ok" {
-			window = 30 * time.Second
+			if (e.Diagnostic.Stage == "ipc_read" || e.Diagnostic.Stage == "ipc_response") && e.Diagnostic.Action != "request_end" {
+				window = 5 * time.Minute
+			} else {
+				window = 30 * time.Second
+			}
 		}
 		if !g.at.IsZero() && time.Since(g.at) < window {
 			g.suppressed++
@@ -133,6 +138,33 @@ func (r *logRing) recordIcon(e kernel.ClientLogEvent, name string) {
 		}{at: time.Now()}
 	} else {
 		r.mu.Lock()
+		if e.Event == "process_rule_skipped" {
+			if r.gate == nil {
+				r.gate = make(map[string]struct {
+					at         time.Time
+					suppressed uint64
+				})
+			}
+			key := "prs:" + strconv.FormatUint(uint64(e.Rule), 10) + ":" + e.Reason + ":" + e.Cause
+			g := r.gate[key]
+			if !g.at.IsZero() && time.Since(g.at) < 60*time.Second {
+				g.suppressed += 1 + e.Suppressed
+				r.gate[key] = g
+				r.mu.Unlock()
+				return
+			}
+			if len(r.gate) >= 128 {
+				for k := range r.gate {
+					delete(r.gate, k)
+					break
+				}
+			}
+			e.Suppressed += g.suppressed
+			r.gate[key] = struct {
+				at         time.Time
+				suppressed uint64
+			}{at: time.Now()}
+		}
 	}
 	defer r.mu.Unlock()
 	if r.seq == maxLogSeq {

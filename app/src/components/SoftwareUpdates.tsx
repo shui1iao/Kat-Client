@@ -240,6 +240,7 @@ export function SoftwareUpdateCard({ u }: { u: SoftwareUpdateController }) {
         const hasNew = !!(r.latest && r.latest !== r.current && r.offer);
         const hasNotes = !!r.notes?.trim();
         const pct = r.total ? Math.floor(Math.min(100, (r.received / r.total) * 100)) : null;
+        const showMsg = r.phase === 'downloading' || hasNew || Boolean(r.message);
         return (
           <div className={'update-row' + (r.phase === 'downloading' ? ' is-downloading' : '')} key={r.kind}>
             <div className="update-row-info">
@@ -252,19 +253,21 @@ export function SoftwareUpdateCard({ u }: { u: SoftwareUpdateController }) {
                 {hasNew && r.size_bytes ? <small className="update-pkg-size num">{showBytes(r.size_bytes)}</small> : null}
               </div>
 
-              <div className={'update-message num' + (r.phase === 'error' ? ' is-error' : '')} role={r.phase === 'error' ? 'status' : undefined}>
-                {r.phase === 'downloading' ? (
-                  <>
-                    正在下载 {showBytes(r.received)}
-                    {r.total ? ` / ${showBytes(r.total)} · ${pct}%` : ''}
-                  </>
-                ) : (
-                  <>
-                    {hasNew && <span>可用新版本 {r.latest} · </span>}
-                    {r.message}
-                  </>
-                )}
-              </div>
+              {showMsg && (
+                <div className={'update-message num' + (r.phase === 'error' ? ' is-error' : '')} role={r.phase === 'error' ? 'status' : undefined}>
+                  {r.phase === 'downloading' ? (
+                    <>
+                      正在下载 {showBytes(r.received)}
+                      {r.total ? ` / ${showBytes(r.total)} · ${pct}%` : ''}
+                    </>
+                  ) : (
+                    <>
+                      {hasNew && <span>可用新版本 {r.latest} · </span>}
+                      {r.message}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="update-row-action">

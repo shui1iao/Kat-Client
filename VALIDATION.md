@@ -1,11 +1,11 @@
-# Validation: Kat-Client v0.2.35 (Windows Core v0.8.21)
+# Validation: Kat-Client v0.2.36 (Windows Core v0.8.22)
 
-- Client sequence: `1795640000`
-- Windows Core sequence: `1795629000` (unchanged Core v0.8.21, `git diff v0.2.34 -- core/` empty)
-- Core source fingerprint: `624ff4ff10f4aa83f86ec85145945aacb02d460c245a5d2fd420e19ab6ece93f`
+- Client sequence: `1795723000`
+- Windows Core sequence: `1795722000`
+- Core source fingerprint: `940bdd151404c4ecf8fbdc3b3fd6101bb063a12c0042e3594e9fdc6555ed8726`
 - Companion Linux Server: `v0.8.3`
 
 ## Automated Gates Passed
-1. **Frontend (`app/`)**: `tsc --noEmit` (0 errors) and `node build.mjs` (Vite production bundle) succeeded; verified default 4:3 (`1080x810`) layout & wide-screen anti-stretch CSS in Chromium with 0 console errors.
-2. **Rust Host (`app/src-tauri/`)**: `cargo test --offline --locked` passed all 326 tests (0 failed, including updated `window_geometry::tests::corrupt_state_falls_back_and_no_minimized_field` covering 96/120/144 DPI 4:3 default sizing and saved window restoration, plus `control_contract::r1_r2_display_version_production_wiring_contract`), `build-windows.sh` cross-compiled all 5 Windows x64 host binaries pinned to unchanged Core v0.8.21 + verified Wintun DLL.
-3. **Packaging & Signing Gate**: pinned NSIS 3.11 uninstaller capture + Ed25519 (`0afa646ee76f17d8`) offline dual-signature product verification gate (schema 1 + schema 2, 22 files) passed; online update manifest verified with product `update_manifest::verify` (`0.2.34 -> 0.2.35 Newer`, `0.2.35 -> Current`).
+1. **Frontend (`app/`)**: `tsc --noEmit -p .` (0 errors), `node tests-ui/run-unit.mjs` (152 / 152 unit & contract tests passed, 0 failed), production bundle `node build.mjs` succeeded, and Playwright headless Chromium visual & interaction audit across all 9 pages, popovers, modals, tray view, scroll edge-fade states, and sidebar glide (0 intermediate chart relayouts) passed with 0 console/page errors.
+2. **Windows Go Core (`core/`, v0.8.22)**: Linux `go vet ./...` (0 issues), Windows amd64 `go vet -tags desktop ./...` (0 issues), full `go test -race -p 2 -parallel 2 -count=1 ./...` across all 25 Go packages (0 failed, 0 data race, including `TestSubscriptionValidationPromotesAndReusesMmap` and `TestBackgroundUpdateSwitchesToMmap`), and Windows amd64 `go build -tags desktop` succeeded (`15,458,304 B`, `WINDOWS_GUI` subsystem).
+3. **Rust Host (`app/src-tauri/`)**: `cargo test --offline --locked` (326 / 326 unit + contract + diagnostic allowlist + supervisor tests passed, 0 failed), `build-windows.sh` (all 5 Windows x64 host binaries pinned to Core v0.8.22 + official Wintun verified), pinned NSIS 3.11 uninstaller capture + final `Kat-Setup-x64.exe` offline dual-signature product verification gate (schema 1 + schema 2, 22 files) passed.

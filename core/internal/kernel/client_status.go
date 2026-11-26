@@ -145,6 +145,45 @@ func (s *Server) DomainTraffic() []DomainTrafficView {
 	return out
 }
 
+// MemoryStats summarizes runtime routing-index and kernel cache counts for
+// numeric diagnostics (never contains paths, domains, or secrets).
+type MemoryStats struct {
+	RouteMmapSets   uint64
+	RouteHeapSets   uint64
+	LiveGenerations uint64
+	RelayPoolBytes  uint64
+	DNSHostEntries  uint64
+	TrackedHosts    uint64
+}
+
+// MemoryStats returns live numeric counts for the current generation and core.
+func (s *Server) MemoryStats() MemoryStats {
+	var ms MemoryStats
+	if s == nil {
+		return ms
+	}
+	if cur := s.current(); cur != nil {
+		if cur.rt != nil && cur.rt.engine != nil {
+			rs := cur.rt.engine.MemoryStats()
+			ms.RouteMmapSets = rs.MmapSets
+			ms.RouteHeapSets = rs.HeapSets
+		}
+		if cur.pool != nil {
+			ms.RelayPoolBytes = cur.pool.bytes()
+		}
+	}
+	if s.core != nil {
+		if g := s.core.liveGens.Load(); g > 0 {
+			ms.LiveGenerations = uint64(g)
+		}
+		ms.DNSHostEntries = s.core.dnsHosts.count()
+		if n := s.core.domainCount.Load(); n > 0 {
+			ms.TrackedHosts = uint64(n)
+		}
+	}
+	return ms
+}
+
 // GenerationID reads the current generation at this call, including when s is
 // an older Server handle. It does not cache a generation across status requests.
 func (s *Server) GenerationID() uint64 {

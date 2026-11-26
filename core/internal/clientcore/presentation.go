@@ -511,25 +511,92 @@ func (h *Host) cachedIcons() map[string]string {
 	return out
 }
 
+const (
+	maxObservedProcEntries = 2048
+	maxDomainIconMisses    = 2048
+)
+
 var (
+	observedProcMu        sync.Mutex
 	observedProcPaths     sync.Map
 	observedProcNames     sync.Map
 	observedProcNamePaths sync.Map
+	observedProcCount     atomic.Int32
+	domainIconMissMu      sync.Mutex
 	domainIconMissCache   sync.Map
+	domainIconMissCount   atomic.Int32
 	htmlLinkTagRe         = regexp.MustCompile(`(?is)<link\b[^>]*>`)
 	htmlAttrRe            = regexp.MustCompile(`(?is)\b(rel|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))`)
 )
+
+func domainIconMissLen() uint64 {
+	if n := domainIconMissCount.Load(); n > 0 {
+		return uint64(n)
+	}
+	return 0
+}
+
+func recordDomainIconMiss(domain string) {
+	now := time.Now()
+	if domainIconMissCount.Load() >= maxDomainIconMisses {
+		domainIconMissMu.Lock()
+		if domainIconMissCount.Load() >= maxDomainIconMisses {
+			domainIconMissCache.Range(func(k, v any) bool {
+				if at, ok := v.(time.Time); !ok || now.Sub(at) >= 10*time.Minute {
+					if _, loaded := domainIconMissCache.LoadAndDelete(k); loaded {
+						domainIconMissCount.Add(-1)
+					}
+				}
+				return true
+			})
+			if domainIconMissCount.Load() >= maxDomainIconMisses {
+				domainIconMissCache.Clear()
+				domainIconMissCount.Store(0)
+			}
+		}
+		domainIconMissMu.Unlock()
+	}
+	if _, loaded := domainIconMissCache.LoadOrStore(domain, now); !loaded {
+		domainIconMissCount.Add(1)
+	} else {
+		domainIconMissCache.Store(domain, now)
+	}
+}
+
+func clearDomainIconMiss(domain string) {
+	if _, loaded := domainIconMissCache.LoadAndDelete(domain); loaded {
+		domainIconMissCount.Add(-1)
+	}
+}
 
 func rememberObservedProcess(name, p string) {
 	n := strings.TrimSpace(name)
 	p = strings.TrimSpace(p)
 	validPath := p != "" && len(p) <= 1024 && !strings.HasPrefix(p, `\`) && !strings.HasPrefix(p, "//")
-	if validPath {
-		observedProcPaths.Store(strings.ToLower(p), struct{}{})
+	validName := n != "" && len(n) <= 128 && !strings.ContainsAny(n, `/\:`)
+	if !validPath && !validName {
+		return
 	}
-	if n != "" && len(n) <= 128 && !strings.ContainsAny(n, `/\:`) {
+	if observedProcCount.Load() >= maxObservedProcEntries {
+		observedProcMu.Lock()
+		if observedProcCount.Load() >= maxObservedProcEntries {
+			observedProcPaths.Clear()
+			observedProcNames.Clear()
+			observedProcNamePaths.Clear()
+			observedProcCount.Store(0)
+		}
+		observedProcMu.Unlock()
+	}
+	if validPath {
+		if _, loaded := observedProcPaths.LoadOrStore(strings.ToLower(p), struct{}{}); !loaded {
+			observedProcCount.Add(1)
+		}
+	}
+	if validName {
 		nl := strings.ToLower(n)
-		observedProcNames.Store(nl, struct{}{})
+		if _, loaded := observedProcNames.LoadOrStore(nl, struct{}{}); !loaded && !validPath {
+			observedProcCount.Add(1)
+		}
 		if validPath {
 			observedProcNamePaths.Store(nl, p)
 		}
@@ -1046,7 +1113,7 @@ func (h *Host) getDomainIcon(ctx context.Context, rawDomain, rawIP, rawRule stri
 			if time.Since(missAt.(time.Time)) < 10*time.Minute {
 				return empty
 			}
-			domainIconMissCache.Delete(domain)
+			clearDomainIconMiss(domain)
 		}
 	}
 
@@ -1064,12 +1131,12 @@ func (h *Host) getDomainIcon(ctx context.Context, rawDomain, rawIP, rawRule stri
 			defer h.iconWG.Done()
 			baseCtx := context.WithValue(context.WithValue(h.iconCtx, iconExpectedKey{}, expected), bootstrapKey{}, proxyCfg)
 			if b := h.resolveDomainIconBytes(baseCtx, domain); len(b) > 0 {
-				domainIconMissCache.Delete(domain)
+				clearDomainIconMiss(domain)
 				if atomicWriteContext(h.iconCtx, path, b) == nil {
 					h.recordDomainIconIndex(dir, domain)
 				}
 			} else {
-				domainIconMissCache.Store(domain, time.Now())
+				recordDomainIconMiss(domain)
 			}
 			h.iconMu.Lock()
 			delete(h.iconPending, path)

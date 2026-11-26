@@ -180,6 +180,16 @@ func (s *tcpSystemStack) gcLoop() {
 	}
 }
 
+func (s *tcpSystemStack) natCount() uint64 {
+	if s == nil {
+		return 0
+	}
+	s.mu.RLock()
+	n := len(s.byTuple)
+	s.mu.RUnlock()
+	return uint64(n)
+}
+
 func (s *tcpSystemStack) gcNow(nowNano int64) {
 	grace := natClosedGrace.Nanoseconds()
 	unacc := natUnacceptIdle.Nanoseconds()

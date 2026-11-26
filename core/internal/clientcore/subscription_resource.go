@@ -15,6 +15,37 @@ func readSubscriptionResource(path string, limit int64) ([]byte, error) {
 	return b, err
 }
 
+// statSubscriptionResource verifies regular-file, no-symlink/reparse, SameFile,
+// and byte-limit invariants without reading file contents onto the Go heap.
+func statSubscriptionResource(path string, limit int64) (os.FileInfo, error) {
+	if limit <= 0 || limit > 64<<20 {
+		return nil, errResourceLimit
+	}
+	before, err := userio.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !before.Mode().IsRegular() {
+		return nil, errResourceShape
+	}
+	f, err := openSubscriptionResource(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !st.Mode().IsRegular() || !os.SameFile(before, st) {
+		return nil, errResourceShape
+	}
+	if st.Size() > limit {
+		return nil, errResourceLimit
+	}
+	return st, nil
+}
+
 func readSubscriptionResourceStat(path string, limit int64) ([]byte, os.FileInfo, error) {
 	if limit <= 0 || limit > 64<<20 {
 		return nil, nil, errResourceLimit

@@ -1,19 +1,19 @@
 import { FlowDetail } from '../components/FlowDetail';
 import { PolicyReveal } from '../components/PolicyReveal';
-import { ProcessIcon } from '../components/EntityIcons';
+import { DomainIcon } from '../components/EntityIcons';
 import { tip } from '../components/Tooltip';
 import { RuleEditor } from './Rules';
 import { flowRuleDraft, type FlowRuleSource } from '../client/flowRule';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { NetworkTag, ConnectionRule, KState, KTag, ConnectionTarget } from '../components/labels';
+import { KState, KTag } from '../components/labels';
+import { FlowExitCell, FlowNumCell, FlowTargetCell, useNodeProtoMap } from '../components/FlowCells';
 import { Icon } from '../components/Icon';
-import { Segmented, StableText } from '../components/ui';
+import { Segmented, StableText, ThumbBar } from '../components/ui';
 import { Diagnostics } from '../components/Diagnostics';
 import { core } from '../client/ipc';
 import { normalizeConnLogs, normalizeConnections, normalizeKernelLogs } from '../client/normalize';
 import { errorText } from '../lib/errors';
 import { clockStr, showBytes } from '../client/display';
-import { parseConnectionRule, ruleColor } from '../client/presentation';
 import { mergeConnectionLogs, flowLog } from '../client/logDetails';
 import type { ConnLogEntry, ConnectionsReply, KernelLogEntry } from '../client/types';
 import type { Client } from '../client/useClient';
@@ -89,6 +89,7 @@ export function Logs({
 }
 
 function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
+  const nodeProtoMap = useNodeProtoMap(c);
   const [entries, setEntries] = useState<ConnLogEntry[]>([]);
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
@@ -167,7 +168,7 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
             aria-label="搜索连接日志"
           />
         </label>
-        <div className="pill-bar" role="radiogroup" aria-label="结果筛选">
+        <ThumbBar selected={outcome} role="radiogroup" aria-label="结果筛选">
           {OUTCOME_PILLS.map((p) => (
             <button
               type="button"
@@ -180,7 +181,7 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
               {p.label}
             </button>
           ))}
-        </div>
+        </ThumbBar>
         <span className="sp" />
         <span className="muted num toolbar-count">{shown.length} 条</span>
         <button type="button" className="btn sm" onClick={() => setPaused(!paused)} aria-pressed={paused}>
@@ -208,34 +209,17 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
       <div className="log-scroll" role="table" aria-label="连接日志">
         <div className="conn-log-grid conn-log-head" role="row">
           <span>时间</span>
-          <span>进程</span>
-          <span>协议</span>
-          <span>目标</span>
-          <span>规则</span>
-          <span>出口链路</span>
-          <span className="r">流量</span>
-          <span className="r">结果</span>
+          <span />
+          <span>目标 · 进程 · 规则</span>
+          <span>落地节点 · 策略</span>
+          <span className="r">结果 / 流量</span>
         </div>
 
-        {(() => {
-          const nodeProtoMap = new Map<string, string>();
-          for (const n of c.status?.nodes ?? []) nodeProtoMap.set(n.name, n.type);
-          for (const o of c.source?.kernel.outbounds ?? []) {
-            if (!nodeProtoMap.has(o.name)) nodeProtoMap.set(o.name, o.type);
-          }
-          return shown.map((raw) => {
+        {shown.map((raw) => {
             const e = flowLog(raw, flows);
             const rawChain = Array.isArray(e.chain) ? e.chain : [];
             const chain = rawChain.map(c.label);
             const open = expanded === e.seq;
-            const parsedRule = parseConnectionRule(e.rule);
-            const shortType = parsedRule
-              ? parsedRule.type
-                  .replace('DOMAIN-SUFFIX', 'SUFFIX')
-                  .replace('DOMAIN-KEYWORD', 'KEYWORD')
-                  .replace('PROCESS-NAME', 'PROC')
-                  .replace('RULE-SET', 'SET')
-              : '';
             return (
               <div className={'conn-log-entry' + (open ? ' is-open' : '')} key={e.seq}>
                 <div
@@ -255,44 +239,30 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
                   <time className="num muted" {...tip(e.time)}>
                     {clockStr(e.time)}
                   </time>
-                  <span className="conn-proc-cell ell" {...tip(e.process_path || e.process_name, true)}>
-                    <ProcessIcon name={e.process_name} path={e.process_path} />
-                    <span className="ell">{e.process_name || '未知'}</span>
+                  <span className="flow-lead">
+                    <DomainIcon domain={e.dest_host || e.host || e.target || ''} ip={e.dest_ip} rule={e.rule} />
                   </span>
-                  <span className="proto-cell">
-                    <NetworkTag network={e.network} />
-                  </span>
-                  <ConnectionTarget
-                    showIcon
+                  <FlowTargetCell
                     name={e.dest_host || e.host || e.target || '—'}
                     ip={e.dest_ip}
                     rule={e.rule}
                     title={e.target}
                     sniffed={e.sniffed && !!(e.dest_host || e.host)}
+                    network={e.network}
+                    processName={e.process_name ?? null}
+                    processPath={e.process_path}
                   />
-                  <span className="conn-rule-compact" {...tip(e.rule, true)}>
-                    {parsedRule ? (
-                      <>
-                        <KTag label={shortType} color={ruleColor(parsedRule.type)} />
-                        {parsedRule.payload && <span className="ell">{parsedRule.payload}</span>}
-                      </>
-                    ) : (
-                      <span className="ell">{e.rule || '—'}</span>
-                    )}
-                  </span>
-                  <span className="conn-chain" {...tip(chain.join(' → '), true)}>
-                    {chain.join(' → ') || '—'}
-                  </span>
-                  <span className="log-bytes num r">
-                    {e.up == null || e.down == null ? '—' : `↑${showBytes(e.up)} ↓${showBytes(e.down)}`}
-                  </span>
-                  <span className="r">
-                    <KState
-                      tone={e.outcome === 'idle' ? 'muted' : e.outcome === 'ok' ? 'ok' : 'bad'}
-                      label={OUTCOME[e.outcome]}
-                      title={e.code}
-                    />
-                  </span>
+                  <FlowExitCell chain={chain} />
+                  <FlowNumCell
+                    top={
+                      <KState
+                        tone={e.outcome === 'idle' ? 'muted' : e.outcome === 'ok' ? 'ok' : 'bad'}
+                        label={OUTCOME[e.outcome]}
+                        title={e.code}
+                      />
+                    }
+                    bottom={e.up == null || e.down == null ? '—' : `↑${showBytes(e.up)} ↓${showBytes(e.down)}`}
+                  />
                 </div>
                 <PolicyReveal open={open}>
                   <FlowDetail
@@ -306,8 +276,7 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
                 </PolicyReveal>
               </div>
             );
-          });
-        })()}
+        })}
 
         {!shown.length && <div className="empty">{needle || outcome !== 'all' ? '没有匹配的记录' : '暂无连接日志'}</div>}
       </div>
@@ -389,7 +358,7 @@ function KernelLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
             onChange={(e) => setQ(e.target.value)}
           />
         </label>
-        <div className="pill-bar" role="radiogroup" aria-label="内核日志等级">
+        <ThumbBar selected={level} role="radiogroup" aria-label="内核日志等级">
           {LEVEL_PILLS.map((p) => (
             <button
               type="button"
@@ -402,7 +371,7 @@ function KernelLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
               {p.label}
             </button>
           ))}
-        </div>
+        </ThumbBar>
         <span className="sp" />
         <span className="muted num toolbar-count">{shown.length} 条</span>
         <button type="button" className="btn sm" onClick={() => setPaused(!paused)} aria-pressed={paused}>
@@ -440,14 +409,10 @@ function KernelLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
             <span>
               <KTag
                 label={e.level}
+                className={'log-level is-' + e.level}
                 color={
-                  e.level === 'error'
-                    ? '#F85149'
-                    : e.level === 'warn'
-                      ? '#D29922'
-                      : e.level === 'debug'
-                        ? '#4C8DFF'
-                        : '#7D8794'
+                  // Salience follows severity: error > warn > info > debug (quietest).
+                  e.level === 'error' ? 'var(--bad)' : e.level === 'warn' ? 'var(--warn)' : 'var(--text-3)'
                 }
               />
             </span>

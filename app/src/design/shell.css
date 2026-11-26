@@ -1,6 +1,7 @@
 /* ==========================================================================
-   Kat Desktop — macOS SplitView Shell: Source-List Sidebar & Toolbar
+   Kat Desktop — Window shell: sidebar, title bar, caption buttons
    Geometry: sidebar 206 / 62 · title bar 52 · page gutter 22 · controls 30
+   Collapsing keeps every icon on the same x so only labels fade/clip.
    ========================================================================== */
 
 .app {
@@ -16,7 +17,7 @@
   min-height: 0;
   display: grid;
   grid-template-columns: 206px minmax(0, 1fr);
-  transition: grid-template-columns var(--t-slow) var(--ease);
+  transition: grid-template-columns 200ms var(--ease);
 }
 
 .body.sidebar-collapsed {
@@ -127,7 +128,6 @@
   flex-direction: column;
   padding-block: 10px;
   scrollbar-width: none;
-  mask-image: var(--fade-y);
 }
 
 .nav-list::-webkit-scrollbar {
@@ -153,17 +153,23 @@
   line-height: 1.2;
 }
 
+.nav-sec-title,
+.nav-txt,
+.nav-badge {
+  transition: opacity 120ms var(--ease), color 120ms var(--ease);
+}
+
+/* Collapsed: titles keep their height (no vertical jump) and turn into a divider. */
 .sidebar-collapsed .nav-sec-title {
-  display: none;
+  color: transparent;
+  background: var(--sep-fade) center / 100% 1px no-repeat;
 }
 
-.sidebar-collapsed .nav-sec + .nav-sec {
-  margin-top: 8px;
-  padding-top: 8px;
-  background: var(--sep-fade) top / 100% 1px no-repeat;
+.sidebar-collapsed .nav-sec:first-child .nav-sec-title {
+  background: none;
 }
 
-/* macOS Sequoia Source-List Row: full rounded pill selection, semantic line icons */
+/* Navigation row: rounded control pill selection, semantic line icons */
 .navcard {
   --nav-tint: var(--accent);
   position: relative;
@@ -172,12 +178,13 @@
   gap: 10px;
   height: 35px;
   padding: 0 11px;
-  border-radius: 10px;
+  border-radius: var(--r-ctl);
   color: var(--text-2);
   font-size: var(--fs-nav);
   font-weight: 500;
   text-align: left;
-  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+  overflow: hidden;
+  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), transform 90ms var(--ease);
 }
 
 .navcard[data-page="overview"]    { --nav-tint: #007AFF; }
@@ -280,7 +287,7 @@
 
 /* Collapsed Sidebar */
 .sidebar-collapsed .sidebar {
-  padding: 0 11px 12px;
+  padding: 0 10px 12px 12px;
 }
 
 .sidebar-collapsed .side-top {
@@ -292,15 +299,9 @@
   display: none;
 }
 
-.sidebar-collapsed .navcard {
-  justify-content: center;
-  padding: 0;
-  height: 38px;
-}
-
 .sidebar-collapsed .nav-txt,
 .sidebar-collapsed .nav-badge {
-  display: none;
+  opacity: 0;
 }
 
 .sidebar-collapsed .nav-dirty-dot,
@@ -380,6 +381,7 @@
 
 .ss-state {
   font-weight: 550;
+  line-height: 18px;
   color: var(--text);
   white-space: nowrap;
 }
@@ -387,6 +389,7 @@
 .ss-uptime {
   margin-left: auto;
   font-size: var(--fs-micro);
+  line-height: 18px;
   color: var(--text-3);
   transition: opacity var(--t-fast) var(--ease);
 }
@@ -401,7 +404,7 @@
   right: 7px;
   width: 26px;
   height: 26px;
-  border-radius: 6.5px;
+  border-radius: var(--r-inner);
   display: grid;
   place-items: center;
   color: var(--text-2);
@@ -452,7 +455,7 @@
   width: 100%;
   height: 30px;
   margin: 2px 0;
-  border-radius: 5px;
+  border-radius: var(--r-chip);
   overflow: hidden;
 }
 
@@ -522,13 +525,26 @@
   display: none;
 }
 
-/* ---------- Workspace & Unified macOS Toolbar ---------- */
+/* ---------- Workspace & Window Title Bar ---------- */
 .workspace {
+  container: kat-ws / inline-size;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
   background: transparent;
+}
+
+/* On wide windows capped pages centre a 1120px column; keep the title on its left edge. */
+.workspace.is-capped {
+  --cap-gutter: 36px;
+}
+.workspace.is-capped.is-flush {
+  --cap-gutter: 0px;
+}
+.workspace.is-capped .titlebar-heading {
+  margin-left: max(0px, calc((100cqw - var(--cap-gutter) - 1120px) / 2));
+  transition: margin-left 200ms var(--ease);
 }
 
 .titlebar {
@@ -588,10 +604,10 @@
   display: flex;
   align-items: center;
   width: 100%;
-  height: 30px;
+  height: var(--h-ctl-sm);
   padding: 2px;
   gap: 0;
-  border-radius: 9.5px;
+  border-radius: var(--r-ctl);
   background: var(--recess-bg);
   box-shadow: var(--recess-shadow);
   flex: none;
@@ -600,7 +616,7 @@
 .mode-seg > .seg-thumb {
   position: absolute;
   z-index: -1;
-  border-radius: 7.5px;
+  border-radius: var(--r-inner);
   background: var(--hig-thumb);
   box-shadow: var(--hig-thumb-shadow);
   transition: left 200ms var(--ease-spring), width 200ms var(--ease-spring);
@@ -614,9 +630,9 @@
   position: relative;
   flex: 1 1 0;
   min-width: 0;
-  height: 26px;
+  height: calc(var(--h-ctl-sm) - 4px);
   padding: 0;
-  border-radius: 7.5px;
+  border-radius: var(--r-inner);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -632,45 +648,50 @@
   font-weight: 500;
 }
 
-.mode-seg > button.on.m-global { color: var(--accent-text); }
-.mode-seg > button.on.m-direct { color: var(--text); }
-
+/* Matches select.inp.sm everywhere else: neutral surface when closed, left-aligned
+   label, fixed trailing chevron, soft accent tint only while the popup is open. */
 .global-group-pill {
   position: relative;
   width: 100%;
-  height: 28px;
-  padding: 0 24px;
-  border-radius: 8px;
-  background: var(--accent-soft);
-  color: var(--accent-text);
-  font-size: var(--fs-meta);
-  font-weight: 550;
+  height: var(--h-ctl-sm);
+  padding: 0 24px 0 10px;
+  border-radius: var(--r-ctl);
+  background: var(--recess-bg);
+  color: var(--text);
+  font-size: var(--fs-data);
+  font-weight: 400;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 6px;
   min-width: 0;
-  transition: background-color var(--t-fast) var(--ease);
+  text-align: left;
+  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
 .global-group-pill:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  background: var(--hover);
+}
+
+.global-group-pill:active:not(:disabled) {
+  background: var(--press);
 }
 
 .global-group-pill.is-open,
 .global-group-pill.is-open:hover {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
 
 .global-group-pill svg {
   position: absolute;
   right: 8px;
   flex: none;
-  transition: transform var(--t-fast) var(--ease);
+  color: var(--text-3);
 }
 
 .global-group-pill.is-open svg {
-  transform: rotate(180deg);
+  color: currentColor;
 }
 
 .global-pill-label {
@@ -680,12 +701,12 @@
 }
 
 .global-opt-copy {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 7px;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
   min-width: 0;
-  max-width: 100%;
   overflow: hidden;
 }
 
@@ -695,10 +716,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
-  /* The group name keeps its width (up to ~60% of the row); the resolved node
-     on the right is what gets ellipsised first. */
   flex: 0 0 auto;
-  max-width: 62%;
+  max-width: 58%;
 }
 
 .global-opt-copy em {
@@ -712,6 +731,10 @@
   white-space: nowrap;
 }
 
+.kat-opt.cur .global-opt-copy em {
+  color: color-mix(in srgb, var(--accent-text) 78%, transparent);
+}
+
 .kat-pop-sep {
   height: 1px;
   margin: 4px 6px;
@@ -721,8 +744,93 @@
 .global-opt-more {
   color: var(--text-2);
   font-size: var(--fs-meta);
-  justify-content: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+/* Global group pill: revealed with a height transition so the nav below glides instead of jumping */
+.global-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  margin-top: -8px;
+  transition: grid-template-rows 200ms var(--ease), margin-top 200ms var(--ease);
+}
+
+.global-reveal.open {
+  grid-template-rows: 1fr;
+  margin-top: 0;
+}
+
+.global-reveal-inner {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 150ms var(--ease);
+}
+
+.global-reveal.open > .global-reveal-inner {
+  opacity: 1;
+}
+
+/* Collapsed rail: compact mode / system proxy / TUN buttons (same total height as the expanded dock) */
+.side-rail-controls {
+  display: flex;
+  flex-direction: column;
   gap: 4px;
+  padding: 2px 0 8px;
+  margin-bottom: 2px;
+  flex: none;
+  animation: kat-fade-in 160ms var(--ease);
+}
+
+.rail-btn {
+  width: 40px;
+  height: 34px;
+  border-radius: var(--r-ctl);
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.rail-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.rail-btn.rail-mode {
+  background: var(--recess-bg);
+  color: var(--text);
+}
+
+.rail-btn.rail-mode.is-open {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.rail-btn.on {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.rail-btn.is-transition {
+  color: var(--warn);
+  animation: kat-ns-pulse 1.1s ease-in-out infinite;
+}
+
+.rail-btn.has-error {
+  color: var(--bad);
+}
+
+.rail-mode-pop {
+  min-width: 112px;
+}
+
+@keyframes kat-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* System Proxy & TUN — clean stacked sidebar toggle rows */
@@ -735,12 +843,11 @@
 }
 
 .net-switch {
-  --ns-track-off: rgba(255, 255, 255, 0.16);
   position: relative;
   width: 100%;
-  height: 30px;
-  padding: 0 8px 0 9px;
-  border-radius: 8px;
+  height: var(--h-ctl-sm);
+  padding: 0 6px 0 9px;
+  border-radius: var(--r-ctl);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -759,18 +866,6 @@
   color: var(--text);
 }
 
-.net-switch:hover:not(:disabled) .ns-thumb {
-  box-shadow: 0 1.5px 3.5px rgba(0, 0, 0, 0.24);
-}
-
-.net-switch.on:hover:not(:disabled) .ns-track {
-  background: var(--accent-hover);
-}
-
-:root[data-theme="light"] .net-switch {
-  --ns-track-off: rgba(15, 23, 42, 0.15);
-}
-
 .sidebar-collapsed .side-controls {
   display: none;
 }
@@ -779,51 +874,12 @@
   line-height: 1;
 }
 
-.net-switch .ns-track {
-  position: relative;
-  width: 26px;
-  height: 15px;
-  border-radius: 999px;
-  background: var(--ns-track-off);
-  flex: none;
-  transition: background-color var(--t-fast) var(--ease);
-}
-
-.net-switch .ns-thumb {
-  position: absolute;
-  top: 1.5px;
-  left: 1.5px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #FFFFFF;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
-  transition: transform 200ms var(--ease-spring), width 120ms var(--ease);
-}
-
-.net-switch:active:not(:disabled) .ns-thumb {
-  width: 14.5px;
-}
-
-.net-switch.on:active:not(:disabled) .ns-thumb {
-  transform: translateX(8.5px);
-}
-
 .net-switch.on {
   color: var(--text);
   font-weight: 500;
 }
 
-.net-switch.on .ns-track {
-  background: var(--accent);
-}
-
-.net-switch.on .ns-thumb {
-  background: #FFFFFF;
-  transform: translateX(11px);
-}
-
-.net-switch.is-transition .ns-track {
+.net-switch.is-transition .sw {
   background: var(--warn);
   animation: kat-ns-pulse 1.1s ease-in-out infinite;
 }
@@ -852,31 +908,46 @@
   pointer-events: auto;
 }
 
-/* Right-hand Window Caption Controls — centered soft rounded pills harmonizing with the 52px toolbar */
+/* Window caption controls (user choice C): compact 30px circles, never edge-flush;
+   close turns into the Windows red disc on hover. */
 .winbtns {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   margin-left: 4px;
   flex: none;
 }
 
 .winbtns button {
-  width: 34px;
+  width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
-  color: var(--text-3);
+  color: var(--text-2);
   transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.winbtns rect {
+  rx: 1.5px;
 }
 
 .winbtns button:hover:not(:disabled) {
   background: var(--hover);
+  color: var(--text);
+}
+
+.winbtns button:active:not(:disabled) {
+  background: var(--press);
 }
 
 .winbtns button.close:hover:not(:disabled) {
-  background: #E5484D;
+  background: #E81123;
+  color: #FFFFFF;
+}
+
+.winbtns button.close:active:not(:disabled) {
+  background: #C50F1F;
   color: #FFFFFF;
 }
 

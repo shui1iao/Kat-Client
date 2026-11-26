@@ -71,13 +71,14 @@ test('unified overlay glass, radius and soft fade CSS rules remain standard-prop
   const comp = readFileSync(resolve(import.meta.dirname, '../src/design/components.css'), 'utf8');
   const pages = readFileSync(resolve(import.meta.dirname, '../src/design/pages.css'), 'utf8');
 
-  assert.match(tokens, /--r-pop:\s*14px/);
+  assert.match(tokens, /--r-pop:\s*10px/);
+  assert.match(tokens, /--r-modal:\s*12px/);
   assert.match(tokens, /--sep-fade:/);
-  assert.match(tokens, /--fade-y:/);
+  assert.match(tokens, /\[data-scroll-fade\]/);
   // Never emit manual -webkit-backdrop-filter that causes LightningCSS to drop standard backdrop-filter
   assert.equal(comp.includes('-webkit-backdrop-filter:'), false);
   assert.equal(pages.includes('-webkit-backdrop-filter:'), false);
   assert.match(pages, /\.rule-judge-pop\s*\{[^}]*border-radius:\s*var\(--r-pop\)[^}]*backdrop-filter:\s*blur\(20px\)\s*saturate\(200%\)/s);
-  assert.match(pages, /\.dns-float-toast\s*\{[^}]*border-radius:\s*var\(--r-pop\)[^}]*backdrop-filter:\s*blur\(20px\)\s*saturate\(200%\)/s);
+  assert.match(pages, /\.dns-query-pop\s*\{/s);
   assert.match(pages, /\.dns-addr-pop\s*\{[^}]*border-radius:\s*var\(--r-pop\)[^}]*backdrop-filter:\s*blur\(20px\)\s*saturate\(200%\)/s);
 });

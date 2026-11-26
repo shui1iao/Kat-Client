@@ -3,18 +3,18 @@ import { tip } from '../components/Tooltip';
 import { RuleEditor } from './Rules';
 import { flowRuleDraft, processCounts, type FlowRuleSource } from '../client/flowRule';
 import { inboundLabel } from '../client/logDetails';
-import { NetworkTag, ConnectionRule, ConnectionTarget, KTag } from '../components/labels';
+import { ConnectionRule } from '../components/labels';
+import { FlowExitCell, FlowNumCell, FlowTargetCell, useNodeProtoMap } from '../components/FlowCells';
 import { ProtocolTag } from '../components/ProtocolTag';
 import { PolicyReveal } from '../components/PolicyReveal';
 import { Icon } from '../components/Icon';
-import { ProcessIcon } from '../components/EntityIcons';
+import { DomainIcon, ProcessIcon } from '../components/EntityIcons';
 import { Modal } from '../components/Editors';
 import { Segmented, StableText } from '../components/ui';
 import { core } from '../client/ipc';
 import { captureCloseTargets, normalizeConnections } from '../client/normalize';
 import { errorText } from '../lib/errors';
 import { clockStr, durationStr, showBytes, showRate } from '../client/display';
-import { parseConnectionRule, ruleColor } from '../client/presentation';
 import type { ClosedConnection, ConnectionInfo, ConnectionsReply } from '../client/types';
 import type { Client } from '../client/useClient';
 import type { ConnTab } from './Dashboard';
@@ -243,9 +243,7 @@ export function Connections({
     });
   }, [selectedId, tab, groupByProc]);
 
-  const nodeProtoMap = new Map<string, string>();
-  for (const n of c.status?.nodes ?? []) nodeProtoMap.set(n.name, n.type);
-  for (const o of c.source?.kernel.outbounds ?? []) if (!nodeProtoMap.has(o.name)) nodeProtoMap.set(o.name, o.type);
+  const nodeProtoMap = useNodeProtoMap(c);
 
   const copyTarget = async (id: number, text: string) => {
     if (!text) return;
@@ -262,15 +260,6 @@ export function Connections({
     const name = x.dest_host || x.host || x.target;
     const rawChain = Array.isArray(x.chain) ? x.chain : [];
     const chain = rawChain.map(c.label);
-    const chainText = chain.join(' → ') || '—';
-    const parsedRule = parseConnectionRule(x.rule);
-    const shortType = parsedRule
-      ? parsedRule.type
-          .replace('DOMAIN-SUFFIX', 'SUFFIX')
-          .replace('DOMAIN-KEYWORD', 'KEYWORD')
-          .replace('PROCESS-NAME', 'PROC')
-          .replace('RULE-SET', 'SET')
-      : '';
     const spd = tab === 'active' ? rateOf(x.id) : null;
     const spdStr = spd == null ? '—' : spd === 0 ? '0 B/s' : showRate(spd);
     const isSel = activeSelectedId === x.id;
@@ -310,42 +299,29 @@ export function Connections({
             }
           }}
         >
-          {!omitProcessCol && (
-            <span className="conn-proc-cell ell" {...tip(x.process_path || x.process_name, true)}>
-              <ProcessIcon name={x.process_name} path={x.process_path} />
-              <span className="ell">{x.process_name || '未知'}</span>
-            </span>
-          )}
-          <span className="proto-cell">
-            <NetworkTag network={x.network} />
+          <span className="flow-lead">
+            <DomainIcon domain={name} ip={x.dest_ip} rule={x.rule} />
           </span>
-          <ConnectionTarget
-            showIcon
+          <FlowTargetCell
             name={name}
             ip={x.dest_ip}
             rule={x.rule}
             title={name && name !== x.target ? `${name} · ${x.target}` : x.target}
             sniffed={x.sniffed && !!(x.dest_host || x.host)}
+            network={x.network}
+            processName={omitProcessCol ? undefined : x.process_name ?? null}
+            processPath={x.process_path}
           />
-          <span className="conn-rule-compact" {...tip(x.rule, true)}>
-            {parsedRule ? (
-              <>
-                <KTag label={shortType} color={ruleColor(parsedRule.type)} />
-                {parsedRule.payload && <span className="ell">{parsedRule.payload}</span>}
-              </>
-            ) : (
-              <span className="ell">{x.rule || '—'}</span>
-            )}
-          </span>
-          <span className="ell dim" {...tip(chainText, true)}>
-            {chainText}
-          </span>
+          <FlowExitCell chain={chain} />
           {tab === 'active' ? (
-            <span className={'conn-rate-cell num' + (!spd ? ' is-zero' : '')}>{spdStr}</span>
+            <FlowNumCell
+              top={spdStr}
+              topClass={'conn-rate-cell' + (!spd ? ' is-zero' : '')}
+              bottom={showBytes(x.up + x.down)}
+            />
           ) : (
-            <span className="r num dim">{clockStr((x as ClosedConnection).end)}</span>
+            <FlowNumCell top={clockStr((x as ClosedConnection).end)} topClass="dim" bottom={showBytes(x.up + x.down)} />
           )}
-          <span className="r num">{showBytes(x.up + x.down)}</span>
         </div>
 
         <PolicyReveal open={isSel}>
@@ -564,13 +540,10 @@ export function Connections({
           {!groupByProc ? (
             <>
               <div className="conn-grid-row conn-grid-head" role="row">
-                <span>进程</span>
-                <span>协议</span>
-                <span>目标</span>
-                <span>规则</span>
-                <span>出口链路</span>
-                <span className="r">{tab === 'active' ? '↓ 速率' : '结束'}</span>
-                <span className="r">总量</span>
+                <span />
+                <span>目标 · 进程 · 规则</span>
+                <span>落地节点 · 策略</span>
+                <span className="r">{tab === 'active' ? '速率 / 总量' : '结束 / 总量'}</span>
               </div>
               {sorted.map((x) => renderConnRow(x, false))}
             </>
@@ -656,12 +629,10 @@ export function Connections({
                     <PolicyReveal open={isOpen}>
                       <div className="conn-proc-children">
                         <div className="conn-sub-row conn-sub-head" role="row">
-                          <span>协议</span>
-                          <span>目标</span>
-                          <span>规则</span>
-                          <span>出口链路</span>
-                          <span className="r">{tab === 'active' ? '↓ 速率' : '结束'}</span>
-                          <span className="r">总量</span>
+                          <span />
+                          <span>目标 · 规则</span>
+                          <span>落地节点 · 策略</span>
+                          <span className="r">{tab === 'active' ? '速率 / 总量' : '结束 / 总量'}</span>
                         </div>
                         {b.items.map((x) => renderConnRow(x, true))}
                       </div>

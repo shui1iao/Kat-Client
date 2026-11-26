@@ -33,6 +33,12 @@ func (p *bufferPool) put(b []byte) {
 	default:
 	}
 }
+func (p *bufferPool) bytes() uint64 {
+	if p == nil {
+		return 0
+	}
+	return uint64(len(p.free)) * uint64(p.size)
+}
 func (p *bufferPool) drain() int {
 	if p == nil {
 		return 0

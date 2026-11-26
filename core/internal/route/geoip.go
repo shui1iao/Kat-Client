@@ -30,8 +30,9 @@ var privateSet = func() ipSet {
 func isPrivate(ip netip.Addr) bool { return privateSet.contains(ip) }
 
 type geoDB struct {
-	table mmdbTable
-	codes []string // 1-based index -> upper-case ISO code
+	table      mmdbTable
+	codes      []string // 1-based index -> upper-case ISO code
+	mmapBacked bool
 }
 
 type geoRecord struct {

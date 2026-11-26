@@ -38,7 +38,9 @@ export function WeekBars({
   const { unit, label, top, ticks, empty } = byteAxis(data.map((d) => totalOf(d) ?? NaN));
   const yMax = Math.max(1, top * unit);
   const ih = Math.max(10, height - PAD.t - PAD.b);
-  const iw = Math.max(10, w - PAD.l - PAD.r);
+  // Reserve a right gutter for the y-axis labels so the last bars never run underneath them.
+  const padR = empty ? PAD.r : 42;
+  const iw = Math.max(10, w - PAD.l - padR);
   const slot = iw / Math.max(1, data.length);
   const bw =
     mode === '7d'

@@ -170,6 +170,23 @@ func StartReady(ctx context.Context, cfg Config) (*Runtime, error) {
 	return r, nil
 }
 
+// MemoryStats returns live System Stack TCP NAT table entries, active UDP
+// source endpoints, and queued UDP payload bytes for numeric diagnostics.
+func (r *Runtime) MemoryStats() (tcpNATEntries, udpSources, udpQueuedBytes uint64) {
+	if r == nil {
+		return 0, 0, 0
+	}
+	r.mu.Lock()
+	udpSources = uint64(len(r.udpSources))
+	if r.udpQueuedBytes > 0 {
+		udpQueuedBytes = uint64(r.udpQueuedBytes)
+	}
+	tcpSys := r.tcpSys
+	r.mu.Unlock()
+	tcpNATEntries = tcpSys.natCount()
+	return tcpNATEntries, udpSources, udpQueuedBytes
+}
+
 // TCPListenPort4 returns the bound IPv4 System Stack TCP listener port (0 if closed).
 func (r *Runtime) TCPListenPort4() uint16 {
 	if r == nil || r.tcpSys == nil {

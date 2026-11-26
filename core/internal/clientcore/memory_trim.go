@@ -19,6 +19,8 @@ func readRuntimeMemoryBreakdown() map[string]uint64 {
 		{Name: "/memory/classes/heap/released:bytes"},
 		{Name: "/memory/classes/heap/stacks:bytes"},
 		{Name: "/memory/classes/total:bytes"},
+		{Name: "/gc/cycles/total:gc-cycles"},
+		{Name: "/gc/heap/goal:bytes"},
 	}
 	metrics.Read(samples[:])
 	u := func(i int) uint64 {
@@ -38,6 +40,8 @@ func readRuntimeMemoryBreakdown() map[string]uint64 {
 		"heap_released": released,
 		"stack_inuse":   u(4),
 		"sys":           u(5),
+		"gc_cycles":     u(6),
+		"heap_goal":     u(7),
 		"goroutines":    uint64(runtime.NumGoroutine()),
 	}
 }

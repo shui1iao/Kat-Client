@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { tip } from './Tooltip';
 import { Icon } from './Icon';
-import { useThumb } from './ui';
+import { Switch, useThumb } from './ui';
 import { MODE_LABEL, stateLabel, type Mode } from '../client/types';
 import { resolveGroupPath } from '../client/groupDisplay';
 import { errorText } from '../lib/errors';
 import type { Client } from '../client/useClient';
 
-export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobalGroup?: (groupName?: string) => void }) {
+export function SideControls({ c, onOpenGlobalGroup, collapsed = false }: { c: Client; onOpenGlobalGroup?: (groupName?: string) => void; collapsed?: boolean }) {
   const mode = c.status?.mode ?? c.source?.client.mode;
   const network = c.network;
   const sys = network?.system_proxy;
@@ -25,6 +25,10 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
   const [menuPos, setMenuPos] = useState<{ left: number; top?: number; bottom?: number; width: number; maxHeight: number; up: boolean } | null>(null);
   const pillRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
+  // Collapsed rail: compact mode menu anchored to the right of the rail button.
+  const [railMenu, setRailMenu] = useState<{ left: number; top: number } | null>(null);
+  const railModeRef = useRef<HTMLButtonElement>(null);
+  const railPopRef = useRef<HTMLDivElement>(null);
 
   const toggle = (key: 'sysproxy' | 'tun', enabled: boolean) => {
     if (netPending || busy) return;
@@ -40,6 +44,7 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
   const shown = pending ?? mode;
   const [segRef, thumb] = useThumb<HTMLDivElement>(shown);
   const pick = (m: Mode) => {
+    setRailMenu(null);
     if (mode === m || pending || !c.connected || c.doc.saving) return;
     setMenuPos(null);
     setPending(m);
@@ -64,6 +69,37 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
   const resolvedGlobalNode = globalGroup
     ? resolveGroupPath(globalGroup, runningGroups, runtimeNodeNames, groupNames).node
     : null;
+
+  useEffect(() => {
+    if (!collapsed) setRailMenu(null);
+  }, [collapsed]);
+
+  useEffect(() => {
+    if (!railMenu) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node | null;
+      if (railModeRef.current?.contains(t) || railPopRef.current?.contains(t)) return;
+      setRailMenu(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setRailMenu(null);
+        railModeRef.current?.focus({ preventScroll: true });
+      }
+    };
+    const close = () => setRailMenu(null);
+    document.addEventListener('mousedown', onDown, true);
+    document.addEventListener('keydown', onKey, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('blur', close);
+    return () => {
+      document.removeEventListener('mousedown', onDown, true);
+      document.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('blur', close);
+    };
+  }, [railMenu]);
 
   useEffect(() => {
     if (!menuPos) return;
@@ -138,6 +174,74 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
     }, c.reportOperationError);
   };
 
+  if (collapsed) {
+    const sysDisabled = !sys || busy || !!netPending || (!sys.error && !sys.enabled && !sysReady);
+    const tunDisabled = !tun || busy || !!netPending || (!tun.error && !tun.intent && !tun.enabled && (!tunReady || !service?.installed));
+    return (
+      <div className="side-rail-controls" aria-label="代理模式与接管开关">
+        <button
+          ref={railModeRef}
+          type="button"
+          className={'rail-btn rail-mode' + (railMenu ? ' is-open' : '') + (shown === 'global' ? ' is-global' : '')}
+          aria-haspopup="listbox"
+          aria-expanded={!!railMenu}
+          disabled={!c.connected}
+          onClick={() => {
+            if (railMenu) { setRailMenu(null); return; }
+            const r = railModeRef.current?.getBoundingClientRect();
+            if (r) setRailMenu({ left: Math.round(r.right + 8), top: Math.round(r.top) });
+          }}
+          {...tip('代理模式：' + (shown ? MODE_LABEL[shown] : '—'))}
+          aria-label={'代理模式：' + (shown ? MODE_LABEL[shown] : '未连接')}
+        >
+          {shown ? MODE_LABEL[shown].slice(0, 1) : '—'}
+        </button>
+        <button
+          type="button"
+          className={'rail-btn' + (sysShown ? ' on' : '') + (sysError ? ' has-error' : '')}
+          disabled={sysDisabled}
+          onClick={() => toggle('sysproxy', !sys?.enabled)}
+          aria-pressed={sysShown}
+          aria-label="系统代理"
+          data-toggle="sysproxy"
+          {...tip(sysError || '系统代理：' + (sysShown ? '开' : '关'))}
+        >
+          <Icon name="monitor" size={17} />
+        </button>
+        <button
+          type="button"
+          className={'rail-btn' + (tunShown ? ' on' : '') + (tunTransition ? ' is-transition' : '') + (tunError ? ' has-error' : '')}
+          disabled={tunDisabled}
+          onClick={() => toggle('tun', !(tun?.intent ?? tun?.enabled))}
+          aria-pressed={tunShown}
+          aria-label="TUN"
+          data-toggle="tun"
+          {...tip(tunError || (!service?.installed && !tunShown ? 'TUN：需先在设置中安装网络服务' : 'TUN：' + (tunShown ? '开' : '关')))}
+        >
+          <Icon name="shield" size={17} />
+        </button>
+        {railMenu &&
+          createPortal(
+            <div ref={railPopRef} className="kat-pop rail-mode-pop" role="listbox" aria-label="代理模式" style={{ left: railMenu.left, top: railMenu.top }}>
+              {modes.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="option"
+                  aria-selected={shown === m}
+                  className={'kat-opt' + (shown === m ? ' cur' : '')}
+                  onClick={() => pick(m)}
+                >
+                  <span>{MODE_LABEL[m]}</span>
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )}
+      </div>
+    );
+  }
+
   return (
     <div className="side-controls" aria-label="代理模式与接管开关">
       <div ref={segRef} className="mode-seg" role="radiogroup" aria-label="代理模式" aria-busy={c.doc.saving || !!pending}>
@@ -158,7 +262,8 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
         ))}
       </div>
 
-      {shown === 'global' && (
+      <div className={'global-reveal' + (shown === 'global' ? ' open' : '')} inert={shown !== 'global'}>
+        <div className="global-reveal-inner">
         <button
           ref={pillRef}
           type="button"
@@ -185,14 +290,15 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
           </span>
           <Icon name="chevDown" size={12} />
         </button>
-      )}
+        </div>
+      </div>
 
       {shown === 'global' &&
         menuPos &&
         createPortal(
           <div
             ref={popRef}
-            className={'kat-pop global-pop centered' + (menuPos.up ? ' up' : '')}
+            className={'kat-pop global-pop' + (menuPos.up ? ' up' : '')}
             role="listbox"
             aria-label="全局策略组"
             onKeyDown={onPopKey}
@@ -254,9 +360,7 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
             </span>
           )}
           <span className="ns-label">系统代理</span>
-          <span className="ns-track" aria-hidden="true">
-            <i className="ns-thumb" />
-          </span>
+          <Switch on={sysShown} />
         </button>
 
         <button
@@ -282,9 +386,7 @@ export function SideControls({ c, onOpenGlobalGroup }: { c: Client; onOpenGlobal
             </span>
           )}
           <span className="ns-label">TUN</span>
-          <span className="ns-track" aria-hidden="true">
-            <i className="ns-thumb" />
-          </span>
+          <Switch on={tunShown} />
         </button>
       </div>
     </div>

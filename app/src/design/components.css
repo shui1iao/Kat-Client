@@ -59,13 +59,13 @@
 .card-note .sq {
   width: 7px;
   height: 7px;
-  border-radius: 2px;
+  border-radius: var(--r-bar);
   display: inline-block;
 }
 .card-note .sq.up { background: var(--up); }
 .card-note .sq.down { background: var(--down); }
 
-/* ---------- macOS Push Buttons (Crisp Elevated Surface + Top Highlight) ---------- */
+/* ---------- Push Buttons (Crisp Elevated Surface + Top Highlight) ---------- */
 .btn {
   height: var(--h-ctl);
   padding: 0 13px;
@@ -162,9 +162,11 @@
   box-shadow: none;
 }
 
-.btn.is-active {
+.btn.is-active,
+.btn.is-on {
   background: var(--accent-soft);
   color: var(--accent-text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .link-btn {
@@ -243,7 +245,7 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 :is(input, textarea).inp:focus {
-  background-color: color-mix(in srgb, var(--accent) 8%, var(--card-2));
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 72%, transparent);
 }
 
 :root:not([data-input="pointer"]) select.inp:focus-visible {
@@ -272,12 +274,12 @@ textarea.inp {
 
 select.inp {
   appearance: none;
-  padding: 0 26px;
+  padding: 0 26px 0 10px;
   background-image: var(--chev);
   background-repeat: no-repeat;
   background-position: right 8px center;
-  text-align: center;
-  text-align-last: center;
+  text-align: start;
+  text-align-last: start;
   cursor: pointer;
 }
 
@@ -301,10 +303,10 @@ select.inp.sm {
   width: 118px;
   min-width: 96px;
   max-width: 196px;
-  padding: 0 24px;
+  padding: 0 24px 0 10px;
   background-position: right 8px center;
-  text-align: center;
-  text-align-last: center;
+  text-align: start;
+  text-align-last: start;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -354,12 +356,17 @@ select.inp.sm.conn-proc-select {
 }
 
 .search:focus-within {
-  background-color: color-mix(in srgb, var(--accent) 8%, var(--card-2));
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 72%, transparent);
 }
 
 .search svg {
   flex: none;
   color: var(--text-3);
+  transition: color var(--t-fast) var(--ease);
+}
+
+.search:focus-within svg {
+  color: var(--accent);
 }
 
 .search input {
@@ -378,53 +385,59 @@ select.inp.sm.conn-proc-select {
   color: var(--text-3);
 }
 
-/* ---------- macOS Segmented Control & Filter Pills ---------- */
-.seg {
+/* ---------- Segmented controls & filter pill bars (one geometry, one sliding thumb) ----------
+   Height follows the toolbar control ladder (30 / sm 26) so tabs, search,
+   selects and buttons on one toolbar line up. */
+.seg,
+.pill-bar {
   position: relative;
   isolation: isolate;
   display: inline-flex;
   align-items: center;
   flex: none;
-  height: 32px;
+  height: var(--h-ctl-sm);
   padding: 2px;
   gap: 0;
-  border-radius: 9.5px;
+  border-radius: var(--r-ctl);
   background: var(--recess-bg);
   box-shadow: var(--recess-shadow);
 }
 
 .seg.seg-sm {
-  height: 28px;
-  padding: 2px;
-  border-radius: 8.5px;
+  height: 26px;
 }
 
-.seg > .seg-thumb {
+.seg > .seg-thumb,
+.pill-bar > .seg-thumb {
   position: absolute;
   z-index: -1;
-  border-radius: 7.5px;
+  border-radius: var(--r-inner);
   background: var(--hig-thumb);
   box-shadow: var(--hig-thumb-shadow);
-  transition: left 200ms var(--ease-spring), width 200ms var(--ease-spring);
+  transition: left 200ms var(--ease), width 200ms var(--ease), top 200ms var(--ease), height 200ms var(--ease);
 }
 
 .seg.seg-sm > .seg-thumb {
-  border-radius: 6.5px;
+  border-radius: var(--r-chip);
 }
 
-.seg > .seg-thumb.instant {
+.seg > .seg-thumb.instant,
+.pill-bar > .seg-thumb.instant {
   transition: none;
 }
 
-.seg > button {
+.seg > button,
+.pill-bar > button {
   position: relative;
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 28px;
-  padding: 0 13px;
-  border-radius: 5px;
-  font-size: var(--fs-body);
+  gap: 5px;
+  height: calc(var(--h-ctl-sm) - 4px);
+  padding: 0 12px;
+  border-radius: var(--r-inner);
+  font-size: var(--fs-data);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--text-3);
@@ -432,28 +445,24 @@ select.inp.sm.conn-proc-select {
   transition: color var(--t-fast) var(--ease);
 }
 
-.seg.seg-sm > button {
-  height: 24px;
-  padding: 0 10px;
-  font-size: var(--fs-meta);
-  border-radius: 4px;
+.seg > button:hover:not(.on):not(:disabled),
+.pill-bar > button:hover:not(.on):not(:disabled) {
+  color: var(--text-2);
 }
 
-.seg > button.on {
+.seg.seg-sm > button {
+  height: 22px;
+  padding: 0 10px;
+  font-size: var(--fs-meta);
+  border-radius: var(--r-chip);
+}
+
+.seg > button.on,
+.pill-bar > button.on {
   color: var(--text);
 }
 
-/* Pill Tabs */
 .pill-bar {
-  display: inline-flex;
-  align-items: center;
-  flex: none;
-  height: 32px;
-  gap: 0;
-  padding: 2px;
-  border-radius: 9.5px;
-  background: var(--recess-bg);
-  box-shadow: var(--recess-shadow);
   max-width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
@@ -461,27 +470,6 @@ select.inp.sm.conn-proc-select {
 
 .pill-bar::-webkit-scrollbar {
   display: none;
-}
-
-.pill-bar button {
-  flex: none;
-  height: 28px;
-  padding: 0 11px;
-  border-radius: 5px;
-  font-size: var(--fs-body);
-  font-weight: 500;
-  color: var(--text-3);
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
-}
-
-.pill-bar button.on {
-  background: var(--hig-thumb);
-  box-shadow: var(--hig-thumb-shadow);
-  color: var(--text);
 }
 
 .pill-bar button em {
@@ -523,6 +511,10 @@ select.inp.sm.conn-proc-select {
   white-space: nowrap;
 }
 
+.btn > svg + .stable-stack {
+  justify-items: start;
+}
+
 .stable-stack > .is-ghost {
   visibility: hidden;
   pointer-events: none;
@@ -531,13 +523,13 @@ select.inp.sm.conn-proc-select {
   overflow: hidden;
 }
 
-/* ---------- macOS Sequoia NSSwitch (38x21, Pure-White Porcelain Knob, GPU-Isolated) ---------- */
+/* ---------- Unified Switch (32x18 across sidebar, settings & tray) ---------- */
 .sw {
   position: relative;
   display: inline-block;
-  width: 38px;
-  height: 21px;
-  border-radius: 999px;
+  width: 32px;
+  height: 18px;
+  border-radius: var(--r-pill);
   background: rgba(120, 125, 136, 0.26);
   flex: none;
   contain: layout paint;
@@ -554,38 +546,38 @@ select.inp.sm.conn-proc-select {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 17px;
-  height: 17px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: #FFFFFF;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 1px 2.5px rgba(0, 0, 0, 0.22);
   will-change: transform;
   backface-visibility: hidden;
   transform: translate3d(0, 0, 0);
   transition: transform 200ms var(--ease-spring), width 120ms var(--ease);
 }
 
-.pref-toggle:active:not(:disabled):not([aria-disabled="true"]) .sw i {
-  width: 20px;
+:is(.pref-toggle, .net-switch, .tm-toggle):active:not(:disabled):not([aria-disabled="true"]) .sw i {
+  width: 17px;
 }
 
-.pref-toggle:active:not(:disabled):not([aria-disabled="true"]) .sw.on i {
-  transform: translate3d(14px, 0, 0);
+:is(.pref-toggle, .net-switch, .tm-toggle):active:not(:disabled):not([aria-disabled="true"]) .sw.on i {
+  transform: translate3d(11px, 0, 0);
 }
 
-.pref-toggle:hover:not(:disabled):not([aria-disabled="true"]) .sw:not(.on) {
+:is(.pref-toggle, .net-switch, .tm-toggle):hover:not(:disabled):not([aria-disabled="true"]) .sw:not(.on) {
   background: rgba(120, 125, 136, 0.34);
 }
 
-:root[data-theme="dark"] .pref-toggle:hover:not(:disabled):not([aria-disabled="true"]) .sw:not(.on) {
+:root[data-theme="dark"] :is(.pref-toggle, .net-switch, .tm-toggle):hover:not(:disabled):not([aria-disabled="true"]) .sw:not(.on) {
   background: rgba(255, 255, 255, 0.22);
 }
 
-.pref-toggle:hover:not(:disabled):not([aria-disabled="true"]) .sw.on {
+:is(.pref-toggle, .net-switch, .tm-toggle):hover:not(:disabled):not([aria-disabled="true"]) .sw.on {
   background: var(--accent-hover);
 }
 
-.pref-toggle:hover:not(:disabled):not([aria-disabled="true"]) .sw i {
+:is(.pref-toggle, .net-switch, .tm-toggle):hover:not(:disabled):not([aria-disabled="true"]) .sw i {
   box-shadow: 0 1.5px 4px rgba(0, 0, 0, 0.24);
 }
 
@@ -596,7 +588,7 @@ select.inp.sm.conn-proc-select {
 
 .sw.on i {
   background: #FFFFFF;
-  transform: translate3d(17px, 0, 0);
+  transform: translate3d(14px, 0, 0);
 }
 
 .pref-toggle {
@@ -609,7 +601,7 @@ select.inp.sm.conn-proc-select {
   cursor: default;
 }
 
-/* ---------- Chips, Tags, Latency & States ---------- */
+/* ---------- Chips, Tags, Latency & States (one tag geometry, one state dot+label) ---------- */
 .ktag,
 .tag {
   --tag-color: var(--text-2);
@@ -620,15 +612,21 @@ select.inp.sm.conn-proc-select {
   height: 20px;
   padding: 0 6px;
   border-radius: var(--r-chip);
-  font-family: var(--mono);
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
   font-size: var(--fs-micro);
   font-weight: 500;
-  letter-spacing: 0.2px;
   line-height: 1;
   color: var(--tag-color);
-  background: color-mix(in srgb, var(--tag-color) 14%, transparent);
+  background: color-mix(in srgb, var(--tag-color) 13%, transparent);
   white-space: nowrap;
   flex: none;
+}
+
+/* debug is the quietest level: outline only, no fill */
+.ktag.log-level.is-debug {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-3) 35%, transparent);
 }
 
 .network-tag {
@@ -637,11 +635,6 @@ select.inp.sm.conn-proc-select {
   justify-self: center;
 }
 
-.proto-cell {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
 
 .tag {
   font-family: var(--font);
@@ -709,10 +702,12 @@ select.inp.sm.conn-proc-select {
   flex: none;
   height: 17px;
   padding: 0 5px;
-  border-radius: 4px;
+  border-radius: var(--r-chip);
   background: var(--card-2);
   color: var(--text-3);
-  font-size: 10px;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1;
   display: inline-flex;
   align-items: center;
 }
@@ -744,6 +739,33 @@ select.inp.sm.conn-proc-select {
   color: var(--text-3);
   font-size: var(--fs-body);
   text-align: center;
+}
+
+/* Richer empty state: mark + title + hint, centred in its card */
+.empty.distribution-empty {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.empty-mark {
+  width: 36px;
+  height: 36px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--card-2);
+  color: var(--text-3);
+}
+
+.empty.distribution-empty > b {
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.empty.distribution-empty > small {
+  font-size: var(--fs-meta);
+  color: var(--text-3);
 }
 
 .form-error {
@@ -785,11 +807,11 @@ select.inp.sm.conn-proc-select {
 }
 
 .modal {
-  width: min(540px, calc(100vw - 48px));
+  width: min(var(--w-modal), calc(100vw - 48px));
   max-height: calc(100vh - 48px);
   background: var(--modal-bg);
   backdrop-filter: blur(28px) saturate(200%);
-  border-radius: var(--r-pop);
+  border-radius: var(--r-modal);
   box-shadow: var(--shadow-modal);
   display: flex;
   flex-direction: column;
@@ -799,11 +821,11 @@ select.inp.sm.conn-proc-select {
 }
 
 .modal.modal-sm {
-  width: min(400px, calc(100vw - 48px));
+  width: min(var(--w-modal-sm), calc(100vw - 48px));
 }
 
 .modal.wide {
-  width: min(680px, calc(100vw - 48px));
+  width: min(var(--w-modal-lg), calc(100vw - 48px));
 }
 
 .modal > header {
@@ -844,7 +866,6 @@ select.inp.sm.conn-proc-select {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  mask-image: var(--fade-y);
 }
 
 .form-set {
@@ -903,6 +924,13 @@ select.inp.sm.conn-proc-select {
   margin-right: auto;
 }
 
+.modal-foot-left {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .modal > footer .subscription-delete {
   margin-right: auto;
   color: var(--bad);
@@ -957,6 +985,39 @@ select.inp.sm.conn-proc-select {
   display: flex;
   align-items: center;
   gap: 2px;
+}
+
+/* Checkbox: same material and accent as the switches instead of the native OS box. */
+input[type="checkbox"] {
+  appearance: none;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border-radius: var(--r-xs);
+  background: var(--card-2);
+  box-shadow: inset 0 0 0 1.25px var(--line-3);
+  cursor: pointer;
+  transition: background-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+
+input[type="checkbox"]:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1.25px var(--text-3);
+}
+
+input[type="checkbox"]:checked {
+  background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.3l2.6 2.6L12 5.4' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 16px no-repeat;
+  box-shadow: none;
+}
+
+input[type="checkbox"]:checked:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+  box-shadow: none;
+}
+
+input[type="checkbox"]:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .check-field {
@@ -1092,9 +1153,11 @@ select.inp.sm.conn-proc-select {
   white-space: nowrap;
 }
 
-.kat-opt.active {
+.kat-opt.active,
+.kat-opt:focus-visible {
   background: var(--hover);
   color: var(--text);
+  outline: none;
 }
 
 .kat-opt:hover:not(:disabled) {
@@ -1109,9 +1172,11 @@ select.inp.sm.conn-proc-select {
 }
 
 .kat-opt.cur.active,
+.kat-opt.cur:focus-visible,
 .kat-opt.cur:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 20%, transparent);
   color: var(--accent-text);
+  outline: none;
 }
 
 .kat-pop.centered .kat-opt {
@@ -1143,6 +1208,7 @@ select.inp.sm.conn-proc-select {
   pointer-events: none;
   white-space: pre-wrap;
   word-break: break-word;
+  animation: kat-tip-in 110ms var(--ease);
 }
 
 .tip {
@@ -1180,7 +1246,7 @@ select.inp.sm.conn-proc-select {
 .chart-tip > div > i {
   width: 7px;
   height: 7px;
-  border-radius: 2px;
+  border-radius: var(--r-bar);
   display: inline-block;
   flex: none;
 }
@@ -1231,6 +1297,50 @@ select.inp.sm.conn-proc-select {
 .toast.show {
   opacity: 1;
   transform: translate(-50%, 0);
+  animation: kat-toast-in 180ms var(--ease);
+}
+
+/* ---------- Exit transitions (visual ghosts, see lib/exitGhost.ts) ----------
+   Individual translate/scale properties compose with each element's own
+   positioning transform instead of replacing it. */
+@keyframes kat-toast-in {
+  from { opacity: 0; translate: 0 -6px; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes kat-fade-out {
+  to { opacity: 0; }
+}
+@keyframes kat-mask-out {
+  from { background-color: var(--mask); }
+  to { background-color: transparent; }
+}
+@keyframes kat-modal-out {
+  to { opacity: 0; translate: 0 4px; scale: 0.985; }
+}
+@keyframes kat-pop-out {
+  to { opacity: 0; translate: 0 -3px; scale: 0.985; }
+}
+@keyframes kat-toast-out {
+  to { opacity: 0; translate: 0 -6px; }
+}
+.kat-leaving {
+  pointer-events: none !important;
+}
+.modal-mask.kat-leaving {
+  animation: kat-mask-out 150ms var(--ease) forwards;
+}
+.modal-mask.kat-leaving > .modal {
+  animation: kat-modal-out 150ms var(--ease) forwards;
+}
+.kat-pop.kat-leaving,
+.rule-judge-pop.kat-leaving {
+  animation: kat-pop-out 120ms var(--ease) forwards;
+}
+.toast.kat-leaving {
+  animation: kat-toast-out 170ms var(--ease) forwards;
+}
+.kat-tip.kat-leaving {
+  animation: kat-fade-out 90ms var(--ease) forwards;
 }
 
 .toast.update-notice {
@@ -1306,6 +1416,11 @@ select.inp.sm.conn-proc-select {
     appearance: auto;
     background-image: none;
     padding-inline: 8px;
+  }
+  input[type="checkbox"] {
+    appearance: auto;
+    background: none;
+    box-shadow: none;
   }
   .kat-opt {
     border: 1px solid transparent;

@@ -17,7 +17,7 @@ import { useDisplaySort } from '../lib/displaySort';
 import { displaySorted, probeTime, type DisplaySort } from '../client/settings';
 import { latencyTone, probeLabel } from '../lib/format';
 
-const PROTOCOLS = ['socks5', 'shadowsocks', 'trojan', 'anytls'];
+const PROTOCOLS = ['anytls', 'shadowsocks', 'trojan', 'socks5'];
 const METHODS = [
   'aes-128-gcm',
   'aes-256-gcm',
@@ -254,7 +254,8 @@ export function Nodes({ c }: { c: Client }) {
           </select>
           <button
             type="button"
-            className="btn sm"
+            className={'btn sm' + (c.probeAllProgress ? ' spin' : '')}
+            aria-label={c.probeAllProgress ? `测速中 ${c.probeAllProgress.done}/${c.probeAllProgress.total}` : undefined}
             disabled={
               c.status?.runtime.state !== 'running' ||
               !!c.probeAllProgress ||
@@ -262,17 +263,17 @@ export function Nodes({ c }: { c: Client }) {
             }
             onClick={() => void c.probeAll()}
           >
-            <Icon name="bolt" size={13} />
+            <Icon name={c.probeAllProgress ? 'refresh' : 'bolt'} size={13} />
             <StableText
-              current={c.probeAllProgress ? `测速中 ${c.probeAllProgress.done}/${c.probeAllProgress.total}` : '全部测速'}
-              items={['全部测速', '测速中 999/999']}
+              current={c.probeAllProgress ? `${c.probeAllProgress.done}/${c.probeAllProgress.total}` : '全部测速'}
+              items={['全部测速', '999/999']}
             />
           </button>
           <button
             type="button"
             className="btn sm primary"
             disabled={!editable}
-            onClick={() => setNode({ previous: null, value: { name: '', type: 'socks5', server: '', port: 0 } })}
+            onClick={() => setNode({ previous: null, value: { name: '', type: 'anytls', server: '', port: 0 } })}
           >
             <Icon name="plus" size={13} />
             添加节点
@@ -510,7 +511,7 @@ function NodeEditor({
       ) : (
         <div className="form-grid">
           <Field label="名称">
-            <input className="inp" value={n.name ? c.label(n.name) : ''} onChange={(e) => set('name', e.target.value)} />
+            <input className="inp" placeholder="例如 香港 01" value={n.name ? c.label(n.name) : ''} onChange={(e) => set('name', e.target.value)} />
           </Field>
           <Field label="类型">
             <select
@@ -527,7 +528,7 @@ function NodeEditor({
             </select>
           </Field>
           <Field label="服务器">
-            <input className="inp" value={n.server} onChange={(e) => set('server', e.target.value)} />
+            <input className="inp" placeholder="域名或 IP" value={n.server} onChange={(e) => set('server', e.target.value)} />
           </Field>
           <Field label="端口">
             <input
@@ -535,6 +536,7 @@ function NodeEditor({
               type="number"
               min="1"
               max="65535"
+              placeholder="1–65535"
               value={n.port || ''}
               onChange={(e) => set('port', Number(e.target.value))}
             />
@@ -594,13 +596,13 @@ function NodeEditor({
           {(n.type === 'trojan' || n.type === 'anytls') && (
             <>
               <Field label="TLS 服务器名">
-                <input className="inp" value={n.tls?.server_name ?? ''} onChange={(e) => tls('server_name', e.target.value)} />
+                <input className="inp" placeholder="留空则使用服务器地址" value={n.tls?.server_name ?? ''} onChange={(e) => tls('server_name', e.target.value)} />
               </Field>
               <Field label="证书 CA 路径">
-                <input className="inp" value={n.tls?.ca ?? ''} onChange={(e) => tls('ca', e.target.value)} />
+                <input className="inp" placeholder="可选" value={n.tls?.ca ?? ''} onChange={(e) => tls('ca', e.target.value)} />
               </Field>
               <Field label="证书 SHA256">
-                <input className="inp" value={n.tls?.pin_sha256 ?? ''} onChange={(e) => tls('pin_sha256', e.target.value)} />
+                <input className="inp" placeholder="可选" value={n.tls?.pin_sha256 ?? ''} onChange={(e) => tls('pin_sha256', e.target.value)} />
               </Field>
               <Field label="TLS 验证">
                 <select

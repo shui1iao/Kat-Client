@@ -1,9 +1,9 @@
 /* ==========================================================================
-   Kat Desktop — macOS Sequoia / Apple HIG Precision Instrument
-   SplitView material separation (vibrant source-list sidebar + crisp canvas),
-   authentic Apple System Blue (#007AFF / #0A84FF) with pure-white on-accent
-   ink, concentric corner radii (12 / 9 / 7.5 / 5.5), top-lit hairline
-   elevation, and comfortable role-based typography at 100% native pixels.
+   Kat Desktop — Windows-first soft material design tokens
+   One seamless window material (Mica/Acrylic when available), crisp cards,
+   a single accent, one radius ladder (card 12 / pop 10 / control 8 /
+   inner 6 / chip 5), one control-height ladder and one motion scale.
+   Hard-coded values elsewhere should resolve to these tokens.
    ========================================================================== */
 
 @font-face {
@@ -23,13 +23,14 @@
   --window-material: var(--canvas);
   --side-bg: transparent;
   --card: #24272E;
+  --card-solid: #24272E;
   --card-2: rgba(255, 255, 255, 0.055);
   --expand-lv1: rgba(255, 255, 255, 0.032);
   --expand-lv2: rgba(255, 255, 255, 0.055);
   --btn-bg: rgba(255, 255, 255, 0.075);
   --btn-shadow: none;
-  --pop: rgba(28, 32, 40, 0.36);
-  --modal-bg: rgba(40, 44, 52, 0.76);
+  --pop: rgba(40, 44, 52, 0.84);
+  --modal-bg: rgba(40, 44, 52, 0.90);
   --pop-solid: #282C34;
   --hover: rgba(255, 255, 255, 0.068);
   --press: rgba(255, 255, 255, 0.11);
@@ -51,11 +52,11 @@
   --down: #3898FF;
   --up: #FF9F0A;
   --proxy: #7D89FF;
-  --direct: #FFD60A;
+  --direct: #40C8B8;
   --ok: #30D158;
   --ok-soft: rgba(48, 209, 88, 0.14);
-  --warn: #FF9F0A;
-  --warn-soft: rgba(255, 159, 10, 0.14);
+  --warn: #FFC53D;
+  --warn-soft: rgba(255, 197, 61, 0.14);
   --bad: #FF453A;
   --bad-soft: rgba(255, 69, 58, 0.14);
   --track: rgba(255, 255, 255, 0.078);
@@ -65,7 +66,7 @@
   --shadow-card: 0 2px 10px rgba(0, 0, 0, 0.18);
   --shadow-pop: 0 14px 38px rgba(0, 0, 0, 0.44);
   --shadow-modal: 0 26px 68px rgba(0, 0, 0, 0.52);
-  --mask: rgba(0, 0, 0, 0.16);
+  --mask: rgba(0, 0, 0, 0.36);
   --scroll: rgba(255, 255, 255, 0.16);
   --scroll-hover: rgba(255, 255, 255, 0.28);
   --tk-k: #6EB5FF;
@@ -85,13 +86,14 @@
   --window-material: var(--canvas);
   --side-bg: transparent;
   --card: #FFFFFF;
+  --card-solid: #FFFFFF;
   --card-2: rgba(15, 23, 42, 0.042);
   --expand-lv1: rgba(15, 23, 42, 0.026);
   --expand-lv2: rgba(15, 23, 42, 0.048);
   --btn-bg: rgba(15, 23, 42, 0.055);
   --btn-shadow: none;
-  --pop: rgba(255, 255, 255, 0.34);
-  --modal-bg: rgba(255, 255, 255, 0.74);
+  --pop: rgba(255, 255, 255, 0.86);
+  --modal-bg: rgba(255, 255, 255, 0.92);
   --pop-solid: #FFFFFF;
   --hover: rgba(15, 23, 42, 0.052);
   --press: rgba(15, 23, 42, 0.088);
@@ -113,11 +115,11 @@
   --down: #007AFF;
   --up: #E67700;
   --proxy: #5856D6;
-  --direct: #D99B00;
+  --direct: #0B8C7E;
   --ok: #1E9E46;
   --ok-soft: rgba(30, 158, 70, 0.10);
-  --warn: #C76A00;
-  --warn-soft: rgba(199, 106, 0, 0.10);
+  --warn: #A86E00;
+  --warn-soft: rgba(196, 140, 0, 0.12);
   --bad: #D93831;
   --bad-soft: rgba(217, 56, 49, 0.09);
   --track: rgba(15, 23, 42, 0.068);
@@ -127,7 +129,7 @@
   --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.025);
   --shadow-pop: 0 14px 36px rgba(15, 23, 42, 0.15);
   --shadow-modal: 0 24px 64px rgba(15, 23, 42, 0.18);
-  --mask: rgba(15, 23, 42, 0.06);
+  --mask: rgba(15, 23, 42, 0.16);
   --scroll: rgba(15, 23, 42, 0.16);
   --scroll-hover: rgba(15, 23, 42, 0.28);
   --tk-k: #0066CC;
@@ -140,8 +142,8 @@
 }
 
 :root {
-  --font: "Twemoji Country Flags", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif;
-  --mono: "Twemoji Country Flags", "SF Mono", "JetBrains Mono", "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  --font: "Twemoji Country Flags", "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui, -apple-system, sans-serif;
+  --mono: "Twemoji Country Flags", "Cascadia Mono", "Consolas", "JetBrains Mono", ui-monospace, monospace;
   /* Role-based type scale (real px at 100%, stepped up slightly for comfortable reading) */
   --fs-readout: 30px;   /* live hero readings (rates) */
   --fs-kpi: 23.5px;     /* secondary totals */
@@ -160,19 +162,23 @@
   --h-ctl-xs: 26px;     /* inline row controls */
   --h-row: 42px;        /* table row */
   /* Soft Concentric Corner Radii */
-  --r-modal: 14px;
-  --r-pop: 14px;
-  --r-card: 14px;
-  --r-tray: 11px;
-  --r-ctl: 9px;
-  --r-inner: 7px;
-  --r-chip: 6px;
+  --r-modal: 12px;
+  --r-pop: 10px;
+  --r-card: 12px;
+  --r-tray: 10px;
+  --r-ctl: 8px;
+  --r-inner: 6px;
+  --r-chip: 5px;
+  --r-xs: 4px;
+  --r-bar: 2px;
   --r-pill: 999px;
-  /* Soft gradient separators & scroll fade masks (zero harsh straight cutoffs) */
+  /* Three standard modal widths (confirm / form / wide editor) */
+  --w-modal-sm: 400px;
+  --w-modal: 540px;
+  --w-modal-lg: 680px;
+  /* Soft gradient separators & dynamic scroll-only edge fade masks */
   --sep-fade: linear-gradient(90deg, transparent 0%, var(--line) 8%, var(--line) 92%, transparent 100%);
   --sep-fade-v: linear-gradient(180deg, transparent 0%, var(--line) 12%, var(--line) 88%, transparent 100%);
-  --fade-y: linear-gradient(to bottom, transparent 0px, #000 12px, #000 calc(100% - 14px), transparent 100%);
-  --fade-bottom: linear-gradient(to bottom, #000 0px, #000 calc(100% - 14px), transparent 100%);
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;
@@ -360,6 +366,38 @@ time {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+@property --fade-t {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fade-b {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+/* Edge fades depend on actual overflow + scroll position (see lib/scrollFade.ts):
+   short views have none; long views fade the bottom at rest, add the top fade once
+   scrolled away from the top, and clear the bottom fade at the end. */
+[data-scroll-fade] {
+  --fade-t: 0px;
+  --fade-b: 0px;
+  transition: --fade-t 140ms var(--ease), --fade-b 140ms var(--ease);
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    #000 var(--fade-t),
+    #000 calc(100% - var(--fade-b)),
+    transparent 100%
+  );
+}
+
+[data-scroll-fade="top"]    { --fade-t: 14px; }
+[data-scroll-fade="bottom"] { --fade-b: 16px; }
+[data-scroll-fade="both"]   { --fade-t: 14px; --fade-b: 16px; }
 
 /* Focus Modality */
 :root[data-input="pointer"] :is(button, input, select, textarea, a, [tabindex]):focus {

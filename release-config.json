@@ -1,10 +1,10 @@
 {
-  "client_version": "0.2.35",
-  "core_version": "0.8.21",
-  "sequence": 1795640000,
-  "client_sequence": 1795640000,
-  "core_sequence": 1795629000,
-  "previous_client_version": "0.2.34",
+  "client_version": "0.2.36",
+  "core_version": "0.8.22",
+  "sequence": 1795723000,
+  "client_sequence": 1795723000,
+  "core_sequence": 1795722000,
+  "previous_client_version": "0.2.35",
   "previous_core_version": "0.8.21",
-  "previous_sequence": 1795630000
+  "previous_sequence": 1795640000
 }
