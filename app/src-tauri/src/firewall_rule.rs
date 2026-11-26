@@ -5,8 +5,12 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 pub const RULE_NAME: &str = "Kat Client Core UDP Inbound";
+pub const TUN_TCP_RULE_NAME: &str = "Kat Client Core TUN TCP Inbound";
 pub const RULE_GROUP: &str = "Kat Client";
 pub const RULE_DESCRIPTION: &str = "Allow inbound UDP traffic for Kat Client Core (Full Cone NAT / EIF)";
+pub const TUN_TCP_RULE_DESCRIPTION: &str = "Allow inbound local TUN System Stack TCP traffic for Kat Client Core";
+pub const TUN_TCP_LOCAL_ADDRESSES: &str = "198.18.0.1,fd4b:6174::1";
+pub const TUN_TCP_REMOTE_ADDRESSES: &str = "198.18.0.2,fd4b:6174::2";
 pub const CORE_EXE_NAME: &str = "kat-client-core.exe";
 pub const FIREWALL_ERROR_CODE: &str = "FIREWALL_RULE_FAILED";
 
@@ -76,17 +80,41 @@ pub struct FirewallRuleSpec {
     pub action: i32,
 }
 
+fn normalize_fw_addrs(raw: &str) -> Vec<String> {
+    let mut items: Vec<String> = raw
+        .split(",")
+        .map(|s| {
+            let t = s.trim().to_ascii_lowercase();
+            t.strip_suffix("/255.255.255.255")
+                .or_else(|| t.strip_suffix("/32"))
+                .or_else(|| t.strip_suffix("/128"))
+                .unwrap_or(&t)
+                .to_string()
+        })
+        .filter(|s| !s.is_empty())
+        .collect();
+    items.sort();
+    items
+}
+
+fn addr_scope_matches(expected: &str, actual: &str) -> bool {
+    if is_unrestricted(expected) {
+        return is_unrestricted(actual);
+    }
+    normalize_fw_addrs(expected) == normalize_fw_addrs(actual)
+}
+
 impl FirewallRuleSpec {
     pub fn matches_readback(&self, actual: &Self) -> bool {
         actual.name == self.name
             && actual.group == self.group
             && same_windows_path(&actual.application_name, &self.application_name)
             && actual.service_name.as_deref().unwrap_or("").is_empty()
-            && actual.protocol == NET_FW_IP_PROTOCOL_UDP
+            && actual.protocol == self.protocol
             && is_unrestricted(&actual.local_ports)
             && is_unrestricted(&actual.remote_ports)
-            && is_unrestricted(&actual.local_addresses)
-            && is_unrestricted(&actual.remote_addresses)
+            && addr_scope_matches(&self.local_addresses, &actual.local_addresses)
+            && addr_scope_matches(&self.remote_addresses, &actual.remote_addresses)
             && actual.direction == NET_FW_RULE_DIR_IN
             && actual.interface_types.eq_ignore_ascii_case(INTERFACE_TYPES_ALL)
             && actual.enabled
@@ -264,6 +292,87 @@ pub fn remove_core_udp_inbound<S: FirewallStore>(
     Ok(RemoveOutcome {
         removed: owned_count,
     })
+}
+
+pub fn expected_core_tun_tcp_rule(install_root: &Path) -> Result<FirewallRuleSpec, FirewallRuleError> {
+    let mut spec = expected_core_udp_rule(install_root)?;
+    spec.name = TUN_TCP_RULE_NAME.to_string();
+    spec.description = TUN_TCP_RULE_DESCRIPTION.to_string();
+    spec.protocol = NET_FW_IP_PROTOCOL_TCP;
+    spec.local_addresses = TUN_TCP_LOCAL_ADDRESSES.to_string();
+    spec.remote_addresses = TUN_TCP_REMOTE_ADDRESSES.to_string();
+    Ok(spec)
+}
+
+pub fn ensure_core_tun_tcp_inbound<S: FirewallStore>(
+    store: &mut S,
+    install_root: &Path,
+) -> Result<EnsureOutcome, FirewallRuleError> {
+    let expected = expected_core_tun_tcp_rule(install_root)?;
+    let candidates = store.list_candidate_rules()?;
+    let mut owned_handles = Vec::new();
+    let mut foreign_same_name = 0usize;
+    for (handle, summary) in candidates {
+        if summary.name == TUN_TCP_RULE_NAME {
+            if summary.group == RULE_GROUP {
+                owned_handles.push((handle, summary));
+            } else {
+                foreign_same_name += 1;
+            }
+        }
+    }
+    if foreign_same_name > 0 {
+        return Err(FirewallRuleError::new(FirewallStage::RuleConflict, None));
+    }
+    match owned_handles.len() {
+        0 => {
+            store.add_rule(&expected)?;
+            Ok(EnsureOutcome { created: true, updated: false, deduplicated: 0 })
+        }
+        1 => {
+            let (mut handle, existing) = owned_handles.pop().unwrap();
+            if expected.matches_readback(&existing) && existing.description == expected.description {
+                return Ok(EnsureOutcome { created: false, updated: false, deduplicated: 0 });
+            }
+            store.update_rule(&mut handle, &expected)?;
+            Ok(EnsureOutcome { created: false, updated: true, deduplicated: 0 })
+        }
+        count => {
+            drop(owned_handles);
+            for _ in 0..count {
+                store.remove_by_name(TUN_TCP_RULE_NAME)?;
+            }
+            store.add_rule(&expected)?;
+            Ok(EnsureOutcome { created: false, updated: true, deduplicated: count - 1 })
+        }
+    }
+}
+
+pub fn remove_core_tun_tcp_inbound<S: FirewallStore>(
+    store: &mut S,
+) -> Result<RemoveOutcome, FirewallRuleError> {
+    let candidates = store.list_candidate_rules()?;
+    let mut owned_count = 0usize;
+    let mut foreign_same_name = 0usize;
+    for (_handle, summary) in candidates {
+        if summary.name == TUN_TCP_RULE_NAME {
+            if summary.group == RULE_GROUP {
+                owned_count += 1;
+            } else {
+                foreign_same_name += 1;
+            }
+        }
+    }
+    if owned_count == 0 {
+        return Ok(RemoveOutcome { removed: 0 });
+    }
+    if foreign_same_name > 0 {
+        return Err(FirewallRuleError::new(FirewallStage::RuleConflict, None));
+    }
+    for _ in 0..owned_count {
+        store.remove_by_name(TUN_TCP_RULE_NAME)?;
+    }
+    Ok(RemoveOutcome { removed: owned_count })
 }
 
 #[cfg(test)]

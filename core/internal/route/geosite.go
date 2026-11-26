@@ -307,22 +307,33 @@ func parseASNDB(b []byte) (db *asnDB, err error) {
 		}
 	}
 	out := &asnDB{}
-	it := r.Networks(maxminddb.SkipAliasedNetworks)
-	for it.Next() {
-		var rec asnRecord
-		nw, e := it.Network(&rec)
-		if e != nil {
-			return nil, errParse
-		}
-		if rec.ASN == 0 {
-			continue
-		}
-		out.table.addNet(nw, rec.ASN)
+	nodeSize := uint64(r.Metadata.RecordSize) / 4
+	dataStart := uint64(r.Metadata.NodeCount)*nodeSize + 16
+	var dataSec []byte
+	if dataStart <= uint64(len(b)) {
+		dataSec = b[dataStart:]
 	}
-	if it.Err() != nil {
+	offsetCache := make(map[uint32]uint32, 65536)
+	err = walkMMDBFast(b, r, &out.table, func(off uint32) (uint32, error) {
+		if v, ok := offsetCache[off]; ok {
+			return v, nil
+		}
+		var asn uint32
+		if v, ok := fastDecodeASN(dataSec, off); ok {
+			asn = v
+		} else {
+			var rec asnRecord
+			if e := r.Decode(uintptr(off), &rec); e != nil {
+				return 0, errParse
+			}
+			asn = rec.ASN
+		}
+		offsetCache[off] = asn
+		return asn, nil
+	})
+	if err != nil {
 		return nil, errParse
 	}
-	out.table.finalize()
 	return out, nil
 }
 

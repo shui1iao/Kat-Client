@@ -50,6 +50,14 @@ func (p *bufferPool) drain() int {
 
 // TrimBuffers drops idle relay buffers cached in the generation pool so long
 // idle periods return their spans to the OS.
+// ActiveTraffic returns the current number of active logical TCP/UDP flows.
+func (s *Server) ActiveTraffic() int64 {
+	if s == nil || s.core == nil {
+		return 0
+	}
+	return s.core.logical.Load()
+}
+
 func (s *Server) TrimBuffers() int {
 	if s == nil {
 		return 0
@@ -85,21 +93,49 @@ const spliceChunk = 256 << 10
 // copyM is copy with payload metering: m counts the bytes written to dst.
 func (s *Server) copyM(dst, src net.Conn, m meter) error {
 	if !s.cfg.Limits.DisableFastPath {
-		if d, ok := dst.(*net.TCPConn); ok {
-			if r, ok := src.(*net.TCPConn); ok {
-				if m.f == nil {
+		rawDst, dstAct := unwrapActivity(dst)
+		rawSrc, srcAct := unwrapActivity(src)
+		if d, ok := rawDst.(*net.TCPConn); ok {
+			if r, ok := rawSrc.(*net.TCPConn); ok {
+				act := dstAct
+				if act == nil {
+					act = srcAct
+				}
+				if m.f == nil && act == nil {
 					_, e := d.ReadFrom(r)
 					return e
 				}
 				for {
-					// LimitedReader over a TCPConn keeps the splice path.
+					// LimitedReader over a TCPConn preserves Linux kernel splice(2)
+					// while advancing flow statistics and idle activity timestamps.
 					n, e := d.ReadFrom(&io.LimitedReader{R: r, N: spliceChunk})
-					m.add(int(n))
+					if n > 0 {
+						m.add(int(n))
+						if act != nil {
+							act.Store(time.Now().UnixNano())
+						}
+					}
 					if e != nil || n < spliceChunk {
 						return e
 					}
 				}
 			}
+		}
+	}
+	rawSrc := src
+	if as, ok := src.(*activityStream); ok {
+		rawSrc = as.Conn
+	}
+	if wt, ok := rawSrc.(io.WriterTo); ok {
+		if _, isTCP := rawSrc.(*net.TCPConn); !isTCP {
+			w := m.writer(dst)
+			if _, ok := w.(interface{ WriteBuffers(*net.Buffers) (int64, error) }); !ok {
+				if _, isTCPDst := dst.(*net.TCPConn); isTCPDst {
+					w = tcpBuffersWriter{dst}
+				}
+			}
+			_, e := wt.WriteTo(w)
+			return e
 		}
 	}
 	if s.pool.size <= smallRelayBufSize {
@@ -115,6 +151,13 @@ func closeWrite(c net.Conn) error {
 		return v.CloseWrite()
 	}
 	return c.Close()
+}
+
+func unwrapActivity(c net.Conn) (net.Conn, *atomic.Int64) {
+	if a, ok := c.(*activityStream); ok {
+		return a.Conn, a.last
+	}
+	return c, nil
 }
 
 type activityStream struct {
@@ -136,7 +179,22 @@ func (c *activityStream) Write(p []byte) (int, error) {
 	}
 	return n, e
 }
+func (c *activityStream) WriteBuffers(b *net.Buffers) (int64, error) {
+	n, e := b.WriteTo(c.Conn)
+	if n > 0 {
+		c.last.Store(time.Now().UnixNano())
+	}
+	return n, e
+}
 func (c *activityStream) CloseWrite() error { return closeWrite(c.Conn) }
+
+type tcpBuffersWriter struct {
+	io.Writer
+}
+
+func (w tcpBuffersWriter) WriteBuffers(b *net.Buffers) (int64, error) {
+	return b.WriteTo(w.Writer)
+}
 func (s *Server) relay(ctx context.Context, a, b net.Conn) error {
 	return s.relayIdle(ctx, a, b, s.cfg.Limits.TCPIdle.value())
 }

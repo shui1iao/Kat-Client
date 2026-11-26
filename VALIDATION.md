@@ -1,11 +1,14 @@
-# Validation: Kat-Client v0.2.33 / Windows Core v0.8.20
+# Validation: Kat-Client v0.2.34 (Windows Core v0.8.21)
 
-- Client version: `0.2.33` (`client_sequence`: `1795550000`, previous `0.2.32` / `1795535000`)
-- Windows Core version: `0.8.20` (`core_sequence`: `1795549000`, previous `0.8.19` / `1795524000`)
-- Core source fingerprint: `39587687863267dbd2a86b38e25f315530fec46b4b159132e0dc18bfd56d15f5`
+- Client sequence: `1795630000`
+- Windows Core sequence: `1795629000`
+- Core source fingerprint: `624ff4ff10f4aa83f86ec85145945aacb02d460c245a5d2fd420e19ab6ece93f`
+- Companion Linux Server: `v0.8.3`
 
 ## Automated Gates Passed
-1. **Windows Go Core (`core/`)**: Linux `go vet ./...` (0 issues), Windows amd64 `go vet -tags desktop ./...` (0 issues), full `go test -race -count=1` across all Go packages + `gvisor.dev/gvisor/pkg/buffer` (0 failed, 0 data race, including `TestMMDBTableCoalesceAndBoundaries`, `TestParseGeoIPAndGeositePruned`, `TestCopyAdaptiveDemotesAndPromotes`), and Windows amd64 `go build -tags desktop` succeeded.
-2. **Rust Host (`app/src-tauri/`)**: `cargo test --offline --locked` (325 passed, 0 failed, 2 ignored, including `core_memory_breakdown_keeps_only_numeric_fields`), `build-windows.sh` (all 5 Windows x64 binaries pinned to Core v0.8.20 + Wintun verified), pinned NSIS 3.11 uninstaller capture + final `Kat-Setup-x64.exe` offline dual-signature product verification gate (schema 1 + schema 2, 22 files) passed.
-3. **Frontend (`app/`)**: Unchanged from verified v0.2.32 production bundle (`app/src/` diff empty).
-4. **Online Update Gate**: Product `update_manifest::verify` verifies `0.2.32 -> 0.2.33` (`Newer`), `0.2.33 -> 0.2.33` (`Current`), `0.8.19 -> 0.8.20` (`Newer`), and `0.8.20 -> 0.8.20` (`Current`).
+1. **Windows Go Core (`core/`, zero gVisor)**: Linux `go vet ./...` (0 issues), Windows amd64 `go vet -tags desktop ./...` (0 issues), full `go test -race -count=1 ./...` across all 25 Go packages (0 failed, 0 data race, including `TestSystemStackNATRFC1624AndAdmissionRST`, `TestUDPPathMTUDiscoveryIPv4AndIPv6`, `TestMmapIndexHotLoadAndInvalidation`, `TestUDPGSOAndGRORoundTrip`), and Windows amd64 `go build -tags desktop` succeeded (`15,430,656 B`).
+2. **Rust Host (`app/src-tauri/`)**: `cargo test --offline --locked` (all unit + contract + supervisor tests passed, 0 failed, including `tun_tcp_rule_matches_windows_com_canonical_readback_and_lifecycle`), `build-windows.sh` (all 5 Windows x64 host binaries pinned to Core v0.8.21 + Wintun verified), pinned NSIS 3.11 uninstaller capture + final `Kat-Setup-x64.exe` offline dual-signature product verification gate (schema 1 + schema 2, 22 files) passed.
+3. **Real Hardware Benchmarks (3-round alternating medians)**:
+   - Win11 181ms Wintun TUN: AnyTLS 4-stream download 1,702.7 Mbps (peak 1,747.7 Mbps, 1.76 s/GB), upload 994.8 Mbps (peak 1,001.0 Mbps), UDP 99.7%, idle 30s WorkingSet 2.7 MiB; SS2022 4-stream download 1,082.4 Mbps (peak 1,360.2 Mbps), upload 549.5 Mbps (peak 779.0 Mbps), UDP 99.4%, idle 30s WorkingSet 0.7 MiB.
+   - 29,203 rules + 3 Geo DBs warm mmap startup: 18.0 ms, steady RSS 19.4 MiB (Go heap 4.4 MiB).
+   - Linux UDP GSO/GRO (4-flow): SS2022 463.3 Mbps (48,716 pps, 100.0% delivery), AnyTLS UoT 440.6 Mbps (100.0% delivery); direct TCP `splice(2)` 23.3 / 35.2 Gbps.

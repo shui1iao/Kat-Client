@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/shui1iao/Kat/internal/outbound"
+	"github.com/shui1iao/Kat/internal/udpmmsg"
 )
 
 // Options configures the direct dialer. All fields may be zero.
@@ -227,8 +228,32 @@ const (
 	maxEIFQueuedBytes = 256 << 10
 )
 
+const directUDPPoolCap = 2048
+
+var directUDPPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, directUDPPoolCap)
+		return &b
+	},
+}
+
+func acquireDirectUDP(n int) ([]byte, *[]byte) {
+	if n <= directUDPPoolCap {
+		bp := directUDPPool.Get().(*[]byte)
+		return (*bp)[:n], bp
+	}
+	return make([]byte, n), nil
+}
+
+func releaseDirectUDP(bp *[]byte) {
+	if bp != nil {
+		directUDPPool.Put(bp)
+	}
+}
+
 type datagram struct {
 	b   []byte
+	bp  *[]byte
 	src netip.AddrPort
 }
 
@@ -251,10 +276,13 @@ type packetConn struct {
 	rdeadline   time.Time
 	rchanged    chan struct{}
 
-	in        chan datagram
-	closed    chan struct{}
-	closeOnce sync.Once
-	wg        sync.WaitGroup
+	in         chan datagram
+	closed     chan struct{}
+	closeOnce  sync.Once
+	wg         sync.WaitGroup
+	rtimer     *time.Timer
+	lastSrc    netip.Addr
+	lastSrcStr string
 }
 
 func (p *packetConn) allowed(src netip.AddrPort) bool {
@@ -270,8 +298,53 @@ func (p *packetConn) allowed(src netip.AddrPort) bool {
 func (p *packetConn) reader(s *net.UDPConn) {
 	defer p.wg.Done()
 	buf := make([]byte, maxDatagram)
+	var rb *udpmmsg.RecvBatch
+	var raw syscall.RawConn
+	pktSeen := 0
+	defer func() {
+		if rb != nil {
+			udpmmsg.ReleaseRecvBatch(rb)
+		}
+	}()
 	for {
-		n, src, e := s.ReadFromUDPAddrPort(buf)
+		if rb == nil {
+			n, src, e := s.ReadFromUDPAddrPort(buf)
+			if e != nil {
+				var ne net.Error
+				if errors.As(e, &ne) && ne.Timeout() {
+					continue
+				}
+				select {
+				case <-p.closed:
+					return
+				default:
+				}
+				if errors.Is(e, net.ErrClosed) {
+					select {
+					case p.failure <- e:
+					default:
+					}
+					return
+				}
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			src = netip.AddrPortFrom(src.Addr().Unmap(), src.Port())
+			if !p.allowed(src) {
+				continue
+			}
+			p.enqueue(buf[:n], src)
+			pktSeen++
+			if pktSeen == udpmmsg.UpgradeCnt {
+				if rc, err := s.SyscallConn(); err == nil && rc != nil {
+					raw = rc
+					rb = udpmmsg.AcquireRecvBatch()
+					buf = nil
+				}
+			}
+			continue
+		}
+		cnt, e := udpmmsg.ReadBatch(s, raw, rb)
 		if e != nil {
 			var ne net.Error
 			if errors.As(e, &ne) && ne.Timeout() {
@@ -282,7 +355,6 @@ func (p *packetConn) reader(s *net.UDPConn) {
 				return
 			default:
 			}
-			// Transient errors (e.g. ICMP-induced) must not end the session.
 			if errors.Is(e, net.ErrClosed) {
 				select {
 				case p.failure <- e:
@@ -293,12 +365,39 @@ func (p *packetConn) reader(s *net.UDPConn) {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
-		src = netip.AddrPortFrom(src.Addr().Unmap(), src.Port())
-		if !p.allowed(src) {
-			continue
+		for i := 0; i < cnt; i++ {
+			src := rb.Addrs[i]
+			if !src.IsValid() || !p.allowed(src) {
+				continue
+			}
+			p.enqueue(rb.Bufs[i][:rb.Lens[i]], src)
 		}
-		p.enqueue(buf[:n], src)
 	}
+}
+
+func (p *packetConn) ReadBatch(bufs [][]byte, lens []int, srcs []outbound.Addr) (int, error) {
+	if len(bufs) == 0 {
+		return 0, nil
+	}
+	n0, src0, err := p.ReadFrom(bufs[0])
+	if err != nil {
+		return 0, err
+	}
+	lens[0] = n0
+	srcs[0] = src0
+	cnt := 1
+	for cnt < len(bufs) {
+		select {
+		case g := <-p.in:
+			ni, si, _ := p.deliverDatagram(bufs[cnt], g)
+			lens[cnt] = ni
+			srcs[cnt] = si
+			cnt++
+		default:
+			return cnt, nil
+		}
+	}
+	return cnt, nil
 }
 
 // Reserve bytes before copying: a full inbox never retains another large
@@ -312,17 +411,33 @@ func (p *packetConn) enqueue(payload []byte, src netip.AddrPort) bool {
 	}
 	p.queuedBytes += n
 	p.mu.Unlock()
-	b := append([]byte(nil), payload...)
+	b, bp := acquireDirectUDP(n)
+	copy(b, payload)
 	select {
-	case p.in <- datagram{b, src}:
+	case p.in <- datagram{b: b, bp: bp, src: src}:
 		return true
 	case <-p.closed:
 	default:
 	}
+	releaseDirectUDP(bp)
 	p.mu.Lock()
 	p.queuedBytes -= n
 	p.mu.Unlock()
 	return false
+}
+
+func (p *packetConn) deliverDatagram(b []byte, g datagram) (int, outbound.Addr, error) {
+	p.mu.Lock()
+	p.queuedBytes -= len(g.b)
+	p.mu.Unlock()
+	n := copy(b, g.b)
+	releaseDirectUDP(g.bp)
+	addr := g.src.Addr()
+	if addr != p.lastSrc {
+		p.lastSrc = addr
+		p.lastSrcStr = addr.String()
+	}
+	return n, outbound.Addr{Host: p.lastSrcStr, Port: g.src.Port()}, nil
 }
 
 func (p *packetConn) ReadFrom(b []byte) (int, outbound.Addr, error) {
@@ -334,34 +449,57 @@ func (p *packetConn) ReadFrom(b []byte) (int, outbound.Addr, error) {
 		}
 		changed := p.rchanged
 		p.mu.Unlock()
+
+		// Fast path: check closed/deadline/ready packet without allocating or arming a timer.
+		select {
+		case <-p.closed:
+			return 0, outbound.Addr{}, net.ErrClosed
+		case e := <-p.failure:
+			return 0, outbound.Addr{}, e
+		default:
+		}
+		if !deadline.IsZero() && !time.Now().Before(deadline) {
+			return 0, outbound.Addr{}, os.ErrDeadlineExceeded
+		}
+		select {
+		case g := <-p.in:
+			return p.deliverDatagram(b, g)
+		default:
+		}
+
 		var timer <-chan time.Time
-		var t *time.Timer
 		if !deadline.IsZero() {
 			d := time.Until(deadline)
 			if d <= 0 {
 				return 0, outbound.Addr{}, os.ErrDeadlineExceeded
 			}
-			t = time.NewTimer(d)
-			timer = t.C
+			if p.rtimer == nil {
+				p.rtimer = time.NewTimer(d)
+			} else {
+				if !p.rtimer.Stop() {
+					select {
+					case <-p.rtimer.C:
+					default:
+					}
+				}
+				p.rtimer.Reset(d)
+			}
+			timer = p.rtimer.C
 		}
 		select {
 		case <-p.closed:
-			stopTimer(t)
+			stopTimer(p.rtimer)
 			return 0, outbound.Addr{}, net.ErrClosed
 		case e := <-p.failure:
-			stopTimer(t)
+			stopTimer(p.rtimer)
 			return 0, outbound.Addr{}, e
 		case g := <-p.in:
-			stopTimer(t)
-			p.mu.Lock()
-			p.queuedBytes -= len(g.b)
-			p.mu.Unlock()
-			n := copy(b, g.b)
-			return n, outbound.Addr{Host: g.src.Addr().String(), Port: g.src.Port()}, nil
+			stopTimer(p.rtimer)
+			return p.deliverDatagram(b, g)
 		case <-timer:
 			return 0, outbound.Addr{}, os.ErrDeadlineExceeded
 		case <-changed:
-			stopTimer(t)
+			stopTimer(p.rtimer)
 		}
 	}
 }
@@ -531,6 +669,7 @@ func (p *packetConn) Close() error {
 	for {
 		select {
 		case g := <-p.in:
+			releaseDirectUDP(g.bp)
 			p.mu.Lock()
 			p.queuedBytes -= len(g.b)
 			p.mu.Unlock()
@@ -627,4 +766,78 @@ func (p *packetConn) LocalEndpoints() []string {
 		}
 	}
 	return a
+}
+
+func (p *packetConn) WriteBatch(payloads [][]byte, dst outbound.Addr) (int, error) {
+	if len(payloads) == 0 {
+		return 0, nil
+	}
+	if len(payloads) == 1 {
+		if _, err := p.WriteTo(payloads[0], dst); err != nil {
+			return 0, err
+		}
+		return 1, nil
+	}
+	select {
+	case <-p.closed:
+		return 0, net.ErrClosed
+	default:
+	}
+	for _, b := range payloads {
+		if len(b) > maxDatagram {
+			return 0, errors.New("direct: datagram too large")
+		}
+	}
+	t, e := p.target(dst)
+	if e != nil {
+		return 0, e
+	}
+	if p.guard != nil && p.guard(t.Addr()) {
+		return 0, ErrBlocked
+	}
+	s := p.v4
+	if t.Addr().Is6() {
+		s = p.v6
+	}
+	if p.d.o.PacketControl != nil && !t.Addr().IsLoopback() {
+		s, e = p.remoteSocket(t.Addr().Is6())
+		if e != nil {
+			return 0, e
+		}
+	}
+	if s == nil {
+		return 0, errNoAddress
+	}
+	p.mu.Lock()
+	if !p.eif {
+		if _, ok := p.sent[t]; !ok {
+			if len(p.order) >= maxSent {
+				delete(p.sent, p.order[0])
+				p.order = p.order[1:]
+			}
+			p.sent[t] = struct{}{}
+			p.order = append(p.order, t)
+		}
+	}
+	p.mu.Unlock()
+	raw, _ := s.SyscallConn()
+	var addrs [udpmmsg.BatchSize]netip.AddrPort
+	var sb udpmmsg.SendBatch
+	v6 := udpmmsg.IsIPv6Socket(s)
+	sentTotal := 0
+	for sentTotal < len(payloads) {
+		chunk := len(payloads) - sentTotal
+		if chunk > udpmmsg.BatchSize {
+			chunk = udpmmsg.BatchSize
+		}
+		for i := 0; i < chunk; i++ {
+			addrs[i] = t
+		}
+		n, err := udpmmsg.WriteBatch(s, raw, v6, &sb, payloads[sentTotal:sentTotal+chunk], addrs[:chunk])
+		sentTotal += n
+		if err != nil {
+			return sentTotal, err
+		}
+	}
+	return sentTotal, nil
 }

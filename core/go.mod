@@ -16,14 +16,8 @@ require (
 )
 
 require (
-	github.com/google/btree v1.1.3 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/refraction-networking/utls v1.8.2
-	golang.org/x/exp v0.0.0-20260611194520-c48552f49976 // indirect
 	golang.org/x/net v0.60.0
 	golang.org/x/sys v0.48.0
-	golang.org/x/time v0.15.0 // indirect
-	gvisor.dev/gvisor v0.0.0-20260701204157-69c2d17aea96
 )
-
-replace gvisor.dev/gvisor => ./third_party/gvisor

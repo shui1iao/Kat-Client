@@ -66,8 +66,20 @@ pub fn single_instance()->Result<Handle>{unsafe{
  if h.0.is_null()||GetLastError()==ERROR_ALREADY_EXISTS{return Err(Error::new("ALREADY_RUNNING","Kat is already running for this user"));}Ok(h)
 }}
 
+fn wake_event_name()->Result<Vec<u16>>{let id=current()?;Ok(wide(&format!(r"Local\KatClient-Wake-{}",id.sid)))}
+pub fn create_wake_event()->Result<Handle>{unsafe{
+ let name=wake_event_name()?;
+ let h=Handle(CreateEventW(std::ptr::null(),0,0,name.as_ptr()));
+ if h.0.is_null(){return Err(Error::new("IDENTITY","Cannot create wake event"));}
+ Ok(h)
+}}
+pub fn wait_wake_event(h:&Handle)->bool{unsafe{WaitForSingleObject(h.0,INFINITE)==WAIT_OBJECT_0}}
 /// Best-effort same-session/SID/image activation; never starts a second network controller.
 pub fn wake_existing(){unsafe{
+ if let Ok(name)=wake_event_name(){
+  let ev=Handle(OpenEventW(EVENT_MODIFY_STATE,0,name.as_ptr()));
+  if !ev.0.is_null(){SetEvent(ev.0);}
+ }
  unsafe extern "system" fn visit(hwnd:windows_sys::Win32::Foundation::HWND,_:isize)->i32{use windows_sys::Win32::UI::WindowsAndMessaging::*;
   let mut title=[0u16;16];let n=GetWindowTextW(hwnd,title.as_mut_ptr(),16);if n!=3||&title[..3]!=[75,97,116]{return 1;}
   let mut pid=0;GetWindowThreadProcessId(hwnd,&mut pid);let p=Handle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,0,pid));if p.0.is_null(){return 1;}

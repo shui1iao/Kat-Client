@@ -9,11 +9,6 @@ import (
 	"os"
 	"testing"
 	"time"
-
-	"gvisor.dev/gvisor/pkg/buffer"
-	"gvisor.dev/gvisor/pkg/tcpip"
-	"gvisor.dev/gvisor/pkg/tcpip/header"
-	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )
 
 func referenceUDPReply(src, dst netip.AddrPort, payload []byte, id uint32) [][]byte {
@@ -45,8 +40,8 @@ func referenceUDPReply(src, dst netip.AddrPort, payload []byte, id uint32) [][]b
 		a, b := src.Addr().As4(), dst.Addr().As4()
 		for off := 0; off < len(udp); {
 			n := len(udp) - off
-			if n > MTU-20 {
-				n = (MTU - 20) &^ 7
+			if n > UDPMTU-20 {
+				n = (UDPMTU - 20) &^ 7
 			}
 			p := make([]byte, 20+n)
 			p[0] = 0x45
@@ -68,15 +63,15 @@ func referenceUDPReply(src, dst netip.AddrPort, payload []byte, id uint32) [][]b
 		}
 	} else {
 		a, b := src.Addr().As16(), dst.Addr().As16()
-		fragment := len(udp)+40 > MTU
+		fragment := len(udp)+40 > UDPMTU
 		for off := 0; off < len(udp); {
 			hdr := 40
 			if fragment {
 				hdr = 48
 			}
 			n := len(udp) - off
-			if n > MTU-hdr {
-				n = (MTU - hdr) &^ 7
+			if n > UDPMTU-hdr {
+				n = (UDPMTU - hdr) &^ 7
 			}
 			p := make([]byte, hdr+n)
 			p[0] = 0x60
@@ -151,14 +146,12 @@ func TestUDPBurst256NotDroppedAndDeadlineWakeupWorks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	id := stack.TransportEndpointID{RemoteAddress: tcpip.AddrFromSlice(src.Addr().AsSlice()), LocalAddress: tcpip.AddrFromSlice(dst.Addr().AsSlice()), RemotePort: src.Port(), LocalPort: dst.Port()}
+	pkt, _, ok := parseIPPacket(frames[0])
+	if !ok {
+		t.Fatal("parseIPPacket failed")
+	}
 	for i := 0; i < 200; i++ {
-		p := stack.NewPacketBuffer(stack.PacketBufferOptions{Payload: buffer.MakeWithData(frames[0])})
-		p.NetworkProtocolNumber = header.IPv4ProtocolNumber
-		p.NetworkHeader().Consume(20)
-		p.TransportHeader().Consume(8)
-		r.udpPacket(id, p)
-		p.DecRef()
+		r.handleUDP(pkt)
 	}
 	<-ready
 	if r.dropped.Load() != 0 {
@@ -172,7 +165,6 @@ func TestUDPBurst256NotDroppedAndDeadlineWakeupWorks(t *testing.T) {
 			t.Fatalf("read %d: n=%d peer=%v err=%v", i, n, peer, err)
 		}
 	}
-	// Verify dynamic deadline update wakes blocked ReadDatagram promptly
 	_ = gotConn.SetReadDeadline(time.Now().Add(10 * time.Second))
 	errCh := make(chan error, 1)
 	go func() {

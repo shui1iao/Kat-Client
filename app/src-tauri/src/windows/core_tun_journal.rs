@@ -60,7 +60,7 @@ impl Value {
  if !(v4||v6)||v.prefix!=1||v.next_hop!=if v4{"0.0.0.0"}else{"::"}||v.scope!=0||v.metric!=5||v.protocol!=3||v.site_prefix!=0||v.valid_lifetime!=u32::MAX||v.preferred_lifetime!=u32::MAX||v.loopback||v.autoconfigure||v.publish||v.immortal||v.origin!=0{return Err("JOURNAL_ROUTE")}
  }
  if let Some(v)=&self.address {if !((v.address=="198.18.0.1"&&v.prefix==30)||(v.address=="fd4b:6174::1"&&v.prefix==126))||v.prefix_origin!=1||v.suffix_origin!=1||v.skip_as_source{return Err("JOURNAL_ADDRESS")}}
- if let Some(v)=&self.interface{if ![2,23].contains(&v.family)||v.mtu!=1420||v.metric!=5||v.automatic_metric||v.dad_transmits!=0{return Err("JOURNAL_INTERFACE")}}
+ if let Some(v)=&self.interface{if ![2,23].contains(&v.family)||![1420,32000,60000].contains(&v.mtu)||v.metric!=5||v.automatic_metric||v.dad_transmits!=0{return Err("JOURNAL_INTERFACE")}}
  if let Some(v)=&self.dns{if v.servers!="198.18.0.2"{return Err("JOURNAL_DNS")}}
  Ok(())
  }

@@ -10,9 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"golang.org/x/sys/windows"
+	"runtime"
 	"io"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -50,17 +50,19 @@ type nativeDevice struct {
 // https://learn.microsoft.com/windows/win32/devnotes/rtlmovememory
 // Resolve before creating the adapter; do not interpret LastError from a void call.
 var ringMove = windows.NewLazySystemDLL("ntdll.dll").NewProc("RtlMoveMemory")
+var switchToThread = windows.NewLazySystemDLL("kernel32.dll").NewProc("SwitchToThread")
 
 // Both slices are nonempty and limited to the size received/allocated by
 // Wintun. Ring pointers remain native addresses; Wintun owns them until the
 // paired ReleaseReceivePacket / SendPacket. No pointer survives the copy.
+// Direct Go builtin memmove (AVX2/ERMS) avoids per-packet syscall.SyscallN
+// g0 stack switching. Ring pointers remain valid exclusively inside the held
+// readMu/writeMu window before ReleaseReceivePacket/SendPacket.
 func (d *nativeDevice) copyFromRing(dst []byte, src uintptr) {
-	syscall.SyscallN(d.moveMemory, uintptr(unsafe.Pointer(&dst[0])), src, uintptr(len(dst)))
-	runtime.KeepAlive(dst)
+	copy(dst, unsafe.Slice((*byte)(*(*unsafe.Pointer)(unsafe.Pointer(&src))), len(dst)))
 }
 func (d *nativeDevice) copyToRing(dst uintptr, src []byte) {
-	syscall.SyscallN(d.moveMemory, dst, uintptr(unsafe.Pointer(&src[0])), uintptr(len(src)))
-	runtime.KeepAlive(src)
+	copy(unsafe.Slice((*byte)(*(*unsafe.Pointer)(unsafe.Pointer(&dst))), len(src)), src)
 }
 func (d *nativeDevice) MTU() int     { return MTU }
 func (d *nativeDevice) LUID() uint64 { return d.luid }
@@ -103,6 +105,34 @@ func (d *nativeDevice) ReadPacket(b []byte) (int, error) {
 		}
 	}
 }
+// tryAllocateFast retries briefly via SwitchToThread/Gosched when the Wintun
+// send ring is momentarily full, avoiding Windows 15.6ms WaitForSingleObject
+// timer quantization stalls that collapse high-speed uploads.
+func (d *nativeDevice) tryAllocateFast(b []byte) (uintptr, syscall.Errno) {
+	p, _, errno := syscall.SyscallN(d.allocate, d.session, uintptr(len(b)))
+	if p != 0 || errno != wintunErrorBufferOverflow {
+		return p, errno
+	}
+	swAddr := uintptr(0)
+	if switchToThread.Find() == nil {
+		swAddr = switchToThread.Addr()
+	}
+	for spin := 0; spin < 64; spin++ {
+		if d.closed.Load() {
+			return 0, syscall.Errno(windows.ERROR_BROKEN_PIPE)
+		}
+		if swAddr != 0 {
+			syscall.SyscallN(swAddr)
+		}
+		runtime.Gosched()
+		p, _, errno = syscall.SyscallN(d.allocate, d.session, uintptr(len(b)))
+		if p != 0 || errno != wintunErrorBufferOverflow {
+			return p, errno
+		}
+	}
+	return 0, errno
+}
+
 func (d *nativeDevice) WritePacket(b []byte) error {
 	if len(b) == 0 || len(b) > 65535 {
 		return errors.New("WINTUN_PACKET_SIZE")
@@ -112,7 +142,7 @@ func (d *nativeDevice) WritePacket(b []byte) error {
 	if d.closed.Load() {
 		return io.ErrClosedPipe
 	}
-	p, _, errno := syscall.SyscallN(d.allocate, d.session, uintptr(len(b)))
+	p, errno := d.tryAllocateFast(b)
 	if p != 0 {
 		d.copyToRing(p, b)
 		syscall.SyscallN(d.send, d.session, p)
@@ -134,6 +164,113 @@ func (d *nativeDevice) WritePacket(b []byte) error {
 		},
 	)
 }
+
+// ReadPackets drains up to len(dst) packets under one read lock, blocking only
+// when no packet is immediately available in the Wintun ring.
+func (d *nativeDevice) ReadPackets(dst [][]byte, sizes []int) (int, error) {
+	if len(dst) == 0 {
+		return 0, nil
+	}
+	d.readMu.Lock()
+	defer d.readMu.Unlock()
+	for {
+		if d.closed.Load() {
+			return 0, io.ErrClosedPipe
+		}
+		count := 0
+		for count < len(dst) {
+			d.readSize = 0
+			p, _, errno := syscall.SyscallN(d.receive, d.session, uintptr(unsafe.Pointer(&d.readSize)))
+			if p != 0 {
+				n := d.readSize
+				if n == 0 || n > 65535 {
+					syscall.SyscallN(d.release, d.session, p)
+					if count > 0 {
+						return count, nil
+					}
+					return 0, errors.New("WINTUN_PACKET_SIZE")
+				}
+				if int(n) > len(dst[count]) {
+					syscall.SyscallN(d.release, d.session, p)
+					if count > 0 {
+						return count, nil
+					}
+					return 0, io.ErrShortBuffer
+				}
+				d.copyFromRing(dst[count][:n], p)
+				syscall.SyscallN(d.release, d.session, p)
+				sizes[count] = int(n)
+				count++
+				continue
+			}
+			if errno == windows.ERROR_NO_MORE_ITEMS {
+				break
+			}
+			if count > 0 {
+				return count, nil
+			}
+			return 0, fmt.Errorf("WINTUN_RECEIVE: %w", errno)
+		}
+		if count > 0 {
+			return count, nil
+		}
+		which, err := windows.WaitForMultipleObjects(d.waitHandles[:], false, windows.INFINITE)
+		if err != nil {
+			return 0, err
+		}
+		if which == windows.WAIT_OBJECT_0 {
+			return 0, io.ErrClosedPipe
+		}
+		if which != windows.WAIT_OBJECT_0+1 {
+			return 0, errors.New("WINTUN_WAIT")
+		}
+	}
+}
+
+// WritePackets writes a batch of packets under one write lock. If an individual
+// packet hits bounded send-ring exhaustion it returns the index written so far
+// plus ErrWintunRingFull so callers can count drops without failing the device.
+func (d *nativeDevice) WritePackets(pkts [][]byte) (int, error) {
+	if len(pkts) == 0 {
+		return 0, nil
+	}
+	d.writeMu.Lock()
+	defer d.writeMu.Unlock()
+	if d.closed.Load() {
+		return 0, io.ErrClosedPipe
+	}
+	for i, b := range pkts {
+		if len(b) == 0 || len(b) > 65535 {
+			return i, errors.New("WINTUN_PACKET_SIZE")
+		}
+		p, errno := d.tryAllocateFast(b)
+		if p != 0 {
+			d.copyToRing(p, b)
+			syscall.SyscallN(d.send, d.session, p)
+			continue
+		}
+		err := retryWintunWrite(
+			b,
+			errno,
+			&d.closed,
+			time.Now,
+			d.waitWriteRetry,
+			func(n int) (uintptr, syscall.Errno) {
+				pkt, _, e := syscall.SyscallN(d.allocate, d.session, uintptr(n))
+				return pkt, e
+			},
+			func(pkt uintptr, src []byte) {
+				d.copyToRing(pkt, src)
+				syscall.SyscallN(d.send, d.session, pkt)
+			},
+		)
+		if err != nil {
+			return i, err
+		}
+	}
+	return len(pkts), nil
+}
+
 func (d *nativeDevice) waitWriteRetry() error {
 	if d.stop == 0 {
 		return io.ErrClosedPipe

@@ -4,13 +4,9 @@ import (
 	"context"
 	"net"
 	"net/netip"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
-
-	"gvisor.dev/gvisor/pkg/tcpip"
-	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
 )
 
 // Exercise the linearization point directly: a pre-fence handshake reservation
@@ -66,58 +62,25 @@ func TestC50AdmissionLinearization(t *testing.T) {
 	}
 }
 
-func TestInitStackTCPRecoveryOptionAndSACK(t *testing.T) {
-	r := &Runtime{}
-	if err := r.initStack(); err != nil {
-		t.Fatalf("initStack: %v", err)
+func TestSystemStackListenerReadyAndClose(t *testing.T) {
+	d := newScriptedDevice(4)
+	ing := &testIngress{udpCh: make(chan struct {
+		flow Flow
+		conn DatagramConn
+	}, 1)}
+	rt, err := StartReady(context.Background(), Config{
+		Device:    d,
+		Ingress:   ing,
+		Admitting: func() bool { return true },
+		Epoch:     func() uint64 { return 1 },
+	})
+	if err != nil {
+		t.Fatalf("StartReady: %v", err)
 	}
-	defer func() {
-		if r.stack != nil {
-			r.stack.Destroy()
-		}
-		if r.link != nil {
-			r.link.Close()
-			r.link.Drain()
-		}
-	}()
-
-	var rec tcpip.TCPRecovery
-	if e := r.stack.TransportProtocolOption(tcp.ProtocolNumber, &rec); e != nil {
-		t.Fatalf("TransportProtocolOption(TCPRecovery): %s", e)
+	if rt.TCPListenPort4() == 0 {
+		t.Fatal("expected non-zero IPv4 TCP listener port")
 	}
-	var sack tcpip.TCPSACKEnabled
-	if e := r.stack.TransportProtocolOption(tcp.ProtocolNumber, &sack); e != nil {
-		t.Fatalf("TransportProtocolOption(TCPSACKEnabled): %s", e)
-	}
-	if !bool(sack) {
-		t.Fatalf("expected SACK enabled true, got %v", sack)
-	}
-
-	if runtime.GOOS == "windows" {
-		if rec != tcpip.TCPRecovery(0) {
-			t.Fatalf("windows expected TCPRecovery(0), got %v", rec)
-		}
-	} else {
-		if rec != tcpip.TCPRACKLossDetection {
-			t.Fatalf("non-windows (%s) expected default TCPRACKLossDetection(%v), got %v", runtime.GOOS, tcpip.TCPRACKLossDetection, rec)
-		}
-		opt := tcpip.TCPRecovery(0)
-		if e := r.stack.SetTransportProtocolOption(tcp.ProtocolNumber, &opt); e != nil {
-			t.Fatalf("SetTransportProtocolOption(TCPRecovery(0)): %s", e)
-		}
-		var gotRec tcpip.TCPRecovery
-		if e := r.stack.TransportProtocolOption(tcp.ProtocolNumber, &gotRec); e != nil {
-			t.Fatalf("readback TransportProtocolOption(TCPRecovery): %s", e)
-		}
-		if gotRec != tcpip.TCPRecovery(0) {
-			t.Fatalf("readback expected TCPRecovery(0), got %v", gotRec)
-		}
-		var gotSack tcpip.TCPSACKEnabled
-		if e := r.stack.TransportProtocolOption(tcp.ProtocolNumber, &gotSack); e != nil {
-			t.Fatalf("readback TransportProtocolOption(TCPSACKEnabled): %s", e)
-		}
-		if !bool(gotSack) {
-			t.Fatalf("expected SACK still true after TCPRecovery(0), got %v", gotSack)
-		}
+	if err := rt.Close(context.Background()); err != nil {
+		t.Fatalf("Close: %v", err)
 	}
 }

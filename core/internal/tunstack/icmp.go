@@ -1,14 +1,10 @@
-// Kat-owned ICMP/ICMPv6 Echo adapter and return packet encoder.
-// Non-echo ICMP control messages remain owned by gVisor.
+// Kat-owned ICMP/ICMPv6 Echo adapter and return packet encoder (zero gVisor).
 package tunstack
 
 import (
 	"encoding/binary"
 	"errors"
 	"net/netip"
-
-	"gvisor.dev/gvisor/pkg/tcpip/header"
-	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )
 
 const maxICMPInFlight = 64
@@ -30,7 +26,7 @@ func ICMPReply(src, dst netip.Addr, ident, seq uint16, ttl uint8, payload []byte
 	icmpLen := 8 + len(payload)
 	if src.Is4() {
 		a, b := src.As4(), dst.As4()
-		if icmpLen <= MTU-20 {
+		if icmpLen <= UDPMTU-20 {
 			p := make([]byte, 20+icmpLen)
 			p[0] = 0x45
 			p[8] = ttl
@@ -55,11 +51,11 @@ func ICMPReply(src, dst netip.Addr, ident, seq uint16, ttl uint8, payload []byte
 		binary.BigEndian.PutUint16(ic[6:8], seq)
 		copy(ic[8:], payload)
 		binary.BigEndian.PutUint16(ic[2:4], folded(sum16(ic)))
-		out := make([][]byte, 0, (icmpLen+(MTU-20)-1)/(MTU-20))
+		out := make([][]byte, 0, (icmpLen+(UDPMTU-20)-1)/(UDPMTU-20))
 		for off := 0; off < len(ic); {
 			n := len(ic) - off
-			if n > MTU-20 {
-				n = (MTU - 20) &^ 7
+			if n > UDPMTU-20 {
+				n = (UDPMTU - 20) &^ 7
 			}
 			p := make([]byte, 20+n)
 			p[0] = 0x45
@@ -84,7 +80,7 @@ func ICMPReply(src, dst netip.Addr, ident, seq uint16, ttl uint8, payload []byte
 
 	a, b := src.As16(), dst.As16()
 	pseudoSum := sum16(a[:]) + sum16(b[:]) + uint32(icmpLen>>16) + uint32(icmpLen&0xffff) + 58
-	if icmpLen+40 <= MTU {
+	if icmpLen+40 <= UDPMTU {
 		p := make([]byte, 40+icmpLen)
 		p[0] = 0x60
 		p[6] = 58
@@ -112,8 +108,8 @@ func ICMPReply(src, dst netip.Addr, ident, seq uint16, ttl uint8, payload []byte
 	for off := 0; off < len(ic); {
 		hdr := 48
 		n := len(ic) - off
-		if n > MTU-hdr {
-			n = (MTU - hdr) &^ 7
+		if n > UDPMTU-hdr {
+			n = (UDPMTU - hdr) &^ 7
 		}
 		p := make([]byte, hdr+n)
 		p[0] = 0x60
@@ -136,83 +132,73 @@ func ICMPReply(src, dst netip.Addr, ident, seq uint16, ttl uint8, payload []byte
 	return out, nil
 }
 
-func (r *Runtime) icmpPacket4(_ stack.TransportEndpointID, pkt *stack.PacketBuffer) bool {
-	hdrSlice := pkt.TransportHeader().Slice()
-	if len(hdrSlice) < header.ICMPv4MinimumSize {
+func (r *Runtime) icmpPacket4(pkt ipPacket) bool {
+	if len(pkt.payload) < 8 {
 		return false
 	}
-	h := header.ICMPv4(hdrSlice)
-	if h.Type() != header.ICMPv4Echo {
+	if pkt.payload[0] != 8 { // ICMPv4 Echo Request
 		return false
 	}
-	if h.Code() != 0 || folded(sum16(h)+uint32(pkt.Data().Checksum())) != 0 {
+	if pkt.payload[1] != 0 || !verifyICMP4Checksum(pkt.payload) {
 		r.dropped.Add(1)
 		return true
 	}
-	n := pkt.Data().Size()
-	if n > 65507 || len(pkt.NetworkHeader().Slice()) < header.IPv4MinimumSize {
+	body := pkt.payload[8:]
+	if len(body) > 65507 {
 		r.dropped.Add(1)
 		return true
 	}
-	iph := header.IPv4(pkt.NetworkHeader().Slice())
-	src := netip.AddrFrom4(iph.SourceAddress().As4())
-	dst := netip.AddrFrom4(iph.DestinationAddress().As4())
-	if !src.IsValid() || !dst.IsValid() || src.IsUnspecified() || dst.IsUnspecified() || src.IsMulticast() || dst.IsMulticast() || dst == netip.AddrFrom4([4]byte{255, 255, 255, 255}) || iph.TTL() == 0 {
-		r.dropped.Add(1)
-		return true
-	}
-	tos, _ := iph.TOS()
-	req := ICMPEchoRequest{
-		Source:      src,
-		Destination: dst,
-		Ident:       h.Ident(),
-		Sequence:    h.Sequence(),
-		TTL:         iph.TTL(),
-		TOS:         tos,
-		DF:          (iph.Flags() & header.IPv4FlagDontFragment) != 0,
-	}
-	r.admitICMP(req, pkt)
-	return true
-}
-
-func (r *Runtime) icmpPacket6(_ stack.TransportEndpointID, pkt *stack.PacketBuffer) bool {
-	hdrSlice := pkt.TransportHeader().Slice()
-	if len(hdrSlice) < header.ICMPv6EchoMinimumSize {
-		return false
-	}
-	h := header.ICMPv6(hdrSlice)
-	if h.Type() != header.ICMPv6EchoRequest {
-		return false
-	}
-	nh := pkt.Network()
-	n := pkt.Data().Size()
-	if h.Code() != 0 || n > 65527 || len(pkt.NetworkHeader().Slice()) < header.IPv6MinimumSize {
-		r.dropped.Add(1)
-		return true
-	}
-	if header.ICMPv6Checksum(header.ICMPv6ChecksumParams{Header: h, Src: nh.SourceAddress(), Dst: nh.DestinationAddress(), PayloadCsum: pkt.Data().Checksum(), PayloadLen: n}) != h.Checksum() {
-		r.dropped.Add(1)
-		return true
-	}
-	iph := header.IPv6(pkt.NetworkHeader().Slice())
-	src := netip.AddrFrom16(iph.SourceAddress().As16())
-	dst := netip.AddrFrom16(iph.DestinationAddress().As16())
-	if !src.IsValid() || !dst.IsValid() || src.IsUnspecified() || dst.IsUnspecified() || src.IsMulticast() || dst.IsMulticast() || iph.HopLimit() == 0 {
+	src, dst := pkt.src, pkt.dst
+	if !src.IsValid() || !dst.IsValid() || src.IsUnspecified() || dst.IsUnspecified() || src.IsMulticast() || dst.IsMulticast() || dst == netip.AddrFrom4([4]byte{255, 255, 255, 255}) || pkt.ttl == 0 {
 		r.dropped.Add(1)
 		return true
 	}
 	req := ICMPEchoRequest{
 		Source:      src,
 		Destination: dst,
-		Ident:       h.Ident(),
-		Sequence:    h.Sequence(),
-		TTL:         iph.HopLimit(),
+		Ident:       binary.BigEndian.Uint16(pkt.payload[4:6]),
+		Sequence:    binary.BigEndian.Uint16(pkt.payload[6:8]),
+		TTL:         pkt.ttl,
+		TOS:         pkt.tos,
+		DF:          pkt.df,
 	}
-	r.admitICMP(req, pkt)
+	r.admitICMP(req, body)
 	return true
 }
 
-func (r *Runtime) admitICMP(req ICMPEchoRequest, pkt *stack.PacketBuffer) {
+func (r *Runtime) icmpPacket6(pkt ipPacket) bool {
+	if len(pkt.payload) < 8 {
+		return false
+	}
+	if pkt.payload[0] != 128 { // ICMPv6 Echo Request
+		return false
+	}
+	body := pkt.payload[8:]
+	if pkt.payload[1] != 0 || len(body) > 65527 {
+		r.dropped.Add(1)
+		return true
+	}
+	if !verifyICMP6Checksum(pkt.src, pkt.dst, pkt.payload) {
+		r.dropped.Add(1)
+		return true
+	}
+	src, dst := pkt.src, pkt.dst
+	if !src.IsValid() || !dst.IsValid() || src.IsUnspecified() || dst.IsUnspecified() || src.IsMulticast() || dst.IsMulticast() || pkt.ttl == 0 {
+		r.dropped.Add(1)
+		return true
+	}
+	req := ICMPEchoRequest{
+		Source:      src,
+		Destination: dst,
+		Ident:       binary.BigEndian.Uint16(pkt.payload[4:6]),
+		Sequence:    binary.BigEndian.Uint16(pkt.payload[6:8]),
+		TTL:         pkt.ttl,
+	}
+	r.admitICMP(req, body)
+	return true
+}
+
+func (r *Runtime) admitICMP(req ICMPEchoRequest, body []byte) {
 	hook, ok := r.cfg.Ingress.(ICMPIngress)
 	if !ok {
 		r.dropped.Add(1)
@@ -235,9 +221,7 @@ func (r *Runtime) admitICMP(req ICMPEchoRequest, pkt *stack.PacketBuffer) {
 		r.mu.Unlock()
 		return
 	}
-	buf := pkt.Data().ToBuffer()
-	req.Payload = append([]byte(nil), buf.Flatten()...)
-	buf.Release()
+	req.Payload = append([]byte(nil), body...)
 	r.icmpInFlight++
 	r.pending++
 	r.wg.Add(1)
@@ -255,9 +239,9 @@ func (r *Runtime) admitICMP(req ICMPEchoRequest, pkt *stack.PacketBuffer) {
 		if !send {
 			return
 		}
-		body := rep.Payload
-		if body == nil {
-			body = req.Payload
+		replyBody := rep.Payload
+		if replyBody == nil {
+			replyBody = req.Payload
 		}
 		r.writeMu.Lock()
 		defer r.writeMu.Unlock()
@@ -267,7 +251,7 @@ func (r *Runtime) admitICMP(req ICMPEchoRequest, pkt *stack.PacketBuffer) {
 		if !valid {
 			return
 		}
-		packets, err := ICMPReply(req.Destination, req.Source, req.Ident, req.Sequence, rep.TTL, body, r.packetID.Add(1))
+		packets, err := ICMPReply(req.Destination, req.Source, req.Ident, req.Sequence, rep.TTL, replyBody, r.packetID.Add(1))
 		if err != nil {
 			return
 		}

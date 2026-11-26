@@ -4,7 +4,7 @@ use crate::{error::{Error, Result}, protocol::validate_public, core_process::Cor
 use serde_json::Value;
 use std::{sync::{Arc, atomic::{AtomicBool, Ordering}}, time::Duration};
 use tauri::{Manager, Emitter, tray::TrayIconBuilder};
-pub(super) struct Host { pub(super) tray_state:std::sync::Mutex<crate::tray_controls::MenuState>, tray:std::sync::Mutex<Option<tauri::tray::TrayIcon>>, core: Option<Supervisor>, core_error: Error, network: Arc<NetworkController>, quitting: AtomicBool, restarting:AtomicBool, app_restarting:AtomicBool, installing:AtomicBool, events:Arc<std::sync::Mutex<crate::safe_log::Ring>>, settings:std::sync::Mutex<crate::preferences::DesktopPreferences>, settings_lock:std::sync::Mutex<()>, window_memory:std::sync::Mutex<crate::window_geometry::Persistence>, pending_maximize:AtomicBool, control:tokio::sync::Mutex<()>, store:crate::user_store::Store, main_hidden:std::sync::Mutex<Option<bool>>,_instance:std::sync::Mutex<Option<crate::windows::identity::Handle>> }
+pub(super) struct Host { pub(super) tray_state:std::sync::Mutex<crate::tray_controls::MenuState>, tray:std::sync::Mutex<Option<tauri::tray::TrayIcon>>, core: Option<Supervisor>, core_error: Error, network: Arc<NetworkController>, quitting: AtomicBool, restarting:AtomicBool, app_restarting:AtomicBool, installing:AtomicBool, events:Arc<std::sync::Mutex<crate::safe_log::Ring>>, settings:std::sync::Mutex<crate::preferences::DesktopPreferences>, settings_lock:std::sync::Mutex<()>, window_memory:std::sync::Mutex<crate::window_geometry::Persistence>, pending_maximize:AtomicBool, control:tokio::sync::Mutex<()>, store:crate::user_store::Store, main_hidden:std::sync::Mutex<Option<bool>>,tray_hidden:AtomicBool,creating_main:AtomicBool,_instance:std::sync::Mutex<Option<crate::windows::identity::Handle>> }
 impl Host{
  fn record<T>(&self,event:crate::safe_log::HostEvent,result:&Result<T>){self.events.lock().unwrap().record(event,result.as_ref().err().map(|e|e.code.as_str()));}
  fn tray_native_busy(&self)->bool{self.installing.load(Ordering::SeqCst)||self.quitting.load(Ordering::SeqCst)||self.restarting.load(Ordering::SeqCst)||self.app_restarting.load(Ordering::SeqCst)}
@@ -151,22 +151,33 @@ fn tray_menu_select(app:tauri::AppHandle,window:tauri::WebviewWindow,state:tauri
   if id=="show"{let _=crate::tray_popup::hide(&app);show_main(&app);return Ok(());}
   if id=="quit"{let _=crate::tray_popup::hide(&app);quit(app.clone());return Ok(());}
   if state.tray_native_busy(){return Err(Error::new("CORE_BUSY","生命周期操作尚未完成，请查看主窗口"));}
-  let delivery={
-   // Same mutex owns snapshot, revision, ID resolution and event admission.
-   let mut current=state.tray_state.lock().unwrap();current.native_busy(state.tray_native_busy());let delivery=current.select(&revision,&id)?;
-   if let Some(delivery)=&delivery{
-    if app.emit_to("main","tray-action",delivery).is_err(){current.pending=None;return Err(Error::new("TRAY_DELIVERY_FAILED","无法把托盘操作交给主窗口，请在主窗口重试"));}
-   }delivery
-  };
-  if let Some(delivery)=delivery{
-   let a=app.clone();tauri::async_runtime::spawn(async move{
-    tokio::time::sleep(Duration::from_secs(3)).await;
-    let expired={let state=a.state::<Host>();let mut current=state.tray_state.lock().unwrap();
-     if current.pending.as_deref()==Some(&delivery.delivery_id){current.pending=None;true}else{false}};
-    if expired{tray_feedback(&a,Error::new("TRAY_DELIVERY_TIMEOUT","主窗口未确认接收托盘操作；操作未自动重试，请在主窗口确认状态"));}
-   });
-   // The event owner must ACK before invoking its existing draft/apply guard.
-  }else{show_main(&app);}
+  let has_main=app.get_webview_window("main").is_some();
+  let headless_action=if !has_main{
+   let mut current=state.tray_state.lock().unwrap();current.native_busy(state.tray_native_busy());
+   current.select_headless(&revision,&id)?
+  }else{None};
+  if !has_main{
+   if let Some(action)=headless_action{
+    let a=app.clone();tauri::async_runtime::spawn(async move{execute_tray_action_headless(a,action).await;});
+   }else{show_main(&app);}
+  }else{
+   let delivery={
+    // Same mutex owns snapshot, revision, ID resolution and event admission.
+    let mut current=state.tray_state.lock().unwrap();current.native_busy(state.tray_native_busy());let delivery=current.select(&revision,&id)?;
+    if let Some(delivery)=&delivery{
+     if app.emit_to("main","tray-action",delivery).is_err(){current.pending=None;return Err(Error::new("TRAY_DELIVERY_FAILED","无法把托盘操作交给主窗口，请在主窗口重试"));}
+    }delivery
+   };
+   if let Some(delivery)=delivery{
+    let a=app.clone();tauri::async_runtime::spawn(async move{
+     tokio::time::sleep(Duration::from_secs(3)).await;
+     let expired={let state=a.state::<Host>();let mut current=state.tray_state.lock().unwrap();
+      if current.pending.as_deref()==Some(&delivery.delivery_id){current.pending=None;true}else{false}};
+     if expired{tray_feedback(&a,Error::new("TRAY_DELIVERY_TIMEOUT","主窗口未确认接收托盘操作；操作未自动重试，请在主窗口确认状态"));}
+    });
+    // The event owner must ACK before invoking its existing draft/apply guard.
+   }else{show_main(&app);}
+  }
   // The event may already be received: a hide failure must not report it as
   // unaccepted and invite duplicate execution. Keep its ACK timeout active.
   if let Err(e)=crate::tray_popup::hide(&app){tray_feedback(&app,e);}
@@ -281,9 +292,57 @@ fn queue_window_save(app:&tauri::AppHandle){sync_main_window_visibility(app,fals
   }}
  }});
 }
-fn show_main(app:&tauri::AppHandle){if let Some(w)=app.get_webview_window("main"){
- if w.is_minimized().unwrap_or(false){let _=w.unminimize();}if app.state::<Host>().pending_maximize.swap(false,Ordering::SeqCst){let _=w.maximize();}let _=w.show();let _=w.set_focus();
-}sync_main_window_visibility(app,false);}
+fn build_main_window(app:&tauri::AppHandle)->std::result::Result<tauri::WebviewWindow,Box<dyn std::error::Error>>{
+ let config=app.config().app.windows.first().ok_or("Missing main window configuration")?;
+ let window=tauri::WebviewWindowBuilder::from_config(app,config)?
+   .on_page_load(|w,payload|{if matches!(payload.event(),tauri::webview::PageLoadEvent::Started){let s=w.state::<Host>();s.tray_state.lock().unwrap().listener_ready=false;*s.main_hidden.lock().unwrap()=None;}})
+   .transparent(true)
+   .on_navigation(|url| url.scheme()=="tauri" || (url.scheme()=="http" && url.host_str()==Some("tauri.localhost")))
+   .icon(window_image())?
+   .visible(false).build()?;
+ crate::windows::identity::set_uac_owner(window.hwnd().map(|h|h.0 as isize).unwrap_or(0));
+ crate::acrylic::install(&window);
+ let settings=app.state::<Host>().settings.lock().unwrap().clone();
+ if settings.remember_window{
+   let result=crate::windows::window_state::restore(&window,&app.state::<Host>().store);
+   match result{Ok((maximized,error))=>{app.state::<Host>().pending_maximize.store(maximized,Ordering::SeqCst);if let Some(e)=error{app.state::<Host>().record::<()>(crate::safe_log::HostEvent::Settings,&Err(e));}},Err(e)=>{app.state::<Host>().record::<()>(crate::safe_log::HostEvent::Settings,&Err(e));}}
+ }else{
+   if let Err(e)=crate::windows::window_state::apply_default(&window){app.state::<Host>().record::<()>(crate::safe_log::HostEvent::Settings,&Err(e));}
+ }
+ window.on_window_event({let a=app.clone();move |e| match e{
+   tauri::WindowEvent::CloseRequested{api,..}=>{api.prevent_close();if a.state::<Host>().installing.load(Ordering::SeqCst){show_main(&a);return;}save_window_now(&a);if a.state::<Host>().settings.lock().unwrap().close_action==crate::preferences::CloseAction::Quit{quit(a.clone());}else{let _=close_to_tray(&a);}sync_main_window_visibility(&a,false);},
+   tauri::WindowEvent::Moved(_)|tauri::WindowEvent::Resized(_)|tauri::WindowEvent::ScaleFactorChanged{..}=>queue_window_save(&a),tauri::WindowEvent::Focused(_)=>sync_main_window_visibility(&a,false),_=>{}
+ }});
+ Ok(window)
+}
+fn show_main(app:&tauri::AppHandle){
+ let state=app.state::<Host>();
+ state.tray_hidden.store(false,Ordering::SeqCst);
+ if let Some(w)=app.get_webview_window("main"){
+  if w.is_minimized().unwrap_or(false){let _=w.unminimize();}if state.pending_maximize.swap(false,Ordering::SeqCst){let _=w.maximize();}let _=w.show();let _=w.set_focus();
+  sync_main_window_visibility(app,false);
+  return;
+ }
+ if state.creating_main.compare_exchange(false,true,Ordering::SeqCst,Ordering::SeqCst).is_err(){return;}
+ let a=app.clone();
+ tauri::async_runtime::spawn_blocking(move||{
+  let built_ok=build_main_window(&a).is_ok();
+  let a2=a.clone();
+  let _=a.run_on_main_thread(move||{
+   let st=a2.state::<Host>();
+   st.creating_main.store(false,Ordering::SeqCst);
+   if built_ok{
+    if let Some(w)=a2.get_webview_window("main"){
+     if st.pending_maximize.swap(false,Ordering::SeqCst){let _=w.maximize();}
+     let _=w.show();let _=w.set_focus();
+     sync_main_window_visibility(&a2,true);
+    }
+   }else{
+    st.record::<()>(crate::safe_log::HostEvent::Tray,&Err(Error::new("WINDOW_FAILED","Cannot recreate main window")));
+   }
+  });
+ });
+}
 
 fn tray_image()->tauri::image::Image<'static>{tauri::image::Image::new(include_bytes!("../icons/icon-32.rgba"),32,32)}
 fn window_image()->tauri::image::Image<'static>{tauri::image::Image::new(include_bytes!("../icons/icon-128.rgba"),128,128)}
@@ -310,9 +369,9 @@ fn ensure_tray(app:&tauri::AppHandle)->bool{
              show_tray_popup(tray.app_handle(),*rect,*position);return;
             }
             if let tauri::tray::TrayIconEvent::Click{button:tauri::tray::MouseButton::Left,button_state:tauri::tray::MouseButtonState::Up,..}=event{
-              let app=tray.app_handle();if let Some(w)=app.get_webview_window("main"){let mode=app.state::<Host>().settings.lock().unwrap().tray_click;
-               match crate::preferences::tray_action(mode,true,w.is_visible().unwrap_or(false),w.is_minimized().unwrap_or(false)){crate::preferences::TrayAction::Show=>show_main(app),crate::preferences::TrayAction::Hide=>{let _=w.hide();sync_main_window_visibility(app,false);},crate::preferences::TrayAction::Ignore=>{}}
-              }
+              let app=tray.app_handle();let mode=app.state::<Host>().settings.lock().unwrap().tray_click;
+              let (vis,min)=if let Some(w)=app.get_webview_window("main"){(w.is_visible().unwrap_or(false),w.is_minimized().unwrap_or(false))}else{(false,false)};
+              match crate::preferences::tray_action(mode,true,vis,min){crate::preferences::TrayAction::Show=>show_main(app),crate::preferences::TrayAction::Hide=>hide_main_to_tray(app),crate::preferences::TrayAction::Ignore=>{}}
             }
           })
 .build(app)
@@ -322,10 +381,107 @@ fn ensure_tray(app:&tauri::AppHandle)->bool{
  state.record(crate::safe_log::HostEvent::Tray,&result);
  match result{Ok(tray)=>{*held=Some(tray);true},Err(_)=>{app.remove_tray_by_id("kat-main");false}}
 }
-fn minimize_reachable(app:&tauri::AppHandle){if let Some(w)=app.get_webview_window("main"){let _=w.show().and_then(|_|w.minimize());sync_main_window_visibility(app,false);}}
+async fn execute_tray_action_headless(app:tauri::AppHandle,action:crate::tray_controls::Action){
+ use crate::tray_controls::Action;
+ let state=app.state::<Host>();
+ let result:Result<()>=match &action{
+  Action::SystemProxy{enabled}=>{
+   let _control=state.control.lock().await;
+   if let Err(e)=state.ensure_not_app_restarting(){Err(e)}else{
+    let id=state.events.lock().unwrap().begin("proxy.set");let started=std::time::Instant::now();
+    let r:Result<()>=async{
+     state.network.proxy_set(*enabled).await?;
+     let _intent=state.settings_lock.lock().unwrap();
+     crate::preferences::set_intent(&state.store,Some(*enabled),None).map_err(|_|Error::new("NETWORK_INTENT_PENDING","网络状态已提交，但开启意图未能保存；请重试保存，当前网络未被撤销"))?;
+     Ok(())
+    }.await;
+    state.events.lock().unwrap().operation(crate::safe_log::HostEvent::Proxy,"proxy.set",id,crate::log_context::Phase::Complete,r.as_ref().err().map(|e|e.code.as_str()),started.elapsed().as_millis().min(u64::MAX as u128)as u64,r.as_ref().err().map(|_|id));
+    r
+   }
+  }
+  Action::Tun{enabled}=>{
+   let _control=state.control.lock().await;
+   if let Err(e)=state.ensure_not_app_restarting(){Err(e)}else{
+    let id=state.events.lock().unwrap().begin("tun.set");let started=std::time::Instant::now();
+    let r:Result<()>=async{
+     let off_intent=if !*enabled{let _intent=state.settings_lock.lock().unwrap();crate::preferences::set_intent(&state.store,None,Some(false)).map_err(|_|Error::new("NETWORK_INTENT_PENDING","TUN关闭意图未能保存；已继续尝试真实清理，请重试保存"))}else{Ok(())};
+     state.network.tun_set(*enabled).await?;off_intent?;
+     if *enabled{let _intent=state.settings_lock.lock().unwrap();crate::preferences::set_intent(&state.store,None,Some(true)).map_err(|_|Error::new("NETWORK_INTENT_PENDING","网络状态已提交，但开启意图未能保存；请重试保存，当前网络未被撤销"))?;}
+     Ok(())
+    }.await;
+    if r.is_ok()||!*enabled{software_updates::set_startup_tun_pending(&app,false);}
+    state.events.lock().unwrap().operation(crate::safe_log::HostEvent::Tun,"tun.set",id,crate::log_context::Phase::Complete,r.as_ref().err().map(|e|e.code.as_str()),started.elapsed().as_millis().min(u64::MAX as u128)as u64,r.as_ref().err().map(|_|id));
+    r
+   }
+  }
+  Action::RestartCore=>restart_kernel(&app,&state).await,
+  Action::RestartApp=>restart_app(app.clone()),
+  Action::Quit=>{quit(app.clone());Ok(())}
+  Action::Mode{mode}=>apply_headless_document_change(&app,&state,|doc|{
+   let first_group=doc.get("kernel").and_then(|k|k.get("groups")).and_then(Value::as_array).and_then(|gs|gs.first()).and_then(|g|g.get("name")).and_then(Value::as_str).map(str::to_owned);
+   if let Some(client)=doc.get_mut("client").and_then(Value::as_object_mut){
+    client.insert("mode".into(),Value::String(mode.clone()));
+    if mode=="global"&&client.get("global_group").and_then(Value::as_str).unwrap_or("").is_empty(){
+     if let Some(first)=first_group{
+      client.insert("global_group".into(),Value::String(first));
+     }
+    }
+    true
+   }else{false}
+  }).await,
+  Action::Member{group,member,unpin}=>apply_headless_document_change(&app,&state,|doc|{
+   if let Some(gs)=doc.get_mut("kernel").and_then(|k|k.get_mut("groups")).and_then(Value::as_array_mut){
+    if let Some(g)=gs.iter_mut().find(|g|g.get("name").and_then(Value::as_str)==Some(group.as_str())).and_then(Value::as_object_mut){
+     let gtype=g.get("type").and_then(Value::as_str).unwrap_or("");
+     if *unpin{g.remove("fixed");}
+     else if matches!(gtype,"smart"|"url-test"|"fallback"|"load-balance"){g.insert("fixed".into(),Value::String(member.clone()));}
+     else if gtype=="select"{g.insert("selected".into(),Value::String(member.clone()));}
+     else{return false;}
+     return true;
+    }
+   }
+   false
+  }).await,
+ };
+ match result{
+  Ok(())=>{state.tray_state.lock().unwrap().apply_headless_result(&action);let _=app.emit("network-changed",());}
+  Err(e)=>{tray_feedback(&app,e);}
+ }
+}
+async fn apply_headless_document_change(app:&tauri::AppHandle,state:&Host,mutate:impl FnOnce(&mut Value)->bool)->Result<()>{
+ let _control=state.control.lock().await;
+ state.ensure_not_app_restarting()?;
+ let core=state.core.as_ref().ok_or_else(||state.core_error.clone())?;
+ let reply=core.request("document.get",Value::Null,Duration::from_secs(5)).await?;
+ let saved=crate::document::AcceptedDocument::from_reply(&reply)?;
+ if saved.format!=crate::document::DocumentFormat::Json{
+  show_main(app);
+  return Err(Error::new("TRAY_REQUIRES_WINDOW","当前配置格式需要在主窗口中修改，已打开主窗口"));
+ }
+ let mut doc:Value=serde_json::from_str(&saved.text).map_err(|_|Error::new("INVALID_PARAMS","无法解析当前配置文档"))?;
+ if !mutate(&mut doc){
+  show_main(app);
+  return Err(Error::new("INVALID_PARAMS","无法应用托盘变更，已打开主窗口"));
+ }
+ let text=serde_json::to_string_pretty(&doc).map_err(|_|Error::new("INVALID_PARAMS","无法序列化配置文档"))?;
+ let params=serde_json::json!({"text":text,"format":"json"});
+ state.network.core_mutation("document.apply",params,Duration::from_secs(15)).await?;
+ Ok(())
+}
+fn minimize_reachable(app:&tauri::AppHandle){if app.get_webview_window("main").is_none(){let _=build_main_window(app);}if let Some(w)=app.get_webview_window("main"){let _=w.show().and_then(|_|w.minimize());sync_main_window_visibility(app,false);}}
+fn destroy_main_to_tray(app:&tauri::AppHandle,w:&tauri::WebviewWindow)->tauri::Result<()>{
+ let state=app.state::<Host>();
+ state.tray_hidden.store(true,Ordering::SeqCst);
+ {let mut ts=state.tray_state.lock().unwrap();ts.listener_ready=false;ts.pending=None;}
+ *state.main_hidden.lock().unwrap()=None;
+ crate::windows::identity::set_uac_owner(0);
+ crate::tray_popup::destroy(app);
+ w.destroy()
+}
+fn hide_main_to_tray(app:&tauri::AppHandle){save_window_now(app);let _=close_to_tray(app);sync_main_window_visibility(app,false);}
 fn close_to_tray(app:&tauri::AppHandle)->tauri::Result<()>{
  let w=app.get_webview_window("main").ok_or(tauri::Error::WindowNotFound)?;
- crate::tray_lifecycle::hide_or_minimize(ensure_tray(app),||w.hide(),||w.show().and_then(|_|w.minimize()))
+ crate::tray_lifecycle::hide_or_minimize(ensure_tray(app),||destroy_main_to_tray(app,&w),||w.show().and_then(|_|w.minimize()))
 }
 // Fixed installed-current-image relaunch only. UI must first resolve its own
 // drafts; the native projection can reject known busy state, not inspect React.
@@ -470,7 +626,7 @@ pub fn run() {
             }
         });}
         let retention_network=network.clone();let retention_days=settings.log_retention_days;tauri::async_runtime::spawn(async move{if crate::windows::scm::query().is_ok_and(|(_,running,_)|running){let _=crate::windows::service_client::call(crate::service_protocol::ServiceRequest::LogRetention{days:retention_days}).await;}let _=retention_network;});
-        app.manage(Host {tray_state:std::sync::Mutex::new(crate::tray_controls::MenuState::default()),tray:std::sync::Mutex::new(None),core,core_error,network,quitting:AtomicBool::new(false),restarting:AtomicBool::new(false),app_restarting:AtomicBool::new(false),installing:AtomicBool::new(false),events,settings:std::sync::Mutex::new(settings.clone()),settings_lock:std::sync::Mutex::new(()),window_memory:std::sync::Mutex::new(crate::window_geometry::Persistence::default()),pending_maximize:AtomicBool::new(false),control:tokio::sync::Mutex::new(()),store,main_hidden:std::sync::Mutex::new(None),_instance:std::sync::Mutex::new(Some(instance))});
+        app.manage(Host {tray_state:std::sync::Mutex::new(crate::tray_controls::MenuState::default()),tray:std::sync::Mutex::new(None),core,core_error,network,quitting:AtomicBool::new(false),restarting:AtomicBool::new(false),app_restarting:AtomicBool::new(false),installing:AtomicBool::new(false),events,settings:std::sync::Mutex::new(settings.clone()),settings_lock:std::sync::Mutex::new(()),window_memory:std::sync::Mutex::new(crate::window_geometry::Persistence::default()),pending_maximize:AtomicBool::new(false),control:tokio::sync::Mutex::new(()),store,main_hidden:std::sync::Mutex::new(None),tray_hidden:AtomicBool::new(false),creating_main:AtomicBool::new(false),_instance:std::sync::Mutex::new(Some(instance))});
         // Stable generation watcher. A delayed old-generation exit may never
         // tear down networking after a newer explicit restart has restored it.
         // App restart owns its cleanup through relaunch; do not queue another
@@ -516,36 +672,26 @@ pub fn run() {
           if need_tun{software_updates::set_startup_tun_pending(&a,true);}
           let _=software_updates::confirm_install(a.clone());
         });
-        let config=app.config().app.windows.first().ok_or("Missing main window configuration")?;
-        let window=tauri::WebviewWindowBuilder::from_config(app,config)?
-          .on_page_load(|w,payload|{if matches!(payload.event(),tauri::webview::PageLoadEvent::Started){let s=w.state::<Host>();s.tray_state.lock().unwrap().listener_ready=false;*s.main_hidden.lock().unwrap()=None;}})
-          .transparent(true)
-          .on_navigation(|url| url.scheme()=="tauri" || (url.scheme()=="http" && url.host_str()==Some("tauri.localhost")))
-          .icon(window_image())?
-          .visible(false).build()?;
-        crate::windows::identity::set_uac_owner(window.hwnd().map(|h|h.0 as isize).unwrap_or(0));
         if installed_handoff { refresh_shell_icons(); }
-        crate::acrylic::install(&window);
-        let should_show=installed_handoff||crate::preferences::initially_visible(&settings,autostart_launch,settings_error.is_some()||intent_error.is_some()||app.state::<Host>().core.is_none());
-        if settings.remember_window{
-          let result=crate::windows::window_state::restore(&window,&app.state::<Host>().store);
-          match result{Ok((maximized,error))=>{app.state::<Host>().pending_maximize.store(maximized,Ordering::SeqCst);if let Some(e)=error{app.state::<Host>().record::<()>(crate::safe_log::HostEvent::Settings,&Err(e));}},Err(e)=>{app.state::<Host>().record::<()>(crate::safe_log::HostEvent::Settings,&Err(e));}}
-        }else{
-          if let Err(e)=crate::windows::window_state::apply_default(&window){app.state::<Host>().record::<()>(crate::safe_log::HostEvent::Settings,&Err(e));}
+        if let Ok(wake_ev)=crate::windows::identity::create_wake_event(){
+         let wake_app=app.handle().clone();
+         std::thread::spawn(move||{while crate::windows::identity::wait_wake_event(&wake_ev){show_main(&wake_app);}});
         }
-        if should_show{show_main(app.handle());}
-        window.on_window_event({let a=app.handle().clone();move |e| match e{
-          tauri::WindowEvent::CloseRequested{api,..}=>{api.prevent_close();if a.state::<Host>().installing.load(Ordering::SeqCst){show_main(&a);return;}save_window_now(&a);if a.state::<Host>().settings.lock().unwrap().close_action==crate::preferences::CloseAction::Quit{quit(a.clone());}else{let _=close_to_tray(&a);}sync_main_window_visibility(&a,false);},
-          tauri::WindowEvent::Moved(_)|tauri::WindowEvent::Resized(_)|tauri::WindowEvent::ScaleFactorChanged{..}=>queue_window_save(&a),tauri::WindowEvent::Focused(_)=>sync_main_window_visibility(&a,false),_=>{}
-        }});
+        let should_show=installed_handoff||crate::preferences::initially_visible(&settings,autostart_launch,settings_error.is_some()||intent_error.is_some()||app.state::<Host>().core.is_none());
+        if should_show{
+          let _window=build_main_window(app.handle())?;
+          show_main(app.handle());
+          crate::tray_popup::prewarm(app.handle().clone());
+        }else{
+          app.state::<Host>().tray_hidden.store(true,Ordering::SeqCst);
+        }
         let _ = window_ready_tx.send(());
-        crate::tray_popup::prewarm(app.handle().clone());
         Ok(())
     })
     .build(tauri::generate_context!());
     let built=match built{Ok(a)=>a,Err(_)=>{crate::windows::installed_handoff::message("Kat 窗口初始化失败，请从开始菜单或 Program Files 已安装目录以普通身份重新打开 Kat。");return;}};
     built.run(|app,event| match event{
       tauri::RunEvent::Ready=>{if !ensure_tray(app){minimize_reachable(app);}software_updates::start(app.clone());},
-      tauri::RunEvent::ExitRequested{api,..}=>{if !app.state::<Host>().quitting.load(Ordering::SeqCst){api.prevent_exit();quit(app.clone());}},_=>{}
+      tauri::RunEvent::ExitRequested{api,..}=>{let st=app.state::<Host>();if st.tray_hidden.load(Ordering::SeqCst)&&!st.quitting.load(Ordering::SeqCst){api.prevent_exit();return;}if !st.quitting.load(Ordering::SeqCst){api.prevent_exit();quit(app.clone());}},_=>{}
     });
 }

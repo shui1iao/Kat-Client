@@ -113,8 +113,12 @@ pub fn prepare(app:&tauri::AppHandle,window:&WebviewWindow,rect:tauri::Rect,poin
  let fallback_point=match (rect.position,rect.size){
   (tauri::Position::Physical(p),tauri::Size::Physical(s)) if s.width>0&&s.height>0&&s.width<=1024&&s.height<=1024=>Some(tauri::PhysicalPosition::new(f64::from(p.x)+f64::from(s.width)*0.5,f64::from(p.y)+f64::from(s.height)*0.5)),_=>None};
  let cursor=if point.x.is_finite()&&point.y.is_finite()&&(point.x!=0.0||point.y!=0.0){point}else{fallback_point.ok_or_else(failed)?};
- let main=app.get_webview_window("main").ok_or_else(failed)?;
- let monitor=main.monitor_from_point(cursor.x,cursor.y).map_err(|_|failed())?.ok_or_else(failed)?;
+ let monitor=if let Some(main)=app.get_webview_window("main"){
+  main.monitor_from_point(cursor.x,cursor.y).map_err(|_|failed())?
+ }else{
+  window.monitor_from_point(cursor.x,cursor.y).map_err(|_|failed())?
+  .or_else(||window.primary_monitor().ok().flatten())
+ }.ok_or_else(failed)?;
  let scale=monitor.scale_factor();let work=monitor.work_area().clone();
  if !scale.is_finite()||scale<=0.0||work.size.width==0||work.size.height==0{return Err(failed());}
  let limit=tauri::PhysicalSize::new(((360.0*scale).round() as u32).max(1).min(work.size.width),
@@ -225,7 +229,19 @@ pub fn hide(app:&tauri::AppHandle)->Result<()>{
    current.popup=None;current.popup_epoch=current.popup_epoch.wrapping_add(1);}
   if let Some(w)=a.get_webview_window(LABEL){
    if w.hide().is_err(){crate::desktop::tray_feedback(&a,failed());}
-   let _=w.eval(PREPARE);
+   if a.get_webview_window("main").is_none(){
+    let _=w.destroy();
+   }else{
+    let _=w.eval(PREPARE);
+   }
   }
  }).map_err(|_|failed())
+}
+pub fn destroy(app:&tauri::AppHandle){
+ let a=app.clone();
+ let _=app.run_on_main_thread(move||{
+  {let state=a.state::<crate::desktop::Host>();let mut current=state.tray_state.lock().unwrap();
+   current.popup=None;current.popup_epoch=current.popup_epoch.wrapping_add(1);}
+  if let Some(w)=a.get_webview_window(LABEL){let _=w.destroy();}
+ });
 }

@@ -84,6 +84,15 @@ func newProtocolOutbound(o outbound.Options, under outbound.Dialer) (outbound.Ou
 	case "trojan":
 		return trojan.New(o, under)
 	case "anytls":
+		if o.IdleSessions == 0 {
+			o.IdleSessions = 12
+		}
+		if o.MinIdleSessions == 0 {
+			o.MinIdleSessions = 8
+		}
+		if o.MinIdleSessions > o.IdleSessions {
+			o.MinIdleSessions = o.IdleSessions
+		}
 		return anytls.New(o, under)
 	}
 	return nil, fmt.Errorf("outbound %q: unsupported type", o.Name)

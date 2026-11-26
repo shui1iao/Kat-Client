@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"errors"
 	"github.com/shui1iao/Kat/internal/userio"
 	"io"
@@ -150,6 +151,10 @@ func preloadLocal(s *source) preloadedSource {
 		if v, key, size, ok := cacheGetStat(s.path, s, fi); ok {
 			return preloadedSource{size: size, fi: fi, key: key, val: v}
 		}
+		if v, fastHash, ok := tryLoadMmapIndex(s, fi); ok {
+			key := s.kind + "|" + s.stamp + "|kidx|" + hex.EncodeToString(fastHash[:8])
+			return preloadedSource{size: int(fi.Size()), fi: fi, key: key, val: v}
+		}
 	}
 	b, fi, err := readLimited(s.path, s.maxBytes)
 	if err != nil {
@@ -161,6 +166,16 @@ func preloadLocal(s *source) preloadedSource {
 		v, err = s.parse(b)
 		if err != nil {
 			return preloadedSource{b: b, size: len(b), fi: fi, key: key, parseErr: err}
+		}
+		// Compile & save zero-heap binary mmap index, then immediately remap so
+		// even a cold startup releases Go heap tables cleanly on GC.
+		if fi != nil && fi.Mode().IsRegular() {
+			fh := computeSourceFastHashFromBytes(b)
+			if saveMmapIndex(s, fi, fh, v) {
+				if mv, _, ok := tryLoadMmapIndex(s, fi); ok {
+					v = mv
+				}
+			}
 		}
 	}
 	return preloadedSource{b: b, size: len(b), fi: fi, key: key, val: v}

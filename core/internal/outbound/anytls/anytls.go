@@ -84,6 +84,9 @@ func Validate(o outbound.Options) error {
 	if o.IdleSessions < 0 || o.IdleSessions > maxIdleSessions {
 		return configError("idle_sessions must be 1..32")
 	}
+	if o.MinIdleSessions < 0 || o.MinIdleSessions > maxIdleSessions {
+		return configError("min_idle_sessions must be 0..32")
+	}
 	if t := o.IdleTimeout.Value(); t != 0 && (t < minIdleTimeout || t > maxIdleTimeout) {
 		return configError("idle_timeout must be 1s..10m")
 	}
@@ -131,13 +134,21 @@ type Outbound struct {
 	under       outbound.Dialer
 	udp         bool
 	idleMax     int
+	warmTarget  int
 	idleTimeout time.Duration
 
 	scheme atomic.Pointer[paddingScheme]
 
-	mu       sync.Mutex
-	sessions []*session
-	closed   bool
+	closeCtx    context.Context
+	closeCancel context.CancelFunc
+	warmWG      sync.WaitGroup
+
+	mu               sync.Mutex
+	sessions         []*session
+	closed           bool
+	warming          int
+	warmBackoffUntil time.Time
+	warmReady        chan struct{}
 
 	// Observability for tests.
 	sessionsCreated atomic.Int64
@@ -161,12 +172,17 @@ func New(o outbound.Options, under outbound.Dialer) (outbound.Outbound, error) {
 	if e != nil {
 		return nil, e
 	}
+	closeCtx, closeCancel := context.WithCancel(context.Background())
 	ob := &Outbound{
 		name: o.Name, server: server, digest: sha256.Sum256([]byte(o.Password)), tls: tc, fp: o.TLS.Fingerprint, under: under,
-		udp: o.UDPEnabled(), idleMax: o.IdleSessions, idleTimeout: o.IdleTimeout.Value(),
+		udp: o.UDPEnabled(), idleMax: o.IdleSessions, warmTarget: o.MinIdleSessions, idleTimeout: o.IdleTimeout.Value(),
+		closeCtx: closeCtx, closeCancel: closeCancel,
 	}
 	if ob.idleMax == 0 {
 		ob.idleMax = defaultIdleSessions
+	}
+	if ob.warmTarget > ob.idleMax {
+		ob.warmTarget = ob.idleMax
 	}
 	if ob.idleTimeout == 0 {
 		ob.idleTimeout = defaultIdleTimeout
@@ -181,8 +197,10 @@ func (o *Outbound) Type() string { return typeName }
 // UDP is configuration only: UoT rides a TCP stream, so any TCP chain carries it.
 func (o *Outbound) UDP() bool { return o.udp }
 
-// DialTCP opens a logical stream to dst. It returns after the server
-// acknowledged the stream (v2 SYNACK); a SYNACK carrying an error fails the dial.
+// DialTCP opens a logical stream to dst without blocking on a server SYNACK
+// round-trip so the caller's first write can pipeline immediately after SYN.
+// An asynchronous SYNACK refusal fails the stream's Read/Write and returns
+// the healthy session to the idle pool.
 func (o *Outbound) DialTCP(ctx context.Context, dst outbound.Addr) (net.Conn, error) {
 	target, e := appendAddr(nil, dst, socksTypes)
 	if e != nil {
@@ -223,6 +241,10 @@ func (o *Outbound) Close() error {
 		return nil
 	}
 	o.closed = true
+	if o.warmReady != nil {
+		close(o.warmReady)
+		o.warmReady = nil
+	}
 	var idle []*session
 	kept := o.sessions[:0]
 	for _, s := range o.sessions {
@@ -236,6 +258,10 @@ func (o *Outbound) Close() error {
 	clear(o.sessions[len(kept):])
 	o.sessions = kept
 	o.mu.Unlock()
+	if o.closeCancel != nil {
+		o.closeCancel()
+	}
+	o.warmWG.Wait()
 	for _, s := range idle {
 		s.fail(net.ErrClosed)
 		s.wg.Wait()
@@ -274,9 +300,9 @@ func (o *Outbound) open(ctx context.Context, target []byte, tcp bool) (*stream, 
 			return nil, e
 		}
 		if !fresh {
-			e = st.awaitWrite(ctx, req, tcp)
+			e = st.awaitWriteOnly(ctx, req)
 		} else {
-			e = st.await(ctx, tcp)
+			e = nil
 		}
 		if e == nil {
 			// A nested AnyTLS hop may itself have reused a carrier. Propagate
@@ -308,15 +334,28 @@ func (o *Outbound) acquire(ctx context.Context) (*session, bool, error) {
 			return nil, false, e
 		}
 		if s == nil {
+			// If parallel hot-standby dials are already in flight (e.g. cold
+			// sequential burst), wait briefly to claim one instead of serializing
+			// another cold TLS handshake.
+			if ch := o.waitWarmingChan(); ch != nil {
+				select {
+				case <-ch:
+					continue
+				case <-ctx.Done():
+					return nil, false, ctx.Err()
+				}
+			}
 			break
 		}
 		// pick reserved an idle, exclusive session. Validate outside o.mu:
 		// group Current may emit events. Busy old streams are never touched.
 		if s.routeValid() {
+			o.maybeWarmStandby()
 			return s, false, nil
 		}
 		s.fail(errSessionRouteChanged)
 	}
+	o.maybeWarmStandby()
 	s, e := o.dialSession(ctx)
 	if e != nil {
 		return nil, false, e
@@ -328,10 +367,124 @@ func (o *Outbound) acquire(ctx context.Context) (*session, bool, error) {
 		return nil, false, net.ErrClosed
 	}
 	s.reserved = 1
+	s.usedCount++
 	s.lastUsed = time.Now()
 	o.sessions = append(o.sessions, s)
 	o.mu.Unlock()
 	return s, true, nil
+}
+
+
+func (o *Outbound) waitWarmingChan() <-chan struct{} {
+	if o.warmTarget <= 0 {
+		return nil
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	if o.closed || o.warming == 0 {
+		return nil
+	}
+	if o.warmReady == nil {
+		o.warmReady = make(chan struct{})
+	}
+	return o.warmReady
+}
+
+func (o *Outbound) notifyWarmLocked() {
+	if o.warmReady != nil {
+		close(o.warmReady)
+		o.warmReady = nil
+	}
+}
+
+// maybeWarmStandby reactively maintains hot-standby TLS sessions when traffic
+// is active, without dialing on startup or re-warming after idle expiration.
+func (o *Outbound) maybeWarmStandby() {
+	if o.warmTarget <= 0 || o.closeCtx == nil {
+		return
+	}
+	now := time.Now()
+	o.mu.Lock()
+	if o.closed || now.Before(o.warmBackoffUntil) {
+		o.mu.Unlock()
+		return
+	}
+	idle, busy := 0, 0
+	for _, s := range o.sessions {
+		if s.failed.Load() {
+			continue
+		}
+		if s.reserved == 0 {
+			idle++
+		} else {
+			busy++
+		}
+	}
+	target := o.warmTarget
+	if target > o.idleMax {
+		target = o.idleMax
+	}
+	// Count active busy sessions too: they return to the idle pool once done,
+	// so we never spawn cold zero-cwnd connections that would evict hot ones.
+	need := target - (idle + busy + o.warming)
+	if need <= 0 {
+		o.mu.Unlock()
+		return
+	}
+	maxConc := 7
+	if busy > 0 && maxConc > 4 {
+		maxConc = 4
+	}
+	if o.warming >= maxConc {
+		o.mu.Unlock()
+		return
+	}
+	if need > maxConc-o.warming {
+		need = maxConc - o.warming
+	}
+	o.warming += need
+	o.warmWG.Add(need)
+	o.mu.Unlock()
+
+	for i := 0; i < need; i++ {
+		go o.warmOne()
+	}
+}
+
+func (o *Outbound) warmOne() {
+	defer o.warmWG.Done()
+	ctx, cancel := context.WithTimeout(o.closeCtx, defaultDialTimeout)
+	s, e := o.dialSession(ctx)
+	cancel()
+	var closing []*session
+	o.mu.Lock()
+	o.warming--
+	if e != nil {
+		if !o.closed {
+			o.warmBackoffUntil = time.Now().Add(10 * time.Second)
+		}
+		o.notifyWarmLocked()
+		o.mu.Unlock()
+		return
+	}
+	if o.closed {
+		o.notifyWarmLocked()
+		o.mu.Unlock()
+		s.fail(net.ErrClosed)
+		return
+	}
+	s.reserved = 0
+	s.lastUsed = time.Now()
+	s.idleGen++
+	gen := s.idleGen
+	s.idleTimer = time.AfterFunc(o.idleTimeout, func() { o.expire(s, gen) })
+	o.sessions = append(o.sessions, s)
+	closing = o.trimIdleLocked()
+	o.notifyWarmLocked()
+	o.mu.Unlock()
+	for _, x := range closing {
+		x.fail(errIdleClosed)
+	}
 }
 
 func (o *Outbound) pick() (*session, error) {
@@ -345,7 +498,8 @@ func (o *Outbound) pick() (*session, error) {
 		if s.failed.Load() || s.reserved != 0 { // only idle sessions are reusable
 			continue
 		}
-		if best == nil || s.lastUsed.After(best.lastUsed) {
+		if best == nil || (s.usedCount > 0 && best.usedCount == 0) ||
+			((s.usedCount > 0) == (best.usedCount > 0) && s.lastUsed.After(best.lastUsed)) {
 			best = s
 		}
 	}

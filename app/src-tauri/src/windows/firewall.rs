@@ -3,7 +3,7 @@
 //! or elevated uninstaller (`kat-network-service.exe --setup-uninstall` / `--uninstall`).
 //! Never disables or alters firewall profiles, never touches Defender, never adds TCP rules.
 use crate::firewall_rule::{
-    ensure_core_udp_inbound as ensure_with_store, remove_core_udp_inbound as remove_with_store,
+    ensure_core_tun_tcp_inbound as ensure_tun_tcp_with_store, ensure_core_udp_inbound as ensure_with_store, remove_core_tun_tcp_inbound as remove_tun_tcp_with_store, remove_core_udp_inbound as remove_with_store, TUN_TCP_RULE_NAME,
     EnsureOutcome, FirewallRuleError, FirewallRuleSpec, FirewallStage, FirewallStore, RemoveOutcome,
     RULE_NAME,
 };
@@ -342,7 +342,7 @@ impl FirewallStore for ComFirewallStore {
                     let disp = std::mem::ManuallyDrop::new(ComPtr(vg.0.ptr));
                     let rule = disp.query_interface(&IID_INET_FW_RULE, FirewallStage::RuleInspect)?;
                     let name = rule.get_bstr(7, FirewallStage::RuleInspect)?.unwrap_or_default();
-                    if name == RULE_NAME {
+                    if name == RULE_NAME || name == TUN_TCP_RULE_NAME {
                         let spec = read_rule_spec(&rule, FirewallStage::RuleInspect)?;
                         out.push((rule, spec));
                     }
@@ -410,10 +410,14 @@ impl FirewallStore for ComFirewallStore {
 
 pub fn ensure_core_udp_inbound(install_root: &Path) -> Result<EnsureOutcome, FirewallRuleError> {
     let mut store = ComFirewallStore::open()?;
-    ensure_with_store(&mut store, install_root)
+    let out = ensure_with_store(&mut store, install_root)?;
+    let _ = ensure_tun_tcp_with_store(&mut store, install_root)?;
+    Ok(out)
 }
 
 pub fn remove_core_udp_inbound() -> Result<RemoveOutcome, FirewallRuleError> {
     let mut store = ComFirewallStore::open()?;
-    remove_with_store(&mut store)
+    let out = remove_with_store(&mut store)?;
+    let _ = remove_tun_tcp_with_store(&mut store)?;
+    Ok(out)
 }

@@ -69,33 +69,36 @@ func parseGeoIP(b []byte) (db *geoDB, err error) {
 	}
 	out := &geoDB{}
 	codeIdx := make(map[string]uint32, 256)
-	it := r.Networks(maxminddb.SkipAliasedNetworks)
-	for it.Next() {
+	offsetCache := make(map[uint32]uint32, 512)
+	err = walkMMDBFast(b, r, &out.table, func(off uint32) (uint32, error) {
+		if v, ok := offsetCache[off]; ok {
+			return v, nil
+		}
 		var rec geoRecord
-		nw, e := it.Network(&rec)
-		if e != nil {
-			return nil, errParse
+		if e := r.Decode(uintptr(off), &rec); e != nil {
+			return 0, errParse
 		}
 		c := rec.Country.ISOCode
 		if c == "" {
 			c = rec.RegisteredCountry.ISOCode
 		}
-		if c == "" {
-			continue
+		var idx uint32
+		if c != "" {
+			c = strings.ToUpper(c)
+			var ok bool
+			idx, ok = codeIdx[c]
+			if !ok {
+				out.codes = append(out.codes, c)
+				idx = uint32(len(out.codes))
+				codeIdx[c] = idx
+			}
 		}
-		c = strings.ToUpper(c)
-		idx, ok := codeIdx[c]
-		if !ok {
-			out.codes = append(out.codes, c)
-			idx = uint32(len(out.codes))
-			codeIdx[c] = idx
-		}
-		out.table.addNet(nw, idx)
-	}
-	if it.Err() != nil {
+		offsetCache[off] = idx
+		return idx, nil
+	})
+	if err != nil {
 		return nil, errParse
 	}
-	out.table.finalize()
 	return out, nil
 }
 

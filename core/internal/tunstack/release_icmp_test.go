@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"gvisor.dev/gvisor/pkg/buffer"
-	"gvisor.dev/gvisor/pkg/tcpip/header"
-	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"net"
 	"net/netip"
 	"sync/atomic"
@@ -86,20 +83,14 @@ func (h *releaseICMPHook) HandleICMP(c context.Context, r ICMPEchoRequest) (ICMP
 	return h.call(c, r)
 }
 func releaseInput(r *Runtime, v6 bool, w []byte) bool {
-	p := stack.NewPacketBuffer(stack.PacketBufferOptions{Payload: buffer.MakeWithData(w)})
-	defer p.DecRef()
-	n := 20
-	p.NetworkProtocolNumber = header.IPv4ProtocolNumber
-	if v6 {
-		n = 40
-		p.NetworkProtocolNumber = header.IPv6ProtocolNumber
+	pkt, _, ok := parseIPPacket(w)
+	if !ok {
+		return false
 	}
-	p.NetworkHeader().Consume(n)
-	p.TransportHeader().Consume(8)
 	if v6 {
-		return r.icmpPacket6(stack.TransportEndpointID{}, p)
+		return r.icmpPacket6(pkt)
 	}
-	return r.icmpPacket4(stack.TransportEndpointID{}, p)
+	return r.icmpPacket4(pkt)
 }
 func releaseWait(t *testing.T, c <-chan struct{}) {
 	t.Helper()
@@ -196,7 +187,7 @@ func TestReleaseICMPFragmentReassembly(t *testing.T) {
 		}
 		rebuilt := []byte{}
 		for i, p := range ps {
-			if len(p) > MTU {
+			if len(p) > UDPMTU {
 				t.Fatal("MTU exceeded")
 			}
 			n := 20

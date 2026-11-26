@@ -2,10 +2,11 @@ package clientcore
 
 import (
 	"runtime"
+	"runtime/debug"
 	"runtime/metrics"
 
 	anytlsout "github.com/shui1iao/Kat/internal/outbound/anytls"
-	"gvisor.dev/gvisor/pkg/buffer"
+	"github.com/shui1iao/Kat/internal/udpmmsg"
 )
 
 // readRuntimeMemoryBreakdown collects Go runtime memory classes via
@@ -42,18 +43,24 @@ func readRuntimeMemoryBreakdown() map[string]uint64 {
 }
 
 // TrimMemory releases idle pooled buffers across the active kernel generation,
-// AnyTLS receive buffer pool, and gVisor chunk pools so the runtime scavenger
+// AnyTLS receive buffer pool, and UDP batch pools so the runtime scavenger
 // can return spans to the OS.
 func (h *Host) TrimMemory() int {
-	dropped := buffer.TrimWinChunkPools() + anytlsout.TrimRecvBufPool()
+	dropped := anytlsout.TrimRecvBufPool() + udpmmsg.TrimPool()
 	if h == nil {
 		return dropped
 	}
 	h.mu.Lock()
 	s := h.server
 	h.mu.Unlock()
+	idle := true
 	if s != nil {
 		dropped += s.TrimBuffers()
+		idle = s.ActiveTraffic() == 0
+	}
+	if idle {
+		debug.FreeOSMemory()
+		trimOSWorkingSet()
 	}
 	return dropped
 }

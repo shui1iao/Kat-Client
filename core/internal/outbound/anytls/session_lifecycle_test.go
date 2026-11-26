@@ -14,7 +14,7 @@ import (
 	"github.com/shui1iao/Kat/internal/outbound"
 )
 
-func TestPooledV2TCPWaitsForItsVerdict(t *testing.T) {
+func TestPooledV2TCPAsyncSYNACKRefusalAndCarrierReuse(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		client, peer := net.Pipe()
 		o := &Outbound{idleMax: 1, idleTimeout: time.Hour}
@@ -24,13 +24,15 @@ func TestPooledV2TCPWaitsForItsVerdict(t *testing.T) {
 		o.sessions = []*session{s}
 		s.start()
 		defer func() { peer.Close(); s.fail(net.ErrClosed); s.wg.Wait() }()
-		done := make(chan error, 1)
+		dialDone := make(chan net.Conn, 1)
 		go func() {
 			c, e := o.DialTCP(context.Background(), outbound.Addr{Host: "127.0.0.1", Port: 80})
-			if c != nil {
-				c.Close()
+			if e != nil {
+				t.Errorf("DialTCP failed: %v", e)
+				dialDone <- nil
+				return
 			}
-			done <- e
+			dialDone <- c
 		}()
 		var id uint32
 		for _, cmd := range []byte{cmdSYN, cmdPSH} {
@@ -43,8 +45,14 @@ func TestPooledV2TCPWaitsForItsVerdict(t *testing.T) {
 				t.Fatal(e)
 			}
 		}
-		// Prior settings and a SYNACK for a different stream aren't acceptance.
-		// A heartbeat is still serviced while a pooled dial awaits its verdict.
+		// Non-blocking DialTCP returns as soon as SYN+target is flushed without
+		// waiting an extra RTT for SYNACK.
+		c := <-dialDone
+		if c == nil {
+			return
+		}
+		defer c.Close()
+		// A heartbeat is still serviced while the stream awaits server frames.
 		if _, err := peer.Write(appendFrame(nil, cmdHeartRequest, 17, nil)); err != nil {
 			t.Fatal(err)
 		}
@@ -52,23 +60,36 @@ func TestPooledV2TCPWaitsForItsVerdict(t *testing.T) {
 		if _, err := io.ReadFull(peer, h[:]); err != nil || h[0] != cmdHeartResponse || binary.BigEndian.Uint32(h[1:5]) != 17 {
 			t.Fatalf("heartbeat: %v %v", h, err)
 		}
+		// Start a blocked Read on the stream; a SYNACK for another stream must not
+		// wake or fail it.
+		readDone := make(chan error, 1)
+		go func() {
+			var buf [16]byte
+			_, err := c.Read(buf[:])
+			readDone <- err
+		}()
 		if _, err := peer.Write(appendFrame(nil, cmdSYNACK, id+1, nil)); err != nil {
 			t.Fatal(err)
 		}
 		synctest.Wait()
 		select {
-		case e := <-done:
-			t.Fatalf("early dial result: %v", e)
+		case e := <-readDone:
+			t.Fatalf("early read result: %v", e)
 		default:
 		}
+		// Server refuses the stream via async SYNACK error; Read surfaces
+		// errStreamRefused, Write also fails, and the healthy session returns to idle.
 		if _, err := peer.Write(appendFrame(nil, cmdSYNACK, id, []byte("private peer diagnostic"))); err != nil {
 			t.Fatal(err)
 		}
-		e := <-done
+		e := <-readDone
 		if e != errStreamRefused || SafeFailure(fmt.Errorf("dial: %w", e)) != "rejected" {
-			t.Fatalf("unexpected refusal: %v", e)
+			t.Fatalf("unexpected refusal on Read: %v", e)
 		}
-		synctest.Wait() // the reader detaches the rejected stream asynchronously
+		if _, we := c.Write([]byte("x")); we != errStreamRefused {
+			t.Fatalf("unexpected refusal on Write: %v", we)
+		}
+		synctest.Wait()
 		if busy, idle := o.sessionCount(); busy != 0 || idle != 1 {
 			t.Fatalf("refused stream retired healthy carrier: %d/%d", busy, idle)
 		}

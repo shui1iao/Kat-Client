@@ -1,5 +1,6 @@
-// Package tunstack terminates the TUN IP stack and delivers trusted original
-// tuples directly to the kernel. It owns neither OS routing nor outbound policy.
+// Package tunstack terminates the TUN IP stack via a pure-Go System Stack
+// (zero gVisor) and delivers trusted original tuples directly to the kernel.
+// It owns neither OS routing nor outbound policy.
 package tunstack
 
 import (
@@ -9,12 +10,12 @@ import (
 	"net/netip"
 	"sync"
 	"sync/atomic"
-
-	"gvisor.dev/gvisor/pkg/tcpip/link/channel"
-	"gvisor.dev/gvisor/pkg/tcpip/stack"
 )
 
-const MTU = 1420
+const (
+	MTU    = 60000
+	UDPMTU = 1420
+)
 const maxHandlers = 4096
 
 type Protocol uint8
@@ -33,6 +34,14 @@ type Device interface {
 	ReadPacket([]byte) (int, error)
 	WritePacket([]byte) error
 	Close() error
+}
+
+// Optional batching interfaces implemented by high-throughput native TUN devices.
+type PacketBatchReader interface {
+	ReadPackets(dst [][]byte, sizes []int) (int, error)
+}
+type PacketBatchWriter interface {
+	WritePackets(pkts [][]byte) (int, error)
 }
 type TCPConn interface {
 	net.Conn
@@ -62,6 +71,10 @@ type Config struct {
 	Ingress   Ingress
 	Admitting func() bool
 	Epoch     func() uint64
+	// Optional preferred local TUN addresses for the System Stack TCP listeners.
+	// When unset, defaults to 198.18.0.1 / fd4b:6174::1 with wildcard fallback.
+	LocalIPv4 netip.Addr
+	LocalIPv6 netip.Addr
 }
 
 // Failure.Code is suitable for the existing safe health channel. Cause must
@@ -78,8 +91,9 @@ type Runtime struct {
 	cfg              Config
 	ctx              context.Context
 	cancel           context.CancelFunc
-	stack            *stack.Stack
-	link             *channel.Endpoint
+	tcpSys           *tcpSystemStack
+	reasm            *ipReassembler
+	hasICMP          bool
 	mu               sync.Mutex // admission, Quiesce/Resume and shutdown linearization
 	paused, stopping bool
 	err, closeErr    error
@@ -112,25 +126,32 @@ func StartReady(ctx context.Context, cfg Config) (*Runtime, error) {
 		return nil, err
 	}
 	life, cancel := context.WithCancel(ctx)
-	r := &Runtime{cfg: cfg, ctx: life, cancel: cancel, active: make(map[net.Conn]struct{}), udpSources: make(map[sourceKey]*sourceConn), failed: make(chan struct{}), done: make(chan struct{})}
-	if err := r.initStack(); err != nil {
+	_, hasICMP := cfg.Ingress.(ICMPIngress)
+	r := &Runtime{
+		cfg:        cfg,
+		ctx:        life,
+		cancel:     cancel,
+		reasm:      newIPReassembler(),
+		hasICMP:    hasICMP,
+		active:     make(map[net.Conn]struct{}),
+		udpSources: make(map[sourceKey]*sourceConn),
+		failed:     make(chan struct{}),
+		done:       make(chan struct{}),
+	}
+	tcpSys, err := newTCPSystemStack(r)
+	if err != nil {
 		cancel()
 		_ = cfg.Device.Close()
-		if r.stack != nil {
-			r.stack.Destroy()
-		}
-		if r.link != nil {
-			r.link.Close()
-			r.link.Drain()
-		}
 		return nil, err
 	}
-	ready := make(chan struct{}, 2)
-	r.wg.Add(2)
+	r.tcpSys = tcpSys
+	r.tcpSys.start()
+
+	ready := make(chan struct{}, 1)
+	r.wg.Add(1)
 	go func() { defer r.wg.Done(); ready <- struct{}{}; r.readPackets() }()
-	go func() { defer r.wg.Done(); ready <- struct{}{}; r.writePackets() }()
 	<-ready
-	<-ready
+
 	go func() {
 		select {
 		case <-life.Done():
@@ -148,6 +169,23 @@ func StartReady(ctx context.Context, cfg Config) (*Runtime, error) {
 	}
 	return r, nil
 }
+
+// TCPListenPort4 returns the bound IPv4 System Stack TCP listener port (0 if closed).
+func (r *Runtime) TCPListenPort4() uint16 {
+	if r == nil || r.tcpSys == nil {
+		return 0
+	}
+	return r.tcpSys.port4
+}
+
+// TCPListenPort6 returns the bound IPv6 System Stack TCP listener port (0 if unavailable).
+func (r *Runtime) TCPListenPort6() uint16 {
+	if r == nil || r.tcpSys == nil {
+		return 0
+	}
+	return r.tcpSys.port6
+}
+
 func (r *Runtime) Quiesce() {
 	r.mu.Lock()
 	r.paused = true
@@ -178,6 +216,7 @@ func (r *Runtime) DrainUDP(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
 func (r *Runtime) Resume() error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -189,9 +228,11 @@ func (r *Runtime) Resume() error {
 	r.paused = false
 	return nil
 }
+
 func (r *Runtime) Failed() <-chan struct{} { return r.failed }
 func (r *Runtime) Done() <-chan struct{}   { return r.done }
 func (r *Runtime) Err() error              { r.mu.Lock(); defer r.mu.Unlock(); return r.err }
+
 func (r *Runtime) Close(ctx context.Context) error {
 	r.stop(nil)
 	select {
@@ -203,6 +244,7 @@ func (r *Runtime) Close(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
 func (r *Runtime) fatal(code string, err error) {
 	if r.ctx.Err() != nil {
 		r.stop(nil)
@@ -210,6 +252,7 @@ func (r *Runtime) fatal(code string, err error) {
 	}
 	r.stop(&Failure{Code: code, Cause: err})
 }
+
 func (r *Runtime) stop(cause error) {
 	r.mu.Lock()
 	if r.stopping {
@@ -225,6 +268,9 @@ func (r *Runtime) stop(cause error) {
 	r.mu.Unlock()
 	go func() {
 		r.cancel()
+		if r.tcpSys != nil {
+			r.tcpSys.close()
+		}
 		e := r.cfg.Device.Close()
 		r.mu.Lock()
 		cs := make([]net.Conn, 0, len(r.active))
@@ -235,12 +281,7 @@ func (r *Runtime) stop(cause error) {
 		for _, c := range cs {
 			_ = c.Close()
 		}
-		r.stack.Close()
-		r.link.Close()
 		r.wg.Wait()
-		r.stack.Close() // abort endpoints created concurrently with the first Close
-		r.stack.Wait()
-		r.link.Drain()
 		r.mu.Lock()
 		r.closeErr = e
 		r.mu.Unlock()
@@ -248,7 +289,7 @@ func (r *Runtime) stop(cause error) {
 	}()
 }
 
-// reserve bounds goroutines BEFORE the potentially blocking TCP handshake.
+// reserve bounds goroutines BEFORE entering TCP ingress.
 // wg.Add and stopping share mu: no Add can race the shutdown Wait at zero.
 func (r *Runtime) reserve() bool {
 	r.mu.Lock()
@@ -261,6 +302,7 @@ func (r *Runtime) reserve() bool {
 	r.wg.Add(1)
 	return true
 }
+
 func (r *Runtime) release(c net.Conn) {
 	if c != nil {
 		_ = c.Close()

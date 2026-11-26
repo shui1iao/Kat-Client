@@ -1,39 +1,39 @@
 {
-  "candidate": "v0.2.33-windows-core-v0.8.20",
-  "app_version": "0.2.33",
-  "windows_clientcore_version": "0.8.20",
-  "sequence": 1795550000,
-  "client_sequence": 1795550000,
-  "core_sequence": 1795549000,
-  "core_source_fingerprint": "39587687863267dbd2a86b38e25f315530fec46b4b159132e0dc18bfd56d15f5",
-  "core_build_commit": "39587687863267dbd2a86b38e25f315530fec46b",
+  "candidate": "v0.2.34-windows-core-v0.8.21",
+  "app_version": "0.2.34",
+  "windows_clientcore_version": "0.8.21",
+  "sequence": 1795630000,
+  "client_sequence": 1795630000,
+  "core_sequence": 1795629000,
+  "core_source_fingerprint": "624ff4ff10f4aa83f86ec85145945aacb02d460c245a5d2fd420e19ab6ece93f",
+  "core_build_commit": "624ff4ff10f4aa83f86ec85145945aacb02d460c",
   "core_build_commit_kind": "exact core source fingerprint first40, not a Git commit",
   "executables": {
-    "kat-desktop.exe": "81956ac7e232adc044d07a571e5eecce3c5cf5ae976e4126ff33d6d6be6c2885",
-    "kat-elevate-helper.exe": "e23e06be16b0512ca629d65b120065d03c6db8d43ce63d02f2cd3679bd348e7c",
-    "kat-install-helper.exe": "fcd571ad6499b938dd67a0261918426a3d43aa7d5cf650af6eeb84844e9759e8",
-    "kat-network-service.exe": "61d45628a3bdc41b36dc3c75b7d8bf61689eabffb2b7e73042d6b2d5b7ff8a3e",
-    "kat-proxy-watchdog.exe": "2b5c9c8976608304b974fb837b5544c01f3942e116eb96d978cd4056b3aeef18",
-    "kat-client-core.exe": "fa7e27288d45c980ccc5df8a631a1eda52daa3d696dc1fc605f95068b2f3aff7"
+    "kat-desktop.exe": "b379057804dbe0ff7741f7ec8d771bd5cfd48b28957fe3ddfe7233ea75ef5dc4",
+    "kat-elevate-helper.exe": "0977039d815b03c7654fe8024160f404c9dc6e55609d808063c9bf1cf7c83907",
+    "kat-install-helper.exe": "2e7a5e93e7869f787aa1b5a5a4a3a95bcedd7600a9b60268e3da1ab1f299fd45",
+    "kat-network-service.exe": "20d562dd463b59848c24145bd0f9e0c3f5ed8f05c4e1b7d01716c00cc89cc103",
+    "kat-proxy-watchdog.exe": "440f37c1668f7031e273b668e93bc728d8409df42e9e46009cffd3802b2b4f0b",
+    "kat-client-core.exe": "ebc9b2108bd2060c96709467f84e6c264634bfa2115d5c28fb3a948dfcb4e00d"
   },
   "executable_sizes": {
-    "kat-desktop.exe": 11996160,
-    "kat-elevate-helper.exe": 569856,
-    "kat-install-helper.exe": 1420800,
-    "kat-network-service.exe": 2031104,
+    "kat-desktop.exe": 12043776,
+    "kat-elevate-helper.exe": 570368,
+    "kat-install-helper.exe": 1433600,
+    "kat-network-service.exe": 2044928,
     "kat-proxy-watchdog.exe": 465408,
-    "kat-client-core.exe": 17707520
+    "kat-client-core.exe": 15430656
   },
   "uninstaller": {
     "bytes": 162464,
-    "sha256": "113596e2ee532127b19635c17461942004b9882e3a22482d4391e04ee3e75b0d"
+    "sha256": "ba11a35814c52161c82cdd605693e24bfe7d8e3c1959b615ec7b895f81a5bcbf"
   },
   "signature_key_id": "0afa646ee76f17d8",
-  "source_manifest_sha256": "39d81dc090f8a44dd9153b1509560840e4928d1b3ae0691a3e7934e8f97d1ce5",
-  "source_manifest_members": 2187,
-  "package_auth_sha256": "ee50b844f7d8f38769825f2e4a836977c504c1173f0b79f09c6cd3963e657063",
-  "package_auth_signature_sha256": "6b73e6875810799581f794bcd5f4d20a2630f32be94f113bd270e31df452a602",
-  "setup_auth_sha256": "4b170b4feea68a8b108f48908ae41f803f539fb37ad76402675fdbe312fa729d",
-  "setup_auth_signature_sha256": "5d2eb4d5622b1817be9f0937a1a4fce9b1070868c1476cde681ddd07ef9df465",
+  "source_manifest_sha256": "df52c0495bd6c270c56fc6cfaed04b0418f6d0d94033886dd68386dd8130721a",
+  "source_manifest_members": 1854,
+  "package_auth_sha256": "7815cb9a8709aa290ce060915c6b0100166fd137422cbb0ccf9d9a7cabd3851a",
+  "package_auth_signature_sha256": "ae0d7c0704e692f761c05190eea2d16b495a51a4eddfc52677429f53d4b32508",
+  "setup_auth_sha256": "933a005a4a548e3020c8792d5742a5d000379c308560ab727e1d4fffd8d7be8e",
+  "setup_auth_signature_sha256": "f6f1be447b9331db3604aa0f10b0c3fbbf33ede2c2de0904495ccc837f2d2d4e",
   "setup_verifier_gate": "passed (schema1 + schema2, 22 files)"
 }

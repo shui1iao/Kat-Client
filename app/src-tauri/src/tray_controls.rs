@@ -65,6 +65,31 @@ impl MenuState{
   self.delivery=self.delivery.checked_add(1).expect("tray delivery exhausted");
   let id=self.delivery.to_string();self.pending=Some(id.clone());Ok(Some(Delivery{delivery_id:id,action}))
  }
+ pub fn select_headless(&mut self,revision:&str,id:&str)->crate::error::Result<Option<Action>>{
+  use crate::error::Error;
+  if revision!=self.revision.to_string(){return Err(Error::new("TRAY_MENU_STALE","托盘状态已更新，请重新打开菜单后选择"));}
+  fn leaf(nodes:Vec<Node>,id:&str)->Option<Node>{for n in nodes{if n.id==id{return if n.enabled&&n.children.is_empty(){Some(n)}else{None}}if n.enabled{if let Some(v)=leaf(n.children,id){return Some(v)}}}None}
+  let node=leaf(self.nodes(),id).ok_or_else(||Error::new("ACTION_DENIED","该托盘菜单项不存在、已禁用或不是可执行项"))?;
+  if id=="show"{return Ok(None);}
+  let action=node.action.ok_or_else(||Error::new("ACTION_DENIED","该托盘菜单项不能执行"))?;
+  if self.pending.is_some(){return Err(Error::new("CORE_BUSY","上一项托盘操作尚未完成，请稍后重试"));}
+  Ok(Some(action))
+ }
+ pub fn apply_headless_result(&mut self,action:&Action){
+  let mut next=self.snapshot.clone();
+  match action{
+   Action::SystemProxy{enabled}=>{next.system_proxy=*enabled;}
+   Action::Tun{enabled}=>{next.tun=*enabled;}
+   Action::Mode{mode}=>{next.mode=mode.clone();}
+   Action::Member{group,member,unpin}=>{
+    if let Some(g)=next.groups.iter_mut().find(|g|&g.name==group){
+     if *unpin{g.fixed=None;}else if g.kind=="select"{g.current=Some(member.clone());}else{g.fixed=Some(member.clone());}
+    }
+   }
+   _=>{}
+  }
+  self.sync(next);
+ }
  pub fn acknowledge(&mut self,id:&str)->crate::error::Result<()>{
   if self.pending.as_deref()!=Some(id){return Err(crate::error::Error::new("TRAY_DELIVERY_STALE","托盘操作的接收凭据已失效；不会执行或重放旧操作"));}
   self.pending=None;Ok(())
@@ -76,7 +101,7 @@ pub fn render(app:&tauri::AppHandle,s:&Snapshot)->tauri::Result<tauri::menu::Men
  fn item(app:&tauri::AppHandle,n:Node)->tauri::Result<MenuItemKind<tauri::Wry>>{let title=n.title.replace('&',"&&");if n.id.is_empty(){return Ok(PredefinedMenuItem::separator(app)?.kind())}if !n.children.is_empty(){let sub=Submenu::with_id(app,n.id,title,n.enabled)?;for c in n.children{sub.append(&item(app,c)?)?;}return Ok(sub.kind())}if let Some(checked)=n.checked{return Ok(CheckMenuItem::with_id(app,n.id,title,n.enabled,checked,None::<&str>)?.kind())}Ok(MenuItem::with_id(app,n.id,title,n.enabled,None::<&str>)?.kind())}
  let menu=Menu::new(app)?;for n in s.menu(){menu.append(&item(app,n)?)?;}Ok(menu)
 }
-#[cfg(test)]mod tests{use super::*;fn fixture()->Snapshot{Snapshot{ready:true,mode:"rule".into(),proxy_ready:true,tun_ready:true,..Default::default()}}
+#[cfg(test)]mod tests{use super::*;fn fixture()->Snapshot{Snapshot{ready:true,busy:false,mode:"rule".into(),proxy_ready:true,tun_ready:true,..Default::default()}}
  #[test]fn exact_order_radio_checks_and_confirmed_sync(){let mut s=fixture();let nodes=s.menu();assert_eq!(nodes.iter().map(|n|n.title.as_str()).collect::<Vec<_>>(),vec!["显示主窗口","","模式：规则","系统代理","TUN","","策略组","","重启内核","重启应用","","恢复网络并退出"]);assert_eq!(nodes[2].children.iter().filter(|n|n.checked==Some(true)).count(),1);assert_eq!(s.action("k3-mode-global"),Some(Action::Mode{mode:"global".into()}));s.mode="global".into();s.system_proxy=true;s.tun=true;let after=s.menu();assert_eq!(after[2].children[1].checked,Some(true));assert_eq!(after[3].checked,Some(true));assert_eq!(after[4].checked,Some(true));assert_eq!(s.action("k3-proxy"),Some(Action::SystemProxy{enabled:false}));s.busy=true;assert_eq!(s.action("k3-mode-rule"),None);assert_eq!(s.action("k3-tun"),None);}
  #[test]fn config_order_limit_fixed_auto_dynamic_members_and_stale_ids(){let mut s=fixture();for i in 0..10{s.groups.push(Group{name:format!("g{i}"),label:format!("G{i}"),kind:"select".into(),fixed:None,current:Some("a".into()),members:vec![Member{name:"a".into(),label:"A".into()},Member{name:"b".into(),label:"B".into()}]});}s.groups.insert(1,Group{name:"auto".into(),label:"自动组".into(),kind:"url-test".into(),fixed:Some("b".into()),current:Some("a".into()),members:vec![Member{name:"b".into(),label:"B".into()}]});let menu=s.menu();let groups=&menu[6].children;assert_eq!(groups.len(),9);assert_eq!(groups[1].children[1].checked,Some(true));assert_eq!(s.action("k3-member-1-auto"),Some(Action::Member{group:"auto".into(),member:"".into(),unpin:true}));assert!(s.action("k3-member-10-0").is_none());s.groups.clear();assert!(s.action("k3-member-1-auto").is_none());}
  #[test]fn same_selection_pipeline_no_native_document_writer(){let front=include_str!("../../src/client/tray.ts");assert!(front.contains("api.select("));assert!(front.contains("api.mode("));let source=include_str!("../../src/client/useClient.ts");assert!(source.contains("selectGroupMember(d,group,member,unpin"));assert!(source.contains("await doc.select(d=>selectGroupMember"));assert!(source.contains("select:selectMember"));}
@@ -102,5 +127,34 @@ pub fn render(app:&tauri::AppHandle,s:&Snapshot)->tauri::Result<tauri::menu::Men
  assert!(state.select(&r.revision,"k3-member-0-auto").is_err());state.listener_ready=true;
  let d=state.select(&r.revision,"k3-member-0-auto").unwrap().unwrap();assert_eq!(d.action,Action::Member{group:"S".into(),member:String::new(),unpin:true});assert!(state.select(&r.revision,"k3-member-0-1").is_err());state.acknowledge(&d.delivery_id).unwrap();assert!(state.acknowledge(&d.delivery_id).is_err());
  state.snapshot.groups[0].fixed=None;assert!(state.snapshot.menu()[6].children.is_empty());
+ }
+}
+
+#[cfg(test)]mod tray_destroy_headless_tests {
+ use super::*;
+ #[test]fn headless_tray_actions_work_without_main_listener_and_update_projection(){
+  let mut state=MenuState::default();
+  state.sync(Snapshot{ready:true,busy:false,mode:"rule".into(),system_proxy:false,tun:false,proxy_ready:true,tun_ready:true,groups:vec![Group{name:"P".into(),label:"Proxy".into(),kind:"select".into(),fixed:None,current:Some("n1".into()),members:vec![Member{name:"n1".into(),label:"N1".into()},Member{name:"n2".into(),label:"N2".into()}]}]});
+  // Main window destroyed -> listener_ready is false.
+  assert!(!state.listener_ready);
+  let r=state.reply();
+  // Normal select still requires listener_ready, while headless select succeeds.
+  assert!(state.select(&r.revision,"k3-proxy").is_err());
+  let a=state.select_headless(&r.revision,"k3-proxy").unwrap().unwrap();
+  assert_eq!(a,Action::SystemProxy{enabled:true});
+  state.apply_headless_result(&a);
+  assert!(state.snapshot.system_proxy);
+  // Stale revision is rejected after state update.
+  assert!(state.select_headless(&r.revision,"k3-tun").is_err());
+  let r2=state.reply();
+  let a2=state.select_headless(&r2.revision,"k3-mode-global").unwrap().unwrap();
+  assert_eq!(a2,Action::Mode{mode:"global".into()});
+  state.apply_headless_result(&a2);
+  assert_eq!(state.snapshot.mode,"global");
+  let r3=state.reply();
+  let a3=state.select_headless(&r3.revision,"k3-member-0-1").unwrap().unwrap();
+  assert_eq!(a3,Action::Member{group:"P".into(),member:"n2".into(),unpin:false});
+  state.apply_headless_result(&a3);
+  assert_eq!(state.snapshot.groups[0].current.as_deref(),Some("n2"));
  }
 }

@@ -1,11 +1,10 @@
-// Kat-owned source-oriented UDP adapter. No connected gVisor UDP endpoint is
-// created: validated datagrams are queued by SOURCE+security epoch, never peer.
+// Kat-owned source-oriented UDP adapter (zero gVisor).
+// Validated datagrams are queued by SOURCE+security epoch, never peer.
 package tunstack
 
 import (
 	"context"
-	"gvisor.dev/gvisor/pkg/tcpip/header"
-	"gvisor.dev/gvisor/pkg/tcpip/stack"
+	"encoding/binary"
 	"net"
 	"net/netip"
 	"os"
@@ -20,14 +19,17 @@ type DatagramConn interface {
 	ReadDatagram([]byte) (int, netip.AddrPort, error)
 	WriteFrom([]byte, netip.AddrPort) (int, error)
 }
+
 type sourceKey struct {
 	source netip.AddrPort
 	epoch  uint64
 }
+
 type udpMessage struct {
 	target netip.AddrPort
 	data   []byte
 }
+
 type sourceConn struct {
 	r        *Runtime
 	cancel   context.CancelFunc
@@ -45,41 +47,72 @@ type sourceConn struct {
 const udpQueuedByteLimit = 8 << 20
 const udpSourceQueueSize = 512
 
-func (r *Runtime) udpPacket(id stack.TransportEndpointID, pkt *stack.PacketBuffer) bool {
-	f := flowID(id, UDP)
-	if !f.Source.IsValid() || !f.Destination.IsValid() || f.Source.Port() == 0 || f.Destination.Port() == 0 {
-		return true
-	}
-	n := pkt.Data().Size()
-	// A default transport handler runs BEFORE UDP endpoint validation. IP
-	// reassembly is gVisor-owned, but length/checksum validation is ours here.
-	if len(pkt.TransportHeader().Slice()) < header.UDPMinimumSize || n > 65527 {
+func (r *Runtime) handleUDP(pkt ipPacket) {
+	if len(pkt.payload) < 8 || len(pkt.payload)-8 > 65527 {
 		r.dropped.Add(1)
-		return true
+		return
 	}
-	h := header.UDP(pkt.TransportHeader().Slice())
-	nh := pkt.Network()
-	lengthOK, checksumOK := header.UDPValid(h, func() uint16 { return pkt.Data().Checksum() }, uint16(n), pkt.NetworkProtocolNumber, nh.SourceAddress(), nh.DestinationAddress(), pkt.RXChecksumValidated)
-	if !lengthOK || !checksumOK || (pkt.NetworkProtocolNumber == header.IPv6ProtocolNumber && h.Checksum() == 0) || int(h.Length()) != n+header.UDPMinimumSize {
+	srcPort := binary.BigEndian.Uint16(pkt.payload[0:2])
+	dstPort := binary.BigEndian.Uint16(pkt.payload[2:4])
+	if !pkt.src.IsValid() || !pkt.dst.IsValid() || srcPort == 0 || dstPort == 0 {
 		r.dropped.Add(1)
-		return true
+		return
 	}
+	if !verifyUDPChecksum(pkt) {
+		r.dropped.Add(1)
+		return
+	}
+	f := Flow{
+		Source:      netip.AddrPortFrom(pkt.src, srcPort),
+		Destination: netip.AddrPortFrom(pkt.dst, dstPort),
+		Protocol:    UDP,
+	}
+	body := pkt.payload[8:]
+	n := len(body)
+
+	// On jumbo virtual TUN interfaces (MTU > UDPMTU), advertise standard Path MTU
+	// (UDPMTU=1420) via ICMPv4 Fragmentation Needed (when DF=1) or ICMPv6 Packet
+	// Too Big so QUIC/UDP peers converge immediately without blackholing upstream.
+	if pkt.totalLen > UDPMTU && pkt.hdrLen >= 20 {
+		needPTB := (pkt.ver == 6) || (pkt.ver == 4 && pkt.df)
+		if needPTB {
+			r.mu.Lock()
+			ok := !r.stopping && !r.paused && r.cfg.Admitting() && r.ctx.Err() == nil
+			r.mu.Unlock()
+			if ok {
+				var origData []byte
+				if pkt.ver == 6 {
+					flat := body
+					if len(flat) > 1200 {
+						flat = flat[:1200]
+					}
+					origData = flat
+				}
+				if reply, built := ICMPPacketTooBig(pkt.raw[:pkt.hdrLen], pkt.payload[:8], origData, uint16(UDPMTU), r.packetID.Add(1)); built {
+					r.writeRawPacket(reply)
+				}
+			}
+			r.dropped.Add(1)
+			return
+		}
+	}
+
 	r.mu.Lock()
 	if r.stopping || r.paused || !r.cfg.Admitting() || r.ctx.Err() != nil {
 		r.dropped.Add(1)
 		r.mu.Unlock()
-		return true
+		return
 	}
 	f.Epoch = r.cfg.Epoch()
 	if f.Epoch != r.cfg.Epoch() || !r.cfg.Admitting() {
 		r.dropped.Add(1)
 		r.mu.Unlock()
-		return true
+		return
 	}
 	if r.udpQueuedBytes+int64(n) > udpQueuedByteLimit {
 		r.dropped.Add(1)
 		r.mu.Unlock()
-		return true
+		return
 	}
 	k := sourceKey{f.Source, f.Epoch}
 	c := r.udpSources[k]
@@ -87,10 +120,18 @@ func (r *Runtime) udpPacket(id stack.TransportEndpointID, pkt *stack.PacketBuffe
 		if r.pending >= maxHandlers {
 			r.dropped.Add(1)
 			r.mu.Unlock()
-			return true
+			return
 		}
 		life, cancel := context.WithCancel(r.ctx)
-		c = &sourceConn{r: r, cancel: cancel, key: k, first: f.Destination, queue: make(chan udpMessage, udpSourceQueueSize), closed: make(chan struct{}), changed: make(chan struct{})}
+		c = &sourceConn{
+			r:       r,
+			cancel:  cancel,
+			key:     k,
+			first:   f.Destination,
+			queue:   make(chan udpMessage, udpSourceQueueSize),
+			closed:  make(chan struct{}),
+			changed: make(chan struct{}),
+		}
 		r.udpSources[k] = c
 		r.active[c] = struct{}{}
 		r.pending++
@@ -101,9 +142,7 @@ func (r *Runtime) udpPacket(id stack.TransportEndpointID, pkt *stack.PacketBuffe
 		r.udpHandlers++
 		go func() { defer r.release(c); _ = r.cfg.Ingress.HandleUDP(life, f, c) }()
 	}
-	buf := pkt.Data().ToBuffer()
-	data := append([]byte(nil), buf.Flatten()...)
-	buf.Release()
+	data := append([]byte(nil), body...)
 	select {
 	case c.queue <- udpMessage{f.Destination, data}:
 		r.udpQueuedBytes += int64(n)
@@ -111,7 +150,6 @@ func (r *Runtime) udpPacket(id stack.TransportEndpointID, pkt *stack.PacketBuffe
 		r.dropped.Add(1)
 	}
 	r.mu.Unlock()
-	return true
 }
 
 // DatagramCurrent fences a second queue (the kernel sender) as well as DNS.
@@ -120,9 +158,11 @@ func (c *sourceConn) DatagramCurrent() bool {
 	defer c.r.mu.Unlock()
 	return c.currentLocked()
 }
+
 func (c *sourceConn) currentLocked() bool {
 	return !c.r.stopping && !c.r.paused && c.r.udpSources[c.key] == c && c.r.cfg.Admitting() && c.r.cfg.Epoch() == c.key.epoch
 }
+
 func (c *sourceConn) takeDatagram(b []byte, p udpMessage) (int, netip.AddrPort, error) {
 	c.r.mu.Lock()
 	c.r.udpQueuedBytes -= int64(len(p.data))
@@ -134,6 +174,7 @@ func (c *sourceConn) takeDatagram(b []byte, p udpMessage) (int, netip.AddrPort, 
 	}
 	return copy(b, p.data), p.target, nil
 }
+
 func (c *sourceConn) ReadDatagram(b []byte) (int, netip.AddrPort, error) {
 	// Fast path: check closed/canceled/expired first, then pop any queued packet without allocating a timer.
 	select {
@@ -215,8 +256,10 @@ func (c *sourceConn) ReadDatagram(b []byte) (int, netip.AddrPort, error) {
 		}
 	}
 }
+
 func (c *sourceConn) Read(b []byte) (int, error)  { n, _, e := c.ReadDatagram(b); return n, e }
 func (c *sourceConn) Write(b []byte) (int, error) { return c.WriteFrom(b, c.first) }
+
 func (c *sourceConn) WriteFrom(b []byte, peer netip.AddrPort) (int, error) {
 	// Serialize BEFORE encoding: at most one large reply/fragment set is held
 	// by the device writer, and admission is rechecked after the wait.
@@ -249,6 +292,7 @@ func (c *sourceConn) WriteFrom(b []byte, peer netip.AddrPort) (int, error) {
 	}
 	return len(b), nil
 }
+
 func (c *sourceConn) Close() error {
 	c.once.Do(func() {
 		c.r.mu.Lock()
@@ -271,6 +315,7 @@ func (c *sourceConn) Close() error {
 	})
 	return nil
 }
+
 func (c *sourceConn) LocalAddr() net.Addr  { return net.UDPAddrFromAddrPort(c.first) }
 func (c *sourceConn) RemoteAddr() net.Addr { return net.UDPAddrFromAddrPort(c.key.source) }
 func (c *sourceConn) SetReadDeadline(t time.Time) error {
@@ -283,5 +328,5 @@ func (c *sourceConn) SetReadDeadline(t time.Time) error {
 	c.mu.Unlock()
 	return nil
 }
-func (c *sourceConn) SetWriteDeadline(time.Time) error { return nil } // device writes share bounded Wintun session ownership
+func (c *sourceConn) SetWriteDeadline(time.Time) error { return nil }
 func (c *sourceConn) SetDeadline(t time.Time) error    { return c.SetReadDeadline(t) }

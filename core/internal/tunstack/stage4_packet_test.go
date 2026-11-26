@@ -18,7 +18,7 @@ func TestStage4UDPEncodeChecksumsAndMTU(t *testing.T) {
 			}
 			var udp []byte
 			for i, p := range frames {
-				if len(p) > MTU {
+				if len(p) > UDPMTU {
 					t.Fatal("exceeds MTU")
 				}
 				if src.Addr().Is4() {

@@ -3,10 +3,6 @@ package kernel
 import (
 	"bytes"
 	"context"
-	"gvisor.dev/gvisor/pkg/tcpip"
-	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
-	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
-	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
 	"net"
 	"net/netip"
 	"strconv"
@@ -15,18 +11,22 @@ import (
 	"time"
 )
 
-func stage4UDP(t *testing.T, p *c50Peer, v6 bool) *gonet.UDPConn {
+func stage4UDP(t *testing.T, p *c50Peer, v6 bool) *c50UDPConn {
 	t.Helper()
 	ip := netip.MustParseAddr("10.50.0.2")
-	proto := ipv4.ProtocolNumber
 	if v6 {
 		ip = netip.MustParseAddr("fd50::2")
-		proto = ipv6.ProtocolNumber
 	}
-	c, e := gonet.DialUDP(p.s, &tcpip.FullAddress{NIC: 1, Addr: tcpip.AddrFromSlice(ip.AsSlice()), Port: 40444}, nil, proto)
-	if e != nil {
-		t.Fatal(e)
+	local := netip.AddrPortFrom(ip, 40444)
+	c := &c50UDPConn{
+		dev:    p.dev,
+		local:  local,
+		in:     make(chan c50UDPDatagram, 256),
+		closed: make(chan struct{}),
 	}
+	p.dev.mu.Lock()
+	p.dev.udpSinks[local] = c
+	p.dev.mu.Unlock()
 	t.Cleanup(func() { c.Close() })
 	return c
 }

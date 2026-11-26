@@ -399,7 +399,13 @@ func TestSYNACKRefusal(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	_, e = o.DialTCP(ctxTimeout(t, 5*time.Second), echo)
+	c2, e := o.DialTCP(ctxTimeout(t, 5*time.Second), echo)
+	if e == nil {
+		_ = c2.SetReadDeadline(time.Now().Add(5 * time.Second))
+		var buf [16]byte
+		_, e = c2.Read(buf[:])
+		_ = c2.Close()
+	}
 	if e == nil || !strings.Contains(e.Error(), "refused") {
 		t.Fatalf("second stream beyond server limit: %v", e)
 	}

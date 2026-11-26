@@ -17,7 +17,7 @@ import (
 
 const JournalSchema = 2
 const Engine = "core_tun_v1"
-const MTU = 1420
+const MTU = 60000
 
 // Launch is supplied by the authenticated service launch, never GUI settings.
 type Launch struct {

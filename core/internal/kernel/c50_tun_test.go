@@ -9,7 +9,9 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -18,93 +20,279 @@ import (
 	"github.com/shui1iao/Kat/internal/procattr"
 	"github.com/shui1iao/Kat/internal/tunstack"
 	"golang.org/x/net/dns/dnsmessage"
-	"gvisor.dev/gvisor/pkg/buffer"
-	"gvisor.dev/gvisor/pkg/tcpip"
-	"gvisor.dev/gvisor/pkg/tcpip/adapters/gonet"
-	"gvisor.dev/gvisor/pkg/tcpip/header"
-	"gvisor.dev/gvisor/pkg/tcpip/link/channel"
-	"gvisor.dev/gvisor/pkg/tcpip/network/ipv4"
-	"gvisor.dev/gvisor/pkg/tcpip/network/ipv6"
-	"gvisor.dev/gvisor/pkg/tcpip/stack"
-	"gvisor.dev/gvisor/pkg/tcpip/transport/icmp"
-	"gvisor.dev/gvisor/pkg/tcpip/transport/tcp"
-	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 )
 
-// Two real IP stacks exchange complete L3 packets. There is no proxy listener
-// in this link and no SOCKS/katflow registration; external sockets bind local assigned addresses; no remote host is contacted.
+// Pure-Go L3 packet test harness driving tunstack.Runtime without gVisor.
+type c50UDPDatagram struct {
+	src  netip.AddrPort
+	data []byte
+}
+
+type c50UDPConn struct {
+	dev      *c50Device
+	local    netip.AddrPort
+	defPeer  netip.AddrPort
+	in       chan c50UDPDatagram
+	closed   chan struct{}
+	once     sync.Once
+	mu       sync.Mutex
+	deadline time.Time
+}
+
+func (c *c50UDPConn) Write(b []byte) (int, error) {
+	return c.WriteTo(b, net.UDPAddrFromAddrPort(c.defPeer))
+}
+
+func (c *c50UDPConn) WriteTo(b []byte, addr net.Addr) (int, error) {
+	ua, ok := addr.(*net.UDPAddr)
+	if !ok {
+		return 0, errors.New("not udp addr")
+	}
+	dst := ua.AddrPort()
+	dst = netip.AddrPortFrom(dst.Addr().Unmap(), dst.Port())
+	frames, err := tunstack.UDPReply(c.local, dst, b, c.dev.pktID.Add(1))
+	if err != nil {
+		return 0, err
+	}
+	for _, f := range frames {
+		select {
+		case <-c.closed:
+			return 0, net.ErrClosed
+		case <-c.dev.ctx.Done():
+			return 0, net.ErrClosed
+		case c.dev.toStack <- f:
+		}
+	}
+	return len(b), nil
+}
+
+func (c *c50UDPConn) Read(b []byte) (int, error) {
+	n, _, err := c.ReadFrom(b)
+	return n, err
+}
+
+func (c *c50UDPConn) ReadFrom(b []byte) (int, net.Addr, error) {
+	c.mu.Lock()
+	dl := c.deadline
+	c.mu.Unlock()
+	var tc <-chan time.Time
+	if !dl.IsZero() {
+		d := time.Until(dl)
+		if d <= 0 {
+			return 0, nil, os.ErrDeadlineExceeded
+		}
+		timer := time.NewTimer(d)
+		defer timer.Stop()
+		tc = timer.C
+	}
+	select {
+	case <-c.closed:
+		return 0, nil, net.ErrClosed
+	case <-tc:
+		return 0, nil, os.ErrDeadlineExceeded
+	case dg := <-c.in:
+		return copy(b, dg.data), net.UDPAddrFromAddrPort(dg.src), nil
+	}
+}
+
+func (c *c50UDPConn) SetDeadline(t time.Time) error      { return c.SetReadDeadline(t) }
+func (c *c50UDPConn) SetWriteDeadline(t time.Time) error { return nil }
+func (c *c50UDPConn) SetReadDeadline(t time.Time) error {
+	c.mu.Lock()
+	c.deadline = t
+	c.mu.Unlock()
+	return nil
+}
+func (c *c50UDPConn) LocalAddr() net.Addr { return net.UDPAddrFromAddrPort(c.local) }
+func (c *c50UDPConn) Close() error {
+	c.once.Do(func() {
+		c.dev.mu.Lock()
+		if c.dev.udpSinks[c.local] == c {
+			delete(c.dev.udpSinks, c.local)
+		}
+		c.dev.mu.Unlock()
+		close(c.closed)
+	})
+	return nil
+}
+
+type c50FragKey struct {
+	src, dst netip.Addr
+	id       uint32
+	v6       bool
+}
+type c50FragState struct {
+	buf      []byte
+	gotLast  bool
+	finalLen int
+	received int
+}
 type c50Device struct {
-	link                *channel.Endpoint
+	toStack             chan []byte
 	ctx                 context.Context
 	cancel              context.CancelFunc
 	closes              atomic.Int64
 	failRead, failWrite atomic.Bool
+	pktID               atomic.Uint32
+	mu                  sync.Mutex
+	udpSinks            map[netip.AddrPort]*c50UDPConn
+	frags               map[c50FragKey]*c50FragState
+}
+
+func newC50Device(ctx context.Context, cancel context.CancelFunc) *c50Device {
+	return &c50Device{
+		toStack:  make(chan []byte, 1024),
+		ctx:      ctx,
+		cancel:   cancel,
+		udpSinks: make(map[netip.AddrPort]*c50UDPConn),
+		frags:    make(map[c50FragKey]*c50FragState),
+	}
 }
 
 func (d *c50Device) ReadPacket(b []byte) (int, error) {
 	if d.failRead.Load() {
 		return 0, errors.New("injected device read failure")
 	}
-	p := d.link.ReadContext(d.ctx)
-	if p == nil {
+	if d.toStack == nil {
+		<-d.ctx.Done()
 		return 0, net.ErrClosed
 	}
-	defer p.DecRef()
-	v := p.ToBuffer()
-	defer v.Release()
-	wire := v.Flatten()
-	if len(wire) > len(b) {
-		return 0, io.ErrShortBuffer
+	select {
+	case <-d.ctx.Done():
+		return 0, net.ErrClosed
+	case wire := <-d.toStack:
+		if d.failRead.Load() {
+			return 0, errors.New("injected device read failure")
+		}
+		if len(wire) > len(b) {
+			return 0, io.ErrShortBuffer
+		}
+		return copy(b, wire), nil
 	}
-	return copy(b, wire), nil
 }
+
 func (d *c50Device) WritePacket(b []byte) error {
 	if d.failWrite.Load() {
 		return errors.New("injected device write failure")
 	}
-	p := stack.NewPacketBuffer(stack.PacketBufferOptions{Payload: buffer.MakeWithData(append([]byte(nil), b...))})
-	defer p.DecRef()
-	if header.IPVersion(b) == 6 {
-		d.link.InjectInbound(ipv6.ProtocolNumber, p)
+	if len(b) < 20 {
+		return nil
+	}
+	ver := b[0] >> 4
+	var srcIP, dstIP netip.Addr
+	var proto byte
+	var payload []byte
+	var isFrag, more bool
+	var fragOff int
+	var fragID uint32
+	if ver == 4 {
+		ihl := int(b[0]&0x0f) * 4
+		tot := int(binary.BigEndian.Uint16(b[2:4]))
+		if ihl < 20 || tot < ihl || tot > len(b) {
+			return nil
+		}
+		proto = b[9]
+		srcIP = netip.AddrFrom4([4]byte(b[12:16]))
+		dstIP = netip.AddrFrom4([4]byte(b[16:20]))
+		ff := binary.BigEndian.Uint16(b[6:8])
+		more = (ff & 0x2000) != 0
+		fragOff = int(ff&0x1fff) * 8
+		fragID = uint32(binary.BigEndian.Uint16(b[4:6]))
+		isFrag = more || fragOff > 0
+		payload = b[ihl:tot]
+	} else if ver == 6 {
+		if len(b) < 40 {
+			return nil
+		}
+		payLen := int(binary.BigEndian.Uint16(b[4:6]))
+		if 40+payLen > len(b) {
+			return nil
+		}
+		proto = b[6]
+		srcIP = netip.AddrFrom16([16]byte(b[8:24]))
+		dstIP = netip.AddrFrom16([16]byte(b[24:40]))
+		payload = b[40 : 40+payLen]
+		if proto == 44 && len(payload) >= 8 {
+			proto = payload[0]
+			of := binary.BigEndian.Uint16(payload[2:4])
+			fragOff = int(of & 0xfff8)
+			more = (of & 1) != 0
+			fragID = binary.BigEndian.Uint32(payload[4:8])
+			isFrag = more || fragOff > 0
+			payload = payload[8:]
+		}
 	} else {
-		d.link.InjectInbound(ipv4.ProtocolNumber, p)
+		return nil
+	}
+	if proto != 17 {
+		return nil
+	}
+	if isFrag {
+		k := c50FragKey{src: srcIP, dst: dstIP, id: fragID, v6: ver == 6}
+		d.mu.Lock()
+		st := d.frags[k]
+		if st == nil {
+			st = &c50FragState{}
+			d.frags[k] = st
+		}
+		end := fragOff + len(payload)
+		if end > len(st.buf) {
+			nb := make([]byte, end)
+			copy(nb, st.buf)
+			st.buf = nb
+		}
+		copy(st.buf[fragOff:end], payload)
+		st.received += len(payload)
+		if !more {
+			st.gotLast = true
+			st.finalLen = end
+		}
+		if !st.gotLast || st.received < st.finalLen {
+			d.mu.Unlock()
+			return nil
+		}
+		payload = st.buf[:st.finalLen]
+		delete(d.frags, k)
+		d.mu.Unlock()
+	}
+	if len(payload) < 8 {
+		return nil
+	}
+	srcPort := binary.BigEndian.Uint16(payload[0:2])
+	dstPort := binary.BigEndian.Uint16(payload[2:4])
+	srcAP := netip.AddrPortFrom(srcIP, srcPort)
+	dstAP := netip.AddrPortFrom(dstIP, dstPort)
+	body := append([]byte(nil), payload[8:]...)
+	d.mu.Lock()
+	sink := d.udpSinks[dstAP]
+	d.mu.Unlock()
+	if sink != nil {
+		select {
+		case sink.in <- c50UDPDatagram{src: srcAP, data: body}:
+		default:
+		}
 	}
 	return nil
 }
+
 func (d *c50Device) Close() error { d.closes.Add(1); d.cancel(); return nil }
 
 type c50Peer struct {
-	s     *stack.Stack
-	dev   *c50Device
-	plane *tunstack.Runtime
+	dev      *c50Device
+	plane    *tunstack.Runtime
+	nextPort atomic.Uint32
 }
 
 func c50Link(t *testing.T, in tunstack.Ingress, gate func() bool, epoch func() uint64) *c50Peer {
 	t.Helper()
-	s := stack.New(stack.Options{NetworkProtocols: []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol}, TransportProtocols: []stack.TransportProtocolFactory{tcp.NewProtocol, udp.NewProtocol, icmp.NewProtocol4, icmp.NewProtocol6}})
-	link := channel.New(1024, tunstack.MTU, "")
-	if e := s.CreateNIC(1, link); e != nil {
-		t.Fatal(e)
-	}
-	for _, v := range []struct {
-		ip    string
-		proto tcpip.NetworkProtocolNumber
-		bits  int
-	}{{"10.50.0.2", ipv4.ProtocolNumber, 24}, {"fd50::2", ipv6.ProtocolNumber, 64}} {
-		a := netip.MustParseAddr(v.ip)
-		if e := s.AddProtocolAddress(1, tcpip.ProtocolAddress{Protocol: v.proto, AddressWithPrefix: tcpip.AddressWithPrefix{Address: tcpip.AddrFromSlice(a.AsSlice()), PrefixLen: v.bits}}, stack.AddressProperties{}); e != nil {
-			t.Fatal(e)
-		}
-	}
-	s.SetRouteTable([]tcpip.Route{{Destination: header.IPv4EmptySubnet, NIC: 1}, {Destination: header.IPv6EmptySubnet, NIC: 1}})
 	ctx, cancel := context.WithCancel(context.Background())
-	d := &c50Device{link: link, ctx: ctx, cancel: cancel}
+	d := newC50Device(ctx, cancel)
 	p, e := tunstack.StartReady(context.Background(), tunstack.Config{Device: d, Ingress: in, Admitting: gate, Epoch: epoch})
 	if e != nil {
-		s.Destroy()
 		t.Fatal(e)
 	}
-	peer := &c50Peer{s: s, dev: d, plane: p}
+	peer := &c50Peer{dev: d, plane: p}
+	peer.nextPort.Store(50000)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -114,40 +302,47 @@ func c50Link(t *testing.T, in tunstack.Ingress, gate func() bool, epoch func() u
 		case <-ctx.Done():
 			t.Error("plane shutdown not joined")
 		}
-		s.Destroy()
 		if d.closes.Load() != 1 {
 			t.Errorf("device close count=%d", d.closes.Load())
 		}
 	})
 	return peer
 }
-func (p *c50Peer) tcp(t *testing.T, target netip.AddrPort) *gonet.TCPConn {
+
+func (p *c50Peer) tcp(t *testing.T, target netip.AddrPort) *net.TCPConn {
 	t.Helper()
-	proto := ipv4.ProtocolNumber
+	srcIP := netip.MustParseAddr("10.50.0.2")
 	if target.Addr().Is6() {
-		proto = ipv6.ProtocolNumber
+		srcIP = netip.MustParseAddr("fd50::2")
 	}
+	srcPort := uint16(p.nextPort.Add(1))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	c, e := gonet.DialContextTCP(ctx, p.s, tcpip.FullAddress{NIC: 1, Addr: tcpip.AddrFromSlice(target.Addr().AsSlice()), Port: target.Port()}, proto)
+	c, e := p.plane.DialTestTCP(ctx, netip.AddrPortFrom(srcIP, srcPort), target)
 	if e != nil {
 		t.Fatal(e)
 	}
 	_ = c.SetDeadline(time.Now().Add(2 * time.Second))
 	return c
 }
-func (p *c50Peer) udp(t *testing.T, port uint16, target netip.AddrPort) *gonet.UDPConn {
+
+func (p *c50Peer) udp(t *testing.T, port uint16, target netip.AddrPort) *c50UDPConn {
 	t.Helper()
 	src := netip.MustParseAddr("10.50.0.2")
-	proto := ipv4.ProtocolNumber
 	if target.Addr().Is6() {
 		src = netip.MustParseAddr("fd50::2")
-		proto = ipv6.ProtocolNumber
 	}
-	c, e := gonet.DialUDP(p.s, &tcpip.FullAddress{NIC: 1, Addr: tcpip.AddrFromSlice(src.AsSlice()), Port: port}, &tcpip.FullAddress{NIC: 1, Addr: tcpip.AddrFromSlice(target.Addr().AsSlice()), Port: target.Port()}, proto)
-	if e != nil {
-		t.Fatal(e)
+	local := netip.AddrPortFrom(src, port)
+	c := &c50UDPConn{
+		dev:     p.dev,
+		local:   local,
+		defPeer: target,
+		in:      make(chan c50UDPDatagram, 256),
+		closed:  make(chan struct{}),
 	}
+	p.dev.mu.Lock()
+	p.dev.udpSinks[local] = c
+	p.dev.mu.Unlock()
 	_ = c.SetDeadline(time.Now().Add(time.Second))
 	return c
 }

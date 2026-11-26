@@ -112,3 +112,55 @@ func readAddress(r io.Reader) (Address, error) {
 	a.Port = binary.BigEndian.Uint16(b)
 	return a, nil
 }
+
+func parseAddressBytes(b []byte, cacheIP4 *[4]byte, cacheStr *string, cacheInit *bool) (Address, int, error) {
+	if len(b) < 4 {
+		return Address{}, 0, io.ErrUnexpectedEOF
+	}
+	var a Address
+	var off int
+	switch b[0] {
+	case 1:
+		if len(b) < 7 {
+			return Address{}, 0, io.ErrUnexpectedEOF
+		}
+		var ip4 [4]byte
+		copy(ip4[:], b[1:5])
+		if cacheIP4 != nil && cacheStr != nil && cacheInit != nil {
+			if !*cacheInit || ip4 != *cacheIP4 {
+				*cacheIP4 = ip4
+				*cacheStr = netip.AddrFrom4(ip4).String()
+				*cacheInit = true
+			}
+			a.Host = *cacheStr
+		} else {
+			a.Host = netip.AddrFrom4(ip4).String()
+		}
+		off = 5
+	case 4:
+		if len(b) < 19 {
+			return Address{}, 0, io.ErrUnexpectedEOF
+		}
+		var ip16 [16]byte
+		copy(ip16[:], b[1:17])
+		a.Host = netip.AddrFrom16(ip16).Unmap().String()
+		off = 17
+	case 3:
+		n := int(b[1])
+		if n == 0 {
+			return Address{}, 0, errors.New("empty domain")
+		}
+		if len(b) < 2+n+2 {
+			return Address{}, 0, io.ErrUnexpectedEOF
+		}
+		a.Host = string(b[2 : 2+n])
+		if strings.ContainsAny(a.Host, "\x00\r\n :/\\") {
+			return Address{}, 0, errors.New("invalid domain")
+		}
+		off = 2 + n
+	default:
+		return Address{}, 0, errors.New("unsupported address type")
+	}
+	a.Port = binary.BigEndian.Uint16(b[off : off+2])
+	return a, off + 2, nil
+}

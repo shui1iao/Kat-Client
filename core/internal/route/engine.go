@@ -261,7 +261,7 @@ func NewResourceEngine(o Options, dial func(via string) (func(ctx context.Contex
 		refs := geositeRefs(o.Rules)
 		sort.Strings(refs)
 		pruneGeosite := len(o.RuleSets) == 0
-		gsStamp := "geosite"
+		gsStamp := "geosite|" + strings.Join(refs, ",")
 		if pruneGeosite {
 			gsStamp = "geosite-pruned|" + strings.Join(refs, ",")
 		}
@@ -273,7 +273,14 @@ func NewResourceEngine(o Options, dial func(via string) (func(ctx context.Contex
 				if pruneGeosite {
 					return parseGeositeDBForRefs(b, refs)
 				}
-				return parseGeositeDB(b)
+				db, err := parseGeositeDB(b)
+				if err != nil {
+					return nil, err
+				}
+				for _, r := range refs {
+					_ = db.matcher(r)
+				}
+				return db, nil
 			},
 			check: func(any) error { return nil },
 			swap: func(v any) {

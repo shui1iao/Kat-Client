@@ -3,7 +3,6 @@ package tunstack
 import (
 	"context"
 	"errors"
-	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"net"
 	"net/netip"
 	"testing"
@@ -25,10 +24,11 @@ func (h *drainingIngress) HandleUDP(ctx context.Context, _ Flow, c net.Conn) err
 	<-h.release
 	return ctx.Err()
 }
+
 func TestQuiesceDrainsUDPWorkAfterSourceHasClosed(t *testing.T) {
 	h := &drainingIngress{make(chan *sourceConn, 1), make(chan struct{}), make(chan struct{})}
 	r := &Runtime{ctx: context.Background(), cfg: Config{Ingress: h, Admitting: func() bool { return true }, Epoch: func() uint64 { return 3 }}, active: map[net.Conn]struct{}{}, udpSources: map[sourceKey]*sourceConn{}}
-	m2Input(t, netip.MustParseAddrPort("10.50.0.2:3456"), netip.MustParseAddrPort("203.0.113.1:4444"), func([]byte) {}, func(p *stack.PacketBuffer, id stack.TransportEndpointID) { r.udpPacket(id, p) })
+	m2Input(t, netip.MustParseAddrPort("10.50.0.2:3456"), netip.MustParseAddrPort("203.0.113.1:4444"), func([]byte) {}, func(p ipPacket) { r.handleUDP(p) })
 	select {
 	case c := <-h.entered:
 		if !c.DatagramCurrent() {

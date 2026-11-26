@@ -56,6 +56,14 @@ var (
 // exactly one whole datagram and the address it came from (as reported by the
 // last hop). Close unblocks pending reads/writes. Implementations must be safe
 // for one concurrent reader plus one concurrent writer.
+// Optional batch interfaces implemented by Linux recvmmsg/sendmmsg-capable packet connections.
+type BatchPacketWriter interface {
+	WriteBatch(payloads [][]byte, dst Addr) (int, error)
+}
+type BatchPacketReader interface {
+	ReadBatch(bufs [][]byte, lens []int, srcs []Addr) (int, error)
+}
+
 type PacketConn interface {
 	WriteTo(p []byte, dst Addr) (int, error)
 	ReadFrom(p []byte) (n int, src Addr, err error)
@@ -155,7 +163,8 @@ type Options struct {
 	Method       string         `json:"method,omitempty"`
 	Key          string         `json:"key,omitempty"`
 	TLS          *TLSOptions    `json:"tls,omitempty"`
-	IdleSessions int            `json:"idle_sessions,omitempty"`
+	IdleSessions    int            `json:"idle_sessions,omitempty"`
+	MinIdleSessions int            `json:"min_idle_sessions,omitempty"`
 	IdleTimeout  Duration       `json:"idle_timeout,omitempty"`
 }
 

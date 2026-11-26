@@ -1,7 +1,6 @@
 package kernel
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -9,12 +8,38 @@ import (
 	"net/netip"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
+	"github.com/shui1iao/Kat/internal/udpmmsg"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
 const maxDatagram = 65507
+
+const udpPayloadPoolCap = 2048
+
+var udpPayloadPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, udpPayloadPoolCap)
+		return &b
+	},
+}
+
+func acquireUDPPayload(n int) []byte {
+	if n <= udpPayloadPoolCap {
+		bp := udpPayloadPool.Get().(*[]byte)
+		return (*bp)[:n]
+	}
+	return make([]byte, n)
+}
+
+func releaseUDPPayload(b []byte) {
+	if cap(b) == udpPayloadPoolCap {
+		s := b[:udpPayloadPoolCap]
+		udpPayloadPool.Put(&s)
+	}
+}
 
 type packet struct {
 	target  Address
@@ -29,6 +54,8 @@ type udpAssociation struct {
 	cancel                       context.CancelFunc
 	stream                       net.Conn
 	outbound4, outbound6, native *net.UDPConn
+	rawNative                    syscall.RawConn
+	v6Native                     bool
 	activity                     atomic.Int64
 	receivedDatagram             atomic.Bool
 	queuedBytes                  atomic.Int64
@@ -51,6 +78,25 @@ type udpAssociation struct {
 	// Sniffing (0.7.0): with override_destination a direct reply from the
 	// resolved address is reported from the client's original target.
 	reverse map[netip.AddrPort]Address
+	// Hot-path buffers & caches (outBuf/lastNativeWDeadline under outputMu; rc* owned by sendLoop).
+	outBuf              []byte
+	lastNativeWDeadline int64
+	rcTarget            Address
+	rcProxy             string
+	rcDst               Address
+	rcRule              int
+	rcRoute             *udpRoute
+	rcValid             atomic.Bool
+	rcSnap              atomic.Pointer[udpFastRoute]
+	hasSniffer          atomic.Bool
+}
+
+type udpFastRoute struct {
+	target Address
+	proxy  string
+	dst    Address
+	rule   int
+	rt     *udpRoute
 }
 
 func (s *Server) resolve(ctx context.Context, a Address) (netip.AddrPort, error) {
@@ -152,6 +198,8 @@ func (s *Server) serveUDP(c net.Conn, r request) (retErr error) {
 		if e != nil {
 			return e
 		}
+		a.rawNative, _ = a.native.SyscallConn()
+		a.v6Native = udpmmsg.IsIPv6Socket(a.native)
 		defer a.native.Close()
 	}
 	var bound net.Addr
@@ -199,6 +247,7 @@ func (s *Server) serveUDP(c net.Conn, r request) (retErr error) {
 		select {
 		case p := <-a.queue:
 			a.queuedBytes.Add(-int64(len(p.payload)))
+			releaseUDPPayload(p.payload)
 		default:
 			return e
 		}
@@ -213,6 +262,7 @@ func (a *udpAssociation) enqueue(p packet) {
 		limit = int64(a.server.cfg.Limits.UDPQueue * maxDatagram)
 	}
 	if a.ctx.Err() != nil {
+		releaseUDPPayload(p.payload)
 		return
 	}
 	for {
@@ -220,6 +270,7 @@ func (a *udpAssociation) enqueue(p packet) {
 		if n > limit-old {
 			a.server.counters.Dropped.Add(1)
 			a.server.failure(failUDPQueue, "udp", -1)
+			releaseUDPPayload(p.payload)
 			return
 		}
 		if a.queuedBytes.CompareAndSwap(old, old+n) {
@@ -229,11 +280,13 @@ func (a *udpAssociation) enqueue(p packet) {
 	select {
 	case <-a.ctx.Done():
 		a.queuedBytes.Add(-n)
+		releaseUDPPayload(p.payload)
 	case a.queue <- p:
 	default:
 		a.queuedBytes.Add(-n)
 		a.server.counters.Dropped.Add(1)
 		a.server.failure(failUDPQueue, "udp", -1)
+		releaseUDPPayload(p.payload)
 	}
 }
 func (a *udpAssociation) nativeLoop() error {
@@ -244,52 +297,128 @@ func (a *udpAssociation) nativeLoop() error {
 			frags.close()
 		}
 	}()
-	for {
-		n, src, e := a.native.ReadFromUDPAddrPort(b)
-		if e != nil {
-			return e
+	var (
+		cachedClient netip.AddrPort
+		cacheIP4     [4]byte
+		cacheStr     string
+		cacheInit    bool
+	)
+	var rb *udpmmsg.RecvBatch
+	pktSeen := 0
+	defer func() {
+		if rb != nil {
+			udpmmsg.ReleaseRecvBatch(rb)
 		}
+	}()
+	handleDatagram := func(pkt []byte, src netip.AddrPort) {
+		n := len(pkt)
 		src = netip.AddrPortFrom(src.Addr().Unmap(), src.Port())
-		a.mu.Lock()
-		client := a.client
-		a.mu.Unlock()
+		client := cachedClient
+		if client.Port() == 0 {
+			a.mu.Lock()
+			client = a.client
+			a.mu.Unlock()
+			if client.Port() != 0 {
+				cachedClient = client
+			}
+		}
 		if src.Addr() != client.Addr() || (client.Port() != 0 && src.Port() != client.Port()) {
 			a.server.counters.Dropped.Add(1)
 			a.server.failure(failUDPInvalid, "udp", -1)
-			continue
+			return
 		}
-		if n < 4 || b[0] != 0 || b[1] != 0 {
+		if n < 4 || pkt[0] != 0 || pkt[1] != 0 {
 			a.server.counters.Dropped.Add(1)
 			a.server.failure(failUDPInvalid, "udp", -1)
-			continue
+			return
 		}
-		reader := bytes.NewReader(b[3:n])
-		target, e := readAddress(reader)
-		if e != nil || reader.Len() > maxDatagram || target.Port == 0 {
+		target, consumed, e := parseAddressBytes(pkt[3:n], &cacheIP4, &cacheStr, &cacheInit)
+		payOff := 3 + consumed
+		if e != nil || n-payOff > maxDatagram || target.Port == 0 {
 			a.server.counters.Dropped.Add(1)
 			a.server.failure(failUDPInvalid, "udp", -1)
-			continue
+			return
 		}
-		a.mu.Lock()
-		if a.client.Port() == 0 {
-			a.client = src
+		if cachedClient.Port() == 0 {
+			a.mu.Lock()
+			if a.client.Port() == 0 {
+				a.client = src
+			}
+			cachedClient = a.client
+			a.mu.Unlock()
 		}
-		a.mu.Unlock()
-		payload := append([]byte(nil), b[n-reader.Len():n]...)
-		if b[2] != 0 {
+		if pkt[2] != 0 {
+			payload := append([]byte(nil), pkt[payOff:n]...)
 			if frags == nil {
 				frags = a.newReassembly()
 			}
 			if frags == nil {
 				a.server.frags.dropped.Add(1)
-				continue
+				return
 			}
 			var ok bool
-			if target, payload, ok = frags.add(b[2], target, payload); !ok {
+			if target, payload, ok = frags.add(pkt[2], target, payload); !ok {
+				return
+			}
+			a.enqueue(packet{target: target, payload: payload})
+			return
+		}
+		payload := acquireUDPPayload(n - payOff)
+		copy(payload, pkt[payOff:n])
+		a.enqueue(packet{target: target, payload: payload})
+	}
+	for {
+		if rb == nil {
+			n, src, e := a.native.ReadFromUDPAddrPort(b)
+			if e != nil {
+				return e
+			}
+			handleDatagram(b[:n], src)
+			pktSeen++
+			if pktSeen == udpmmsg.UpgradeCnt && a.rawNative != nil {
+				rb = udpmmsg.AcquireRecvBatch()
+				b = nil
+			}
+			continue
+		}
+		cnt, e := udpmmsg.ReadBatch(a.native, a.rawNative, rb)
+		if e != nil {
+			return e
+		}
+		if snap := a.rcSnap.Load(); snap != nil && !a.hasSniffer.Load() && len(a.queue) == 0 && cachedClient.Port() != 0 {
+			var fastPays [udpmmsg.BatchSize][]byte
+			fastN := 0
+			allFast := true
+			for i := 0; i < cnt; i++ {
+				src := rb.Addrs[i]
+				if !src.IsValid() {
+					continue
+				}
+				pkt := rb.Bufs[i][:rb.Lens[i]]
+				if src != cachedClient || len(pkt) < 4 || pkt[0] != 0 || pkt[1] != 0 || pkt[2] != 0 {
+					allFast = false
+					break
+				}
+				target, consumed, pe := parseAddressBytes(pkt[3:], &cacheIP4, &cacheStr, &cacheInit)
+				payOff := 3 + consumed
+				if pe != nil || len(pkt)-payOff > maxDatagram || target != snap.target {
+					allFast = false
+					break
+				}
+				fastPays[fastN] = pkt[payOff:]
+				fastN++
+			}
+			if allFast && fastN > 0 {
+				a.receivedDatagram.Store(true)
+				a.sendProxyFastBatch(snap.proxy, snap.dst, fastPays[:fastN], snap.target, snap.rule, snap.rt)
 				continue
 			}
 		}
-		a.enqueue(packet{target, payload})
+		for i := 0; i < cnt; i++ {
+			if rb.Addrs[i].IsValid() {
+				handleDatagram(rb.Bufs[i][:rb.Lens[i]], rb.Addrs[i])
+			}
+		}
 	}
 }
 func (a *udpAssociation) sendLoop() {
@@ -297,6 +426,11 @@ func (a *udpAssociation) sendLoop() {
 	// Proxy sessions never outlive the association's sender.
 	defer a.closeProxies()
 	sn := a.newUDPSniffer()
+	if sn != nil {
+		a.hasSniffer.Store(true)
+	}
+	var batch [udpmmsg.BatchSize]packet
+	var payBatch [udpmmsg.BatchSize][]byte
 	for {
 		select {
 		case <-a.ctx.Done():
@@ -304,12 +438,52 @@ func (a *udpAssociation) sendLoop() {
 		case <-sn.timerC():
 			sn.expire(a, time.Now(), idle)
 		case p := <-a.queue:
-			a.queuedBytes.Add(-int64(len(p.payload)))
+			batch[0] = p
+			n := 1
+			drainedBytes := int64(len(p.payload))
+			if sn == nil && a.tunSend == nil {
+				for n < udpmmsg.BatchSize {
+					select {
+					case p2 := <-a.queue:
+						batch[n] = p2
+						drainedBytes += int64(len(p2.payload))
+						n++
+					default:
+						goto drained
+					}
+				}
+			}
+		drained:
+			a.queuedBytes.Add(-drainedBytes)
 			if sn != nil {
-				sn.packet(a, p, idle)
+				sn.packet(a, batch[0], idle)
+				batch[0] = packet{}
 				continue
 			}
-			a.send(a.ctx, p, idle)
+			if n > 1 && a.rcValid.Load() {
+				allSame := true
+				for i := 0; i < n; i++ {
+					if batch[i].target != a.rcTarget {
+						allSame = false
+						break
+					}
+					payBatch[i] = batch[i].payload
+				}
+				if allSame {
+					a.sendProxyFastBatch(a.rcProxy, a.rcDst, payBatch[:n], a.rcTarget, a.rcRule, a.rcRoute)
+					for i := 0; i < n; i++ {
+						releaseUDPPayload(batch[i].payload)
+						batch[i] = packet{}
+						payBatch[i] = nil
+					}
+					continue
+				}
+			}
+			for i := 0; i < n; i++ {
+				a.send(a.ctx, batch[i], idle)
+				releaseUDPPayload(batch[i].payload)
+				batch[i] = packet{}
+			}
 		}
 	}
 }
@@ -318,6 +492,10 @@ func (a *udpAssociation) sendLoop() {
 func (a *udpAssociation) send(ctx context.Context, p packet, idle time.Duration) {
 	if a.tunSend != nil {
 		a.tunSend(ctx, p, idle)
+		return
+	}
+	if a.rcValid.Load() && p.target == a.rcTarget && sniffOf(ctx).target(p.target) == p.target {
+		a.sendProxyFast(a.rcProxy, a.rcDst, p.payload, p.target, a.rcRule, a.rcRoute)
 		return
 	}
 	if a.native != nil {
@@ -358,7 +536,15 @@ func (a *udpAssociation) send(ctx context.Context, p packet, idle time.Duration)
 			// the outbound gets the original target.
 			dst = p.target
 		}
-		a.sendProxy(proxy, dst, p.payload, p.target, rule, candidates)
+		rt, cacheable := a.sendProxy(proxy, dst, p.payload, p.target, rule, candidates)
+		if cacheable && !overridden && proxy != "direct" {
+			a.rcTarget = p.target
+			a.rcProxy = proxy
+			a.rcDst = dst
+			a.rcRule = rule
+			a.rcRoute = rt
+			a.rcValid.Store(true)
+		}
 		return
 	}
 	var target netip.AddrPort
@@ -544,14 +730,20 @@ func (a *udpAssociation) output(client netip.AddrPort, source Address, payload [
 		if client.Port() == 0 {
 			return nil
 		}
-		out := appendAddress([]byte{0, 0, 0}, source)
+		out := append(a.outBuf[:0], 0, 0, 0)
+		out = appendAddress(out, source)
 		out = append(out, payload...)
+		a.outBuf = out
 		if len(out) > maxDatagram {
 			a.server.counters.Dropped.Add(1)
 			a.server.failure(failUDPInvalid, "udp", -1)
 			return nil
 		}
-		a.native.SetWriteDeadline(time.Now().Add(a.server.cfg.Limits.DialTimeout.value()))
+		now := time.Now()
+		if nowNano := now.UnixNano(); nowNano-a.lastNativeWDeadline >= int64(time.Second) {
+			a.native.SetWriteDeadline(now.Add(a.server.cfg.Limits.DialTimeout.value()))
+			a.lastNativeWDeadline = nowNano
+		}
 		_, e = a.native.WriteToUDPAddrPort(out, client)
 	}
 	return e
@@ -586,4 +778,63 @@ func (a *udpAssociation) touchActivity(now time.Time) {
 			return
 		}
 	}
+}
+
+func (a *udpAssociation) outputBatch(client netip.AddrPort, sources []Address, payloads [][]byte, idle time.Duration) error {
+	if len(payloads) == 0 {
+		return nil
+	}
+	if len(payloads) == 1 || a.native == nil || a.rawNative == nil || client.Port() == 0 {
+		for i := range payloads {
+			if e := a.output(client, sources[i], payloads[i], idle); e != nil {
+				return e
+			}
+		}
+		return nil
+	}
+	a.outputMu.Lock()
+	defer a.outputMu.Unlock()
+	var (
+		pkts  [udpmmsg.BatchSize][]byte
+		addrs [udpmmsg.BatchSize]netip.AddrPort
+		sb    udpmmsg.SendBatch
+		n     int
+	)
+	// Reuse a.outBuf as contiguous scratch for all SOCKS5 UDP frames in this batch.
+	totalEst := 0
+	for i := range payloads {
+		totalEst += 24 + len(sources[i].Host) + len(payloads[i])
+	}
+	if cap(a.outBuf) < totalEst {
+		a.outBuf = make([]byte, 0, totalEst)
+	}
+	buf := a.outBuf[:0]
+	for i := range payloads {
+		start := len(buf)
+		buf = append(buf, 0, 0, 0)
+		buf = appendAddress(buf, sources[i])
+		buf = append(buf, payloads[i]...)
+		frame := buf[start:]
+		if len(frame) > maxDatagram {
+			buf = buf[:start]
+			a.server.counters.Dropped.Add(1)
+			a.server.failure(failUDPInvalid, "udp", -1)
+			continue
+		}
+		pkts[n] = frame
+		addrs[n] = client
+		n++
+	}
+	a.outBuf = buf[:0]
+	if n == 0 {
+		return nil
+	}
+	now := time.Now()
+	nowNano := now.UnixNano()
+	if nowNano-a.lastNativeWDeadline >= int64(time.Second) {
+		a.native.SetWriteDeadline(now.Add(a.server.cfg.Limits.DialTimeout.value()))
+		a.lastNativeWDeadline = nowNano
+	}
+	_, e := udpmmsg.WriteBatch(a.native, a.rawNative, a.v6Native, &sb, pkts[:n], addrs[:n])
+	return e
 }

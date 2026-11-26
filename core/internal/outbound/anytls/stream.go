@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -81,14 +82,13 @@ func acquireRecvBuf(n int) []byte {
 	return make([]byte, n, c)
 }
 
-func releaseRecvBuf(b []byte) {
+func releaseRecvBufLocked(b []byte) {
 	idx := recvClassIndex(len(b))
 	if idx < 0 || cap(b) != recvClassCaps[idx] {
 		return
 	}
 	c := recvClassCaps[idx]
 	b = b[:c]
-	recvPool.mu.Lock()
 	recvPool.seq++
 	recvPool.lastUsed[idx] = recvPool.seq
 	if len(recvPool.classes[idx]) < maxRecvClassSlot {
@@ -120,6 +120,26 @@ func releaseRecvBuf(b []byte) {
 			recvPool.bytes += c
 		}
 	}
+}
+
+func releaseRecvBuf(b []byte) {
+	idx := recvClassIndex(len(b))
+	if idx < 0 || cap(b) != recvClassCaps[idx] {
+		return
+	}
+	recvPool.mu.Lock()
+	releaseRecvBufLocked(b)
+	recvPool.mu.Unlock()
+}
+
+func releaseRecvBufs(bufs [][]byte) {
+	if len(bufs) == 0 {
+		return
+	}
+	recvPool.mu.Lock()
+	for _, b := range bufs {
+		releaseRecvBufLocked(b)
+	}
 	recvPool.mu.Unlock()
 }
 
@@ -128,6 +148,13 @@ var errClosedByPeer = errors.New("anytls: stream closed by server")
 // stream is one logical AnyTLS stream; it is the net.Conn returned by DialTCP.
 // FIN closes the whole logical stream in both directions (the protocol has no
 // half-close), so no CloseWrite is offered. Deadlines apply to this stream only.
+type directSink struct {
+	w       io.Writer
+	written int64
+	err     error
+	done    chan struct{}
+}
+
 type stream struct {
 	s      *session
 	id     uint32
@@ -135,6 +162,11 @@ type stream struct {
 
 	rmu, wmu sync.Mutex // serialize Read / Write callers
 	wbuf     []byte
+	wvec     [16][]byte
+	wbufs    net.Buffers
+
+	freeMu   sync.Mutex
+	freeBufs [][]byte
 
 	mu       sync.Mutex
 	in       [][]byte
@@ -149,15 +181,24 @@ type stream struct {
 	closed   bool // local Close
 	detached bool // removed from the session, slot released
 
+	inBytesAtomic atomic.Int32
+	stopped       atomic.Bool // true once closed or rerr != nil
+
+	sink       *directSink // non-nil while WriteTo is directly serviced by recvLoop
+	sinkActive bool        // true while recvLoop is inside sink.w.Write
+	sinkIdle   chan struct{}
+
 	rch     chan struct{} // capacity 1: data/state for readers and await
 	space   chan struct{} // capacity 1: buffer drained
 	closing chan struct{} // closed by local Close
+	wabort  chan struct{} // closed on async SYNACK refusal to wake blocked writes
+	wabortOnce sync.Once
 
 	rd, wd deadline
 }
 
 func newStream(s *session, id uint32) *stream {
-	st := &stream{s: s, id: id, rch: make(chan struct{}, 1), space: make(chan struct{}, 1), closing: make(chan struct{})}
+	st := &stream{s: s, id: id, rch: make(chan struct{}, 1), space: make(chan struct{}, 1), closing: make(chan struct{}), wabort: make(chan struct{})}
 	st.rd.init()
 	st.wd.init()
 	return st
@@ -172,21 +213,25 @@ func signal(c chan struct{}) {
 
 // On reuse, the previous stream already authenticated the session. Flush this
 // stream's SYN/target before evaluating its protocol-specific verdict.
-func (st *stream) awaitWrite(ctx context.Context, req *writeReq, needAck bool) error {
+// awaitWriteOnly flushes SYN/target onto a reused carrier without waiting for
+// the remote SYNACK round-trip, allowing dead pooled sessions to be detected
+// and retried locally while keeping stream open 0-RTT on healthy carriers.
+func (st *stream) awaitWriteOnly(ctx context.Context, req *writeReq) error {
 	s := st.s
 	select {
 	case e := <-req.done:
-		if e != nil {
-			return e
-		}
+		return e
 	case <-s.done:
 		return s.cause()
 	case <-ctx.Done():
-		// SYN/target has its own immutable buffer. A request already taken
-		// by the writer can finish ahead of the closing FIN without holding
-		// the canceled caller until the carrier's stall deadline.
 		s.cancel(req)
 		return fmt.Errorf("anytls: waiting for server: %w", ctx.Err())
+	}
+}
+
+func (st *stream) awaitWrite(ctx context.Context, req *writeReq, needAck bool) error {
+	if e := st.awaitWriteOnly(ctx, req); e != nil {
+		return e
 	}
 	return st.await(ctx, needAck)
 }
@@ -250,8 +295,12 @@ func (st *stream) acknowledge(accepted bool) {
 	if st.werr == nil {
 		st.werr = st.synErr
 	}
+	st.stopped.Store(true)
+	st.wakeDirectSinkLocked()
 	st.mu.Unlock()
+	st.wabortOnce.Do(func() { close(st.wabort) })
 	signal(st.rch)
+	signal(st.space)
 	st.detach(false)
 }
 
@@ -259,6 +308,85 @@ func (st *stream) acknowledge(accepted bool) {
 // reader waits for the application (or stream close / session failure); the
 // session is exclusive to this stream, so no other stream is held up and
 // memory stays bounded by maxStreamBuffer plus one frame.
+const maxStreamFreeBufs = 8
+
+func (st *stream) acquireBuf(n int) []byte {
+	idx := recvClassIndex(n)
+	if idx < 0 {
+		return make([]byte, n)
+	}
+	c := recvClassCaps[idx]
+	st.freeMu.Lock()
+	for i := len(st.freeBufs) - 1; i >= 0; i-- {
+		if cap(st.freeBufs[i]) == c {
+			b := st.freeBufs[i]
+			last := len(st.freeBufs) - 1
+			st.freeBufs[i] = st.freeBufs[last]
+			st.freeBufs[last] = nil
+			st.freeBufs = st.freeBufs[:last]
+			st.freeMu.Unlock()
+			return b[:n]
+		}
+	}
+	st.freeMu.Unlock()
+	return acquireRecvBuf(n)
+}
+
+func (st *stream) releaseBuf(b []byte) {
+	idx := recvClassIndex(len(b))
+	if idx < 0 || cap(b) != recvClassCaps[idx] {
+		return
+	}
+	st.freeMu.Lock()
+	if !st.stopped.Load() && len(st.freeBufs) < maxStreamFreeBufs {
+		st.freeBufs = append(st.freeBufs, b[:cap(b)])
+		st.freeMu.Unlock()
+		return
+	}
+	st.freeMu.Unlock()
+	releaseRecvBuf(b)
+}
+
+func (st *stream) releaseBufs(bufs [][]byte) {
+	if len(bufs) == 0 {
+		return
+	}
+	var overflow [16][]byte
+	nOver := 0
+	st.freeMu.Lock()
+	canCache := !st.stopped.Load()
+	for _, b := range bufs {
+		idx := recvClassIndex(len(b))
+		if idx < 0 || cap(b) != recvClassCaps[idx] {
+			continue
+		}
+		if canCache && len(st.freeBufs) < maxStreamFreeBufs {
+			st.freeBufs = append(st.freeBufs, b[:cap(b)])
+		} else if nOver < len(overflow) {
+			overflow[nOver] = b
+			nOver++
+		} else {
+			st.freeMu.Unlock()
+			releaseRecvBuf(b)
+			st.freeMu.Lock()
+		}
+	}
+	st.freeMu.Unlock()
+	if nOver > 0 {
+		releaseRecvBufs(overflow[:nOver])
+	}
+}
+
+func (st *stream) drainFreeBufs() {
+	st.freeMu.Lock()
+	bufs := st.freeBufs
+	st.freeBufs = nil
+	st.freeMu.Unlock()
+	if len(bufs) > 0 {
+		releaseRecvBufs(bufs)
+	}
+}
+
 func (st *stream) push(b []byte) {
 	st.enqueueIn(b, false)
 }
@@ -270,6 +398,11 @@ func (st *stream) pushPooled(b []byte) {
 // waitSpace blocks until the stream's receive window can accept a frame of n
 // bytes, the stream stops accepting incoming frames, or the session fails.
 func (st *stream) waitSpace(n int) (ok bool, sessionDone bool) {
+	if !st.stopped.Load() {
+		if cur := int(st.inBytesAtomic.Load()); cur == 0 || cur+n <= maxStreamBuffer {
+			return true, false
+		}
+	}
 	for {
 		st.mu.Lock()
 		closed := st.closed || st.rerr != nil
@@ -320,6 +453,7 @@ func (st *stream) enqueueIn(b []byte, pooled bool) {
 			}
 			st.in = append(st.in, b)
 			st.inBytes += len(b)
+			st.inBytesAtomic.Store(int32(st.inBytes))
 			st.mu.Unlock()
 			signal(st.rch)
 			return
@@ -346,10 +480,12 @@ func (st *stream) remoteClose(err error) {
 	if st.werr == nil {
 		st.werr = errClosedByPeer
 	}
+	st.stopped.Store(true)
 	if st.inHead == len(st.in) {
 		st.in = nil
 		st.inHead = 0
 	}
+	st.wakeDirectSinkLocked()
 	signal(st.space)
 	st.mu.Unlock()
 	signal(st.rch)
@@ -365,10 +501,12 @@ func (st *stream) abort(err error) {
 	if st.werr == nil || st.werr == errClosedByPeer {
 		st.werr = err
 	}
+	st.stopped.Store(true)
 	if st.inHead == len(st.in) {
 		st.in = nil
 		st.inHead = 0
 	}
+	st.wakeDirectSinkLocked()
 	signal(st.space)
 	st.mu.Unlock()
 	signal(st.rch)
@@ -415,26 +553,40 @@ func (st *stream) Read(p []byte) (int, error) {
 				st.mu.Unlock()
 				return 0, nil
 			}
-			total := 0
+			// Pop complete chunks under st.mu so copy + recvPool release happen
+			// outside the stream mutex, avoiding lock nesting and contention.
+			var popBuf [16][]byte
+			var popOff [16]int
+			nPop := 0
+			rem := len(p)
 			drained := false
-			for len(p) > 0 && st.inHead < len(st.in) {
+			pooled := st.pooled
+			partialCopied := 0
+			for rem > 0 && st.inHead < len(st.in) && nPop < len(popBuf) {
 				b := st.in[st.inHead]
-				if total > 0 && st.off == 0 && len(p) < len(b) {
+				avail := len(b) - st.off
+				if nPop > 0 && st.off == 0 && rem < avail {
 					break
 				}
-				n := copy(p, b[st.off:])
-				total += n
-				p = p[n:]
-				st.off += n
-				if st.off == len(b) {
+				if rem >= avail {
+					popBuf[nPop] = b
+					popOff[nPop] = st.off
+					nPop++
+					rem -= avail
 					st.in[st.inHead] = nil
-					if st.pooled {
-						releaseRecvBuf(b)
-					}
 					st.inHead++
 					st.off = 0
 					st.inBytes -= len(b)
 					drained = true
+				} else {
+					// Copy partial chunk under st.mu so Close cannot recycle it concurrently.
+					// Destination offset is len(p)-rem (all popped chunks go before it).
+					dstOff := len(p) - rem
+					n := copy(p[dstOff:], b[st.off:st.off+rem])
+					st.off += n
+					partialCopied = n
+					rem -= n
+					break
 				}
 			}
 			if st.inHead == len(st.in) {
@@ -446,9 +598,22 @@ func (st *stream) Read(p []byte) (int, error) {
 				st.inHead = 0
 			}
 			if drained {
-				signal(st.space)
+				st.inBytesAtomic.Store(int32(st.inBytes))
 			}
 			st.mu.Unlock()
+			total := 0
+			for i := 0; i < nPop; i++ {
+				n := copy(p, popBuf[i][popOff[i]:])
+				total += n
+				p = p[n:]
+			}
+			total += partialCopied
+			if pooled && nPop > 0 {
+				releaseRecvBufs(popBuf[:nPop])
+			}
+			if drained {
+				signal(st.space)
+			}
 			return total, nil
 		}
 		if st.rerr != nil {
@@ -462,6 +627,196 @@ func (st *stream) Read(p []byte) (int, error) {
 		if len(p) == 0 {
 			return 0, nil
 		}
+		select {
+		case <-st.rch:
+		case <-st.rd.done():
+		case <-st.closing:
+		}
+	}
+}
+
+func (st *stream) acquireDirectSink() *directSink {
+	st.mu.Lock()
+	if st.closed || st.rerr != nil || st.sink == nil || st.inHead < len(st.in) {
+		st.mu.Unlock()
+		return nil
+	}
+	st.sinkActive = true
+	sk := st.sink
+	st.mu.Unlock()
+	return sk
+}
+
+func (st *stream) releaseDirectSink(writeErr error) {
+	st.mu.Lock()
+	sk := st.sink
+	st.sinkActive = false
+	if st.sinkIdle != nil {
+		close(st.sinkIdle)
+		st.sinkIdle = nil
+	}
+	if writeErr != nil && sk != nil {
+		sk.err = writeErr
+		st.sink = nil
+		close(sk.done)
+	}
+	st.mu.Unlock()
+}
+
+func (st *stream) wakeDirectSinkLocked() {
+	if st.sink != nil {
+		sk := st.sink
+		st.sink = nil
+		close(sk.done)
+	}
+}
+
+type buffersWriter interface {
+	WriteBuffers(*net.Buffers) (int64, error)
+}
+
+func (st *stream) WriteTo(w io.Writer) (int64, error) {
+	st.rmu.Lock()
+	defer st.rmu.Unlock()
+	bw, hasBW := w.(buffersWriter)
+	var total int64
+	for {
+		st.mu.Lock()
+		if st.closed {
+			st.mu.Unlock()
+			return total, net.ErrClosed
+		}
+		if st.rd.expired() {
+			st.mu.Unlock()
+			return total, os.ErrDeadlineExceeded
+		}
+		if st.inHead < len(st.in) {
+			var popBuf [16][]byte
+			var popOff [16]int
+			nPop := 0
+			pooled := st.pooled
+			for st.inHead < len(st.in) && nPop < len(popBuf) {
+				b := st.in[st.inHead]
+				popBuf[nPop] = b
+				popOff[nPop] = st.off
+				nPop++
+				st.in[st.inHead] = nil
+				st.inHead++
+				st.off = 0
+				st.inBytes -= len(b)
+			}
+			if st.inHead == len(st.in) {
+				if st.rerr != nil {
+					st.in = nil
+				} else {
+					st.in = st.in[:0]
+				}
+				st.inHead = 0
+			}
+			st.inBytesAtomic.Store(int32(st.inBytes))
+			st.mu.Unlock()
+
+			var writeErr error
+			if nPop == 1 {
+				chunk := popBuf[0][popOff[0]:]
+				for len(chunk) > 0 {
+					nw, ew := w.Write(chunk)
+					total += int64(nw)
+					chunk = chunk[nw:]
+					if ew != nil {
+						writeErr = ew
+						break
+					}
+					if nw == 0 {
+						writeErr = io.ErrShortWrite
+						break
+					}
+				}
+			} else if hasBW {
+				for i := 0; i < nPop; i++ {
+					st.wvec[i] = popBuf[i][popOff[i]:]
+				}
+				st.wbufs = net.Buffers(st.wvec[:nPop])
+				for len(st.wbufs) > 0 {
+					nw, ew := bw.WriteBuffers(&st.wbufs)
+					total += nw
+					if ew != nil {
+						writeErr = ew
+						break
+					}
+				}
+				for i := 0; i < nPop; i++ {
+					st.wvec[i] = nil
+				}
+				st.wbufs = nil
+			} else {
+				for i := 0; i < nPop && writeErr == nil; i++ {
+					chunk := popBuf[i][popOff[i]:]
+					for len(chunk) > 0 {
+						nw, ew := w.Write(chunk)
+						total += int64(nw)
+						chunk = chunk[nw:]
+						if ew != nil {
+							writeErr = ew
+							break
+						}
+						if nw == 0 {
+							writeErr = io.ErrShortWrite
+							break
+						}
+					}
+				}
+			}
+			if pooled {
+				st.releaseBufs(popBuf[:nPop])
+			}
+			signal(st.space)
+			if writeErr != nil {
+				return total, writeErr
+			}
+			continue
+		}
+		if st.rerr != nil {
+			st.in = nil
+			st.inHead = 0
+			e := st.rerr
+			st.mu.Unlock()
+			if e == io.EOF {
+				return total, nil
+			}
+			return total, e
+		}
+		if st.s.rawWrite != nil && !st.rd.active() {
+			sk := &directSink{w: w, done: make(chan struct{})}
+			st.sink = sk
+			st.mu.Unlock()
+			select {
+			case <-sk.done:
+			case <-st.rd.done():
+			case <-st.closing:
+			}
+			st.mu.Lock()
+			if st.sink == sk {
+				st.sink = nil
+			}
+			for st.sinkActive {
+				if st.sinkIdle == nil {
+					st.sinkIdle = make(chan struct{})
+				}
+				ch := st.sinkIdle
+				st.mu.Unlock()
+				<-ch
+				st.mu.Lock()
+			}
+			total += sk.written
+			writeErr := sk.err
+			st.mu.Unlock()
+			if writeErr != nil {
+				return total, writeErr
+			}
+			continue
+		}
+		st.mu.Unlock()
 		select {
 		case <-st.rch:
 		case <-st.rd.done():
@@ -563,6 +918,8 @@ func (st *stream) writeData(data []byte) error {
 		stop = os.ErrDeadlineExceeded
 	case <-st.closing:
 		stop = net.ErrClosed
+	case <-st.wabort:
+		stop = errStreamRefused
 	}
 	if s.cancel(req) {
 		return stop
@@ -584,6 +941,7 @@ func (st *stream) Close() error {
 		return nil
 	}
 	st.closed = true
+	st.stopped.Store(true)
 	in := st.in
 	head := st.inHead
 	pooled := st.pooled
@@ -591,6 +949,8 @@ func (st *stream) Close() error {
 	st.inHead = 0
 	st.off = 0
 	st.inBytes = 0
+	st.inBytesAtomic.Store(0)
+	st.wakeDirectSinkLocked()
 	close(st.closing)
 	st.mu.Unlock()
 	if pooled {
@@ -602,6 +962,7 @@ func (st *stream) Close() error {
 		}
 	}
 	signal(st.space)
+	st.drainFreeBufs()
 	st.rd.stop()
 	st.wd.stop()
 	st.detach(true)
@@ -708,5 +1069,6 @@ func TrimRecvBufPool() int {
 		}
 	}
 	recvPool.bytes = 0
+	dropped += trimSessionIOPools()
 	return dropped
 }

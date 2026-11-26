@@ -6,18 +6,15 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/shui1iao/Kat/internal/tunplatform"
-	"gvisor.dev/gvisor/pkg/buffer"
-	"gvisor.dev/gvisor/pkg/tcpip"
-	"gvisor.dev/gvisor/pkg/tcpip/header"
-	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"net"
 	"net/netip"
 	"syscall"
 	"testing"
+
+	"github.com/shui1iao/Kat/internal/tunplatform"
 )
 
-func m2Input(t *testing.T, src, dst netip.AddrPort, mutate func([]byte), run func(*stack.PacketBuffer, stack.TransportEndpointID)) {
+func m2Input(t *testing.T, src, dst netip.AddrPort, mutate func([]byte), run func(ipPacket)) {
 	t.Helper()
 	frames, e := UDPReply(src, dst, []byte("test"), 1)
 	if e != nil {
@@ -25,18 +22,13 @@ func m2Input(t *testing.T, src, dst netip.AddrPort, mutate func([]byte), run fun
 	}
 	wire := frames[0]
 	mutate(wire)
-	p := stack.NewPacketBuffer(stack.PacketBufferOptions{Payload: buffer.MakeWithData(wire)})
-	defer p.DecRef()
-	h := 20
-	p.NetworkProtocolNumber = header.IPv4ProtocolNumber
-	if src.Addr().Is6() {
-		h = 40
-		p.NetworkProtocolNumber = header.IPv6ProtocolNumber
+	pkt, _, ok := parseIPPacket(wire)
+	if !ok {
+		t.Fatal("parseIPPacket rejected wire")
 	}
-	p.NetworkHeader().Consume(h)
-	p.TransportHeader().Consume(8)
-	run(p, stack.TransportEndpointID{RemoteAddress: tcpip.AddrFromSlice(src.Addr().AsSlice()), LocalAddress: tcpip.AddrFromSlice(dst.Addr().AsSlice()), RemotePort: src.Port(), LocalPort: dst.Port()})
+	run(pkt)
 }
+
 func TestM2UDPRejectsInvalidChecksumLengthAndTornEpoch(t *testing.T) {
 	for _, v6 := range []bool{false, true} {
 		src, dst := netip.MustParseAddrPort("10.50.0.2:4000"), netip.MustParseAddrPort("203.0.113.1:4444")
@@ -65,18 +57,19 @@ func TestM2UDPRejectsInvalidChecksumLengthAndTornEpoch(t *testing.T) {
 				case "zero-v6":
 					binary.BigEndian.PutUint16(w[h+6:], 0)
 				}
-			}, func(p *stack.PacketBuffer, id stack.TransportEndpointID) { r.udpPacket(id, p) })
+			}, func(p ipPacket) { r.handleUDP(p) })
 			if r.pending != 0 || len(r.udpSources) != 0 || r.dropped.Load() != 1 {
 				t.Fatalf("invalid %s v6=%v admitted", bad, v6)
 			}
 		}
 	}
 }
+
 func TestM2UDPGlobalQueueAndHandlerBudget(t *testing.T) {
 	src, dst := netip.MustParseAddrPort("10.50.0.2:4000"), netip.MustParseAddrPort("203.0.113.1:4444")
 	r := &Runtime{ctx: context.Background(), cfg: Config{Admitting: func() bool { return true }, Epoch: func() uint64 { return 1 }}, udpSources: map[sourceKey]*sourceConn{}, active: map[net.Conn]struct{}{}, pending: maxHandlers}
 	deliver := func() {
-		m2Input(t, src, dst, func([]byte) {}, func(p *stack.PacketBuffer, id stack.TransportEndpointID) { r.udpPacket(id, p) })
+		m2Input(t, src, dst, func([]byte) {}, func(p ipPacket) { r.handleUDP(p) })
 	}
 	deliver()
 	if len(r.udpSources) != 0 || r.pending != maxHandlers {
@@ -98,29 +91,28 @@ func TestM2UDPGlobalQueueAndHandlerBudget(t *testing.T) {
 	}
 	c.Close()
 	if r.udpQueuedBytes != 0 {
-		t.Fatal("close did not release queue bytes")
+		t.Fatal("close leaked queued bytes")
 	}
 }
 
 func TestM2UDPWriteFromRingFullDropsWithoutFatalAndPreservesFragmentSemantics(t *testing.T) {
-	src := netip.MustParseAddrPort("10.50.0.2:4000")
-	peer := netip.MustParseAddrPort("203.0.113.1:4444")
+	src := netip.MustParseAddrPort("198.18.0.1:41000")
+	peer := netip.MustParseAddrPort("203.0.113.50:4444")
 
-	t.Run("single_packet_and_second_fragment_ring_full_return_0_err_and_keep_conn_alive", func(t *testing.T) {
+	t.Run("ring_full_single_and_fragmented_drop_then_recover", func(t *testing.T) {
 		dev := &backpressureDevice{
-			scriptedDevice: newScriptedDevice(16),
+			scriptedDevice: newScriptedDevice(8),
 			wb: scriptedWriteBehavior{
 				errSeq: []error{
-					&tunplatform.WintunRingFullError{Cause: 111}, // call 0: single packet fails with ring full
-					nil, // call 1: fragmented packet frag 0 succeeds
-					&tunplatform.WintunRingFullError{Cause: 111}, // call 2: fragmented packet frag 1 fails with ring full
-					nil, // call 3: subsequent single packet succeeds
+					&tunplatform.WintunRingFullError{Cause: syscall.Errno(111)},
+					nil,
+					&tunplatform.WintunRingFullError{Cause: syscall.Errno(111)},
+					nil,
 				},
 			},
 		}
 		r := &Runtime{
 			ctx:        context.Background(),
-			cancel:     func() {},
 			cfg:        Config{Device: dev, Admitting: func() bool { return true }, Epoch: func() uint64 { return 1 }},
 			udpSources: map[sourceKey]*sourceConn{},
 			active:     map[net.Conn]struct{}{},
@@ -131,14 +123,9 @@ func TestM2UDPWriteFromRingFullDropsWithoutFatalAndPreservesFragmentSemantics(t 
 		c := &sourceConn{r: r, key: k, first: peer, queue: make(chan udpMessage, 4), closed: make(chan struct{}), changed: make(chan struct{})}
 		r.udpSources[k] = c
 
-		// 1) Single packet (<= MTU) ring full -> returns 0, err; increments dropped; does NOT fatal.
-		small := []byte("small-udp-reply")
-		n, err := c.WriteFrom(small, peer)
-		if n != 0 || err == nil {
-			t.Fatalf("expected (0, err) on ring full, got (%d, %v)", n, err)
-		}
-		if !errors.Is(err, tunplatform.ErrWintunRingFull) || !errors.Is(err, syscall.Errno(111)) {
-			t.Fatalf("expected WintunRingFullError wrapping errno 111, got %v", err)
+		n, err := c.WriteFrom([]byte("small-udp"), peer)
+		if n != 0 || err == nil || !errors.Is(err, tunplatform.ErrWintunRingFull) {
+			t.Fatalf("expected (0, WintunRingFullError), got (%d, %v)", n, err)
 		}
 		if got := r.dropped.Load(); got != 1 {
 			t.Fatalf("dropped=%d, want 1", got)
@@ -150,8 +137,6 @@ func TestM2UDPWriteFromRingFullDropsWithoutFatalAndPreservesFragmentSemantics(t 
 			t.Fatalf("expected 0 written packets on first call, got %d", len(dev.writes))
 		}
 
-		// 2) Fragmented packet (> MTU, 2000B -> 2 IPv4 fragments): frag 0 written, frag 1 fails with ring full.
-		// Already-sent fragment 0 cannot be rolled back; WriteFrom increments dropped by 1 and returns 0, err.
 		large := bytes.Repeat([]byte{0x7A}, 2000)
 		n, err = c.WriteFrom(large, peer)
 		if n != 0 || err == nil || !errors.Is(err, tunplatform.ErrWintunRingFull) {
@@ -168,7 +153,6 @@ func TestM2UDPWriteFromRingFullDropsWithoutFatalAndPreservesFragmentSemantics(t 
 		}
 		<-dev.writes
 
-		// 3) Subsequent packet on the same sourceConn still succeeds and returns real payload length.
 		next := []byte("recovered-udp-reply")
 		n, err = c.WriteFrom(next, peer)
 		if err != nil || n != len(next) {
