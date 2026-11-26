@@ -12,12 +12,16 @@
 .overview-bento {
   --ov-inset: 17px;
   --ov-gap: 13px;
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
   flex: 1;
   min-height: 0;
   height: 100%;
   display: grid;
   grid-template-columns: repeat(24, minmax(0, 1fr));
-  grid-template-rows: minmax(204px, 1fr) minmax(204px, 0.94fr) minmax(136px, 0.66fr);
+  grid-template-rows: minmax(204px, 276px) minmax(204px, 264px) minmax(136px, 196px);
+  align-content: start;
   grid-template-areas:
     "speed speed speed speed speed speed speed speed speed speed speed speed speed speed live live live live live live live live live live"
     "dest dest dest dest dest dest dest dest dest usage usage usage usage usage usage usage usage usage usage usage usage usage usage usage"
@@ -795,6 +799,9 @@
    2. POLICIES (Policies.tsx) — Independent group cards, health strip, member chips
    ========================================================================== */
 .pol-page-v2 {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
   flex: 1;
   min-height: 0;
   height: 100%;
@@ -1655,6 +1662,9 @@
    3. NODES & SUBSCRIPTIONS (Nodes.tsx)
    ========================================================================== */
 .nodes-page {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
   flex: 1;
   padding-bottom: 16px;
   min-height: 0;
@@ -3503,6 +3513,9 @@
 /* Windows-Settings style: a section rail on the left, one calm column of
    cards on the right. The rail reuses the scroll-spy Segmented (vertical). */
 .settings-page-v2 {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
   flex: 1;
   min-height: 0;
   height: 100%;

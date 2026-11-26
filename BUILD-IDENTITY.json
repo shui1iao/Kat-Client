@@ -1,19 +1,19 @@
 {
-  "candidate": "v0.2.34-windows-core-v0.8.21",
-  "app_version": "0.2.34",
+  "candidate": "v0.2.35-windows-core-v0.8.21",
+  "app_version": "0.2.35",
   "windows_clientcore_version": "0.8.21",
-  "sequence": 1795630000,
-  "client_sequence": 1795630000,
+  "sequence": 1795640000,
+  "client_sequence": 1795640000,
   "core_sequence": 1795629000,
   "core_source_fingerprint": "624ff4ff10f4aa83f86ec85145945aacb02d460c245a5d2fd420e19ab6ece93f",
   "core_build_commit": "624ff4ff10f4aa83f86ec85145945aacb02d460c",
   "core_build_commit_kind": "exact core source fingerprint first40, not a Git commit",
   "executables": {
-    "kat-desktop.exe": "b379057804dbe0ff7741f7ec8d771bd5cfd48b28957fe3ddfe7233ea75ef5dc4",
-    "kat-elevate-helper.exe": "0977039d815b03c7654fe8024160f404c9dc6e55609d808063c9bf1cf7c83907",
-    "kat-install-helper.exe": "2e7a5e93e7869f787aa1b5a5a4a3a95bcedd7600a9b60268e3da1ab1f299fd45",
-    "kat-network-service.exe": "20d562dd463b59848c24145bd0f9e0c3f5ed8f05c4e1b7d01716c00cc89cc103",
-    "kat-proxy-watchdog.exe": "440f37c1668f7031e273b668e93bc728d8409df42e9e46009cffd3802b2b4f0b",
+    "kat-desktop.exe": "96ad3c083ad9a056594c89747fa93cdb3b382db1a733429a347e4eb0fa6dc083",
+    "kat-elevate-helper.exe": "5dc56e991a2a97329b3934b4934e7333ae467db3c727cfa4ab06b045c5c47fd3",
+    "kat-install-helper.exe": "abbf8695b46323f05185905ddff230ed6e7d9c11fbaa2cf46ec6623eb88d6cce",
+    "kat-network-service.exe": "326e0389554d0822509c4c24709c55fd85c5f0a8e1d418560129e2cb6908c7d0",
+    "kat-proxy-watchdog.exe": "214370a469b9d2a6381b95a3c1e178bca336691921fee83ba7f95a89d7d2203a",
     "kat-client-core.exe": "ebc9b2108bd2060c96709467f84e6c264634bfa2115d5c28fb3a948dfcb4e00d"
   },
   "executable_sizes": {
@@ -26,14 +26,14 @@
   },
   "uninstaller": {
     "bytes": 162464,
-    "sha256": "ba11a35814c52161c82cdd605693e24bfe7d8e3c1959b615ec7b895f81a5bcbf"
+    "sha256": "f791117f9c86dc600a3dff8a6e6bbf69ba3ac2e333d8d8e531e6c1622ea55d84"
   },
   "signature_key_id": "0afa646ee76f17d8",
-  "source_manifest_sha256": "df52c0495bd6c270c56fc6cfaed04b0418f6d0d94033886dd68386dd8130721a",
+  "source_manifest_sha256": "c79b36530105b120c3fec840f1434fa17088bebc7d380ba2a73627dfd497d4a7",
   "source_manifest_members": 1854,
-  "package_auth_sha256": "7815cb9a8709aa290ce060915c6b0100166fd137422cbb0ccf9d9a7cabd3851a",
-  "package_auth_signature_sha256": "ae0d7c0704e692f761c05190eea2d16b495a51a4eddfc52677429f53d4b32508",
-  "setup_auth_sha256": "933a005a4a548e3020c8792d5742a5d000379c308560ab727e1d4fffd8d7be8e",
-  "setup_auth_signature_sha256": "f6f1be447b9331db3604aa0f10b0c3fbbf33ede2c2de0904495ccc837f2d2d4e",
+  "package_auth_sha256": "99ba5907f7a105d9afd8295fd8c3c9da9573ea1b4fb70985ee859e02ce744f6e",
+  "package_auth_signature_sha256": "558aec234ba96ccba454a04cdc95b87f0f6b478d73b2d872270abad9755ea963",
+  "setup_auth_sha256": "3f35ab7f5043d3b18019dca0fb1b45ee3bd3af00d273f6ce7820cc157035b8cc",
+  "setup_auth_signature_sha256": "9672f991eb67e6f429a83dcfe87fde3e2904894fb69983bb91c364420eeb35dd",
   "setup_verifier_gate": "passed (schema1 + schema2, 22 files)"
 }
