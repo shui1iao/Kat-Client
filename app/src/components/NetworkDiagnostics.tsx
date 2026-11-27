@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { ServiceIcon } from './ServiceIcon';
-import { Card, Segmented, StableText } from './ui';
+import { Card, Empty, Segmented, StableText } from './ui';
 import { Icon } from './Icon';
 import { KState } from './labels';
+import { hmStr } from '../client/display';
 import { tip } from './Tooltip';
 import { Field, Modal, LocalError } from './Editors';
 import { core } from '../client/ipc';
@@ -20,7 +21,7 @@ const labels = {
   ok: '可达',
 };
 
-export function regionLabel(iso?: string) {
+function regionLabel(iso?: string) {
   return iso && /^[A-Z]{2}$/.test(iso)
     ? String.fromCodePoint(...[...iso].map((c) => 127397 + c.charCodeAt(0))) + ' ' + iso
     : '—';
@@ -101,9 +102,7 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
     row: (cache.unlock?.items ?? []).find((x) => x.name === name),
   }));
 
-  const lastAt = r?.at
-    ? '上次检测 ' + new Date(r.at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
-    : '尚未检测';
+  const lastAt = r?.at ? '上次检测 ' + hmStr(r.at) : '尚未检测';
 
   return (
     <>
@@ -125,7 +124,7 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
             <div className="diagnostic-foot-actions">
               <button
                 type="button"
-                className={'btn sm ghost diag-add-btn' + (kind !== 'connectivity' ? ' is-placeholder' : '')}
+                className={'btn xs ghost diag-add-btn' + (kind !== 'connectivity' ? ' is-placeholder' : '')}
                 aria-hidden={kind !== 'connectivity' || undefined}
                 tabIndex={kind !== 'connectivity' ? -1 : undefined}
                 disabled={kind !== 'connectivity' || urls.length >= 16 || c.busy.has('preferences')}
@@ -139,7 +138,7 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
               </span>
               <button
                 type="button"
-                className={'btn sm diag-run-btn' + (busy === kind ? ' spin' : '')}
+                className={'btn xs diag-run-btn' + (busy === kind ? ' spin' : '')}
                 disabled={!running || !!busy}
                 onClick={() => void detect(kind)}
               >
@@ -183,7 +182,7 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
 
           {kind === 'connectivity' &&
             (!r ? (
-              <div className="empty">点击右上角「检测」查看连通性</div>
+              <Empty>点击右上角「检测」查看连通性</Empty>
             ) : (
               <div className="diag-list diag-grid-2" role="list" aria-label="连通性检测结果">
                 {connectivityItems?.map((x) => (
@@ -218,7 +217,7 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
 
           {kind === 'exit' &&
             (!cache.exit ? (
-              <div className="empty">点击右上角「刷新」查看出口 IP</div>
+              <Empty>点击右上角「刷新」查看出口 IP</Empty>
             ) : (cache.exit.items ?? []).length ? (
               <div className="diag-list diag-grid-2" role="list" aria-label="出口 IP">
                 {(cache.exit.items ?? []).map((x) => {
@@ -241,7 +240,7 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
                 })}
               </div>
             ) : (
-              <div className="empty">规则未使用策略组</div>
+              <Empty>规则未使用策略组</Empty>
             ))}
         </div>
       </Card>

@@ -6,7 +6,6 @@
 const LEAVING: { selector: string; ms: number }[] = [
   { selector: '.modal-mask', ms: 150 },
   { selector: '.kat-pop, .rule-judge-pop', ms: 120 },
-  { selector: '.toast', ms: 170 },
   { selector: '.kat-tip', ms: 90 },
 ];
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');

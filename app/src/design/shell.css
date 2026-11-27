@@ -283,6 +283,7 @@
 
 .nav-update-dot {
   background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 /* Collapsed Sidebar */
@@ -330,12 +331,9 @@
   text-align: left;
   cursor: default;
   transition: background-color var(--t-fast) var(--ease), transform 90ms var(--ease);
-  animation: kat-pop-in 140ms var(--ease-spring);
+  animation: kat-pop-in 140ms var(--ease);
 }
 
-.global-group-pill:active:not(:disabled) {
-  transform: scale(0.98);
-}
 
 .side-status:hover .ss-capsule {
   background: var(--hover);
@@ -599,53 +597,7 @@
 }
 
 .mode-seg {
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  align-items: center;
-  width: 100%;
-  height: var(--h-ctl-sm);
-  padding: 2px;
-  gap: 0;
-  border-radius: var(--r-ctl);
-  background: var(--recess-bg);
-  box-shadow: var(--recess-shadow);
   flex: none;
-}
-
-.mode-seg > .seg-thumb {
-  position: absolute;
-  z-index: -1;
-  border-radius: var(--r-inner);
-  background: var(--hig-thumb);
-  box-shadow: var(--hig-thumb-shadow);
-  transition: left 200ms var(--ease-spring), width 200ms var(--ease-spring);
-}
-
-.mode-seg > .seg-thumb.instant {
-  transition: none;
-}
-
-.mode-seg > button {
-  position: relative;
-  flex: 1 1 0;
-  min-width: 0;
-  height: calc(var(--h-ctl-sm) - 4px);
-  padding: 0;
-  border-radius: var(--r-inner);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--fs-meta);
-  font-weight: 500;
-  color: var(--text-3);
-  transition: color var(--t-fast) var(--ease);
-  white-space: nowrap;
-}
-
-.mode-seg > button.on {
-  color: var(--text);
-  font-weight: 500;
 }
 
 /* Matches select.inp.sm everywhere else: neutral surface when closed, left-aligned
@@ -908,20 +860,21 @@
   pointer-events: auto;
 }
 
-/* Window caption controls (user choice C): compact 30px circles, never edge-flush;
-   close turns into the Windows red disc on hover. */
+/* Window caption controls: compact 34x28 rounded rectangles (--r-inner = 6px,
+   same family as icon buttons), inset from the window edge; close turns into
+   Windows red on hover. */
 .winbtns {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   margin-left: 4px;
   flex: none;
 }
 
 .winbtns button {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+  width: 34px;
+  height: 28px;
+  border-radius: var(--r-inner);
   display: grid;
   place-items: center;
   color: var(--text-2);
@@ -970,9 +923,6 @@
   flex-direction: column;
 }
 
-.main:has(.page-overview) {
-  padding-inline: 0;
-}
 
 /* Core unreachable banner (never shown for a deliberately stopped core) */
 .core-fault {
@@ -986,9 +936,6 @@
   border-radius: var(--r-ctl);
   background: var(--bad-soft);
   font-size: var(--fs-body);
-}
-.page-overview > .core-fault {
-  margin: 4px 30px 4px 14px; /* bento padding 22px + 8px scrollbar gutter */
 }
 .core-fault-dot {
   width: 7.5px;
@@ -1020,5 +967,5 @@
 
 /* Subtle macOS page transition on navigation */
 .content > * {
-  animation: kat-page-in 150ms var(--ease-spring);
+  animation: kat-page-in 150ms var(--ease);
 }

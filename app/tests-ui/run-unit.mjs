@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 
 const appDir = fileURLToPath(new URL("..", import.meta.url));
 const suite = [
+  "tests-ui/architecture-gate.test.ts",
   "tests-ui/audit-20261123.test.ts",
   "tests-ui/c16-network.test.ts",
   "tests-ui/comprehensive.test.ts",
@@ -15,7 +16,6 @@ const suite = [
   "tests-ui/operations.test.ts",
   "tests-ui/overview.test.ts",
   "tests-ui/polish.test.ts",
-  "tests-ui/probe-budget.test.ts",
   "tests-ui/quick-import-retention.test.ts",
   "tests-ui/r10.test.ts",
   "tests-ui/r2-display.test.ts",

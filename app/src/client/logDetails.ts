@@ -110,4 +110,3 @@ export function flowLog(e:ConnLogEntry,list:ConnectionsReply|null){
  return f?{...e,up:f.up,down:f.down,start:f.start,end:'end' in f&&typeof f.end==='string'?f.end:undefined,duration_ms:f.duration_ms}:e;
 }
 export const inboundLabel=(s?:string)=>({tun:'TUN',system_proxy:'系统代理(HTTP)',socks:'SOCKS',http:'HTTP'}[s??'']??'—');
-export const kernelLevelVisible=(entry:string,level:string)=>level==='all'||['debug','info','warn','error'].indexOf(entry)>=['debug','info','warn','error'].indexOf(level);

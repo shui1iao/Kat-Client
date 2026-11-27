@@ -20,7 +20,7 @@ import {
   MAIN_WINDOW_SHOWN_EVENT,
   applyMainWindowHidden,
 } from "../src/client/useClient.ts";
-import { errorText } from "../src/client/ipc.ts";
+import { errorText } from "../src/lib/errors.ts";
 
 test("normalizeStatus guards Go null slices and malformed nested arrays without crashing", () => {
   const s = normalizeStatus({

@@ -8,7 +8,7 @@ import { desktopExtras } from '../client/settings';
 import { NetworkSettings } from '../components/NetworkSettings';
 import { SniffSettingsCard } from '../components/DnsTools';
 import { Diagnostics } from '../components/Diagnostics';
-import { Card, Segmented, SettingSwitch, StableText } from '../components/ui';
+import { Card, Empty, Segmented, SettingSwitch, StableText } from '../components/ui';
 import { KState } from '../components/labels';
 import { LocalError, Modal } from '../components/Editors';
 import { host } from '../client/ipc';
@@ -110,15 +110,6 @@ function KernelCard({ c }: { c: Client }) {
   );
 }
 
-export function Kernel({ c }: { c: Client }) {
-  return (
-    <div className="settings-stack">
-      <KernelCard c={c} />
-      <NetworkSettings c={c} section="ports" />
-    </div>
-  );
-}
-
 export function Settings({
   c,
   theme,
@@ -217,7 +208,7 @@ export function Settings({
           {/* 1. 常规 */}
           <div className="settings-group" data-sec-id="general">
             <Card title="外观与启动">
-              {!prefs && <div className="empty">未连接</div>}
+              {!prefs && <Empty>未连接</Empty>}
               <div className="set-row">
                 <span className="set-row-copy">
                   <b>界面主题</b>

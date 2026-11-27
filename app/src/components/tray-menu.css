@@ -91,55 +91,10 @@
   color: var(--accent);
 }
 
-/* Mode Segmented Bar — identical recessed track & sliding thumb as the main window */
-.tm-seg {
-  position: relative;
-  isolation: isolate;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  height: var(--h-ctl-sm);
-  padding: 2px;
+/* Mode Segmented Bar — uses shared <Segmented block /> (.seg.seg-block) */
+.seg.tm-seg {
+  width: auto;
   margin: 2px 4px 6px;
-  border-radius: var(--r-ctl);
-  background: var(--recess-bg);
-  box-shadow: var(--recess-shadow);
-}
-
-.tm-seg > .seg-thumb {
-  position: absolute;
-  z-index: -1;
-  border-radius: var(--r-inner);
-  background: var(--hig-thumb);
-  box-shadow: var(--hig-thumb-shadow);
-  transition: left 200ms var(--ease), width 200ms var(--ease);
-}
-
-.tm-seg > .seg-thumb.instant {
-  transition: none;
-}
-
-.tm-seg > button {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: calc(var(--h-ctl-sm) - 4px);
-  border-radius: var(--r-inner);
-  font: 500 var(--fs-meta)/1 var(--font);
-  color: var(--text-3);
-  transition: color var(--t-fast) var(--ease);
-}
-
-.tm-seg > button.on {
-  color: var(--text);
-}
-
-.tm-seg > button:hover:not(.on):not(:disabled) {
-  color: var(--text-2);
-}
-
-.tm-seg > button:disabled:not(.on) {
-  color: var(--text-3);
 }
 
 /* Menu Rows */

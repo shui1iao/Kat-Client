@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { tip } from './Tooltip';
-import { Modal, Field, LocalError } from './Editors';
+import { ConfirmModal } from './Confirm';
+import { Modal, Field, LocalError, Secret } from './Editors';
 import { Segmented } from './ui';
-import { Icon } from './Icon';
 import { host } from '../client/ipc';
 import { intervalLabel, routeLabel, subscriptionFieldErrors } from '../client/subscription';
 import { errorText } from '../lib/errors';
@@ -34,8 +33,6 @@ export function SubscriptionImport({
     old?.auto_update === false ? '0' : old?.follow_interval ? 'follow' : String(old?.interval ?? 86400),
   );
   const [downloadMode, setDownloadMode] = useState<'auto' | 'direct' | 'proxy'>(old?.download_mode ?? 'auto');
-  // Default visible when pasting/creating so users can verify the link immediately; toggleable via eye button
-  const [show, setShow] = useState(!old?.url);
   const [error, setError] = useState(
     refresh && !c.subscriptionReviews[id ?? 'new'] ? c.subscriptionNotices[id ?? ''] ?? '' : '',
   );
@@ -118,13 +115,13 @@ export function SubscriptionImport({
 
   if (deleting && old) {
     return (
-      <Modal
+      <ConfirmModal
         title="删除订阅？"
         close={() => setDeleting(false)}
-        saveLabel="删除"
+        confirmLabel="删除"
         danger
         busy={busy}
-        save={() =>
+        onConfirm={() =>
           void c.selectSubscription(old.id, { delete_id: old.id }).then((ok) => {
             if (ok) close();
           })
@@ -135,7 +132,7 @@ export function SubscriptionImport({
             ? '此订阅正在使用。确认后将变为“无订阅”，仅保留手动节点、自建策略组与规则。'
             : '此订阅的远端快照与本地覆盖将一并移除。'}
         </p>
-      </Modal>
+      </ConfirmModal>
     );
   }
 
@@ -172,47 +169,17 @@ export function SubscriptionImport({
       />
 
       {mode === 'remote' ? (
-        <Field label="订阅链接">
-          <div className="sub-secret">
-            <input
-              className={'inp' + (fields.url ? ' field-invalid' : '')}
-              aria-invalid={!!fields.url}
-              aria-describedby={fields.url ? 'subscription-url-error' : undefined}
-              aria-label="订阅链接"
-              type={show ? 'text' : 'password'}
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="https://…"
-              value={text}
-              onChange={(e) => change(e.target.value)}
-            />
-            <div className="sub-secret-actions">
-              <button
-                type="button"
-                className="ib"
-                {...tip(show ? '隐藏链接' : '显示链接')}
-                aria-label={show ? '隐藏链接' : '显示链接'}
-                onClick={() => setShow(!show)}
-              >
-                <Icon name={show ? 'eyeOff' : 'eye'} size={14} />
-              </button>
-              <button
-                type="button"
-                className="ib"
-                {...tip('复制链接')}
-                aria-label="复制链接"
-                onClick={() => void navigator.clipboard.writeText(text).catch(() => setError('复制失败'))}
-              >
-                <Icon name="copy" size={14} />
-              </button>
-            </div>
-          </div>
-          {fields.url && (
-            <small id="subscription-url-error" className="subscription-field-error">
-              {fields.url}
-            </small>
-          )}
-        </Field>
+        <Secret
+          label="订阅链接"
+          placeholder="https://…"
+          defaultVisible={!old?.url}
+          value={text}
+          onChange={change}
+          invalid={!!fields.url}
+          errorText={fields.url}
+          errorId="subscription-url-error"
+          onCopyError={() => setError('复制失败')}
+        />
       ) : (
         <div className="editor-field">
           <div className="sub-content-label">

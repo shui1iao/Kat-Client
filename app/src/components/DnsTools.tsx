@@ -1,11 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Icon } from './Icon';
-import { Card, SettingSwitch, StableText } from './ui';
+import { Card, SettingSwitch } from './ui';
 import { LocalError } from './Editors';
-import { core } from '../client/ipc';
-import { parseDnsQueryInput } from '../client/dnsInput';
-import { normalizeDNSQuery } from '../client/normalize';
-import { errorText } from '../lib/errors';
+import { tip } from './Tooltip';
 import { KTag } from './labels';
 import {
   DEFAULT_SKIP_DOMAINS,
@@ -17,96 +13,8 @@ import {
   type SkipDomainMode,
   type SniffField,
 } from '../client/sniff';
-import type { DNSQueryReply, SniffSettings } from '../client/types';
+import type { SniffSettings } from '../client/types';
 import type { Client } from '../client/useClient';
-
-/** DNS lookup through the running kernel's own resolver chain. Read-only: never changes settings. */
-export function DnsQuery({ c }: { c: Client }) {
-  const running = c.status?.runtime.state === 'running';
-  const [name, setName] = useState('');
-  const [type, setType] = useState<'both' | 'A' | 'AAAA'>('both');
-  const [reply, setReply] = useState<DNSQueryReply | null>(null);
-  const [error, setError] = useState('');
-  const busy = c.busy.has('dns-query');
-  const query = () => {
-    const parsed = parseDnsQueryInput(name);
-    if (!parsed.ok) {
-      setError(parsed.error);
-      setReply(null);
-      return;
-    }
-    void c.run('dns-query', async () => {
-      setError('');
-      setReply(null);
-      try {
-        setReply(normalizeDNSQuery(await core<unknown>('dns.query', { name: parsed.domain, type })));
-      } catch (e) {
-        setError(errorText(e));
-      }
-    });
-  };
-  return (
-    <div className="dns-query">
-      <div className="dq-h">在线解析测试</div>
-      <form
-        className="dq-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (name.trim()) void query();
-        }}
-      >
-        <input
-          className="inp mono"
-          aria-label="要查询的域名"
-          placeholder="输入域名或粘贴网站链接测试解析，例如 https://example.com"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <select
-          className="inp set-inp-sm"
-          aria-label="记录类型"
-          value={type}
-          onChange={(e) => setType(e.target.value as typeof type)}
-        >
-          <option value="both">A + AAAA</option>
-          <option value="A">仅 A</option>
-          <option value="AAAA">仅 AAAA</option>
-        </select>
-        <button className="btn primary" type="submit" disabled={!running || !name.trim() || busy}>
-          <Icon name="search" size={13} />
-          <StableText current={busy ? '查询中…' : '查询'} items={['查询', '查询中…']} />
-        </button>
-      </form>
-      {!running && <div className="dq-note">内核运行时才能发起解析测试</div>}
-      <LocalError text={error} />
-      {reply && (
-        <div className="dq-result" role="status">
-          <div className="dq-meta">
-            <span>
-              上游 <b>{reply.server || '—'}</b>
-            </span>
-            <span>
-              耗时 <b className="num">{Math.round(reply.duration_ms)} ms</b>
-            </span>
-            {reply.cached && <span className="dq-cached">缓存命中</span>}
-          </div>
-          {reply.addresses.length ? (
-            <ul className="dq-list">
-              {reply.addresses.map((a) => (
-                <li key={a.type + a.addr}>
-                  <i>{a.type}</i>
-                  <span className="dq-addr num">{a.addr}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="empty">无解析记录</div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /** Only expose the options the existing generated inbound already supports. */
 export function SniffSettingsCard({ c }: { c: Client }) {
@@ -188,7 +96,7 @@ export function SniffSettingsCard({ c }: { c: Client }) {
           save={set}
         />
       </div>
-      {c.doc.dirty && <div className="form-error">原文有未保存草稿</div>}
+      {c.doc.dirty && <LocalError text="原文有未保存草稿" raw />}
     </>
   );
   return (
@@ -238,7 +146,7 @@ function SkipDomainInput({
       <div className="set-row">
         <label className="set-row-copy" htmlFor={mode === 'default' ? id : id + '-mode'}>
           <b>跳过目标覆盖</b>
-          <small id={descId} title={subText}>{subText}</small>
+          <small id={descId} {...tip(subText, true)}>{subText}</small>
         </label>
         <div className="row-actions">
           <select

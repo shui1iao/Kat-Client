@@ -4,7 +4,7 @@ import { Icon } from './Icon';
 import { KState } from './labels';
 import { Modal } from './Editors';
 import { intervalLabel, routeLabel, subscriptionUsage } from '../client/subscription';
-import { showBytes } from '../client/display';
+import { dateStr, shortDateTimeStr, showBytes } from '../client/display';
 import { subscriptionFailureText, subscriptionFailureShort } from '../lib/errors';
 import type { Client } from '../client/useClient';
 import type { FullSubscription } from '../client/types';
@@ -28,15 +28,7 @@ export function SubscriptionCard({
   const notice = c.subscriptionNotices[s.id];
   const needsConfirm = !!notice?.includes('订阅变化需要确认');
   const failure = needsConfirm ? undefined : notice ?? (result && !result.success ? subscriptionFailureText(result) : undefined);
-  const updated = s.updated
-    ? new Date(s.updated * 1000).toLocaleString('zh-CN', {
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      })
-    : '—';
+  const updated = s.updated ? shortDateTimeStr(s.updated * 1000) : '—';
   const active = s.active !== false;
   const invalids = s.overlay?.invalid ?? [];
 
@@ -106,7 +98,7 @@ export function SubscriptionCard({
             className="sub-usage-summary num"
             {...tip(
               `已用 ${showBytes(usage.used)}${usage.total ? ' / ' + showBytes(usage.total) : ''}${
-                s.userinfo?.expire ? ' · 到期 ' + new Date(s.userinfo.expire * 1000).toLocaleDateString('sv-SE') : ''
+                s.userinfo?.expire ? ' · 到期 ' + dateStr(s.userinfo.expire * 1000) : ''
               }`,
               true,
             )}

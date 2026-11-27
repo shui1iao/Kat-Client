@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useFormDraft } from '../lib/formDraft';
-import { Card } from './ui';
+import { Card, Empty } from './ui';
 import { LocalError } from './Editors';
 import { desktopExtras, validateBypass } from '../client/settings';
 import type { Client } from '../client/useClient';
@@ -9,7 +9,7 @@ export function ProxyBypass({ c }: { c: Client }) {
   const p = c.desktop?.preferences;
   return (
     <Card title="系统代理绕过" extra={<span className="card-note">下次启用系统代理生效</span>}>
-      {p ? <BypassForm c={c} /> : <div className="empty">未连接</div>}
+      {p ? <BypassForm c={c} /> : <Empty>未连接</Empty>}
     </Card>
   );
 }

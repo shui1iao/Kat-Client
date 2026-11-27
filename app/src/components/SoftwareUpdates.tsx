@@ -5,10 +5,10 @@ import { listen } from '@tauri-apps/api/event';
 import { host } from '../client/ipc';
 import { errorText } from '../lib/errors';
 import type { Client } from '../client/useClient';
-import { Card, SettingSwitch, StableText } from './ui';
+import { Card, Empty, SettingSwitch, StableText } from './ui';
 import { Modal, LocalError } from './Editors';
 import { Icon } from './Icon';
-import { showBytes } from '../client/display';
+import { fullDateTimeStr, showBytes } from '../client/display';
 
 type Kind = 'client' | 'core';
 
@@ -58,10 +58,10 @@ function renderInlineMd(text: string): ReactNode[] {
   });
 }
 
-export function ReleaseNotesBody({ markdown }: { markdown?: string | null }) {
+function ReleaseNotesBody({ markdown }: { markdown?: string | null }) {
   const raw = (markdown ?? '').trim();
   if (!raw) {
-    return <div className="sparkle-notes-empty">该版本未附带详细更新日志。</div>;
+    return <Empty>该版本未附带详细更新日志。</Empty>;
   }
 
   const lines = raw.split(/\r?\n/);
@@ -211,10 +211,9 @@ export function SoftwareUpdateCard({ u }: { u: SoftwareUpdateController }) {
   return (
     <Card
       title="软件更新"
-      icon="refresh"
       className="software-update-card"
       extra={
-        <button
+        <button type="button"
           className="btn sm"
           disabled={!d || d.checking || d.preparing}
           onClick={() => void u.action('update_check')}
@@ -277,11 +276,11 @@ export function SoftwareUpdateCard({ u }: { u: SoftwareUpdateController }) {
                 </button>
               )}
               {r.phase === 'downloading' ? (
-                <button className="btn sm" disabled={u.working} onClick={() => void u.action('update_cancel', { offer: r.offer })}>
+                <button type="button" className="btn sm" disabled={u.working} onClick={() => void u.action('update_cancel', { offer: r.offer })}>
                   <StableText current="取消下载" items={['下载更新', '取消下载', '安装更新']} />
                 </button>
               ) : (
-                <button
+                <button type="button"
                   className={'btn sm' + (hasNew ? ' primary' : '')}
                   disabled={!r.offer || u.working || !!d?.preparing || r.phase === 'checking'}
                   onClick={() => (r.downloaded ? u.setConfirm(r) : void u.action('update_download', { offer: r.offer }))}
@@ -309,9 +308,7 @@ export function SoftwareUpdateCard({ u }: { u: SoftwareUpdateController }) {
       })}
 
       <p className="update-help update-last num">
-        {d?.last_check
-          ? `上次检查 ${new Date(d.last_check * 1000).toLocaleString('zh-CN', { hour12: false })}`
-          : '尚未检查更新'}
+        {d?.last_check ? `上次检查 ${fullDateTimeStr(d.last_check * 1000)}` : '尚未检查更新'}
       </p>
       <LocalError text={u.error || d?.error || ''} />
     </Card>
@@ -340,7 +337,7 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
             {d.confirmation.message || '需要管理员确认才能完成更新'}
             {u.error && <span role="alert"> · {u.error}</span>}
           </span>
-          <button className="btn sm" style={{ flexShrink: 0 }} disabled={d.confirmation.running || u.working} onClick={() => void u.action('update_recover')}>
+          <button type="button" className="btn sm update-confirm-btn" disabled={d.confirmation.running || u.working} onClick={() => void u.action('update_recover')}>
             <StableText current={d.confirmation.running ? '等待确认…' : '重试确认'} items={['重试确认', '等待确认…']} />
           </button>
         </div>,
@@ -353,7 +350,7 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
           <span>
             发现新版本 <b>{label(firstOfferRow.kind)} {firstOfferRow.latest}</b>
           </span>
-          <button
+          <button type="button"
             className="link-btn"
             onClick={() => {
               u.setDialogKind(firstOfferRow.kind);
@@ -362,7 +359,7 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
           >
             查看更新内容
           </button>
-          <button
+          <button type="button"
             className="ib"
             aria-label="前往软件更新设置"
             onClick={() => {
@@ -372,7 +369,7 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
           >
             <Icon name="settings" size={13} />
           </button>
-          <button className="ib" aria-label="关闭更新通知" onClick={() => void u.action('update_dismiss')}>
+          <button type="button" className="ib" aria-label="关闭更新通知" onClick={() => void u.action('update_dismiss')}>
             <Icon name="x" size={14} />
           </button>
         </div>,
@@ -489,26 +486,18 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
         </Modal>
       )}
 
-      {d?.preparing && createPortal(
-        <div className="modal-mask" role="status" aria-live="polite">
-          <section className="modal modal-md">
-            <header>
-              <h3>准备更新</h3>
-            </header>
-            <div className="form">
-              <p>正在保存状态并退出内核，请稍候…</p>
-              {d.error && (
-                <>
-                  <LocalError text={d.error} />
-                  <button className="btn" disabled={u.working} onClick={() => void u.action('update_recover')}>
-                    重试恢复
-                  </button>
-                </>
-              )}
-            </div>
-          </section>
-        </div>,
-        document.body,
+      {d?.preparing && (
+        <Modal title="准备更新" size="sm" closable={false}>
+          <p>正在保存状态并退出内核，请稍候…</p>
+          {d.error && (
+            <>
+              <LocalError text={d.error} />
+              <button type="button" className="btn" disabled={u.working} onClick={() => void u.action('update_recover')}>
+                重试恢复
+              </button>
+            </>
+          )}
+        </Modal>
       )}
     </>
   );

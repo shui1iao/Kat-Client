@@ -8,7 +8,6 @@ export function recoveryMessage(payload: unknown) {
   const code=typeof raw==='string'&&/^[A-Z][A-Z0-9_]{1,63}$/.test(raw)?raw:'RECOVERY_PENDING';
   return '网络操作未完成：' + errorText({code,tun:p?.tun,transport:p?.transport});
 }
-export const QUIT_CLEANUP_NOTICE = '正在完成网络清理…';
 export function watchNetworkEvents(listen: EventListen, failed: (text: string) => void, refresh: () => void, restarting: (active:boolean)=>void = ()=>{}, quitWaiting: (active:boolean)=>void = ()=>{}) {
   let live = true;
   const stops: Stop[] = [];

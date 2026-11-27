@@ -1,6 +1,6 @@
 // Display aggregation only. Integer boundaries cover every original sample once.
 // SPEC9 keeps real time-group means at every range, at a target 4px pitch; sparse input stays sparse.
-export interface SpeedColumn { start:number; end:number; x0:number; x1:number; down:number|null; up:number|null }
+interface SpeedColumn { start:number; end:number; x0:number; x1:number; down:number|null; up:number|null }
 export function speedColumns(down:number[],up:number[],width:number,left=74,targetPitch=4):SpeedColumn[] {
   const n=down.length,iw=Number.isFinite(width)?Math.max(0,width):0;
   const count=iw<3?0:Math.min(n,Math.max(1,Math.floor(iw/targetPitch)));

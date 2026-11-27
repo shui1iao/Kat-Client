@@ -4,11 +4,11 @@ import { useState } from 'react';
 import { Icon } from '../components/Icon';
 import { DomainIcon } from '../components/EntityIcons';
 import { tip } from '../components/Tooltip';
-import { Card, Segmented, useSize } from '../components/ui';
+import { Card, Empty, Segmented, useSize } from '../components/ui';
 import { SpeedChart } from '../charts/SpeedChart';
 import { WeekBars, type Bar } from '../charts/WeekBars';
 import { DomainRankList, TrafficDistribution, type DomainRankItem } from '../charts/TrafficDistribution';
-import { countStr, showBytes, showRate, trafficSlices } from '../client/display';
+import { countStr, dateStr, showBytes, showRate, trafficSlices } from '../client/display';
 import type { Client } from '../client/useClient';
 
 export type ConnTab = 'active' | 'closed';
@@ -38,7 +38,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
   const running = s?.runtime.state === 'running';
 
   const nowDate = new Date();
-  const todayStr = nowDate.toLocaleDateString('en-CA');
+  const todayStr = dateStr(nowDate);
   const currentMonthPrefix = todayStr.slice(0, 7);
   const currentHour = nowDate.getHours();
 
@@ -115,7 +115,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
     usageBars = Array.from({ length: 7 }, (_, idx) => {
       const dt = new Date(nowDate);
       dt.setDate(nowDate.getDate() - (6 - idx));
-      const dStr = dt.toLocaleDateString('en-CA');
+      const dStr = dateStr(dt);
       const entry = byDate.get(dStr);
       const sp = entry ? splitDayTraffic(entry) : { up: 0, down: 0, direct: 0, proxy: 0, total: 0 };
       rangeDown += sp.down;
@@ -194,7 +194,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
   const domainAgg = new Map<string, DomainRankItem>();
   const sevenDaysStart = new Date(nowDate);
   sevenDaysStart.setDate(nowDate.getDate() - 6);
-  const sevenDaysStartStr = sevenDaysStart.toLocaleDateString('en-CA');
+  const sevenDaysStartStr = dateStr(sevenDaysStart);
   const relevantDays =
     usageRange === 'today'
       ? dailyList.filter((d) => d.date === todayStr)
@@ -299,7 +299,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
 
       {/* Row 1 Right (Span 6): Traffic Usage */}
       <Card
-        className="usage-card ov-usage"
+        className="ov-usage"
         title="流量用量"
         extra={
           <Segmented
@@ -322,12 +322,12 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
             <div className="usage-split-legend">
               <span className="us-leg-item">
                 <i className="dot-proxy" />
-                <em className="txt-proxy">代理</em>
+                <em>代理</em>
                 <b>{showBytes(t ? rangeProxy : null)}</b>
               </span>
               <span className="us-leg-item">
                 <i className="dot-direct" />
-                <em className="txt-direct">直连</em>
+                <em>直连</em>
                 <b>{showBytes(t ? rangeDirect : null)}</b>
               </span>
             </div>
@@ -339,7 +339,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
 
       {/* Row 2 Left (Span 6): Traffic Destination (Domain / Policy) */}
       <Card
-        className="distribution-card ov-dest"
+        className="ov-dest"
         title="流量去向"
         extra={
           <Segmented
@@ -381,7 +381,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
 
       {/* Row 3 Left (Span 6 — Compact Side-by-Side): Active Connections */}
       <Card
-        className="active-connections-card ov-live"
+        className="ov-live"
         title="活跃连接"
         extra={
           <button type="button" className="ac-extra-link" onClick={() => onConnections('active')}>
@@ -430,7 +430,7 @@ export function Dashboard({ c, onConnections }: { c: Client; onConnections: (tab
               </button>
             );
           })}
-          {(!running || !topRows.length) && <div className="empty">暂无活跃连接</div>}
+          {(!running || !topRows.length) && <Empty icon="link" title="暂无活跃连接" hint="产生新连接后，这里实时展示速率最高的前 5 条" />}
         </div>
         <footer className="analytics-foot num">
           <span>

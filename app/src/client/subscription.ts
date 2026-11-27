@@ -5,7 +5,7 @@ export function importKind(text:string, format:DocumentFormat='yaml'):'native'|'
  try {const d=readDocument(text,format);if(d?.schema_version===1&&d.client&&d.kernel)return 'native';if(d&&typeof d==='object'&&['proxies','proxy-groups','rule-providers','rules'].some(k=>Object.hasOwn(d,k)))return 'clash';}catch { /* core returns the authoritative safe error */ }
  return 'nodes';
 }
-export function assertSubscriptionWritable(doc:DocumentSession) {
+function assertSubscriptionWritable(doc:DocumentSession) {
  if(doc.saved===null)throw new Error('配置未连接');
  if(doc.dirty||doc.draftFilename)throw new Error('请先保存或取消原文草稿；导入不会覆盖草稿');
  if(doc.saving||doc.installing||doc.uncertain)throw new Error('请等待当前保存或安装完成');
@@ -23,13 +23,9 @@ export function dueSubscriptions(source:DocumentSource|null,now:number,attempts:
   return s.url&&s.auto_update!==false&&!busy.has('subscription:'+s.id)&&now>=deadline;
  });
 }
-export function subscriptionSummary(p:SubscriptionPreview) {
- const n=p.counts;return `${n.nodes??0} 节点 · ${n.groups??0} 策略组 · ${n.rules??0} 规则 + ${n.match??0} MATCH · ${n.rule_sets??0} 规则集`;
-}
-
 export function intervalLabel(seconds:number){const minutes=seconds/60;return '每 '+(minutes>=1440&&minutes%1440===0?minutes/1440+' 天':minutes>=60&&minutes%60===0?minutes/60+' 小时':minutes+' 分钟');}
 
-export interface SubscriptionTransport{preview(params:Record<string,unknown>):Promise<SubscriptionPreview>;cancel(token:string):Promise<unknown>}
+interface SubscriptionTransport{preview(params:Record<string,unknown>):Promise<SubscriptionPreview>;cancel(token:string):Promise<unknown>}
 // Network work never owns DocumentSession.saving. One optimistic remerge
 // handles intervening accepted edits; a second conflict remains explicit.
 export async function backgroundSubscription(doc:DocumentSession,api:SubscriptionTransport,params:Record<string,unknown>,approved?:{preview:SubscriptionPreview;revision:number}){
@@ -63,9 +59,6 @@ export function subscriptionGroup(source:DocumentSource|null,name?:string){retur
 
 const stableSubscriptionValue=(v:any):any=>Array.isArray(v)?v.map(stableSubscriptionValue):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stableSubscriptionValue(v[k])])):v;
 const stableSubscriptionKey=(v:unknown)=>JSON.stringify(stableSubscriptionValue(v));
-export function sameSubscriptionObject(a:unknown,b:unknown):boolean {
- return stableSubscriptionKey(a)===stableSubscriptionKey(b);
-}
 const subscriptionRuleIndex=new WeakMap<object,{overlayRef:unknown;overlayLen:number;snapshotRef:unknown;snapshotLen:number;patches:Map<string,{patch:number;originalKey:string}>;remotes:Map<string,number>}>();
 function getSubscriptionRuleIndex(s:any){
  const overlayRef=s.overlay?.rules,overlayLen=Array.isArray(overlayRef)?overlayRef.length:0;

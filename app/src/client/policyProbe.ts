@@ -1,5 +1,5 @@
 import type {CoreStatus,MemberStatus} from './types';
-export type PolicyProbe=Pick<MemberStatus,'probe_ms'|'probe_at'|'probe_error'>;
+type PolicyProbe=Pick<MemberStatus,'probe_ms'|'probe_at'|'probe_error'>;
 const measured=(p:PolicyProbe|undefined):p is PolicyProbe=>!!p&&(p.probe_ms!=null||!!p.probe_error);
 // A group-name sample is a historical route, not the current selected route.
 // Follow live choices on every status update; cycles/missing data stay unknown.

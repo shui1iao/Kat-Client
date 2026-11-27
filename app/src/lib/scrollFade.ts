@@ -8,12 +8,12 @@
      the header via [data-scrolled-top="1"] only when scrollTop > 2. */
 
 const STICKY_HEAD_SCROLL =
-  '.node-table-scroll, .rule-table-scroll, .res-list, .conn-table-wrap, .log-scroll, .kernel-log-scroll';
+  '.node-table-scroll, .rule-table-scroll, .res-list, .conn-table-wrap, .log-scroll, .kernel-log-scroll, .safe-log-list';
 
 const FADE_SCROLL =
   STICKY_HEAD_SCROLL +
   ', .nav-list, .modal > .form, .overview-bento, .pol-stream, .settings-scroll, .dns-addr-pop-list' +
-  ', .dns-settings-unified, .dns-settings-scroll, .safe-log-list, .cfg-tools' +
+  ', .dns-settings-unified, .cfg-tools' +
   ', .policy-editor-v2 .pe-form-body, .sparkle-notes-box, .pe-candidates, .diag-body';
 
 function updateOne(el: HTMLElement) {

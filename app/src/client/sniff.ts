@@ -22,7 +22,7 @@ function hasLoneSurrogate(s:string):boolean {
 }
 
 // Matches route.ParsePorts: 1..65535, ascending ranges, comma/slash lists, <=64 entries/1024 bytes.
-export function sniffPortsError(value:string):string {
+function sniffPortsError(value:string):string {
  if(value===''||value==='none')return '';
  const entries=value.replaceAll('/',',').split(',');
  const valid=value.length<=1024&&entries.length<=64&&entries.every(s=>{
@@ -41,7 +41,7 @@ export function sniffInputError(field:SniffField,value:string):string {
  return value===''||Number.isFinite(Number(value))&&Number(value)>=1&&Number(value)<=2000?'':'等待首包须为 1–2000 毫秒';
 }
 
-export function skipDomainMode(rawSkip:unknown):SkipDomainMode {
+function skipDomainMode(rawSkip:unknown):SkipDomainMode {
  return rawSkip===undefined||rawSkip===null?'default':'custom';
 }
 
@@ -50,19 +50,19 @@ export function parseSkipDomainInput(raw:string,mode:SkipDomainMode='custom'):st
  return raw.split(',').map(s=>s.trim()).filter(Boolean);
 }
 
-export function sameSkipDomain(a:string[]|undefined,b:string[]|undefined):boolean {
+function sameSkipDomain(a:string[]|undefined,b:string[]|undefined):boolean {
  if(a===undefined||b===undefined)return a===b;
  return a.length===b.length&&a.every((v,i)=>v===b[i]);
 }
 
-export function skipDomainKey(items:string[]|undefined):string {
+function skipDomainKey(items:string[]|undefined):string {
  return items===undefined?'default':'custom:'+JSON.stringify(items);
 }
 
 // Aligned with Go kernel.ValidateSkipDomains: <=128 entries, valid UTF-8,
 // no C0/C1 control chars (unicode.IsControl), 1..253 UTF-8 bytes after trim,
 // and non-empty/non-whitespace suffix body after stripping +./*./. and trailing dots.
-export function skipDomainError(items:string[]|undefined|null):string {
+function skipDomainError(items:string[]|undefined|null):string {
  if(items===undefined||items===null)return '';
  if(!Array.isArray(items))return '跳过列表格式无效';
  if(items.length>128)return '跳过列表最多 128 项';
@@ -78,7 +78,7 @@ export function skipDomainError(items:string[]|undefined|null):string {
  return '';
 }
 
-export function shouldBlurOnSkipKeyDown(event:{key:string;isComposing?:boolean;keyCode?:number}):boolean {
+function shouldBlurOnSkipKeyDown(event:{key:string;isComposing?:boolean;keyCode?:number}):boolean {
  return event.key==='Enter'&&!event.isComposing&&event.keyCode!==229;
 }
 
@@ -102,7 +102,7 @@ export function patchSniff(cur:SniffSettings|undefined,patch:Partial<SniffSettin
  return next;
 }
 
-export interface SkipDomainControllerState {
+interface SkipDomainControllerState {
  mode:SkipDomainMode;
  value:string;
  error:string;

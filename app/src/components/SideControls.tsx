@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { tip } from './Tooltip';
 import { Icon } from './Icon';
-import { Switch, useThumb } from './ui';
-import { MODE_LABEL, stateLabel, type Mode } from '../client/types';
+import { Segmented, Switch } from './ui';
+import { measureDropdown, useDismissablePopup } from '../lib/floating';
+import { MODE_LABEL, type Mode } from '../client/types';
 import { resolveGroupPath } from '../client/groupDisplay';
 import { errorText } from '../lib/errors';
 import type { Client } from '../client/useClient';
@@ -42,7 +43,6 @@ export function SideControls({ c, onOpenGlobalGroup, collapsed = false }: { c: C
   const tunTransition = ['cleanup_pending', 'waiting_network', 'recovering', 'starting', 'stopping'].includes(tunState ?? '');
 
   const shown = pending ?? mode;
-  const [segRef, thumb] = useThumb<HTMLDivElement>(shown);
   const pick = (m: Mode) => {
     setRailMenu(null);
     if (mode === m || pending || !c.connected || c.doc.saving) return;
@@ -74,59 +74,8 @@ export function SideControls({ c, onOpenGlobalGroup, collapsed = false }: { c: C
     if (!collapsed) setRailMenu(null);
   }, [collapsed]);
 
-  useEffect(() => {
-    if (!railMenu) return;
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node | null;
-      if (railModeRef.current?.contains(t) || railPopRef.current?.contains(t)) return;
-      setRailMenu(null);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        setRailMenu(null);
-        railModeRef.current?.focus({ preventScroll: true });
-      }
-    };
-    const close = () => setRailMenu(null);
-    document.addEventListener('mousedown', onDown, true);
-    document.addEventListener('keydown', onKey, true);
-    window.addEventListener('resize', close);
-    window.addEventListener('blur', close);
-    return () => {
-      document.removeEventListener('mousedown', onDown, true);
-      document.removeEventListener('keydown', onKey, true);
-      window.removeEventListener('resize', close);
-      window.removeEventListener('blur', close);
-    };
-  }, [railMenu]);
-
-  useEffect(() => {
-    if (!menuPos) return;
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node | null;
-      if (pillRef.current?.contains(t) || popRef.current?.contains(t)) return;
-      setMenuPos(null);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        setMenuPos(null);
-        pillRef.current?.focus({ preventScroll: true });
-      }
-    };
-    const close = () => setMenuPos(null);
-    document.addEventListener('mousedown', onDown, true);
-    document.addEventListener('keydown', onKey, true);
-    window.addEventListener('resize', close);
-    window.addEventListener('blur', close);
-    return () => {
-      document.removeEventListener('mousedown', onDown, true);
-      document.removeEventListener('keydown', onKey, true);
-      window.removeEventListener('resize', close);
-      window.removeEventListener('blur', close);
-    };
-  }, [menuPos]);
+  useDismissablePopup(!!railMenu, railModeRef, railPopRef, () => setRailMenu(null));
+  useDismissablePopup(!!menuPos, pillRef, popRef, () => setMenuPos(null));
 
   // Keyboard model of a listbox popup: focus enters the current option, arrows
   // move, Home/End jump, Enter/Space choose (native button), Tab/Escape close.
@@ -146,23 +95,15 @@ export function SideControls({ c, onOpenGlobalGroup, collapsed = false }: { c: C
     else if (e.key === 'ArrowUp') go(i < 0 ? items.length - 1 : i - 1);
     else if (e.key === 'Home') go(0);
     else if (e.key === 'End') go(items.length - 1);
-    else if (e.key === 'Tab') { e.preventDefault(); setMenuPos(null); pillRef.current?.focus({ preventScroll: true }); }
+    else if (e.key === 'Tab' || e.key === 'Escape') { e.preventDefault(); setMenuPos(null); pillRef.current?.focus({ preventScroll: true }); }
   };
 
   const toggleGlobalMenu = () => {
-    if (menuPos) {
+    if (menuPos || !pillRef.current) {
       setMenuPos(null);
       return;
     }
-    const r = pillRef.current?.getBoundingClientRect();
-    if (!r) return;
-    const gap = 6, margin = 10, width = r.width;
-    const below = window.innerHeight - r.bottom - gap - margin;
-    const above = r.top - gap - margin;
-    const up = below < 220 && above > below;
-    const maxHeight = Math.max(120, Math.min(300, up ? above : below));
-    const left = Math.max(margin, Math.min(r.left, window.innerWidth - width - margin));
-    setMenuPos({ left, width, maxHeight, up, ...(up ? { bottom: window.innerHeight - r.top + gap } : { top: r.bottom + gap }) });
+    setMenuPos(measureDropdown(pillRef.current, { gap: 6, margin: 10, minBelow: 220, minMaxH: 120, capMaxH: 300 }));
   };
 
   const selectGlobalGroup = (name: string) => {
@@ -244,23 +185,22 @@ export function SideControls({ c, onOpenGlobalGroup, collapsed = false }: { c: C
 
   return (
     <div className="side-controls" aria-label="代理模式与接管开关">
-      <div ref={segRef} className="mode-seg" role="radiogroup" aria-label="代理模式" aria-busy={c.doc.saving || !!pending}>
-        {thumb}
-        {modes.map((m) => (
-          <button
-            key={m}
-            type="button"
-            role="radio"
-            aria-checked={mode === m}
-            disabled={!c.connected}
-            className={shown === m ? 'on m-' + m : ''}
-            onClick={() => pick(m)}
-            data-mode={m}
-          >
-            {MODE_LABEL[m]}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        block
+        role="radiogroup"
+        ariaLabel="代理模式"
+        className="mode-seg"
+        busy={c.doc.saving || !!pending}
+        disabled={!c.connected}
+        value={shown}
+        onChange={pick}
+        options={modes.map((m) => ({
+          value: m,
+          label: MODE_LABEL[m],
+          checked: mode === m,
+          itemProps: { 'data-mode': m },
+        }))}
+      />
 
       <div className={'global-reveal' + (shown === 'global' ? ' open' : '')} inert={shown !== 'global'}>
         <div className="global-reveal-inner">
@@ -355,7 +295,7 @@ export function SideControls({ c, onOpenGlobalGroup, collapsed = false }: { c: C
           {...tip(sysError || null)}
         >
           {sysError && (
-            <span className="net-warning" title={sysError}>
+            <span className="net-warning" {...tip(sysError)}>
               <Icon name="alert" size={13} />
             </span>
           )}
@@ -381,7 +321,7 @@ export function SideControls({ c, onOpenGlobalGroup, collapsed = false }: { c: C
           )}
         >
           {tunError && (
-            <span className="net-warning" title={tunError}>
+            <span className="net-warning" {...tip(tunError)}>
               <Icon name="alert" size={13} />
             </span>
           )}

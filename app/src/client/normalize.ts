@@ -115,7 +115,7 @@ export function normalizeDNSQuery(raw: unknown): DNSQueryReply {
   return { ...(raw as DNSQueryReply), addresses: objects<DNSQueryReply['addresses'][number]>(raw.addresses) };
 }
 
-export interface TargetPreviewLike { target: { addresses: string[] } & Record<string, any>; chain: string[]; matched: Record<string, any> }
+interface TargetPreviewLike { target: { addresses: string[] } & Record<string, any>; chain: string[]; matched: Record<string, any> }
 export function normalizeTargetPreview<T extends TargetPreviewLike>(raw: unknown): T {
   if (!isObj(raw) || !isObj(raw.matched)) throw new InvalidReplyError('判定结果');
   const target = isObj(raw.target) ? raw.target : {};

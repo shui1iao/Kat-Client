@@ -35,7 +35,7 @@ function sparkPath(values: number[], maxVal: number): { line: string; area: stri
   return { line: d, area };
 }
 
-export function SideStatus({ c }: { c: Client; current?: boolean; onOpen?: () => void }) {
+export function SideStatus({ c }: { c: Client }) {
   const gradId = 'ss-grad-' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const s = c.status;
   const state = s?.runtime.state;

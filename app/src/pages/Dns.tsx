@@ -1,20 +1,20 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { getAppRect, useCardAnchor } from '../lib/floating';
+import { useEffect, useRef, useState } from 'react';
+import { ToolPopover } from '../components/ToolPopover';
+import { LocalError } from '../components/Editors';
 import { DomainIcon } from '../components/EntityIcons';
 import { canClearDnsCache } from '../client/sniff';
 import { NetworkSettings } from '../components/NetworkSettings';
 import { Icon } from '../components/Icon';
-import { Segmented, StableText, ThumbBar } from '../components/ui';
+import { CopyButton, Empty, SearchInput, Segmented, StableText, StreamControls } from '../components/ui';
 import { KState, KTag } from '../components/labels';
 import { tip } from '../components/Tooltip';
 import { core } from '../client/ipc';
 import { parseDnsQueryInput } from '../client/dnsInput';
-import { normalizeDNSLogs } from '../client/normalize';
+import { normalizeDNSLogs, normalizeDNSQuery } from '../client/normalize';
 import { clockStr } from '../client/display';
 import { errorText } from '../lib/errors';
 import type { DNSCacheItem, DNSCacheListReply, DNSLogEntry } from '../client/types';
-import type { Client } from '../client/useClient';
+import { useWindowPoll, type Client } from '../client/useClient';
 
 const POLL_MS = 1000;
 const KEEP = 2000;
@@ -23,9 +23,9 @@ export type DnsTab = 'recent' | 'cache' | 'settings';
 
 const RECENT_PILLS: { value: string; label: string }[] = [
   { value: 'all', label: '全部' },
-  { value: 'cached', label: '缓存命中' },
-  { value: 'upstream', label: '上游查询' },
-  { value: 'failed', label: '空 / 失败' },
+  { value: 'cached', label: '缓存' },
+  { value: 'upstream', label: '上游' },
+  { value: 'failed', label: '失败' },
 ];
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -112,7 +112,6 @@ export function Dns({
   const [recentQ, setRecentQ] = useState('');
   const [filter, setFilter] = useState('all');
   const [paused, setPaused] = useState(false);
-  const [copiedSeq, setCopiedSeq] = useState<number | null>(null);
   const [addrPop, setAddrPop] = useState<AddrPopState | null>(null);
   const [queryOpen, setQueryOpen] = useState(false);
   const queryBtnRef = useRef<HTMLButtonElement>(null);
@@ -140,29 +139,12 @@ export function Dns({
     }
   };
 
-  useEffect(() => {
-    if (activeTab !== 'recent') return;
-    let alive = true;
-    let timer = 0;
-    if (!readable || paused) return;
-    const tick = async () => {
-      if (!document.hidden && alive) {
-        await pullNow();
-      }
-      if (alive) timer = window.setTimeout(tick, POLL_MS);
-    };
-    void tick();
-    return () => {
-      alive = false;
-      window.clearTimeout(timer);
-    };
-  }, [activeTab, readable, paused]);
+  useWindowPoll(activeTab === 'recent' && readable && !paused, POLL_MS, pullNow);
 
   // --- DNS Cache state ---
   const [cacheData, setCacheData] = useState<DNSCacheListReply | null>(null);
   const [cacheError, setCacheError] = useState('');
   const [cacheQ, setCacheQ] = useState('');
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [cleared, setCleared] = useState<number | null>(null);
 
   const loadCache = async () => {
@@ -180,23 +162,10 @@ export function Dns({
   };
 
   useEffect(() => {
-    if (activeTab !== 'cache') return;
-    let alive = true;
-    let timer = 0;
-    if (!running) {
-      setCacheData(null);
-      return;
-    }
-    const tick = async () => {
-      if (!document.hidden && alive) await loadCache();
-      if (alive) timer = window.setTimeout(tick, 1500);
-    };
-    void tick();
-    return () => {
-      alive = false;
-      window.clearTimeout(timer);
-    };
-  }, [activeTab, running]);
+    if (!running) setCacheData(null);
+  }, [running]);
+
+  useWindowPoll(activeTab === 'cache' && running, 1500, loadCache);
 
   useEffect(() => {
     if (cleared === null) return;
@@ -249,20 +218,6 @@ export function Dns({
   const tunOn = !!c.network?.tun.enabled;
   const ipv6On = !!c.source?.client?.ipv6;
 
-  const copyRecentAddr = (seq: number, text: string) => {
-    if (!text) return;
-    void navigator.clipboard?.writeText(text);
-    setCopiedSeq(seq);
-    window.setTimeout(() => setCopiedSeq((cur) => (cur === seq ? null : cur)), 1400);
-  };
-
-  const copyCacheAddr = (key: string, text: string) => {
-    if (!text) return;
-    void navigator.clipboard?.writeText(text);
-    setCopiedKey(key);
-    window.setTimeout(() => setCopiedKey((cur) => (cur === key ? null : cur)), 1400);
-  };
-
   const toggleAddrPop = (key: string, domain: string, qtype: string, addrs: string[], anchor: HTMLElement) => {
     setAddrPop((cur) => (cur && cur.key === key ? null : { key, domain, qtype, addrs, anchor }));
   };
@@ -272,7 +227,6 @@ export function Dns({
       <section ref={dnsCardRef} className="card table-card dns-table-card">
         <header className="table-toolbar dns-unified-toolbar">
           <Segmented
-            size="sm"
             value={activeTab}
             onChange={switchTab}
             options={[
@@ -284,29 +238,8 @@ export function Dns({
 
           {activeTab === 'recent' && (
             <>
-              <label className="search">
-                <Icon name="search" size={14} />
-                <input
-                  value={recentQ}
-                  onChange={(e) => setRecentQ(e.target.value)}
-                  placeholder="搜索"
-                  aria-label="搜索最近解析"
-                />
-              </label>
-              <ThumbBar selected={filter} role="radiogroup" aria-label="解析筛选">
-                {RECENT_PILLS.map((p) => (
-                  <button
-                    type="button"
-                    key={p.value}
-                    role="radio"
-                    aria-checked={filter === p.value}
-                    className={filter === p.value ? 'on' : ''}
-                    onClick={() => setFilter(p.value)}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </ThumbBar>
+              <SearchInput value={recentQ} onChange={setRecentQ} ariaLabel="搜索最近解析" />
+              <Segmented role="radiogroup" ariaLabel="解析筛选" value={filter} onChange={setFilter} options={RECENT_PILLS} />
               <span className="sp" />
               <span className="muted num toolbar-count">{shownRecent.length} 条</span>
               <button
@@ -320,36 +253,18 @@ export function Dns({
                 <Icon name="bolt" size={13} />
                 解析
               </button>
-              <button
-                type="button"
-                className="btn sm"
-                onClick={() => setPaused(!paused)}
-                aria-pressed={paused}
-              >
-                <StableText current={paused ? '继续' : '暂停'} items={['暂停', '继续']} />
-              </button>
-              <button
-                type="button"
-                className="btn sm btn-fixed-xs"
-                disabled={!entries.length}
-                onClick={() => setEntries([])}
-              >
-                清空
-              </button>
+              <StreamControls
+                paused={paused}
+                onTogglePause={() => setPaused((p) => !p)}
+                onClear={() => setEntries([])}
+                clearDisabled={!entries.length}
+              />
             </>
           )}
 
           {activeTab === 'cache' && (
             <>
-              <label className="search">
-                <Icon name="search" size={14} />
-                <input
-                  value={cacheQ}
-                  onChange={(e) => setCacheQ(e.target.value)}
-                  placeholder="搜索"
-                  aria-label="搜索解析缓存"
-                />
-              </label>
+              <SearchInput value={cacheQ} onChange={setCacheQ} ariaLabel="搜索解析缓存" />
               <span className="sp" />
               <span className="muted num toolbar-count">
                 {cacheData ? `${cacheItems.length} / ${cacheData.capacity ?? 0} 条` : '0 条'}
@@ -393,11 +308,7 @@ export function Dns({
 
         {activeTab === 'recent' && (
           <>
-            {recentError && (
-              <div className="form-error" style={{ margin: '8px 16px 0' }} role="alert">
-                {recentError}
-              </div>
-            )}
+            <LocalError text={recentError} inset />
             <div className="log-scroll" role="table" aria-label="最近 DNS 解析">
               <div className="dns-log-grid dns-grid-head" role="row">
                 <span>时间</span>
@@ -411,8 +322,6 @@ export function Dns({
 
               {shownRecent.map((e) => {
                 const addrs = asStringArray(e.addresses);
-                const primaryIp = addrs[0] ?? '';
-                const extraCount = Math.max(0, addrs.length - 1);
                 const serverText = formatServer(e.server);
                 const srcLabel = SOURCE_LABEL[e.source] ?? e.source ?? '路由';
                 const qtype = e.qtype || 'A';
@@ -427,55 +336,31 @@ export function Dns({
                       <span className="dns-domain-name" {...tip(e.name, true)}>
                         {e.name || '—'}
                       </span>
-                      <small className={'dns-src-tag is-' + (e.source || 'kernel')}>{srcLabel}</small>
+                      <KTag size="xs" label={srcLabel} />
                     </span>
 
                     <span className="dns-qtype-cell" role="cell">
                       <KTag label={qtype} color="var(--text-2)" />
                     </span>
 
-                    <span className="dns-addr-cell" role="cell">
-                      {primaryIp ? (
-                        <>
-                          <button
-                            type="button"
-                            className="dns-ip-copy"
-                            onClick={() => copyRecentAddr(e.seq, primaryIp)}
-                            {...tip(`点击复制 ${primaryIp}`)}
-                          >
-                            <span className="dns-ip-val num">{primaryIp}</span>
-                          </button>
-                          {extraCount > 0 && (
-                            <button
-                              type="button"
-                              className={'dns-ip-more-btn num' + (addrPop?.key === `recent:${e.seq}` ? ' is-open' : '')}
-                              aria-haspopup="dialog"
-                              aria-expanded={addrPop?.key === `recent:${e.seq}`}
-                              aria-label={`查看全部 ${addrs.length} 条解析结果`}
-                              onClick={(ev) =>
-                                toggleAddrPop(`recent:${e.seq}`, e.name || '—', qtype, addrs, ev.currentTarget)
-                              }
-                              {...tip(`查看全部 ${addrs.length} 条解析结果`)}
-                            >
-                              +{extraCount}
-                            </button>
-                          )}
-                          <span className="dns-copied-slot" role="status" aria-live="polite">
-                            {copiedSeq === e.seq ? '已复制' : ''}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="muted">
-                          {e.outcome === 'ok'
-                            ? `${qtype} 记录已应答`
-                            : e.outcome === 'nxdomain'
-                              ? '域名不存在 (NXDOMAIN)'
-                              : e.outcome === 'nodata'
-                                ? '无该类型记录'
-                                : '解析未返回地址'}
-                        </span>
-                      )}
-                    </span>
+                    <DnsAddrCell
+                      addrs={addrs}
+                      popKey={`recent:${e.seq}`}
+                      domain={e.name || '—'}
+                      qtype={qtype}
+                      moreLabel={`查看全部 ${addrs.length} 条解析结果`}
+                      activePopKey={addrPop?.key}
+                      onTogglePop={toggleAddrPop}
+                      emptyText={
+                        e.outcome === 'ok'
+                          ? `${qtype} 记录已应答`
+                          : e.outcome === 'nxdomain'
+                            ? '域名不存在 (NXDOMAIN)'
+                            : e.outcome === 'nodata'
+                              ? '无该类型记录'
+                              : '解析未返回地址'
+                      }
+                    />
 
                     <span className="dns-server-cell" role="cell" {...tip(e.server || serverText, true)}>
                       <span className="dns-server-txt">{serverText}</span>
@@ -510,13 +395,9 @@ export function Dns({
               })}
 
               {!shownRecent.length && (
-                <div className="empty dns-empty">
-                  {entries.length
-                    ? '无匹配的 DNS 解析记录'
-                    : running
-                      ? '等待新的 DNS 解析请求…'
-                      : '内核未运行'}
-                </div>
+                <Empty>
+                  {entries.length ? '无匹配的 DNS 解析记录' : running ? '等待新的 DNS 解析请求…' : '内核未运行'}
+                </Empty>
               )}
             </div>
           </>
@@ -524,11 +405,7 @@ export function Dns({
 
         {activeTab === 'cache' && (
           <>
-            {cacheError && (
-              <div className="form-error" style={{ margin: '8px 16px 0' }} role="alert">
-                {cacheError}
-              </div>
-            )}
+            <LocalError text={cacheError} inset />
             <div className="log-scroll" role="table" aria-label="DNS 解析缓存">
               <div className="dns-cache-grid dns-grid-head" role="row">
                 <span>缓存域名</span>
@@ -542,8 +419,6 @@ export function Dns({
                 const addrs = asStringArray(it.addresses);
                 const qtype = it.qtype || 'A';
                 const rowKey = `${it.name || idx}:${qtype}:${idx}`;
-                const primaryIp = addrs[0] ?? '';
-                const extraCount = Math.max(0, addrs.length - 1);
                 const serverText = formatServer(it.server);
                 return (
                   <div key={rowKey} className="dns-cache-grid dns-grid-row" role="row">
@@ -558,40 +433,16 @@ export function Dns({
                       <KTag label={qtype} color="var(--text-2)" />
                     </span>
 
-                    <span className="dns-addr-cell" role="cell">
-                      {primaryIp ? (
-                        <>
-                          <button
-                            type="button"
-                            className="dns-ip-copy"
-                            onClick={() => copyCacheAddr(rowKey, primaryIp)}
-                            {...tip(`点击复制 ${primaryIp}`)}
-                          >
-                            <span className="dns-ip-val num">{primaryIp}</span>
-                          </button>
-                          {extraCount > 0 && (
-                            <button
-                              type="button"
-                              className={'dns-ip-more-btn num' + (addrPop?.key === `cache:${rowKey}` ? ' is-open' : '')}
-                              aria-haspopup="dialog"
-                              aria-expanded={addrPop?.key === `cache:${rowKey}`}
-                              aria-label={`查看全部 ${addrs.length} 条缓存地址`}
-                              onClick={(ev) =>
-                                toggleAddrPop(`cache:${rowKey}`, it.name || '—', qtype, addrs, ev.currentTarget)
-                              }
-                              {...tip(`查看全部 ${addrs.length} 条缓存地址`)}
-                            >
-                              +{extraCount}
-                            </button>
-                          )}
-                          <span className="dns-copied-slot" role="status" aria-live="polite">
-                            {copiedKey === rowKey ? '已复制' : ''}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="muted">{`${qtype} 缓存已就绪`}</span>
-                      )}
-                    </span>
+                    <DnsAddrCell
+                      addrs={addrs}
+                      popKey={`cache:${rowKey}`}
+                      domain={it.name || '—'}
+                      qtype={qtype}
+                      moreLabel={`查看全部 ${addrs.length} 条缓存地址`}
+                      activePopKey={addrPop?.key}
+                      onTogglePop={toggleAddrPop}
+                      emptyText={`${qtype} 缓存已就绪`}
+                    />
 
                     <span className="dns-server-cell" role="cell" {...tip(it.server || serverText, true)}>
                       <span className="dns-server-txt">{serverText}</span>
@@ -605,7 +456,7 @@ export function Dns({
               })}
 
               {!shownCache.length && (
-                <div className="empty dns-empty">
+                <Empty>
                   {!running
                     ? '内核未运行'
                     : cacheData?.capacity === 0
@@ -613,7 +464,7 @@ export function Dns({
                       : cacheItems.length
                         ? '无匹配的缓存记录'
                         : '当前暂无存活的 DNS 缓存条目'}
-                </div>
+                </Empty>
               )}
             </div>
           </>
@@ -625,15 +476,14 @@ export function Dns({
           </div>
         )}
       </section>
-      {activeTab === 'recent' && queryOpen && (
-        <DnsQueryPopover
-          c={c}
-          btnRef={queryBtnRef}
-          cardRef={dnsCardRef}
-          close={() => setQueryOpen(false)}
-          onQueried={() => void pullNow()}
-        />
-      )}
+      <DnsQueryPopover
+        open={activeTab === 'recent' && queryOpen}
+        c={c}
+        btnRef={queryBtnRef}
+        cardRef={dnsCardRef}
+        close={() => setQueryOpen(false)}
+        onQueried={() => void pullNow()}
+      />
       {addrPop && <DnsAddrPopover pop={addrPop} close={() => setAddrPop(null)} />}
     </div>
   );
@@ -654,143 +504,137 @@ interface QuickNotice {
   fromUrl?: boolean;
 }
 
-function DnsAddrPopover({ pop, close }: { pop: AddrPopState; close: () => void }) {
-  const popRef = useRef<HTMLDivElement>(null);
-  const closeRef = useRef(close);
-  closeRef.current = close;
-  const copyTimer = useRef<number | null>(null);
-  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
-
+function DnsAddrCell({
+  addrs,
+  popKey,
+  domain,
+  qtype,
+  moreLabel,
+  emptyText,
+  activePopKey,
+  onTogglePop,
+}: {
+  addrs: string[];
+  popKey: string;
+  domain: string;
+  qtype: string;
+  moreLabel: string;
+  emptyText: string;
+  activePopKey?: string;
+  onTogglePop: (key: string, domain: string, qtype: string, addrs: string[], anchor: HTMLElement) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<number | null>(null);
   useEffect(
     () => () => {
-      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+      if (timer.current !== null) window.clearTimeout(timer.current);
     },
     [],
   );
-
-  useLayoutEffect(() => {
-    const update = () => {
-      if (!pop.anchor.isConnected) {
-        closeRef.current();
-        return;
-      }
-      const app = getAppRect();
-      const r = pop.anchor.getBoundingClientRect();
-      const width = Math.min(356, Math.max(268, Math.round(app.width - 32)));
-      const estHeight = Math.min(286, 84 + pop.addrs.length * 32);
-      const minLeft = Math.round(app.left + 12);
-      const maxLeft = Math.round(app.right - width - 12);
-      const left = Math.max(minLeft, Math.min(maxLeft, Math.round(r.left - 120)));
-      const spaceBelow = app.bottom - r.bottom - 12;
-      const spaceAbove = r.top - app.top - 12;
-      const top =
-        spaceBelow >= estHeight || spaceBelow >= spaceAbove
-          ? Math.round(Math.min(app.bottom - estHeight - 12, r.bottom + 8))
-          : Math.round(Math.max(app.top + 12, r.top - estHeight - 8));
-      setPos((prev) =>
-        prev && prev.top === top && prev.left === left && prev.width === width ? prev : { top, left, width },
-      );
-    };
-    update();
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node | null;
-      if (!t) return;
-      if (popRef.current?.contains(t) || pop.anchor.contains(t)) return;
-      closeRef.current();
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !e.defaultPrevented && !e.isComposing && !document.querySelector('[role="dialog"], .kat-pop')) {
-        closeRef.current();
-      }
-    };
-    const onScroll = (e: Event) => {
-      const t = e.target as Node | null;
-      if (t && popRef.current?.contains(t)) return;
-      closeRef.current();
-    };
-    document.addEventListener('mousedown', onDown, true);
-    document.addEventListener('keydown', onKey, true);
-    document.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', update);
-    return () => {
-      document.removeEventListener('mousedown', onDown, true);
-      document.removeEventListener('keydown', onKey, true);
-      document.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', update);
-    };
-  }, [pop]);
-
-  const copyText = (key: string, text: string) => {
-    if (!text) return;
-    void navigator.clipboard?.writeText(text);
-    setCopiedKey(key);
-    if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
-    copyTimer.current = window.setTimeout(() => setCopiedKey((cur) => (cur === key ? null : cur)), 1500);
+  const primaryIp = addrs[0] ?? '';
+  const extraCount = Math.max(0, addrs.length - 1);
+  const isOpen = activePopKey === popKey;
+  const copyPrimary = () => {
+    if (!primaryIp) return;
+    void navigator.clipboard?.writeText(primaryIp);
+    setCopied(true);
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setCopied(false), 1400);
   };
-
-  if (!pos) return null;
-
-  return createPortal(
-    <aside
-      ref={popRef}
-      className="dns-addr-pop"
-      style={{ top: pos.top, left: pos.left, width: pos.width }}
-      role="region"
-      aria-label={`${pop.domain} 全部解析结果`}
-    >
-      <div className="dns-addr-pop-head">
-        <span className="dns-addr-pop-domain mono" {...tip(pop.domain, true)}>
-          {pop.domain}
-        </span>
-        <span className="dns-addr-pop-count num">{pop.addrs.length} 条</span>
-        <button
-          type="button"
-          className="dns-toast-copy"
-          onClick={() => copyText('all', pop.addrs.join('\n'))}
-        >
-          <Icon name={copiedKey === 'all' ? 'check' : 'copy'} size={12} />
-          <StableText current={copiedKey === 'all' ? '已复制' : '复制全部'} items={['复制全部', '已复制']} />
-        </button>
-        <button type="button" className="ib dns-pop-close" aria-label="关闭" onClick={close}>
-          <Icon name="x" size={13} />
-        </button>
-      </div>
-
-      <div className="dns-addr-pop-list">
-        {pop.addrs.map((addr, i) => {
-          const recType = inferRecordType(addr, pop.qtype);
-          const itemKey = `${i}:${addr}`;
-          const isCopied = copiedKey === itemKey;
-          return (
+  return (
+    <span className="dns-addr-cell" role="cell">
+      {primaryIp ? (
+        <>
+          <button type="button" className="dns-ip-copy" onClick={copyPrimary} {...tip(`点击复制 ${primaryIp}`)}>
+            <span className="dns-ip-val num">{primaryIp}</span>
+          </button>
+          {extraCount > 0 && (
             <button
-              key={itemKey}
               type="button"
-              className="dns-rec-row"
-              onClick={() => copyText(itemKey, addr)}
-              {...tip(`点击复制 ${addr}`)}
+              className={'dns-ip-more-btn num' + (isOpen ? ' is-open' : '')}
+              aria-haspopup="dialog"
+              aria-expanded={isOpen}
+              aria-label={moreLabel}
+              onClick={(ev) => onTogglePop(popKey, domain, qtype, addrs, ev.currentTarget)}
+              {...tip(moreLabel)}
             >
-              <span className="dns-rec-type">{recType}</span>
-              <span className="dns-rec-addr mono">{addr}</span>
-              <span className={'dns-rec-copy' + (isCopied ? ' is-ok' : '')}>
-                <Icon name={isCopied ? 'check' : 'copy'} size={12} />
-              </span>
+              +{extraCount}
             </button>
-          );
-        })}
+          )}
+          <span className="dns-copied-slot" role="status" aria-live="polite">
+            {copied ? '已复制' : ''}
+          </span>
+        </>
+      ) : (
+        <span className="muted">{emptyText}</span>
+      )}
+    </span>
+  );
+}
+
+function DnsRecordRow({ type, addr }: { type: string; addr: string }) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+    },
+    [],
+  );
+  const copy = () => {
+    if (!addr) return;
+    void navigator.clipboard?.writeText(addr);
+    setCopied(true);
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <button type="button" className="dns-rec-row" onClick={copy} {...tip(`点击复制 ${addr}`)}>
+      <KTag size="xs" label={type} color="var(--text-2)" />
+      <span className="dns-rec-addr num">{addr}</span>
+      <span className={'dns-rec-copy' + (copied ? ' is-ok' : '')}>
+        <Icon name={copied ? 'check' : 'copy'} size={12} />
+      </span>
+    </button>
+  );
+}
+
+function DnsAddrPopover({ pop, close }: { pop: AddrPopState; close: () => void }) {
+  const estHeight = Math.min(284, 56 + pop.addrs.length * 32);
+  return (
+    <ToolPopover
+      open
+      anchorEl={pop.anchor}
+      width={316}
+      estHeight={estHeight}
+      closeOnScroll
+      title={pop.domain}
+      ariaLabel={`${pop.domain} 全部解析结果`}
+      titleMono
+      hint={`${pop.addrs.length} 条`}
+      headExtra={<CopyButton variant="link" text={pop.addrs.join('\n')} label="复制全部" />}
+      closeLabel="关闭"
+      className="dns-addr-pop"
+      close={close}
+    >
+      <div className="dns-addr-pop-list">
+        {pop.addrs.map((addr, i) => (
+          <DnsRecordRow key={`${i}:${addr}`} type={inferRecordType(addr, pop.qtype)} addr={addr} />
+        ))}
       </div>
-    </aside>,
-    document.body,
+    </ToolPopover>
   );
 }
 
 function DnsQueryPopover({
+  open,
   c,
   btnRef,
   cardRef,
   close,
   onQueried,
 }: {
+  open: boolean;
   c: Client;
   btnRef: React.RefObject<HTMLElement | null>;
   cardRef: React.RefObject<HTMLElement | null>;
@@ -801,35 +645,9 @@ function DnsQueryPopover({
   const [name, setName] = useState('');
   const [type, setType] = useState<'both' | 'A' | 'AAAA'>('both');
   const [notice, setNotice] = useState<QuickNotice | null>(null);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const noticeSeq = useRef(0);
-  const copyTimer = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const popRef = useRef<HTMLElement>(null);
   const busy = c.busy.has('dns-quick-query');
-  const pos = useCardAnchor(true, btnRef, cardRef, 448);
-
-  useEffect(() => {
-    requestAnimationFrame(() => inputRef.current?.focus());
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !e.defaultPrevented && !e.isComposing && !document.querySelector('[role="dialog"], .kat-pop')) {
-        close();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
-    };
-  }, [close]);
-
-  const copyText = (key: string, text: string) => {
-    if (!text) return;
-    void navigator.clipboard?.writeText(text);
-    setCopiedKey(key);
-    if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
-    copyTimer.current = window.setTimeout(() => setCopiedKey((cur) => (cur === key ? null : cur)), 1500);
-  };
 
   const submit = () => {
     const parsed = parseDnsQueryInput(name);
@@ -845,16 +663,9 @@ function DnsQueryPopover({
 
     void c.run('dns-quick-query', async () => {
       try {
-        const res = await core<{
-          name: string;
-          addresses?: { addr: string; type: string }[] | null;
-          server: string;
-          duration_ms: number;
-          cached: boolean;
-        }>('dns.query', { name: parsed.domain, type });
-        const list = Array.isArray(res?.addresses) ? res.addresses : [];
-        const records: QuickRecord[] = list
-          .filter((a) => a && typeof a.addr === 'string' && a.addr.trim())
+        const res = normalizeDNSQuery(await core<unknown>('dns.query', { name: parsed.domain, type }));
+        const records: QuickRecord[] = res.addresses
+          .filter((a) => typeof a.addr === 'string' && a.addr.trim())
           .map((a) => ({
             addr: a.addr.trim(),
             type: a.type || inferRecordType(a.addr.trim()),
@@ -883,26 +694,19 @@ function DnsQueryPopover({
     });
   };
 
-  if (!pos) return null;
-  return createPortal(
-    <aside
-      ref={popRef}
-      className="rule-judge-pop dns-query-pop"
-      role="region"
-      aria-label="DNS 解析测试"
-      style={{ top: pos.top, left: pos.left, width: pos.width }}
+  return (
+    <ToolPopover
+      open={open}
+      btnRef={btnRef}
+      cardRef={cardRef}
+      focusRef={inputRef}
+      icon="bolt"
+      title="DNS 解析测试"
+      hint="域名 · 网址"
+      closeLabel="关闭解析测试"
+      className="dns-query-pop"
+      close={close}
     >
-      <div className="rule-judge-head">
-        <div className="rule-judge-title-wrap">
-          <Icon name="bolt" size={14} />
-          <span className="rule-judge-title">DNS 解析测试</span>
-          <span className="rule-judge-hint">域名 · 网址</span>
-        </div>
-        <button type="button" className="ib" aria-label="关闭解析测试" onClick={close}>
-          <Icon name="x" size={13} />
-        </button>
-      </div>
-
       <form
         className="rule-judge-form"
         onSubmit={(e) => {
@@ -954,36 +758,19 @@ function DnsQueryPopover({
               {notice.meta && <span className="dns-toast-meta num">{notice.meta}</span>}
               <span className="sp" />
               {notice.records && notice.records.length > 1 && (
-                <button
-                  type="button"
-                  className="link-btn"
-                  onClick={() => copyText(`all:${notice.id}`, notice.records!.map((r) => r.addr).join('\n'))}
-                >
-                  {copiedKey === `all:${notice.id}` ? '已复制全部' : '复制全部'}
-                </button>
+                <CopyButton
+                  variant="link"
+                  text={notice.records.map((r) => r.addr).join('\n')}
+                  label="复制全部"
+                  copiedLabel="已复制全部"
+                />
               )}
             </div>
             {notice.records && notice.records.length > 0 ? (
               <div className="dns-pop-records">
-                {notice.records.map((rec, idx) => {
-                  const rowKey = `${notice.id}:${idx}:${rec.addr}`;
-                  const isCopied = copiedKey === rowKey;
-                  return (
-                    <button
-                      key={rowKey}
-                      type="button"
-                      className="dns-rec-row"
-                      onClick={() => copyText(rowKey, rec.addr)}
-                      {...tip(`点击复制 ${rec.addr}`)}
-                    >
-                      <KTag label={rec.type} color="var(--text-2)" />
-                      <span className="dns-rec-addr num">{rec.addr}</span>
-                      <span className={'dns-rec-copy' + (isCopied ? ' is-ok' : '')}>
-                        <Icon name={isCopied ? 'check' : 'copy'} size={12} />
-                      </span>
-                    </button>
-                  );
-                })}
+                {notice.records.map((rec, idx) => (
+                  <DnsRecordRow key={`${notice.id}:${idx}:${rec.addr}`} type={rec.type} addr={rec.addr} />
+                ))}
               </div>
             ) : (
               notice.detail && <div className="rule-judge-empty">{notice.detail}</div>
@@ -991,7 +778,6 @@ function DnsQueryPopover({
           </div>
         )}
       </div>
-    </aside>,
-    document.body,
+    </ToolPopover>
   );
 }

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
-import { useSize } from '../components/ui';
+import { Empty, useSize } from '../components/ui';
 import { rateStr, clock } from '../lib/format';
 import { speedAxis, axisLabel, speedTimeTicks } from './scale';
 import { speedColumns, columnAt, speedBar, columnPath } from './speedColumns';
@@ -60,7 +60,7 @@ export function SpeedChart({
   return (
     <div className={'speedchart' + (fixedH ? '' : ' fill')} ref={ref} style={fixedH ? { height: fixedH } : undefined}>
       {n < 2 ? (
-        <div className="empty chart-empty">无数据</div>
+        <Empty>无数据</Empty>
       ) : (
         w > 0 && (
           <svg

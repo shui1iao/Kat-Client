@@ -1,4 +1,5 @@
 import { setField } from './document';
+import { monthDaySecStr } from './display';
 import type { DocumentSource, DesktopPreferences } from './types';
 export const PROBE_URLS={gstatic:'https://www.gstatic.com/generate_204',cloudflare:'https://cp.cloudflare.com/generate_204'};
 export function durationMS(v:unknown):number {
@@ -9,7 +10,7 @@ export function durationMS(v:unknown):number {
  if(parts.map(p=>p[0]).join('')!==value||!parts.length)return NaN;
  return sign*parts.reduce((sum,p)=>sum+Number(p[1])*units[p[2]],0);
 }
-export interface ProbeDraft {probe_url:string;probe_timeout:string;probe_round_timeout:string;probe_concurrency:string;unified_delay:boolean}
+interface ProbeDraft {probe_url:string;probe_timeout:string;probe_round_timeout:string;probe_concurrency:string;unified_delay:boolean}
 export function probeDraft(d:DocumentSource):ProbeDraft {return {unified_delay:d.client.unified_delay??true,probe_url:d.client.probe_url??'',probe_timeout:d.client.probe_timeout??'',probe_round_timeout:d.client.probe_round_timeout??'',probe_concurrency:d.client.probe_concurrency===undefined?'':String(d.client.probe_concurrency)};}
 export function patchProbe(d:DocumentSource,v:ProbeDraft,changed:ReadonlySet<keyof ProbeDraft>){
  const next={...d.client};
@@ -23,12 +24,11 @@ export function patchProbe(d:DocumentSource,v:ProbeDraft,changed:ReadonlySet<key
  for(const k of changed)setField(d.client,k,next[k]);
 }
 export type DisplaySort='config'|'name'|'latency';
-const probeTimeFmt=new Intl.DateTimeFormat('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
 export function displaySorted<T>(items:readonly T[],sort:DisplaySort,name:(x:T)=>string,latency:(x:T)=>number|null|undefined):T[]{
  if(sort==='config')return [...items];
  const score=(v:T)=>{const n=latency(v);return typeof n==='number'&&Number.isFinite(n)&&n>=0?n:Infinity;};
  return items.map((value,index)=>({value,index,label:sort==='name'?name(value):'',score:sort==='latency'?score(value):0})).sort((a,b)=>(sort==='name'?a.label.localeCompare(b.label):(a.score-b.score||0))||a.index-b.index).map(x=>x.value);
 }
-export function probeTime(at:string|null|undefined){if(!at||!/^\d{4}-\d{2}-\d{2}T/.test(at))return '—';const d=new Date(at);return Number.isFinite(d.getTime())?probeTimeFmt.format(d):'—';}
+export function probeTime(at:string|null|undefined){return !at||!/^\d{4}-\d{2}-\d{2}T/.test(at)?'—':monthDaySecStr(at);}
 export function desktopExtras(p:DesktopPreferences){return {remember_window:p.remember_window??false,tray_click:p.tray_click??'show',proxy_bypass_mode:p.proxy_bypass_mode??'inherit',proxy_bypass:p.proxy_bypass??''};}
 export function validateBypass(value:string){if([...value].length>32768||/[\x00-\x1f\x7f-\x9f]/u.test(value))throw Error('绕过规则须≤32768字符且无控制字符');}

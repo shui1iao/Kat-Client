@@ -2,7 +2,7 @@ import type { DocumentFormat, DocumentSource, DesktopSettingsReply, DesktopPrefe
 import { replyFormat, type DocumentSession } from './session';
 import { setField } from './document';
 export type DNSMode = 'default'|'system'|'custom'|'legacy';
-export interface NetworkDraft { http_port:string; socks_port:string; probe_url:string; dns_mode:DNSMode; servers:string[]; cache_entries:string; advanced_dns:boolean }
+interface NetworkDraft { http_port:string; socks_port:string; probe_url:string; dns_mode:DNSMode; servers:string[]; cache_entries:string; advanced_dns:boolean }
 export function networkDraft(d:DocumentSource):NetworkDraft {
  const dns=d.kernel.dns;
  const advanced=!!dns&&['hosts','rules','nameserver-policy'].some(k=>Object.prototype.hasOwnProperty.call(dns,k))||!!d.client.tun_dns&&['remote','fake_ip','fake_ip_filter'].some(k=>Object.prototype.hasOwnProperty.call(d.client.tun_dns,k));

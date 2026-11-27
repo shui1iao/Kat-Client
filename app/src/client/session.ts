@@ -6,7 +6,7 @@ export const replyFormat = (format?: DocumentFormat): DocumentFormat => {
   if (!['json', 'yaml', 'yml'].includes(format)) throw new Error('不支持的配置格式');
   return format;
 };
-export interface DocumentAPI { validate(text: string, format: DocumentFormat): Promise<unknown>; apply(text: string, format: DocumentFormat): Promise<DocumentReply> }
+interface DocumentAPI { validate(text: string, format: DocumentFormat): Promise<unknown>; apply(text: string, format: DocumentFormat): Promise<DocumentReply> }
 // Ordinary runtime refreshes never enter this object. Only an uncertain mutation
 // may adopt a stable public document.get reply through reconcileAccepted(). Accepted source and text/format
 // drafts are separate; revision guards include typing-and-undo and format-only

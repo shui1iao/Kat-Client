@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 import {tip, TooltipHost} from './Tooltip';
 import { invoke } from '@tauri-apps/api/core';
 import { Icon } from './Icon';
-import { Switch, useThumb } from './ui';
+import { Segmented, Switch } from './ui';
 import './tray-menu.css';
 
 /* Self-drawn tray menu (user 2026-11-02: same visual language as the main
@@ -15,26 +15,24 @@ import './tray-menu.css';
    Node ids are used only to pick a presentation (segmented / switch / icon);
    unknown ids fall back to plain menu rows. */
 
-export interface TrayMenuNode { id: string; title: string; enabled: boolean; checked: boolean | null; children: TrayMenuNode[] }
+interface TrayMenuNode { id: string; title: string; enabled: boolean; checked: boolean | null; children: TrayMenuNode[] }
 interface PopupGeometry { epoch: string; layout: string; phase: 'preparing' | 'visible'; client_width: number; client_height: number; max_width: number; max_height: number }
-export interface TrayMenuState { revision: string; nodes: TrayMenuNode[]; theme: 'light' | 'dark' | 'system'; popup?: PopupGeometry | null }
-export const TRAY_MENU_DISMISS = '__dismiss';
+interface TrayMenuState { revision: string; nodes: TrayMenuNode[]; theme: 'light' | 'dark' | 'system'; popup?: PopupGeometry | null }
+const TRAY_MENU_DISMISS = '__dismiss';
 /** Popup preparing/visible: fast geometry handshake + 1 s state refresh. */
-export const TRAY_ACTIVE_TICK_MS = 50, TRAY_ACTIVE_POLL_MS = 1000;
+const TRAY_ACTIVE_TICK_MS = 50, TRAY_ACTIVE_POLL_MS = 1000;
 /** No popup: slow heartbeat only; native `kat-tray-prepare` wakes the page instantly. */
-export const TRAY_IDLE_TICK_MS = 2000, TRAY_IDLE_POLL_MS = 5000;
+const TRAY_IDLE_TICK_MS = 2000, TRAY_IDLE_POLL_MS = 5000;
 
-const glyph = (d: ReactNode) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>;
 const ICONS: Record<string, ReactNode> = {
-  show: glyph(<><rect x="3.5" y="4.5" width="17" height="15" rx="2.5" /><path d="M3.5 9h17" /></>),
+  show: <Icon name="window" size={16} />,
   'k3-proxy': <Icon name="monitor" size={16} />,
   'k3-tun': <Icon name="shield" size={16} />,
   restart: <Icon name="refresh" size={16} />,
-  'restart-app': glyph(<><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3" /><path d="M4.5 4.5v4h4" /></>),
-  quit: glyph(<><path d="M12 3.5v8" /><path d="M7 6.3a7.5 7.5 0 1 0 10 0" /></>),
+  'restart-app': <Icon name="rotateCcw" size={16} />,
+  quit: <Icon name="power" size={16} />,
 };
 ICONS.restart_app = ICONS['restart-app'];
-const CHECK = <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>;
 const MODE_ID = 'mode', GROUPS_ID = 'groups';
 
 const separator = (n: TrayMenuNode) => n.id === '';
@@ -59,11 +57,27 @@ const focusables = (root: HTMLElement | null) => root ? [...root.querySelectorAl
 
 function ModeSegment({ node, busy, select }: { node: TrayMenuNode; busy: boolean; select: (id: string) => void }) {
   const current = node.children.find(c => c.checked)?.id ?? null;
-  const [ref, thumb] = useThumb<HTMLDivElement>(current);
-  return <div ref={ref} className="tm-seg" role="radiogroup" aria-label={node.title} style={{ gridTemplateColumns: `repeat(${node.children.length},minmax(0,1fr))` }}>
-    {thumb}
-    {node.children.map(c => <button type="button" key={c.id} role="menuitemradio" aria-checked={!!c.checked} className={c.checked ? 'on' : ''} disabled={busy || !node.enabled || !c.enabled} onClick={() => { if (!c.checked) select(c.id); }} data-menu-item>{c.title}</button>)}
-  </div>;
+  return (
+    <Segmented
+      block
+      role="radiogroup"
+      itemRole="menuitemradio"
+      ariaLabel={node.title}
+      className="tm-seg"
+      disabled={busy || !node.enabled}
+      value={current}
+      onChange={(id) => {
+        if (id !== current) select(id);
+      }}
+      options={node.children.map((c) => ({
+        value: c.id,
+        label: c.title,
+        disabled: !c.enabled,
+        checked: !!c.checked,
+        itemProps: { 'data-menu-item': true },
+      }))}
+    />
+  );
 }
 
 function Row({ node, busy, select, open, inSub }: { node: TrayMenuNode; busy: boolean; select: (id: string) => void; open: (id: string) => void; inSub?: boolean }) {
@@ -75,7 +89,7 @@ function Row({ node, busy, select, open, inSub }: { node: TrayMenuNode; busy: bo
     {ICONS[node.id] ?? <span className="tm-icon-space" />}<span className="tm-name">{node.title}</span><Switch on={node.checked} />
   </button>;
   if (node.checked !== null) return <button type="button" className={'tm-row tm-check' + (node.checked ? ' on' : '')} role="menuitemradio" aria-checked={node.checked} disabled={disabled} onClick={() => { if (!node.checked) select(node.id); }} data-menu-item>
-    <span className="tm-mark">{node.checked && CHECK}</span><span className="tm-name" {...tip(node.title,true)}>{node.title}</span>
+    <span className="tm-mark">{node.checked && <Icon name="check" size={14} stroke={2.2} />}</span><span className="tm-name" {...tip(node.title,true)}>{node.title}</span>
   </button>;
   return <button type="button" className="tm-row" role="menuitem" disabled={disabled} onClick={() => select(node.id)} data-menu-item>
     {ICONS[node.id] ?? <span className="tm-icon-space" />}<span className="tm-name">{node.title}</span>
@@ -83,7 +97,7 @@ function Row({ node, busy, select, open, inSub }: { node: TrayMenuNode; busy: bo
 }
 
 /** Pure view of one native menu state (also used by the visual preview). */
-export function TrayMenuView({ state, busy = false, notice = '', onSelect, initialPath = [], resetSignal = 0 }: { state: TrayMenuState; busy?: boolean; notice?: string; onSelect: (id: string) => void; initialPath?: string[]; resetSignal?: number }) {
+function TrayMenuView({ state, busy = false, notice = '', onSelect, initialPath = [], resetSignal = 0 }: { state: TrayMenuState; busy?: boolean; notice?: string; onSelect: (id: string) => void; initialPath?: string[]; resetSignal?: number }) {
   const [path, setPath] = useState<string[]>(initialPath);
   const [rootHeight, setRootHeight] = useState(0);
   const ref = useRef<HTMLDivElement>(null);

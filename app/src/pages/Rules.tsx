@@ -1,20 +1,19 @@
 import { flowRuleValues, type FlowRuleSource } from '../client/flowRule';
-import { Segmented, StableText } from '../components/ui';
+import { Checkbox, Empty, MoveButtons, SearchInput, Segmented, StableText } from '../components/ui';
+import { ToolPopover } from '../components/ToolPopover';
 import { subscriptionRule } from '../client/subscription';
 import { policyColor, ruleType, ruleKeys, reorderRule, ruleKindLabel } from '../client/presentation';
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { useCardAnchor } from '../lib/floating';
-import { KState, KTag, RuleTag } from '../components/labels';
+import { KState, KTag, PolicyPill, RuleTag } from '../components/labels';
 import { Icon } from '../components/Icon';
 import { tip } from '../components/Tooltip';
-import { Field, LocalError, Modal } from '../components/Editors';
+import { Field, LocalError, Modal, RawJsonField, RawJsonToggle } from '../components/Editors';
 import { names } from '../client/operations';
 import { editRule, MATCH_FIELDS, simpleMatch, targetOf } from '../client/rules';
 import { core } from '../client/ipc';
 import { normalizeResources, normalizeTargetPreview } from '../client/normalize';
 import { errorText, resourceRefreshError, resourceStateReason } from '../lib/errors';
-import { countStr, showBytes } from '../client/display';
+import { countStr, shortDateTimeStr, showBytes } from '../client/display';
 import { updateResources } from '../client/resources';
 import type { Client } from '../client/useClient';
 import type { DocumentReply, ResourceItem, SourceObject } from '../client/types';
@@ -49,7 +48,7 @@ interface Draft {
   flow?: FlowRuleSource;
 }
 
-export interface TargetPreview {
+interface TargetPreview {
   target: { input: string; host: string; kind: 'domain' | 'ip'; addresses: string[] };
   matched: { source: 'rule' | 'final'; index: number | null; type: string; payload: string; policy: string };
   chain: string[];
@@ -96,24 +95,7 @@ export function Rules({
   const judgeBtnRef = useRef<HTMLButtonElement>(null);
   const rulesCardRef = useRef<HTMLElement>(null);
   const ruleScrollRef = useRef<HTMLDivElement>(null);
-  const judgePos = useCardAnchor(activeView === 'rules' && judgeOpen, judgeBtnRef, rulesCardRef, 448);
 
-  useEffect(() => {
-    if (activeView !== 'rules' || !judgeOpen) return;
-    requestAnimationFrame(() => judgeInputRef.current?.focus());
-    const onKey = (e: KeyboardEvent) => {
-      if (
-        e.key === 'Escape' &&
-        !e.defaultPrevented &&
-        !e.isComposing &&
-        !document.querySelector('[role="dialog"], .kat-pop')
-      ) {
-        setJudgeOpen(false);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [activeView, judgeOpen]);
 
   // External Resources State (read-only on mount, reconciled on refresh)
   const [resItems, setResItems] = useState<ResourceItem[] | null>(null);
@@ -274,10 +256,7 @@ export function Rules({
 
   const badge = (type: string) => <RuleTag type={type} />;
   const policy = (target: string) => (
-    <span className="rule-policy">
-      <i style={{ background: policyColor(target, c.status, c.label) }} />
-      <span {...tip(c.label(target), true)}>{c.label(target)}</span>
-    </span>
+    <PolicyPill label={c.label(target)} color={policyColor(target, c.status, c.label)} />
   );
 
   const hitRuleIdx =
@@ -294,7 +273,6 @@ export function Rules({
       <section ref={rulesCardRef} className="card table-card rules-card">
         <header className="table-toolbar">
           <Segmented
-            size="sm"
             value={activeView}
             onChange={switchView}
             options={[
@@ -305,15 +283,7 @@ export function Rules({
 
           {activeView === 'rules' ? (
             <>
-              <label className="search">
-                <Icon name="search" size={14} />
-                <input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="搜索"
-                  aria-label="搜索规则"
-                />
-              </label>
+              <SearchInput value={q} onChange={setQ} ariaLabel="搜索规则" />
               <select
                 className="inp sm rule-type-select"
                 aria-label="规则类型筛选"
@@ -439,26 +409,7 @@ export function Rules({
                       </span>
                       <span className="rule-hit-count num">{countStr(hits.get(keys[i]))}</span>
                       <div className="row-actions">
-                        <button
-                          type="button"
-                          className="ib"
-                          {...tip('上移规则')}
-                          disabled={i === 0 || c.doc.saving}
-                          onClick={() => move(i, -1)}
-                          aria-label="上移规则"
-                        >
-                          <Icon name="chevUp" size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          className="ib"
-                          {...tip('下移规则')}
-                          disabled={i === rules.length - 1 || c.doc.saving}
-                          onClick={() => move(i, 1)}
-                          aria-label="下移规则"
-                        >
-                          <Icon name="chevDown" size={14} />
-                        </button>
+                        <MoveButtons subject="规则" index={i} count={rules.length} disabled={c.doc.saving} onMove={(dir) => move(i, dir)} />
                         <button
                           type="button"
                           className="ib"
@@ -487,7 +438,7 @@ export function Rules({
                     </div>
                   );
                 })}
-                {!visible.length && <div className="empty">{c.connected ? '没有匹配的规则' : '未连接'}</div>}
+                {!visible.length && <Empty>{c.connected ? '没有匹配的规则' : '未连接'}</Empty>}
               </div>
 
               <div className={'live-rule-row final-route' + (hitIsFinal ? ' is-hit' : '')} data-rule="final">
@@ -561,17 +512,9 @@ export function Rules({
                     <span className="num r">{countStr(x.entries)}</span>
                     <span className="num r">{showBytes(x.size_bytes)}</span>
                     <span className="num res-time" {...tip(x.updated_at ?? '—')}>
-                      {x.updated_at
-                        ? new Date(x.updated_at).toLocaleString('zh-CN', {
-                            hour12: false,
-                            month: '2-digit',
-                            day: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })
-                        : '—'}
+                      {shortDateTimeStr(x.updated_at)}
                     </span>
-                    <div className="row-actions" style={{ justifyContent: 'flex-end' }}>
+                    <div className="row-actions">
                       <button
                         type="button"
                         className="ib"
@@ -587,39 +530,23 @@ export function Rules({
                 ))}
               </div>
             )}
-            {resItems && !resItems.length && <div className="empty">没有外部规则资源</div>}
-            {!resItems && !resErrors.length && (
-              <div className="empty">{c.hasHost && c.connected ? '加载中…' : '未连接'}</div>
-            )}
+            {resItems && !resItems.length && <Empty>没有外部规则资源</Empty>}
+            {!resItems && !resErrors.length && <Empty>{c.hasHost && c.connected ? '加载中…' : '未连接'}</Empty>}
           </>
         )}
       </section>
 
-      {activeView === 'rules' &&
-        judgeOpen &&
-        judgePos &&
-        createPortal(
-          <aside
-            className="rule-judge-pop"
-            role="region"
-            aria-label="规则判定"
-            style={{ top: judgePos.top, left: judgePos.left, width: judgePos.width }}
-          >
-                <div className="rule-judge-head">
-                  <div className="rule-judge-title-wrap">
-                    <Icon name="target" size={14} />
-                    <span className="rule-judge-title">规则判定</span>
-                    <span className="rule-judge-hint">域名 · IP · 网址</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="ib"
-                    aria-label="关闭规则判定"
-                    onClick={() => setJudgeOpen(false)}
-                  >
-                    <Icon name="x" size={13} />
-                  </button>
-                </div>
+      <ToolPopover
+        open={activeView === 'rules' && judgeOpen}
+        btnRef={judgeBtnRef}
+        cardRef={rulesCardRef}
+        focusRef={judgeInputRef}
+        icon="target"
+        title="规则判定"
+        hint="域名 · IP · 网址"
+        closeLabel="关闭规则判定"
+        close={() => setJudgeOpen(false)}
+      >
 
                 <form
                   className="rule-judge-form"
@@ -707,10 +634,12 @@ export function Rules({
 
                       <div className="rule-judge-kv">
                         <span className="rule-judge-k">出口</span>
-                        <span className="rule-judge-policy-dot" style={{ background: policyColor(judgeResult.matched.policy, c.status, c.label) }} />
-                        <span className="rule-judge-v rule-judge-chain" {...tip(judgeChainText, true)}>
-                          <b>{judgeChainText}</b>
-                        </span>
+                        <PolicyPill
+                          className="rule-judge-v rule-judge-chain"
+                          label={judgeChainText}
+                          color={policyColor(judgeResult.matched.policy, c.status, c.label)}
+                          bold
+                        />
                         {judgeResult.resolved && judgeResult.target.addresses.length > 0 && (
                           <span
                             className="rule-judge-dns"
@@ -725,9 +654,7 @@ export function Rules({
                     <div className="rule-judge-empty">输入域名、IP 或网站链接，按回车查看首条命中规则与出口链路</div>
                   )}
                 </div>
-          </aside>,
-          document.body,
-        )}
+      </ToolPopover>
 
       {showOverlay && overlayOwner && (
         <Modal title="订阅规则的本地修改" close={() => setShowOverlay(false)}>
@@ -832,6 +759,36 @@ export function RuleEditor({ c, draft, close }: { c: Client; draft: Draft; close
       close={close}
       save={() => void save()}
       busy={c.doc.saving || c.busy.has('save')}
+      headerExtra={
+        !draft.flow && simpleMatch(draft.value) ? (
+          <RawJsonToggle
+            active={raw !== null}
+            onToggle={() => {
+              if (raw === null) {
+                try {
+                  setRaw(JSON.stringify(editRule(base, field, value, target, noResolve), null, 2));
+                } catch (e) {
+                  setError(errorText(e));
+                }
+              } else {
+                try {
+                  const r = JSON.parse(raw);
+                  const f = simpleMatch(r);
+                  if (!f) throw new Error();
+                  setBase(r);
+                  setField(f);
+                  setValue(r[f]);
+                  setTarget(targetOf(r));
+                  setNoResolve(!!r.no_resolve);
+                  setRaw(null);
+                } catch {
+                  setFieldErrors({ '规则 JSON': '复杂规则请用原文编辑' });
+                }
+              }
+            }}
+          />
+        ) : undefined
+      }
     >
       {draft.flow && c.source?.subscriptions?.some((s) => s.active !== false) && (
         <div className="subscription-overlay-note">保存为活动订阅的本地覆盖，不修改远端规则</div>
@@ -855,46 +812,13 @@ export function RuleEditor({ c, draft, close }: { c: Client; draft: Draft; close
             </>
           )}
           <span>保存为此订阅的本地覆盖</span>
-          <label className="check-field">
-            <input type="checkbox" checked={disabled} onChange={(e) => setDisabled(e.target.checked)} />
+          <Checkbox checked={disabled} onChange={setDisabled}>
             禁用此订阅规则
-          </label>
+          </Checkbox>
         </div>
       )}
-      {!draft.flow && simpleMatch(draft.value) && (
-        <button
-          className="btn sm"
-          onClick={() => {
-            if (raw === null) {
-              try {
-                setRaw(JSON.stringify(editRule(base, field, value, target, noResolve), null, 2));
-              } catch (e) {
-                setError(errorText(e));
-              }
-            } else {
-              try {
-                const r = JSON.parse(raw);
-                const f = simpleMatch(r);
-                if (!f) throw new Error();
-                setBase(r);
-                setField(f);
-                setValue(r[f]);
-                setTarget(targetOf(r));
-                setNoResolve(!!r.no_resolve);
-                setRaw(null);
-              } catch {
-                setFieldErrors({ '规则 JSON': '复杂规则请用原文编辑' });
-              }
-            }
-          }}
-        >
-          {raw === null ? '高级原文' : '表单'}
-        </button>
-      )}
       {raw !== null ? (
-        <Field label="规则 JSON">
-          <textarea className="inp raw-object" value={raw} onChange={(e) => setRaw(e.target.value)} />
-        </Field>
+        <RawJsonField label="规则 JSON" value={raw} onChange={setRaw} />
       ) : (
         <>
           <div className={draft.flow ? 'form-grid flow-rule-form' : 'form-grid'}>
@@ -949,10 +873,9 @@ export function RuleEditor({ c, draft, close }: { c: Client; draft: Draft; close
             ) : (
               <span />
             )}
-            <label className="check-field">
-              <input type="checkbox" checked={noResolve} onChange={(e) => setNoResolve(e.target.checked)} />
+            <Checkbox checked={noResolve} onChange={setNoResolve}>
               不解析域名（no-resolve）
-            </label>
+            </Checkbox>
           </div>
         </>
       )}

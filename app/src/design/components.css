@@ -35,12 +35,6 @@
   white-space: nowrap;
 }
 
-.card-glyph {
-  display: inline-grid;
-  place-items: center;
-  color: var(--text-3);
-}
-
 .card-x {
   margin-left: auto;
   display: flex;
@@ -49,21 +43,12 @@
 }
 
 .card-note {
-  font-size: var(--fs-body);
+  font-size: var(--fs-meta);
   color: var(--text-3);
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
-
-.card-note .sq {
-  width: 7px;
-  height: 7px;
-  border-radius: var(--r-bar);
-  display: inline-block;
-}
-.card-note .sq.up { background: var(--up); }
-.card-note .sq.down { background: var(--down); }
 
 /* ---------- Push Buttons (Crisp Elevated Surface + Top Highlight) ---------- */
 .btn {
@@ -99,6 +84,13 @@
   padding: 0 10px;
   font-size: var(--fs-data);
   border-radius: var(--r-ctl);
+}
+
+.btn.xs {
+  height: 26px;
+  padding: 0 10px;
+  font-size: var(--fs-meta);
+  border-radius: var(--r-inner);
 }
 
 .btn svg {
@@ -385,16 +377,39 @@ select.inp.sm.conn-proc-select {
   color: var(--text-3);
 }
 
-/* ---------- Segmented controls & filter pill bars (one geometry, one sliding thumb) ----------
-   Height follows the toolbar control ladder (30 / sm 26) so tabs, search,
-   selects and buttons on one toolbar line up. */
-.seg,
-.pill-bar {
+.search.search-full {
+  flex: none;
+  width: 100%;
+  max-width: none;
+  height: var(--h-ctl);
+}
+
+.search-clear {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-right: -3px;
+  padding: 0;
+  border-radius: var(--r-xs);
+  display: grid;
+  place-items: center;
+  color: var(--text-3);
+  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.search-clear:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* ---------- Single unified Segmented control (pages, toolbars, modals, sidebar & tray) ---------- */
+.seg {
   position: relative;
   isolation: isolate;
   display: inline-flex;
   align-items: center;
   flex: none;
+  max-width: 100%;
   height: var(--h-ctl-sm);
   padding: 2px;
   gap: 0;
@@ -407,8 +422,12 @@ select.inp.sm.conn-proc-select {
   height: 26px;
 }
 
-.seg > .seg-thumb,
-.pill-bar > .seg-thumb {
+.seg.seg-block {
+  display: flex;
+  width: 100%;
+}
+
+.seg > .seg-thumb {
   position: absolute;
   z-index: -1;
   border-radius: var(--r-inner);
@@ -421,13 +440,11 @@ select.inp.sm.conn-proc-select {
   border-radius: var(--r-chip);
 }
 
-.seg > .seg-thumb.instant,
-.pill-bar > .seg-thumb.instant {
+.seg > .seg-thumb.instant {
   transition: none;
 }
 
-.seg > button,
-.pill-bar > button {
+.seg > button {
   position: relative;
   flex: none;
   display: inline-flex;
@@ -445,9 +462,15 @@ select.inp.sm.conn-proc-select {
   transition: color var(--t-fast) var(--ease);
 }
 
-.seg > button:hover:not(.on):not(:disabled),
-.pill-bar > button:hover:not(.on):not(:disabled) {
-  color: var(--text-2);
+.seg[role="radiogroup"]:not(.seg-block) > button {
+  padding: 0 10px;
+}
+
+.seg.seg-block > button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0;
+  font-size: var(--fs-meta);
 }
 
 .seg.seg-sm > button {
@@ -457,46 +480,24 @@ select.inp.sm.conn-proc-select {
   border-radius: var(--r-chip);
 }
 
-.seg > button.on,
-.pill-bar > button.on {
+.seg > button:hover:not(.on):not(:disabled) {
+  color: var(--text-2);
+}
+
+.seg > button.on {
   color: var(--text);
 }
 
-.pill-bar {
-  max-width: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
+.seg > button.on.t-ok {
+  color: var(--ok);
 }
 
-.pill-bar::-webkit-scrollbar {
-  display: none;
+.seg > button.on.t-warn {
+  color: var(--warn);
 }
 
-.pill-bar button em {
-  font-style: normal;
-  font-size: var(--fs-meta);
-  color: var(--text-3);
-}
-
-.pick {
-  height: 26px;
-  padding: 0 10px;
-  border-radius: var(--r-inner);
-  background: var(--card-2);
-  color: var(--text-2);
-  font-size: var(--fs-meta);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.pick:hover:not(.on) {
-  background: var(--hover);
-}
-
-.pick.on {
-  background: var(--accent-soft);
-  color: var(--accent-text);
+.seg > button.on.t-bad {
+  color: var(--bad);
 }
 
 /* ---------- Stable Multi-State Label Stack ---------- */
@@ -554,7 +555,7 @@ select.inp.sm.conn-proc-select {
   will-change: transform;
   backface-visibility: hidden;
   transform: translate3d(0, 0, 0);
-  transition: transform 200ms var(--ease-spring), width 120ms var(--ease);
+  transition: transform 200ms var(--ease), width 120ms var(--ease);
 }
 
 :is(.pref-toggle, .net-switch, .tm-toggle):active:not(:disabled):not([aria-disabled="true"]) .sw i {
@@ -623,6 +624,18 @@ select.inp.sm.conn-proc-select {
   flex: none;
 }
 
+/* Compact 17px sub-row / metadata badge (shared by sniffed, DNS source, and 2-line flow row) */
+.ktag.ktag-xs {
+  height: 17px;
+  padding: 0 5px;
+  font-size: 10.5px;
+}
+
+.ktag.is-neutral {
+  background: var(--card-2);
+  color: var(--text-3);
+}
+
 /* debug is the quietest level: outline only, no fill */
 .ktag.log-level.is-debug {
   background: transparent;
@@ -676,13 +689,6 @@ select.inp.sm.conn-proc-select {
 .lat-bad { color: var(--bad); }
 .lat-off { color: var(--text-3); }
 
-.ui-count {
-  font-size: var(--fs-body);
-  color: var(--text-3);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 /* Connection target & rule inline helpers */
 .conn-target {
   display: inline-flex;
@@ -698,19 +704,7 @@ select.inp.sm.conn-proc-select {
   white-space: nowrap;
 }
 
-.sniff-label {
-  flex: none;
-  height: 17px;
-  padding: 0 5px;
-  border-radius: var(--r-chip);
-  background: var(--card-2);
-  color: var(--text-3);
-  font-size: 10.5px;
-  font-weight: 500;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-}
+
 
 .conn-rule {
   display: inline-flex;
@@ -742,15 +736,15 @@ select.inp.sm.conn-proc-select {
 }
 
 /* Richer empty state: mark + title + hint, centred in its card */
-.empty.distribution-empty {
+.empty.has-detail {
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 }
 
 .empty-mark {
   width: 36px;
   height: 36px;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -758,12 +752,12 @@ select.inp.sm.conn-proc-select {
   color: var(--text-3);
 }
 
-.empty.distribution-empty > b {
+.empty.has-detail > b {
   font-weight: 500;
   color: var(--text-2);
 }
 
-.empty.distribution-empty > small {
+.empty.has-detail > small {
   font-size: var(--fs-meta);
   color: var(--text-3);
 }
@@ -775,6 +769,19 @@ select.inp.sm.conn-proc-select {
   color: var(--bad);
   font-size: var(--fs-meta);
   line-height: 1.45;
+}
+
+.form-error.is-inset {
+  margin: 8px 16px 0;
+}
+
+.form-error.is-spaced {
+  margin-top: 8px;
+}
+
+.ib.is-copied,
+.ib.is-copied:hover:not(:disabled) {
+  color: var(--ok);
 }
 
 .field-error {
@@ -817,7 +824,7 @@ select.inp.sm.conn-proc-select {
   flex-direction: column;
   overflow: hidden;
   outline: none;
-  animation: kat-modal-in 180ms var(--ease-spring);
+  animation: kat-modal-in 180ms var(--ease);
 }
 
 .modal.modal-sm {
@@ -855,6 +862,10 @@ select.inp.sm.conn-proc-select {
   display: flex;
   align-items: center;
   gap: 6px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
 }
 
 .modal > .form {
@@ -888,20 +899,16 @@ select.inp.sm.conn-proc-select {
   text-align-last: start;
 }
 
-.modal :is(.secret-input, .sub-secret) .btn.sm {
-  height: var(--h-ctl);
-  padding: 0 12px;
-  border-radius: var(--r-ctl);
-}
 
-.modal .editor-field > .seg:not(.seg-sm) {
+
+.modal :is(.form-set, .editor-field) > .seg:not(.seg-sm) {
   display: flex;
   height: var(--h-ctl);
 }
 
-.modal .editor-field > .seg:not(.seg-sm) > button {
+.modal :is(.form-set, .editor-field) > .seg:not(.seg-sm) > button {
   flex: 1;
-  height: 28px;
+  height: calc(var(--h-ctl) - 4px);
 }
 
 .modal textarea.inp {
@@ -931,11 +938,6 @@ select.inp.sm.conn-proc-select {
   gap: 8px;
 }
 
-.modal > footer .subscription-delete {
-  margin-right: auto;
-  color: var(--bad);
-}
-
 .modal-note {
   margin-right: auto;
   font-size: var(--fs-meta);
@@ -961,30 +963,33 @@ select.inp.sm.conn-proc-select {
   gap: 12px;
 }
 
-.raw-object {
+textarea.inp.raw-object {
   font-family: var(--mono);
   font-size: var(--fs-meta);
-  min-height: 220px !important;
+  min-height: 220px;
   white-space: pre;
 }
 
-.secret-input,
-.sub-secret {
+.secret-area.concealed {
+  -webkit-text-security: disc;
+}
+
+.secret-input {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.secret-input .inp,
-.sub-secret .inp {
+.secret-input .inp {
   flex: 1;
   min-width: 0;
 }
 
-.sub-secret-actions {
+.secret-actions {
   display: flex;
   align-items: center;
   gap: 2px;
+  flex: none;
 }
 
 /* Checkbox: same material and accent as the switches instead of the native OS box. */
@@ -1028,6 +1033,45 @@ input[type="checkbox"]:disabled {
   color: var(--text-2);
   align-self: end;
   min-height: 34px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.check-chip {
+  height: 28px;
+  padding: 0 10px 0 8px;
+  border-radius: var(--r-inner);
+  background: var(--card-2);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
+}
+
+.check-chip > input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  background-size: 14px;
+}
+
+.check-chip:hover:not(.on):not(.is-disabled) {
+  background: var(--hover);
+}
+
+.check-chip.on {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.check-field.is-disabled,
+.check-chip.is-disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .subscription-overlay-note {
@@ -1125,7 +1169,7 @@ input[type="checkbox"]:disabled {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  animation: kat-pop-in 130ms var(--ease-spring);
+  animation: kat-pop-in 130ms var(--ease);
 }
 
 .kat-opt {
@@ -1177,12 +1221,6 @@ input[type="checkbox"]:disabled {
   background: color-mix(in srgb, var(--accent) 20%, transparent);
   color: var(--accent-text);
   outline: none;
-}
-
-.kat-pop.centered .kat-opt {
-  justify-content: center;
-  padding-inline: 12px;
-  text-align: center;
 }
 
 @keyframes kat-tip-in {
@@ -1270,43 +1308,9 @@ input[type="checkbox"]:disabled {
   background: var(--sep-fade) top / 100% 1px no-repeat;
 }
 
-.toast {
-  position: fixed;
-  top: 56px;
-  left: 50%;
-  right: auto;
-  bottom: auto;
-  z-index: 950;
-  max-width: min(460px, calc(100% - 40px));
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-radius: var(--r-pop);
-  background: var(--pop);
-  backdrop-filter: blur(20px) saturate(200%);
-  box-shadow: var(--shadow-pop);
-  font-size: var(--fs-data);
-  color: var(--text);
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(-50%, -8px);
-  transition: opacity var(--t) var(--ease), transform var(--t) var(--ease);
-}
-
-.toast.show {
-  opacity: 1;
-  transform: translate(-50%, 0);
-  animation: kat-toast-in 180ms var(--ease);
-}
-
 /* ---------- Exit transitions (visual ghosts, see lib/exitGhost.ts) ----------
    Individual translate/scale properties compose with each element's own
    positioning transform instead of replacing it. */
-@keyframes kat-toast-in {
-  from { opacity: 0; translate: 0 -6px; }
-  to { opacity: 1; translate: 0 0; }
-}
 @keyframes kat-fade-out {
   to { opacity: 0; }
 }

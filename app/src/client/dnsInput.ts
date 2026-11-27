@@ -1,4 +1,4 @@
-export type ParsedDnsInput =
+type ParsedDnsInput =
   | { ok: true; domain: string; fromUrl: boolean }
   | { ok: false; error: string };
 

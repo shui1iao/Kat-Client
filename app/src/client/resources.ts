@@ -1,5 +1,5 @@
 import type { ResourceItem } from './types';
-export interface ResourceUpdateFailure { item:ResourceItem; message:string }
+interface ResourceUpdateFailure { item:ResourceItem; message:string }
 /** A click owns one snapshot: one request per row, serial, failures do not stop
  * the remaining resources, including when its page has since unmounted. */
 export async function updateResources(

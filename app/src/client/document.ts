@@ -166,7 +166,6 @@ export function editDocument(text: string, edit: (document: DocumentSource) => v
   return text.slice(0, root.start) + body + text.slice(root.end);
 }
 export function setField(object: SourceObject, key: string, value: any) { if (value === undefined || value === '') delete object[key]; else object[key] = value; }
-export const sourceCounts = (d: DocumentSource) => ({ nodes: d.kernel.outbounds?.length ?? 0, groups: d.kernel.groups?.length ?? 0, rules: d.kernel.routing?.rules?.length ?? 0, providers: d.subscriptions?.length ?? 0 });
 
 export function formatDocument(text:string, format:DocumentFormat = 'json'):string {
   documentBudget(text);
@@ -183,7 +182,7 @@ export function formatDocument(text:string, format:DocumentFormat = 'json'):stri
 
 // Host/core enforce the same 1 MiB and 2 MiB frame limits. Detect lone UTF-16
 // surrogates rather than letting TextEncoder silently replace user input.
-export function documentBudget(text: string) {
+function documentBudget(text: string) {
   for (let i = 0; i < text.length; i++) {
     const c = text.charCodeAt(i);
     if (c >= 0xd800 && c <= 0xdbff) { const n = text.charCodeAt(++i); if (!(n >= 0xdc00 && n <= 0xdfff)) throw new Error('需要有效 UTF-8 文本'); }

@@ -1,4 +1,8 @@
-import { niceStep } from './path';
+function niceStep(raw: number): number {
+  const p = Math.pow(10, Math.floor(Math.log10(raw)));
+  const f = raw / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+}
 // Scale only the visible samples. A positive fallback is used only for all-zero
 // data, never as a floor that hides a real low-rate or low-usage measurement.
 export function byteAxis(values: number[], rate = false) {

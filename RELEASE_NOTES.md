@@ -1,28 +1,30 @@
-# Kat-Client v0.2.36 (Windows Core v0.8.22)
+# Kat-Client v0.2.37 (Windows Core v0.8.22)
 
-全站视觉组件、排版与动效深度统一 + 连接与日志双行信息流重构 + Windows Core v0.8.22 订阅启动/后台刷新只读 `mmap` 内存优化与细分诊断正式发布版（client sequence `1795723000`，内置 Windows Core v0.8.22 `core_sequence 1795722000`；配套 Linux Server v0.8.3 与 Kat-Manager v0.1.3）。
+全站 UI 组件统一收口为单一权威基础原语、清理历史冗余代码并补齐静态架构与多视口浏览器几何自动化验收门禁（client sequence `1795793000`；内置未变动的零 gVisor 纯 Go System Stack Windows Core v0.8.22 `core_sequence 1795722000`；配套 Linux Server v0.8.3 与 Kat-Manager v0.1.3）。
 
 ## 本版更新
 
-### 1. 全站设计语言、控件体系与色彩语义统一
-- **Windows 优先字体与统一 Token 阶梯**（`tokens.css`、`shell.css`、`components.css`、`pages.css`、`tray-menu.css`）：优先采用 `Segoe UI Variable Text / Segoe UI / Microsoft YaHei UI` 与 `Cascadia Mono / Consolas`；收束全站圆角阶梯（`12 / 10 / 8 / 6 / 5 / 4 / 2px`）与弹窗三档标准宽度（`400 / 540 / 680px`）；右上角采用紧凑 `30×30` 圆形窗口按钮（关闭悬停使用 Windows 标准红）。
-- **单一开关、分段滑块、标签、下拉框与状态表达**：
-  - 侧栏「系统代理 / TUN」、设置页与托盘菜单统一为同一套 `32×18` `<Switch />` 组件；
-  - 主窗口与托盘菜单的分段切换、筛选胶囊统一为同构凹槽滑动块且与工具栏等高对齐；
-  - 全站搜索框与文本输入框统一 `1.5px` 蓝色聚焦内描边，下拉框与侧栏全局策略组选择器统一左对齐与展开态高亮；
-  - 标签统一采用主界面字体配等宽数字 `tabular-nums`，状态表达全站统一为语义圆点加文字（`KState`）；
-  - 理顺色彩语义：分离警告琥珀色与上传橙色，「直连」改为青色，区分 TCP/UDP 标签层级，降低 `debug` 日志视觉权重，Smart 自动命中改为淡蓝细描边。
+### 1. 全站同类控件 100% 单一组件与像素尺寸统一
+- **右上角窗口按钮统一为 `34 × 28px` 圆角矩形（`6px` 圆角）**：摒弃正圆按钮特例，与工具栏及桌面标题栏视觉体系一致。
+- **表单、开关、搜索、分段滑块、标签胶囊、密钥框、浮层与弹窗全面收口**：
+  - 全站开关（含侧边栏、设置页、自绘托盘菜单）统一为 `<Switch />`（`32 × 18px`）；
+  - 全站搜索框统一为 `<SearchInput />`（工具栏 `30px`、弹窗内自动匹配 `34px`）；
+  - 全站分段切换（含概览时间/诊断切换、设置页、弹窗顶部/字段、托盘模式切换）统一为 `<Segmented />`；
+  - 节点、策略组、规则、订阅四类编辑弹窗统一 `<Modal headerExtra />`、`<ConfirmModal size="sm" />`、`<RawJsonToggle />`、`<MoveButtons />` 与 `<Secret />`（修复多行私密框默认遮罩 `.concealed`），弹窗内所有输入/下拉/密钥/分段控件严格统一 `34px` 高度；
+  - 规则判定、DNS 解析测试与 DNS 多 IP `+N` 浮层统一为 `<ToolPopover />`，DNS 最近解析与解析缓存共用 `<DnsAddrCell />`，4 处实时流页面共用 `<StreamControls />`，节点与策略组共用 `<DisplaySortSelect />`；
+  - 全站流式表格行收敛为紧凑单行主干 + 点击展开详情，清除所有原生浏览器 `title=` 延迟悬停框。
 
-### 2. 连接/日志双行布局、工具栏浮层与平滑过渡动效
-- **连接与连接日志双行布局**（`FlowCells.tsx`、`Connections.tsx`、`Logs.tsx`）：第一行优先呈现目标域名与最终落地节点（窄窗绝不截断落地节点），第二行以小字呈现进程图标与进程名、协议、命中规则及策略路径；内核获取网站 favicon 与本地进程 EXE 图标的原版逻辑完整保留。
-- **概览、DNS 与细节打磨**：实时速率图精简为仅标注上下两端峰值刻度，补足流量用量图右侧刻度留白并优化空状态；DNS「解析」与规则「判定」统一为同规格工具栏磨砂测试浮层；全站弹窗、下拉、浮层、通知与提示补齐平滑退出动画；滚动容器按实际内容溢出与滚动位置动态呈现顶/底边缘渐隐，吸顶表头改为不透明实心底且首行选中零遮挡；侧栏收起补齐窄栏模式/代理/TUN 快捷按钮并在滑动期间延迟图表重排消除抖动。
+### 2. 轮询省电、单例格式化与代码深度精简（净减 4,280+ 行）
+- **统一前台感知轮询（`useWindowPoll`）**：合并连接、DNS 与日志 5 处轮询逻辑，主窗口最小化或关闭至托盘时自动暂停后台 IPC 轮询并在恢复显示当帧立即补刷。
+- **统一弹层定位与东八区时间格式化**：抽离共享 `lib/floating.ts`（`measureDropdown` + `useDismissablePopup`）；全站日期/时间格式化统一收口至 `client/display.ts` 模块级 `Asia/Shanghai` 单例，消除列表渲染循环内重复创建 `Intl.DateTimeFormat` 实例；错误脱敏与中文化统一收口至唯一 `lib/errors.ts`。
+- **清零死代码与样式冲突**：开启 `tsconfig.json` 严格未使用检查（`noUnusedLocals` + `noUnusedParameters`），收紧 `<Icon />` 编译期 `IconName` 枚举，确保 `main.tsx` 生产依赖图 100% 可达、0 僵尸导出、0 未用 CSS 变量、0 跨文件重复选择器、业务样式 0 `!important`。
 
-### 3. Windows Core v0.8.22：订阅预检与后台刷新全链路 `KIDX0003 mmap` 内存优化
-- **修复订阅启动预检短路 `KIDX0003` 只读 `mmap`**（`route/resource_check.go`、`clientcore/subscription.go`、`subscription_resource.go`）：新增 `statSubscriptionResource` 在不读取全文进 Go 堆的前提下完成常规文件、防重解析点与大小上限校验，优先直接复用或构建只读 `mmap` 索引写入缓存，彻底消除订阅模式下规则集与 Geo 库驻留 Go 堆导致的启动内存膨胀。
-- **修复后台自动更新回退 Go 堆与 Windows 映射覆盖冲突**（`route/remote.go`、`route/mmap_index.go`）：`updateWithCommit` 后台刷新后同步切换为版本化命名的只读 `mmap` 索引（`<nameHash>-<fastHash>.kidx`）并清理旧索引，避免 Windows `MapViewOfFile` 映射占用导致的替换冲突。
-- **全局缓存封顶与高频诊断日志降噪**（`clientcore/presentation.go`、`logs.go`、`app/src-tauri/src/desktop.rs`）：为域名图标未命中缓存及进程观测表增设 2,048 条硬上限；抑制 `icon.get`、`connections.list` 等高频只读 IPC 成功日志冲刷诊断环，合并节流 `process_rule_skipped` 重复事件。
-- **导出诊断新增 19 项零隐私内存归属指标**（`clientcore/status.go`、`app/src-tauri/src/diagnostics.rs` 等）：`core.memory` 新增 `route_mmap_sets`、`route_heap_sets`、`gc_cycles`、`heap_goal`、`live_generations`、`relay_pool_bytes`、`anytls_recv_pool_bytes`、`active_tcp/udp`、`anytls_sessions/streams`、`tun_tcp_nat_entries`、`tun_udp_sources/queued_bytes` 及各缓存计数，纯数值白名单零敏感信息暴露。
+### 3. 固化静态架构与多视口真实浏览器几何双门禁（`npm run verify`）
+- 新增 `architecture-gate.test.ts` 与 `geometry-gate.mjs`：自动校验 4 档视口（`1080×810`、`900×600`、`880×600`、`1440×900`）× 深浅双色 × 全部 20 个子视图 × 自绘托盘菜单 × 全部编辑弹窗与测试浮层零横向溢出、同类控件像素等高及控制台零报错。
+
+### 4. 内核与底层能力保持不变
+- 继续内置 **Windows Core v0.8.22**（`KIDX0003` 4 字节紧凑引用零分配路由匹配、冷路径延迟加载 MMDB、内存分段诊断、零 gVisor 纯 Go System Stack 60K MTU、UDP 1420 自动 PMTUD 与 AnyTLS 热备连接池）。
 
 ## 升级与边界说明
-- `windows-core-v0.8.22` 保持 `gui_compatibility` 为 `>=0.2.34, <0.3.0`，支持 v0.2.34/v0.2.35 在线平滑升级。
+- 已安装 v0.2.36 及更早版本的用户可直接通过 `Kat-Setup-x64.exe` 或客户端内在线更新平滑升级至 v0.2.37。
 - Ed25519 签名为产品包与在线更新身份验证（`key_id 0afa646ee76f17d8`），非 Windows Authenticode 代码签名。Kat 自研代码 source-available、保留所有权利（非 MIT）；第三方原许可保留，见 `RIGHTS.md`。

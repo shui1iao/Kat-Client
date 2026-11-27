@@ -1,7 +1,7 @@
 import { weightedProbe, smartProbe, groupSummary, groupTypeLabel, resolveGroupPath } from '../client/groupDisplay';
 import { subscriptionGroup } from '../client/subscription';
-import { Segmented, StableText } from '../components/ui';
-import { durationNumber } from '../client/groupSelection';
+import { Checkbox, DisplaySortSelect, Empty, MoveButtons, SearchInput, Segmented, StableText } from '../components/ui';
+import { durationNumber, smartHeaderMember } from '../client/groupSelection';
 import { protocolInfo } from '../components/ProtocolTag';
 import { useState, useEffect, useLayoutEffect, type KeyboardEvent } from 'react';
 import { GroupIcon } from '../components/GroupIcon';
@@ -10,9 +10,10 @@ import { core } from '../client/ipc';
 import { policyMemberProbe } from '../client/policyProbe';
 import { Icon } from '../components/Icon';
 import { tip } from '../components/Tooltip';
-import { Field, LocalError, Modal } from '../components/Editors';
+import { ConfirmModal } from '../components/Confirm';
+import { Field, LocalError, Modal, RawJsonField, RawJsonToggle } from '../components/Editors';
 import { useDisplaySort } from '../lib/displaySort';
-import { displaySorted, probeTime, type DisplaySort } from '../client/settings';
+import { displaySorted, probeTime } from '../client/settings';
 import { latencyTone, probeFailureTitle } from '../lib/format';
 import { errorText } from '../lib/errors';
 import { groupFormValue, groupProbeURLError, groupProbeInterval } from '../client/entityValidation';
@@ -99,26 +100,9 @@ export function Policies({
     <div className="pol-page-v2">
       {/* Top Action Strip */}
       <header className="pol-topbar">
-        <label className="search">
-          <Icon name="search" size={14} />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索"
-            aria-label="搜索策略组或成员节点"
-          />
-        </label>
+        <SearchInput value={search} onChange={setSearch} ariaLabel="搜索策略组或成员节点" />
         <span className="sp" />
-        <select
-          className="inp sm member-sort display-sort"
-          aria-label="成员显示排序"
-          value={sort}
-          onChange={(e) => setSort(e.target.value as DisplaySort)}
-        >
-          <option value="config">配置顺序</option>
-          <option value="latency">按延迟</option>
-          <option value="name">按名称</option>
-        </select>
+        <DisplaySortSelect value={sort} onChange={setSort} ariaLabel="成员显示排序" />
         {visibleGroups.length > 0 && (
           <button
             type="button"
@@ -149,7 +133,7 @@ export function Policies({
           const pin = pinnable(g.type);
           const busy = c.groupProbing(g.name);
           const site = g.type === 'smart' && (runtime?.selection_mode ?? g.smart?.scope ?? 'site') === 'site';
-          const headerMember = site ? runtime?.most_used_member || runtime?.current : runtime?.current;
+          const headerMember = smartHeaderMember(runtime, g);
           const allMemberNames = [...new Set([...(g.members ?? []), ...(runtime?.members ?? []).map((m) => m.name)])];
           const filteredMemberNames =
             needle && !g.name.toLowerCase().includes(needle) && !c.label(g.name).toLowerCase().includes(needle)
@@ -432,7 +416,7 @@ export function Policies({
                       })}
                     </div>
                   ) : (
-                    <div className="empty">暂无成员</div>
+                    <Empty>暂无成员</Empty>
                   )}
                 </div>
               </PolicyReveal>
@@ -442,20 +426,19 @@ export function Policies({
 
         {!visibleGroups.length && (
           <section className="card">
-            <div className="empty">{groups.length ? '没有匹配的策略组或节点' : c.connected ? '暂无策略组' : '未连接'}</div>
+            <Empty>{groups.length ? '没有匹配的策略组或节点' : c.connected ? '暂无策略组' : '未连接'}</Empty>
           </section>
         )}
       </div>
 
       {draft && <GroupEditor c={c} value={draft.value} previous={draft.previous} close={() => setDraft(null)} />}
       {deleting && (
-        <Modal
-          size="sm"
-          saveLabel="删除"
+        <ConfirmModal
           danger
+          confirmLabel="删除"
           title={'删除策略组「' + deleting + '」？'}
           close={() => setDeleting(null)}
-          save={() =>
+          onConfirm={() =>
             void (async () => {
               if (
                 await c.edit((d) => {
@@ -472,7 +455,7 @@ export function Policies({
           busy={c.doc.saving || c.busy.has('save')}
         >
           <LocalError text={c.error} />
-        </Modal>
+        </ConfirmModal>
       )}
     </div>
   );
@@ -697,38 +680,36 @@ function GroupEditor({ c, value, previous, close }: { c: Client; value: Group; p
       save={() => void save()}
       busy={validating || c.doc.saving || c.busy.has('save')}
       wide
+      headerExtra={
+        <RawJsonToggle
+          active={raw !== null}
+          onToggle={() => {
+            setFieldErrors({});
+            if (raw === null) {
+              const errors = weightErrors();
+              if (Object.keys(errors).length) {
+                setFieldErrors(errors);
+                return;
+              }
+              setRaw(JSON.stringify(groupFormSources(formGroup(), value, sourceChanged), null, 2));
+            } else {
+              try {
+                setG(groupFormValue(JSON.parse(raw)));
+                setWeightDrafts({});
+                setSourceChanged(false);
+                setRaw(null);
+                setError('');
+              } catch {
+                setFieldErrors({ '策略组 JSON': '原文不是有效的策略组配置' });
+              }
+            }
+          }}
+        />
+      }
     >
-      <button
-        className="btn sm"
-        onClick={() => {
-          setFieldErrors({});
-          if (raw === null) {
-            const errors = weightErrors();
-            if (Object.keys(errors).length) {
-              setFieldErrors(errors);
-              return;
-            }
-            setRaw(JSON.stringify(groupFormSources(formGroup(), value, sourceChanged), null, 2));
-          } else {
-            try {
-              setG(groupFormValue(JSON.parse(raw)));
-              setWeightDrafts({});
-              setSourceChanged(false);
-              setRaw(null);
-              setError('');
-            } catch {
-              setFieldErrors({ '策略组 JSON': '原文不是有效的策略组配置' });
-            }
-          }
-        }}
-      >
-        {raw === null ? '高级原文' : '表单'}
-      </button>
       <div className="pe-form-body">
         {raw !== null ? (
-          <Field label="策略组 JSON">
-            <textarea className="inp raw-object" value={raw} onChange={(e) => setRaw(e.target.value)} />
-          </Field>
+          <RawJsonField label="策略组 JSON" value={raw} onChange={setRaw} />
         ) : (
           <>
             <section className="pe-section">
@@ -869,26 +850,7 @@ function GroupEditor({ c, value, previous, close }: { c: Client; value: Group; p
                       <div className="pe-member-actions">
                         {manual ? (
                           <>
-                            <button
-                              type="button"
-                              className="ib"
-                              {...tip('上移成员')}
-                              disabled={i === 0}
-                              onClick={() => move(i, -1)}
-                              aria-label="上移成员"
-                            >
-                              <Icon name="chevUp" size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              className="ib"
-                              {...tip('下移成员')}
-                              disabled={i === written.length - 1}
-                              onClick={() => move(i, 1)}
-                              aria-label="下移成员"
-                            >
-                              <Icon name="chevDown" size={14} />
-                            </button>
+                            <MoveButtons subject="成员" index={i} count={written.length} onMove={(dir) => move(i, dir)} />
                             <button
                               type="button"
                               className="ib danger"
@@ -906,7 +868,7 @@ function GroupEditor({ c, value, previous, close }: { c: Client; value: Group; p
                     </div>
                   );
                 })}
-                {!effective.length && <p className="pe-member-empty">尚无成员，请选择来源或添加手动成员</p>}
+                {!effective.length && <Empty>尚无成员，请选择来源或添加手动成员</Empty>}
               </div>
               {weighted(g.type) && missing.length > 0 && (
                 <details className="pe-details pe-missing">
@@ -921,20 +883,20 @@ function GroupEditor({ c, value, previous, close }: { c: Client; value: Group; p
               )}
               <details className="pe-details pe-add">
                 <summary tabIndex={0}>添加手动成员</summary>
-                <input
-                  className="inp"
-                  aria-label="搜索可用成员"
-                  placeholder="搜索名称"
+                <SearchInput
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={setQuery}
+                  placeholder="搜索名称"
+                  ariaLabel="搜索可用成员"
+                  className="search-full"
                 />
-                <div className="ge-chips pe-candidates">
+                <div className="pe-candidates">
                   {candidates
                     .filter((n) => c.label(n).toLowerCase().includes(query.toLowerCase()))
                     .map((n) => (
-                      <button type="button" key={n} className={'pick' + (written.includes(n) ? ' on' : '')} onClick={() => flip(n)}>
+                      <Checkbox key={n} variant="chip" checked={written.includes(n)} onChange={() => flip(n)}>
                         {c.label(n)}
-                      </button>
+                      </Checkbox>
                     ))}
                 </div>
               </details>

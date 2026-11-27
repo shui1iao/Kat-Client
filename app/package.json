@@ -1,13 +1,14 @@
 {
   "name": "kat-desktop",
   "private": true,
-  "version": "0.2.36",
+  "version": "0.2.37",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1420 --strictPort",
     "typecheck": "tsc --noEmit -p .",
     "build": "tsc --noEmit -p . && node build.mjs",
-    "test": "node tests-ui/run-unit.mjs"
+    "test": "node tests-ui/run-unit.mjs",
+    "verify": "npm run build && npm test && node tests-ui/geometry-gate.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",

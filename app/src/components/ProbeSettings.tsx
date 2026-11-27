@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useFormDraft } from '../lib/formDraft';
-import { Switch, Card, SettingSwitch, StableText } from './ui';
+import { Card, Empty, SettingSwitch, StableText } from './ui';
 import { errorText } from '../lib/errors';
 import { LocalError } from './Editors';
 import { probeDraft, patchProbe, PROBE_URLS } from '../client/settings';
 import type { Client } from '../client/useClient';
 
 export function ProbeSettings({ c }: { c: Client }) {
-  return <Card title="节点测速参数">{c.source ? <ProbeForm c={c} /> : <div className="empty">未连接</div>}</Card>;
+  return <Card title="节点测速参数">{c.source ? <ProbeForm c={c} /> : <Empty>未连接</Empty>}</Card>;
 }
 
 function ProbeForm({ c }: { c: Client }) {
@@ -52,16 +52,11 @@ function ProbeForm({ c }: { c: Client }) {
           <b>统一延迟</b>
           <small>测量完整代理握手与 HTTP 往返耗时，排除复用偏差</small>
         </div>
-        <button
-          type="button"
-          className="pref-toggle"
-          role="switch"
-          aria-label="统一延迟"
-          aria-checked={value.unified_delay}
-          onClick={() => set('unified_delay', !value.unified_delay)}
-        >
-          <Switch on={value.unified_delay} />
-        </button>
+        <SettingSwitch
+          ariaLabel="统一延迟"
+          on={value.unified_delay}
+          onToggle={(next) => set('unified_delay', next)}
+        />
       </div>
 
       <label className="set-row">
@@ -145,7 +140,7 @@ function ProbeForm({ c }: { c: Client }) {
       </label>
 
       <LocalError text={error} />
-      {c.doc.dirty && <div className="form-error">原文有未保存草稿</div>}
+      {c.doc.dirty && <LocalError text="原文有未保存草稿" raw />}
 
       <div className="set-form-foot">
         <button

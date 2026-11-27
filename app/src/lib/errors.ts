@@ -159,7 +159,7 @@ export function errorText(error: unknown, sourceText?: string): string {
 const resourceLabels:Record<string,string>={subscription:'主订阅',rule_set:'规则集',geoip:'国家数据库',asn:'ASN数据库',resource_stage:'订阅资源'};
 const stageLabels:Record<string,string>={url_check:'地址检查',resolve:'DNS解析',connect:'网络连接',proxy_read:'系统代理读取',proxy_connect:'代理隧道',tls:'TLS验证',http_status:'HTTP响应',body_read:'内容读取',dependency_scan:'依赖检查',format_check:'格式校验',local_read:'本地读取',stage_create:'缓存目录创建',stage_protect:'缓存权限设置',stage_write:'缓存写入',cache_verify:'缓存校验',validate:'配置校验',apply:'配置接纳'};
 const categoryLabels:Record<string,string>={fake_ip:'本机DNS返回了代理软件的虚拟地址(fake-ip)，请改用“通过系统代理”下载',address_refused:'目标地址被安全检查拒绝',egress_unavailable:'受控出口不可用',dns_failed:'DNS解析失败',connect_failed:'连接失败',timeout:'超时',canceled:'已取消',tls_certificate:'证书验证失败',tls_handshake:'TLS握手失败',redirect_refused:'不允许重定向',http_status:'HTTP请求失败',read_failed:'内容读取失败',size_limit:'超过单项大小限制',total_size_limit:'超过资源总量限制',invalid_format:'格式无效',db_incompatible:'数据库字段不兼容',permission_denied:'权限不足',disk_full:'磁盘空间不足',file_io:'文件操作失败',unsafe_file:'文件安全检查失败',unknown:'操作失败',proxy_unsupported:'仅支持明确的静态系统HTTP代理，不支持PAC或多连接配置',proxy_auth_required:'代理需要认证，当前不支持',proxy_protocol:'代理协议失败',proxy_http:'代理拒绝隧道',self_loop:'拒绝连接Kat自身代理',proxy_identity_unknown:'无法确认本机代理归属',candidate_changed:'系统代理已变化，请重新导入',header_limit:'响应头超过限制',proxy_read_failed:'无法读取系统代理'};
-export function resourceDiagnostic(d:any):string{
+function resourceDiagnostic(d:any):string{
  if(!d||typeof d!=='object'||!Object.hasOwn(resourceLabels,d.resource)||!Object.hasOwn(stageLabels,d.stage)||!Object.hasOwn(categoryLabels,d.category)||!['download','local','cache'].includes(d.source)||!['direct','windows_static_http','kernel_rules'].includes(d.route))return '';
  for(const k of ['ordinal','subscription_ordinal'])if(d[k]!==undefined&&(!Number.isInteger(d[k])||d[k]<1||d[k]>(k==='ordinal'?1000000:16)))return '';
  if(d.http_status!==undefined&&(!Number.isInteger(d.http_status)||d.http_status<100||d.http_status>599))return '';
@@ -205,7 +205,7 @@ export function subscriptionAttemptLines(diagnostic:string):string[]{
 }
 
 /** Finite transport facts only; never print payload, decoder text or arbitrary keys. */
-export function transportDiagnostic(d:any):string{
+function transportDiagnostic(d:any):string{
  const branches=['frame_limit','json_decode','response_shape','subscription_reason','resource_detail','tun_detail','transport_detail','id_unmatched','truncated_eof','eof','read','write','timeout'];
  const shapes=['id_empty','id_length','result_missing','success_error','error_missing','error_with_result'];
  const numbers=['frame_len','observed_bytes','limit','id_len','request_id','line','column','native','remote_native'];

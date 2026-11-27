@@ -7,8 +7,8 @@ import { flowRuleDraft, type FlowRuleSource } from '../client/flowRule';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { KState, KTag } from '../components/labels';
 import { FlowExitCell, FlowNumCell, FlowTargetCell, useNodeProtoMap } from '../components/FlowCells';
-import { Icon } from '../components/Icon';
-import { Segmented, StableText, ThumbBar } from '../components/ui';
+import { Empty, SearchInput, Segmented, StreamControls } from '../components/ui';
+import { LocalError } from '../components/Editors';
 import { Diagnostics } from '../components/Diagnostics';
 import { core } from '../client/ipc';
 import { normalizeConnLogs, normalizeConnections, normalizeKernelLogs } from '../client/normalize';
@@ -16,7 +16,7 @@ import { errorText } from '../lib/errors';
 import { clockStr, showBytes } from '../client/display';
 import { mergeConnectionLogs, flowLog } from '../client/logDetails';
 import type { ConnLogEntry, ConnectionsReply, KernelLogEntry } from '../client/types';
-import type { Client } from '../client/useClient';
+import { useWindowPoll, type Client } from '../client/useClient';
 
 const POLL_MS = 1000;
 const KEEP = 2000;
@@ -28,19 +28,19 @@ const OUTCOME: Record<ConnLogEntry['outcome'], string> = {
   idle: '未传输',
 };
 
-const OUTCOME_PILLS: { value: string; label: string }[] = [
+const OUTCOME_PILLS: { value: string; label: string; tone?: 'ok' | 'warn' | 'bad' }[] = [
   { value: 'all', label: '全部' },
-  { value: 'ok', label: '成功' },
-  { value: 'error', label: '失败' },
-  { value: 'rejected', label: '拒绝' },
+  { value: 'ok', label: '成功', tone: 'ok' },
+  { value: 'error', label: '失败', tone: 'bad' },
+  { value: 'rejected', label: '拒绝', tone: 'warn' },
   { value: 'idle', label: '未传输' },
 ];
 
-const LEVEL_PILLS: { value: string; label: string }[] = [
+const LEVEL_PILLS: { value: string; label: string; tone?: 'ok' | 'warn' | 'bad' }[] = [
   { value: 'all', label: '全部' },
   { value: 'info', label: 'info' },
-  { value: 'warn', label: 'warn' },
-  { value: 'error', label: 'error' },
+  { value: 'warn', label: 'warn', tone: 'warn' },
+  { value: 'error', label: 'error', tone: 'bad' },
   { value: 'debug', label: 'debug' },
 ];
 
@@ -64,7 +64,6 @@ export function Logs({
 
   const tabs = (
     <Segmented
-      size="sm"
       value={activeTab}
       onChange={switchTab}
       options={[
@@ -103,41 +102,27 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
   const instance = useRef(0);
   const readable = c.hasHost && c.status !== null;
 
-  useEffect(() => {
-    let alive = true;
-    let timer = 0;
-    if (!readable || paused) return;
-    const tick = async () => {
-      try {
-        if (!document.hidden) {
-          const [r, f] = await Promise.all([
-            core<unknown>('logs.connections', {
-              instance: instance.current,
-              after: cursor.current,
-              limit: 500,
-            }).then(normalizeConnLogs),
-            core<unknown>('connections.list', { closed_limit: 500 }).then(normalizeConnections),
-          ]);
-          if (!alive) return;
-          const reset = instance.current !== r.instance;
-          instance.current = r.instance;
-          cursor.current = r.next_seq;
-          setEntries((old) => mergeConnectionLogs(reset ? [] : old, r.entries));
-          if (reset) setExpanded(null);
-          setFlows(f);
-          setError('');
-        }
-      } catch (e) {
-        if (alive) setError(errorText(e));
-      }
-      if (alive) timer = window.setTimeout(tick, POLL_MS);
-    };
-    void tick();
-    return () => {
-      alive = false;
-      window.clearTimeout(timer);
-    };
-  }, [readable, paused]);
+  useWindowPoll(readable && !paused, POLL_MS, async () => {
+    try {
+      const [r, f] = await Promise.all([
+        core<unknown>('logs.connections', {
+          instance: instance.current,
+          after: cursor.current,
+          limit: 500,
+        }).then(normalizeConnLogs),
+        core<unknown>('connections.list', { closed_limit: 500 }).then(normalizeConnections),
+      ]);
+      const reset = instance.current !== r.instance;
+      instance.current = r.instance;
+      cursor.current = r.next_seq;
+      setEntries((old) => mergeConnectionLogs(reset ? [] : old, r.entries));
+      if (reset) setExpanded(null);
+      setFlows(f);
+      setError('');
+    } catch (e) {
+      setError(errorText(e));
+    }
+  });
 
   const needle = q.trim().toLowerCase();
   const shown = entries.filter(
@@ -159,52 +144,22 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
     <section className="card table-card connlog-card">
       <header className="table-toolbar">
         {tabs}
-        <label className="search">
-          <Icon name="search" size={14} />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="搜索"
-            aria-label="搜索连接日志"
-          />
-        </label>
-        <ThumbBar selected={outcome} role="radiogroup" aria-label="结果筛选">
-          {OUTCOME_PILLS.map((p) => (
-            <button
-              type="button"
-              key={p.value}
-              role="radio"
-              aria-checked={outcome === p.value}
-              className={outcome === p.value ? 'on' : ''}
-              onClick={() => setOutcome(p.value)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </ThumbBar>
+        <SearchInput value={q} onChange={setQ} ariaLabel="搜索连接日志" />
+        <Segmented role="radiogroup" ariaLabel="结果筛选" value={outcome} onChange={setOutcome} options={OUTCOME_PILLS} />
         <span className="sp" />
         <span className="muted num toolbar-count">{shown.length} 条</span>
-        <button type="button" className="btn sm" onClick={() => setPaused(!paused)} aria-pressed={paused}>
-          <StableText current={paused ? '继续' : '暂停'} items={['暂停', '继续']} />
-        </button>
-        <button
-          type="button"
-          className="btn sm"
-          disabled={!entries.length}
-          onClick={() => {
+        <StreamControls
+          paused={paused}
+          onTogglePause={() => setPaused((p) => !p)}
+          onClear={() => {
             setEntries([]);
             setExpanded(null);
           }}
-        >
-          清空
-        </button>
+          clearDisabled={!entries.length}
+        />
       </header>
 
-      {error && (
-        <div className="form-error" style={{ margin: '8px 16px 0' }} role="alert">
-          {error}
-        </div>
-      )}
+      <LocalError text={error} inset />
 
       <div className="log-scroll" role="table" aria-label="连接日志">
         <div className="conn-log-grid conn-log-head" role="row">
@@ -278,7 +233,7 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
             );
         })}
 
-        {!shown.length && <div className="empty">{needle || outcome !== 'all' ? '没有匹配的记录' : '暂无连接日志'}</div>}
+        {!shown.length && <Empty>{needle || outcome !== 'all' ? '没有匹配的记录' : '暂无连接日志'}</Empty>}
       </div>
 
       {ruleFlow && <RuleEditor c={c} draft={flowRuleDraft(ruleFlow, c.source)} close={() => setRuleFlow(null)} />}
@@ -301,40 +256,26 @@ function KernelLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
   follow.current = following;
   const readable = c.hasHost && c.status !== null;
 
-  useEffect(() => {
-    let alive = true;
-    let timer = 0;
-    if (!readable || paused) return;
-    const tick = async () => {
-      try {
-        if (!document.hidden) {
-          const r = normalizeKernelLogs(
-            await core<unknown>('logs.kernel', {
-              instance: instance.current,
-              after: cursor.current,
-              limit: 500,
-            }),
-          );
-          if (!alive) return;
-          const reset = instance.current !== r.instance;
-          instance.current = r.instance;
-          cursor.current = r.next_seq;
-          if (reset || r.entries.length) {
-            setEntries((old) => [...(reset ? [] : old), ...r.entries].slice(-KEEP));
-          }
-          setError('');
-        }
-      } catch (e) {
-        if (alive) setError(errorText(e));
+  useWindowPoll(readable && !paused, POLL_MS, async () => {
+    try {
+      const r = normalizeKernelLogs(
+        await core<unknown>('logs.kernel', {
+          instance: instance.current,
+          after: cursor.current,
+          limit: 500,
+        }),
+      );
+      const reset = instance.current !== r.instance;
+      instance.current = r.instance;
+      cursor.current = r.next_seq;
+      if (reset || r.entries.length) {
+        setEntries((old) => [...(reset ? [] : old), ...r.entries].slice(-KEEP));
       }
-      if (alive) timer = window.setTimeout(tick, POLL_MS);
-    };
-    void tick();
-    return () => {
-      alive = false;
-      window.clearTimeout(timer);
-    };
-  }, [readable, paused]);
+      setError('');
+    } catch (e) {
+      setError(errorText(e));
+    }
+  });
 
   const kNeedle = q.trim().toLowerCase();
   const shown = entries.filter(
@@ -349,44 +290,19 @@ function KernelLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
     <section className="card table-card kernel-log-card">
       <header className="table-toolbar">
         {tabs}
-        <label className="search">
-          <Icon name="search" size={14} />
-          <input
-            aria-label="搜索内核日志"
-            placeholder="搜索"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </label>
-        <ThumbBar selected={level} role="radiogroup" aria-label="内核日志等级">
-          {LEVEL_PILLS.map((p) => (
-            <button
-              type="button"
-              key={p.value}
-              role="radio"
-              aria-checked={level === p.value}
-              className={level === p.value ? 'on' : ''}
-              onClick={() => setLevel(p.value)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </ThumbBar>
+        <SearchInput value={q} onChange={setQ} ariaLabel="搜索内核日志" />
+        <Segmented role="radiogroup" ariaLabel="内核日志等级" value={level} onChange={setLevel} options={LEVEL_PILLS} />
         <span className="sp" />
         <span className="muted num toolbar-count">{shown.length} 条</span>
-        <button type="button" className="btn sm" onClick={() => setPaused(!paused)} aria-pressed={paused}>
-          <StableText current={paused ? '继续' : '暂停'} items={['暂停', '继续']} />
-        </button>
-        <button type="button" className="btn sm btn-fixed-xs" disabled={!entries.length} onClick={() => setEntries([])}>
-          清空
-        </button>
+        <StreamControls
+          paused={paused}
+          onTogglePause={() => setPaused((p) => !p)}
+          onClear={() => setEntries([])}
+          clearDisabled={!entries.length}
+        />
       </header>
 
-      {error && (
-        <div className="form-error" style={{ margin: '8px 16px 0' }} role="alert">
-          {error}
-        </div>
-      )}
+      <LocalError text={error} inset />
 
       <div
         className="kernel-log-scroll"
@@ -421,7 +337,7 @@ function KernelLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
             </span>
           </div>
         ))}
-        {!shown.length && <div className="empty">暂无内核日志</div>}
+        {!shown.length && <Empty>暂无内核日志</Empty>}
       </div>
 
       {!following && (

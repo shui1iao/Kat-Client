@@ -21,7 +21,7 @@ export function groupFormSources(g:Group,original:Group,sourceChanged=false):Gro
   return next;
 }
 export type GroupPreviewReply={names:string[];error?:string};
-export type GroupPreviewCall=(params:Record<string,unknown>)=>Promise<GroupPreviewReply>;
+type GroupPreviewCall=(params:Record<string,unknown>)=>Promise<GroupPreviewReply>;
 export function groupPreviewParams(g:Group,previous:string|null):Record<string,unknown> {
   return {filter:g.filter??'',exclude_filter:g.filter||g.include_group?g.exclude_filter??'':'',
     ...(g.include_group?{include_group:g.include_group,...(previous?{group_name:previous}:{})}:{})};

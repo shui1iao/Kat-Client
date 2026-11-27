@@ -102,7 +102,6 @@ export function PolicyMiniIcon({
   name: string;
   iconUrl?: string;
   groupType?: string;
-  color?: string;
   running?: boolean;
 }) {
   return (

@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { tip } from './Tooltip';
+import { measureDropdown } from '../lib/floating';
 
 /**
  * App-drawn open state for every <select> (the app does not use CSS
@@ -15,7 +17,6 @@ import { createPortal } from 'react-dom';
 type Opt = { value: string; label: string; disabled: boolean };
 type OpenState = { el: HTMLSelectElement; options: Opt[]; active: number; left: number; top?: number; bottom?: number; width: number; maxHeight: number; up: boolean; label: string };
 
-const ITEM = 34;
 const forced = () => window.matchMedia?.('(forced-colors: active)').matches;
 
 export function SelectPopover() {
@@ -27,18 +28,19 @@ export function SelectPopover() {
 
   useEffect(() => {
     const show = (el: HTMLSelectElement) => {
-      if (el.disabled || el.multiple || el.size > 1 || forced()) return false;
-      const options = Array.from(el.options).map((o) => ({ value: o.value, label: o.label || o.text, disabled: o.disabled }));
+      if (el.disabled || forced()) return false;
+      const options = [...el.options].map((o) => ({ value: o.value, label: o.textContent ?? o.label, disabled: o.disabled }));
       if (!options.length) return false;
-      const r = el.getBoundingClientRect(), gap = 6, margin = 10;
-      const below = window.innerHeight - r.bottom - gap - margin, above = r.top - gap - margin;
-      const want = Math.min(320, options.length * ITEM + 10);
-      const up = below < want && above > below;
-      const maxHeight = Math.max(ITEM + 10, Math.min(320, up ? above : below));
-      const left = Math.max(margin, Math.min(r.left, window.innerWidth - margin - r.width));
+      const pos = measureDropdown(el, { gap: 5, margin: 10, minBelow: 180, minMaxH: 112, capMaxH: 288 });
+      if (!pos) return false;
       el.setAttribute('data-open', '');
-      setOpen({ el, options, active: Math.max(0, el.selectedIndex), left, width: r.width, maxHeight, up, label: el.getAttribute('aria-label') ?? el.labels?.[0]?.textContent ?? '',
-        ...(up ? { bottom: window.innerHeight - r.top + gap } : { top: r.bottom + gap }) });
+      setOpen({
+        el,
+        options,
+        active: Math.max(0, el.selectedIndex),
+        ...pos,
+        label: el.getAttribute('aria-label') ?? el.labels?.[0]?.textContent ?? '',
+      });
       return true;
     };
     const close = (refocus: boolean) => {
@@ -141,11 +143,11 @@ export function SelectPopover() {
     <div ref={list} className={'kat-pop' + (open.up ? ' up' : '')} role="listbox" aria-label={open.label}
       style={{ left: open.left, top: open.top, bottom: open.bottom, width: open.width, minWidth: open.width, maxHeight: open.maxHeight, maxWidth: window.innerWidth - open.left - 10 }}>
       {open.options.map((o, i) => (
-        <button key={i} type="button" tabIndex={-1} role="option" aria-selected={i === selected} disabled={o.disabled} title={o.label}
+        <button key={i} type="button" tabIndex={-1} role="option" aria-selected={i === selected} disabled={o.disabled}
           className={'kat-opt' + (i === open.active ? ' active' : '') + (i === selected ? ' cur' : '')}
           onMouseEnter={() => { if (!o.disabled) setOpen((s) => (s && s.active !== i ? { ...s, active: i } : s)); }}
           onClick={() => commitRef.current(i)}>
-          <span>{o.label}</span>
+          <span {...tip(o.label, true)}>{o.label}</span>
         </button>
       ))}
     </div>,

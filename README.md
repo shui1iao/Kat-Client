@@ -1,5 +1,5 @@
-# Kat-Client v0.2.36
+# Kat-Client v0.2.37
 
-Windows x64 客户端正式发布版（client sequence `1795723000`），内置零 gVisor 纯 Go System Stack Windows Core v0.8.22（core sequence `1795722000`）。安装附件名 `Kat-Setup-x64.exe`。
+Windows x64 客户端正式发布版（client sequence `1795793000`），全站 UI 控件统一收口为单一权威基础原语并内置静态架构与多视口几何验收门禁，默认固定 4:3（1080×810）启动比例，内置零 gVisor 纯 Go System Stack Windows Core v0.8.22（core sequence `1795722000`）。安装附件名 `Kat-Setup-x64.exe`。
 
 完整更新说明见 [RELEASE_NOTES.md](RELEASE_NOTES.md)，测试与审查证据见 [VALIDATION.md](VALIDATION.md)，复现构建说明见 [BUILDING.md](BUILDING.md)。配套 Linux Server latest 为 `v0.8.3`，Kat-Manager latest 为 `v0.1.3`。Kat 自研代码 source-available、保留所有权利（非 MIT），第三方许可保留，见 [RIGHTS.md](RIGHTS.md)。

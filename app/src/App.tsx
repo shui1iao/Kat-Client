@@ -1,5 +1,6 @@
 import { useSoftwareUpdates, SoftwareUpdateLayer } from './components/SoftwareUpdates';
 import { OperationError } from './components/OperationError';
+import { Modal } from './components/Editors';
 import { useEffect, useState } from 'react';
 import { TitleBar, useWindowDrag } from './components/TitleBar';
 import { Sidebar, PAGE_IDS, PAGE_LABEL, type PageId } from './components/Sidebar';
@@ -160,15 +161,7 @@ export default function App() {
               />
             }
             footer={
-              <SideStatus
-                c={c}
-                current={page === 'settings' && settingsSection === 'kernel'}
-                onOpen={() => {
-                  setSettingsSection('kernel');
-                  location.hash = 'kernel';
-                  setPage('settings');
-                }}
-              />
+              <SideStatus c={c} />
             }
           />
           <div className={'workspace' + (CAPPED_PAGES.includes(page) ? ' is-capped' + (page === 'overview' ? ' is-flush' : '') : '')}>
@@ -232,28 +225,14 @@ export default function App() {
       </div>
       {c.errorQueue[0] && <OperationError key={c.errorQueue[0]} error={c.errorQueue[0]} close={c.dismissError} />}
       {c.quitCleanupPending && (
-        <div className="modal-mask" role="status" aria-live="polite">
-          <section className="modal modal-sm">
-            <header>
-              <h3>退出 Kat</h3>
-            </header>
-            <div className="form">
-              <p>正在完成网络清理…</p>
-            </div>
-          </section>
-        </div>
+        <Modal title="退出 Kat" size="sm" closable={false}>
+          <p>正在完成网络清理…</p>
+        </Modal>
       )}
       {c.doc.installing && (
-        <div className="modal-mask" role="status" aria-live="polite">
-          <section className="modal">
-            <header>
-              <h3>安装 / 更新网络服务</h3>
-            </header>
-            <div className="form">
-              <p>正在安装，请完成 Windows 授权。</p>
-            </div>
-          </section>
-        </div>
+        <Modal title="安装 / 更新网络服务" size="sm" closable={false}>
+          <p>正在安装，请完成 Windows 授权。</p>
+        </Modal>
       )}
     </EditorSessionContext.Provider>
   );

@@ -2,11 +2,11 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { tip } from './Tooltip';
 import { diagnosticEvents, tunDiagnosticText } from '../client/daily';
 import { KTag } from './labels';
-import { Icon } from './Icon';
-import { Card, StableText, ThumbBar } from './ui';
+import { Card, Empty, SearchInput, Segmented } from './ui';
+import { LocalError } from './Editors';
 import { host } from '../client/ipc';
 import { errorText } from '../lib/errors';
-import { showUptime } from '../client/display';
+import { fullDateTimeStr, showUptime } from '../client/display';
 import { stateLabel, type DiagnosticReply, type SaveReply } from '../client/types';
 import type { Client } from '../client/useClient';
 
@@ -66,19 +66,8 @@ export function Diagnostics({
 
   const shanghai = (s?: string) => {
     if (!s) return '—';
-    const d = new Date(s);
-    return Number.isNaN(d.getTime())
-      ? s
-      : new Intl.DateTimeFormat('sv-SE', {
-          timeZone: 'Asia/Shanghai',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-        }).format(d);
+    const res = fullDateTimeStr(s);
+    return res === '—' ? s : res;
   };
 
   const events = diagnosticEvents(data, level, search).filter(
@@ -92,29 +81,18 @@ export function Diagnostics({
   const eventHead = (
     <header className="table-toolbar">
       {tabs}
-      <label className="search">
-        <Icon name="search" size={14} />
-        <input
-          aria-label="搜索日志事件"
-          placeholder="搜索事件 / 诊断码"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </label>
-      <ThumbBar selected={level} role="radiogroup" aria-label="日志等级筛选">
-        {(['all', 'info', 'warn', 'error', 'debug'] as const).map((l) => (
-          <button
-            type="button"
-            key={l}
-            role="radio"
-            aria-checked={level === l}
-            className={level === l ? 'on' : ''}
-            onClick={() => setLevel(l)}
-          >
-            {l === 'all' ? '全部' : l}
-          </button>
-        ))}
-      </ThumbBar>
+      <SearchInput value={search} onChange={setSearch} placeholder="搜索事件 / 诊断码" ariaLabel="搜索日志事件" />
+      <Segmented
+        role="radiogroup"
+        ariaLabel="日志等级筛选"
+        value={level}
+        onChange={setLevel}
+        options={(['all', 'info', 'warn', 'error', 'debug'] as const).map((l) => ({
+          value: l,
+          label: l === 'all' ? '全部' : l,
+          tone: l === 'error' ? 'bad' : l === 'warn' ? 'warn' : undefined,
+        }))}
+      />
       <span className="sp" />
       <span className="muted num toolbar-count">{events.length} 条</span>
       <button
@@ -139,7 +117,6 @@ export function Diagnostics({
   return (
     <Card
       title={part === 'events' ? undefined : part === 'summary' ? '日志保留与诊断包' : '诊断与日志'}
-      icon="doc"
       className={'diagnostics-card' + (part === 'events' ? ' table-card events-card' : '')}
       extra={
         part === 'events' ? undefined : (
@@ -165,11 +142,7 @@ export function Diagnostics({
       }
     >
       {part === 'events' && eventHead}
-      {error && (
-        <div className="form-error" style={part === 'events' ? { margin: '8px 16px 0' } : undefined} role="alert">
-          {error}
-        </div>
-      )}
+      <LocalError text={error} inset={part === 'events'} />
 
       {showSummary && (
         <div>
@@ -190,11 +163,7 @@ export function Diagnostics({
               <option value="30">30 天</option>
             </select>
           </label>
-          {retentionError && (
-            <div className="form-error" role="alert">
-              {retentionError}
-            </div>
-          )}
+          <LocalError text={retentionError} />
         </div>
       )}
 
@@ -258,23 +227,17 @@ export function Diagnostics({
               </div>
             </div>
           )}
-          {data.errors.length > 0 && (
-            <div className="form-error" role="alert" style={{ marginTop: 8 }}>
-              {data.errors.map((code, i) => (
-                <span key={i}>{errorText(code)} </span>
-              ))}
-            </div>
-          )}
+          {data.errors.length > 0 && <LocalError text={data.errors.map((code) => errorText(code)).join(' ')} spaced raw />}
           {showEvents && (
             <div className="events-table">
-              <div className="safe-log-head">
-                <span>时间</span>
-                <span>级别</span>
-                <span>来源</span>
-                <span>事件</span>
-                <span>代码</span>
-              </div>
               <div className="safe-log-list">
+                <div className="safe-log-head">
+                  <span>时间</span>
+                  <span>级别</span>
+                  <span>来源</span>
+                  <span>事件</span>
+                  <span>代码</span>
+                </div>
                 {events.length ? (
                   events.map((e) => (
                     <div className="safe-log" key={e.source + (e.meta?.instance ?? 0) + e.event + e.seq}>
@@ -299,14 +262,14 @@ export function Diagnostics({
                     </div>
                   ))
                 ) : (
-                  <div className="empty">暂无诊断事件</div>
+                  <Empty>暂无诊断事件</Empty>
                 )}
               </div>
             </div>
           )}
         </>
       ) : (
-        !error && <div className="empty">{c.hasHost ? '无诊断数据' : '未连接'}</div>
+        !error && <Empty>{c.hasHost ? '无诊断数据' : '未连接'}</Empty>
       )}
     </Card>
   );

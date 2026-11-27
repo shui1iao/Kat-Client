@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from 'react';
 import { tip } from './Tooltip';
-import { Icon } from './Icon';
+import { Icon, type IconName } from './Icon';
 
 export type PageId =
   | 'overview'
@@ -13,7 +13,7 @@ export type PageId =
   | 'config'
   | 'settings';
 
-export const NAV: { section: string; items: { id: PageId; label: string; icon: string }[] }[] = [
+const NAV: { section: string; items: { id: PageId; label: string; icon: IconName }[] }[] = [
   {
     section: '监控',
     items: [

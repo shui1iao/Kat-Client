@@ -1,5 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { errorText, hasHost, host } from '../client/ipc';
+import { hasHost, host } from '../client/ipc';
+import { errorText } from '../lib/errors';
+import { WindowButtons } from './TitleBar';
 
 /** Sanitised one-line summary; never echoes URLs, credentials or stacks. */
 export function faultSummary(error: unknown): string {
@@ -75,17 +77,13 @@ function AppFault({ detail }: { detail: string }) {
           <h1 className="page-title">Kat</h1>
         </div>
         <div className="titlebar-spacer" />
-        <div className="winbtns">
-          <button type="button" aria-label="最小化" title="最小化" disabled={!hasHost()} onClick={() => act('minimize')}>
-            <svg width="10" height="10"><path d="M0 5.5h10" stroke="currentColor" /></svg>
-          </button>
-          <button type="button" aria-label="最大化" title="最大化" disabled={!hasHost()} onClick={() => act('maximize')}>
-            <svg width="10" height="10"><rect x=".5" y=".5" width="9" height="9" rx="1" fill="none" stroke="currentColor" /></svg>
-          </button>
-          <button type="button" className="close" aria-label="关闭窗口" title="关闭窗口" disabled={!hasHost()} onClick={() => act('close')}>
-            <svg width="10" height="10"><path d="M.5.5l9 9M9.5.5l-9 9" stroke="currentColor" /></svg>
-          </button>
-        </div>
+        <WindowButtons
+          disabled={!hasHost()}
+          closeLabel="关闭窗口"
+          onMinimize={() => act('minimize')}
+          onMaximize={() => act('maximize')}
+          onClose={() => act('close')}
+        />
       </header>
       <main className="app-fault-body">
         <section className="card page-fault" role="alert">

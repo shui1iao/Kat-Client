@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { tip } from '../components/Tooltip';
 import { SubscriptionImport } from '../components/SubscriptionImport';
 import { importKind } from '../client/subscription';
-import { Modal } from '../components/Editors';
+import { LocalError, Modal } from '../components/Editors';
 import { KState } from '../components/labels';
 import { StableText } from '../components/ui';
 import { errorText, errorLocation } from '../lib/errors';
@@ -18,7 +18,7 @@ import {
   savedDocumentFilename,
 } from '../client/daily';
 import type { DocumentFormat, ImportedDocument, SaveReply } from '../client/types';
-import { Icon } from '../components/Icon';
+import { Icon, type IconName } from '../components/Icon';
 import { convertDocument, editDocument, formatDocument, parseDocument, readDocument } from '../client/document';
 import type { Client } from '../client/useClient';
 
@@ -222,7 +222,7 @@ export function Config({ c }: { c: Client }) {
   };
 
   const errLine = parsed.ok ? null : parsed.line;
-  const sections = v
+  const sections: { key: string; label: string; count: number; icon: IconName }[] = v
     ? [
         { key: 'subscriptions', label: '订阅来源', count: v.subscriptions?.length ?? 0, icon: 'link' },
         { key: 'outbounds', label: '代理节点', count: v.kernel.outbounds?.length ?? 0, icon: 'nodes' },
@@ -431,14 +431,13 @@ export function Config({ c }: { c: Client }) {
         </header>
 
         {advancedDNS && (
-          <div style={{ padding: '10px 18px', borderBottom: '1px solid var(--line)', background: 'var(--card-2)' }}>
-            <div className="form-error" role="alert">
-              此配置包含已停用的高级 DNS，请选择系统 DNS 或自定义 DNS 后保存。保存会替换旧 DNS 配置，可先使用“导出已保存配置”留存原文。
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}>
-              <label htmlFor="legacy-dns-choice" style={{ fontSize: 12.5 }}>
-                DNS 模式
-              </label>
+          <div className="cfg-legacy-dns">
+            <LocalError
+              text="此配置包含已停用的高级 DNS，请选择系统 DNS 或自定义 DNS 后保存。保存会替换旧 DNS 配置，可先使用“导出已保存配置”留存原文。"
+              raw
+            />
+            <div className="cfg-legacy-row">
+              <label htmlFor="legacy-dns-choice">DNS 模式</label>
               <select
                 className="inp sm"
                 id="legacy-dns-choice"
@@ -454,22 +453,17 @@ export function Config({ c }: { c: Client }) {
               </select>
             </div>
             {dnsChoice === 'custom' && (
-              <label style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
+              <label className="cfg-legacy-area">
                 <span>DNS 服务器（每行一个）</span>
                 <textarea
                   className="inp"
-                  style={{ width: '100%', marginTop: 4 }}
                   value={dnsServers}
                   onChange={(e) => setDNSServers(e.target.value)}
                   aria-label="自定义 DNS 服务器"
                 />
               </label>
             )}
-            {dnsError && (
-              <div className="form-error" role="alert" style={{ marginTop: 6 }}>
-                {dnsError}
-              </div>
-            )}
+            <LocalError text={dnsError} spaced />
           </div>
         )}
 

@@ -4,9 +4,10 @@ import { nodeRows } from '../client/nodeRows';
 import { useState } from 'react';
 import { SubscriptionCard } from '../components/SubscriptionCard';
 import { SubscriptionImport } from '../components/SubscriptionImport';
-import { Card, Segmented, StableText } from '../components/ui';
+import { DisplaySortSelect, Empty, SearchInput, Segmented, StableText } from '../components/ui';
 import { Icon } from '../components/Icon';
-import { Field, LocalError, Modal, Secret } from '../components/Editors';
+import { ConfirmModal } from '../components/Confirm';
+import { Field, LocalError, Modal, RawJsonField, RawJsonToggle, Secret } from '../components/Editors';
 import { nodeFormValue } from '../client/entityValidation';
 import { errorText } from '../lib/errors';
 import { names, putEntity, removeEntity, validateGraph, validName } from '../client/operations';
@@ -14,7 +15,7 @@ import { setField } from '../client/document';
 import type { Client } from '../client/useClient';
 import type { Outbound } from '../client/types';
 import { useDisplaySort } from '../lib/displaySort';
-import { displaySorted, probeTime, type DisplaySort } from '../client/settings';
+import { displaySorted, probeTime } from '../client/settings';
 import { latencyTone, probeLabel } from '../lib/format';
 
 const PROTOCOLS = ['anytls', 'shadowsocks', 'trojan', 'socks5'];
@@ -229,29 +230,12 @@ export function Nodes({ c }: { c: Client }) {
       {/* Lower: Searchable & Source-Filterable Node Table */}
       <section className="card table-card" aria-label="节点列表">
         <div className="table-toolbar">
-          <label className="search">
-            <Icon name="search" size={14} />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜索"
-              aria-label="搜索节点"
-            />
-          </label>
+          <SearchInput value={search} onChange={setSearch} ariaLabel="搜索节点" />
           {sourceOptions.length > 1 && (
-            <Segmented size="sm" value={activeFilter} onChange={setSourceFilter} options={sourceOptions} />
+            <Segmented value={activeFilter} onChange={setSourceFilter} options={sourceOptions} />
           )}
           <span className="sp" />
-          <select
-            className="inp sm display-sort"
-            aria-label="节点显示排序"
-            value={sort}
-            onChange={(e) => setSort(e.target.value as DisplaySort)}
-          >
-            <option value="config">配置顺序</option>
-            <option value="latency">延迟</option>
-            <option value="name">名称</option>
-          </select>
+          <DisplaySortSelect value={sort} onChange={setSort} ariaLabel="节点显示排序" />
           <button
             type="button"
             className={'btn sm' + (c.probeAllProgress ? ' spin' : '')}
@@ -381,7 +365,7 @@ export function Nodes({ c }: { c: Client }) {
             );
           })}
           {!nodes.length && (
-            <div className="empty">{!c.connected ? '未连接' : rows.length ? '没有匹配的节点' : '暂无节点'}</div>
+            <Empty>{!c.connected ? '未连接' : rows.length ? '没有匹配的节点' : '暂无节点'}</Empty>
           )}
         </div>
       </section>
@@ -389,18 +373,17 @@ export function Nodes({ c }: { c: Client }) {
       {full && <SubscriptionImport c={c} {...full} close={() => setFull(null)} />}
       {node && <NodeEditor key={node.previous ?? 'new'} c={c} item={node.value} previous={node.previous} close={() => setNode(null)} />}
       {deleting && (
-        <Modal
-          size="sm"
-          saveLabel="删除"
+        <ConfirmModal
           danger
+          confirmLabel="删除"
           title={'删除' + (deleting.kind === 'providers' ? '订阅' : '节点') + '「' + c.label(deleting.name) + '」？'}
           close={() => setDeleting(null)}
-          save={() => void remove()}
+          onConfirm={() => void remove()}
           busy={c.doc.saving || c.busy.has('save')}
         >
           <span>{c.label(deleting.name)}</span>
           <LocalError text={c.error} />
-        </Modal>
+        </ConfirmModal>
       )}
     </div>
   );
@@ -486,28 +469,26 @@ function NodeEditor({
       save={() => void save()}
       busy={c.doc.saving || c.busy.has('save')}
       wide
-    >
-      <button
-        className="btn sm"
-        onClick={() => {
-          if (raw === null) setRaw(JSON.stringify(n, null, 2));
-          else {
-            try {
-              setN(nodeFormValue(JSON.parse(raw)));
-              setRaw(null);
-              setError('');
-            } catch {
-              setFieldErrors({ '节点 JSON': '原文不是有效的节点配置' });
+      headerExtra={
+        <RawJsonToggle
+          active={raw !== null}
+          onToggle={() => {
+            if (raw === null) setRaw(JSON.stringify(n, null, 2));
+            else {
+              try {
+                setN(nodeFormValue(JSON.parse(raw)));
+                setRaw(null);
+                setError('');
+              } catch {
+                setFieldErrors({ '节点 JSON': '原文不是有效的节点配置' });
+              }
             }
-          }
-        }}
-      >
-        {raw === null ? '高级原文' : '表单'}
-      </button>
+          }}
+        />
+      }
+    >
       {raw !== null ? (
-        <Field label="节点 JSON">
-          <textarea className="inp raw-object" value={raw} onChange={(e) => setRaw(e.target.value)} />
-        </Field>
+        <RawJsonField label="节点 JSON" value={raw} onChange={setRaw} />
       ) : (
         <div className="form-grid">
           <Field label="名称">

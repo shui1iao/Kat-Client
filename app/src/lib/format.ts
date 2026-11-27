@@ -3,7 +3,7 @@ export const MB = KB * 1024;
 export const GB = MB * 1024;
 export const TB = GB * 1024;
 
-export interface Val { v: string; u: string }
+interface Val { v: string; u: string }
 
 export function rate(b: number): Val {
   if (b >= MB) return { v: (b / MB).toFixed(b >= 100 * MB ? 0 : b >= 10 * MB ? 1 : 2), u: 'MB/s' };
@@ -36,8 +36,6 @@ export function delayLabel(raw: number | null | undefined): string {
   return `${Math.round(raw)} ms`;
 }
 
-// Display only: selection and weighted sorting continue to use source priorities.
-export const weightLabel = (weight:number) => weight === 1 ? '' : `权重 ${weight}`;
 export function probeLabel(ms:number|null|undefined,error?:string){return error?'失败':delayLabel(ms);}
 // Closed, local text only: never put transport errors/URLs in the DOM title.
 export function probeFailureTitle(error?:string){return !error?'':({PROBE_TARGET_TIMEOUT:'超时',PROBE_QUEUE_TIMEOUT:'等待测速名额超时',PROBE_CANCELED:'已取消',PROBE_FAILED:'连接失败或HTTP响应异常'} as Record<string,string>)[error]??'测速失败';}

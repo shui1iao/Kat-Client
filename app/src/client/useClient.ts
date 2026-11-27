@@ -12,8 +12,8 @@ import { errorText, isMutationUncertain, subscriptionFailureText } from '../lib/
 import { updatePreferences } from './daily';
 import { DocumentSession } from './session';
 import type { ConnectionsReply, DesktopPreferences, DesktopSettingsReply, CoreMethod, CoreStatus, DocumentReply, DocumentSource, HostCommand, NetworkStatus, ProbeResult, SubscriptionPreview, SubscriptionStatus } from './types';
-export interface Sample { at: number; down: number; up: number }
-export function appendSample(old: readonly Sample[], sample: Sample, now = sample.at, windowMs = 3600000, maxCount = 1801): Sample[] {
+interface Sample { at: number; down: number; up: number }
+function appendSample(old: readonly Sample[], sample: Sample, now = sample.at, windowMs = 3600000, maxCount = 1801): Sample[] {
   const cutoff = now - windowMs, keepLast = sample.at > cutoff ? 1 : 0;
   let count = keepLast, start = old.length;
   while (start > 0 && count < maxCount) {
@@ -28,7 +28,7 @@ export function appendSample(old: readonly Sample[], sample: Sample, now = sampl
   if (keepLast) out[w] = sample;
   return out;
 }
-export const MAIN_WINDOW_HIDDEN_EVENT = 'main-window-hidden';
+const MAIN_WINDOW_HIDDEN_EVENT = 'main-window-hidden';
 export const MAIN_WINDOW_SHOWN_EVENT = 'kat-main-window-shown';
 export function applyMainWindowHidden(hidden: unknown, root: { dataset?: DOMStringMap | Record<string, string | undefined> } | null = typeof document !== 'undefined' ? document.documentElement : null) {
   if (typeof hidden !== 'boolean' || !root?.dataset) return;
@@ -39,13 +39,13 @@ export function applyMainWindowHidden(hidden: unknown, root: { dataset?: DOMStri
   if (wasHidden && root.dataset.katWindowHidden !== 'true' && typeof window !== 'undefined') window.dispatchEvent(new Event(MAIN_WINDOW_SHOWN_EVENT));
 }
 /** True while the main window is hidden to the tray or the page is not visible. */
-export function mainWindowHidden(): boolean {
+function mainWindowHidden(): boolean {
   if (typeof document === 'undefined') return false;
   return document.hidden || document.documentElement.dataset.katWindowHidden === 'true';
 }
 /** Hidden windows keep a slow status heartbeat (tray snapshot, auto-recovery) instead of the 2 s poll. */
 export const HIDDEN_POLL_MS = 10000;
-export function watchMainWindowHidden(subscribe: typeof listen = listen, root?: { dataset?: DOMStringMap | Record<string, string | undefined> } | null) {
+function watchMainWindowHidden(subscribe: typeof listen = listen, root?: { dataset?: DOMStringMap | Record<string, string | undefined> } | null) {
   applyMainWindowHidden(false, root);
   let live = true, stop: (() => void) | undefined;
   void subscribe<boolean>(MAIN_WINDOW_HIDDEN_EVENT, e => { if (live) applyMainWindowHidden(e.payload, root); })
@@ -53,12 +53,56 @@ export function watchMainWindowHidden(subscribe: typeof listen = listen, root?: 
     .catch(() => applyMainWindowHidden(false, root));
   return () => { live = false; stop?.(); applyMainWindowHidden(false, root); };
 }
-export function useMainWindowHidden() {
+function useMainWindowHidden() {
   useEffect(() => {
     applyMainWindowHidden(false);
     if (!hasHost()) return;
     return watchMainWindowHidden(listen);
   }, []);
+}
+
+/** Shared visibility- and tray-aware polling loop: pauses while the window is hidden to tray
+ *  or minimized, never overlaps in-flight ticks, and refreshes immediately when shown again. */
+export function useWindowPoll(enabled: boolean, intervalMs: number, task: () => Promise<void> | void) {
+  const taskRef = useRef(task);
+  taskRef.current = task;
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    let busy = false;
+    let timer = 0;
+    const schedule = () => {
+      window.clearTimeout(timer);
+      if (alive) timer = window.setTimeout(run, intervalMs);
+    };
+    const run = async () => {
+      window.clearTimeout(timer);
+      if (!alive || busy) return;
+      if (mainWindowHidden()) {
+        schedule();
+        return;
+      }
+      busy = true;
+      try {
+        await taskRef.current();
+      } finally {
+        busy = false;
+        schedule();
+      }
+    };
+    const wake = () => {
+      if (alive && !mainWindowHidden()) void run();
+    };
+    void run();
+    window.addEventListener(MAIN_WINDOW_SHOWN_EVENT, wake);
+    document.addEventListener('visibilitychange', wake);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+      window.removeEventListener(MAIN_WINDOW_SHOWN_EVENT, wake);
+      document.removeEventListener('visibilitychange', wake);
+    };
+  }, [enabled, intervalMs]);
 }
 export function useClient() {
   useMainWindowHidden();

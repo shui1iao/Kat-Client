@@ -2,21 +2,19 @@ import { useEffect, useRef, useState } from 'react';
 import { tip } from '../components/Tooltip';
 import { RuleEditor } from './Rules';
 import { flowRuleDraft, processCounts, type FlowRuleSource } from '../client/flowRule';
-import { inboundLabel } from '../client/logDetails';
-import { ConnectionRule } from '../components/labels';
+import { FlowDetail } from '../components/FlowDetail';
 import { FlowExitCell, FlowNumCell, FlowTargetCell, useNodeProtoMap } from '../components/FlowCells';
-import { ProtocolTag } from '../components/ProtocolTag';
 import { PolicyReveal } from '../components/PolicyReveal';
 import { Icon } from '../components/Icon';
 import { DomainIcon, ProcessIcon } from '../components/EntityIcons';
-import { Modal } from '../components/Editors';
-import { Segmented, StableText } from '../components/ui';
+import { LocalError, Modal } from '../components/Editors';
+import { Empty, SearchInput, Segmented, StableText, StreamControls } from '../components/ui';
 import { core } from '../client/ipc';
 import { captureCloseTargets, normalizeConnections } from '../client/normalize';
 import { errorText } from '../lib/errors';
-import { clockStr, durationStr, showBytes, showRate } from '../client/display';
+import { clockStr, showBytes, showRate } from '../client/display';
 import type { ClosedConnection, ConnectionInfo, ConnectionsReply } from '../client/types';
-import type { Client } from '../client/useClient';
+import { useWindowPoll, type Client } from '../client/useClient';
 import type { ConnTab } from './Dashboard';
 
 const POLL_MS = 1000;
@@ -60,7 +58,6 @@ export function Connections({
   const [ruleFlow, setRuleFlow] = useState<FlowRuleSource | null>(null);
   const [paused, setPaused] = useState(false);
   const [closing, setClosing] = useState(false);
-  const [copiedId, setCopiedId] = useState<number | null>(null);
   const [confirmation, setConfirmation] = useState<{ connection_instance: string; ids: number[]; rowCount: number; label?: string; matched: boolean } | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
@@ -97,49 +94,36 @@ export function Connections({
   }
 
   useEffect(() => {
-    let alive = true;
     if (!running) {
       setData(null);
       setLocalRates({});
       prevSnap.current = null;
       setError('');
     }
-    if (!c.hasHost || !running || paused)
-      return () => {
-        alive = false;
-      };
-    let timer = 0;
-    const tick = async () => {
-      try {
-        const r = normalizeConnections(await core<unknown>('connections.list', { closed_limit: 500 }));
-        if (alive) {
-          const now = Date.now();
-          const prev = prevSnap.current;
-          const dt = prev ? (now - prev.at) / 1000 : 0;
-          if (prev && dt >= 0.4) {
-            const nextRates: Record<number, number | null> = {};
-            for (const item of r.active) {
-              const old = prev.map.get(item.id);
-              nextRates[item.id] =
-                old && old.start === item.start && item.down >= old.down ? (item.down - old.down) / dt : null;
-            }
-            setLocalRates(nextRates);
-          }
-          prevSnap.current = { at: now, map: new Map(r.active.map((x) => [x.id, x])) };
-          setData(r);
-          setError('');
+  }, [running]);
+
+  useWindowPoll(c.hasHost && running && !paused, POLL_MS, async () => {
+    try {
+      const r = normalizeConnections(await core<unknown>('connections.list', { closed_limit: 500 }));
+      const now = Date.now();
+      const prev = prevSnap.current;
+      const dt = prev ? (now - prev.at) / 1000 : 0;
+      if (prev && dt >= 0.4) {
+        const nextRates: Record<number, number | null> = {};
+        for (const item of r.active) {
+          const old = prev.map.get(item.id);
+          nextRates[item.id] =
+            old && old.start === item.start && item.down >= old.down ? (item.down - old.down) / dt : null;
         }
-      } catch (e) {
-        if (alive) setError(errorText(e));
+        setLocalRates(nextRates);
       }
-      if (alive) timer = window.setTimeout(tick, POLL_MS);
-    };
-    void tick();
-    return () => {
-      alive = false;
-      window.clearTimeout(timer);
-    };
-  }, [c.hasHost, running, paused]);
+      prevSnap.current = { at: now, map: new Map(r.active.map((x) => [x.id, x])) };
+      setData(r);
+      setError('');
+    } catch (e) {
+      setError(errorText(e));
+    }
+  });
 
   const rateOf = (id: number): number | null => {
     if (localRates[id] != null) return localRates[id]!;
@@ -245,17 +229,6 @@ export function Connections({
 
   const nodeProtoMap = useNodeProtoMap(c);
 
-  const copyTarget = async (id: number, text: string) => {
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedId(id);
-      window.setTimeout(() => setCopiedId((cur) => (cur === id ? null : cur)), 1500);
-    } catch {
-      /* ignore clipboard denial */
-    }
-  };
-
   const renderConnRow = (x: ConnectionInfo | ClosedConnection, omitProcessCol: boolean) => {
     const name = x.dest_host || x.host || x.target;
     const rawChain = Array.isArray(x.chain) ? x.chain : [];
@@ -263,21 +236,6 @@ export function Connections({
     const spd = tab === 'active' ? rateOf(x.id) : null;
     const spdStr = spd == null ? '—' : spd === 0 ? '0 B/s' : showRate(spd);
     const isSel = activeSelectedId === x.id;
-    const inboundText =
-      [
-        inboundLabel(x.inbound_kind) !== '—' ? inboundLabel(x.inbound_kind) : x.inbound,
-        x.source_addr || x.source,
-      ]
-        .filter(Boolean)
-        .join(' · ') || '—';
-    const targetSub =
-      [
-        x.dest_ip || (x.remote_dns ? '远端解析' : ''),
-        x.target && x.target !== name ? x.target : '',
-        x.sniffed ? '嗅探 SNI' : '',
-      ]
-        .filter(Boolean)
-        .join(' · ') || '直接目标';
 
     return (
       <div className={'conn-entry' + (isSel ? ' is-open' : '')} key={x.id + (tab === 'closed' ? 'c' : 'a')}>
@@ -325,99 +283,31 @@ export function Connections({
         </div>
 
         <PolicyReveal open={isSel}>
-          <div className="conn-inline-detail">
-            <div className="cid-grid">
-              <div className="cid-item">
-                <span>目标与解析</span>
-                <b className="mono ell" {...tip(targetSub, true)}>
-                  {targetSub}
-                </b>
-              </div>
-              <div className="cid-item">
-                <span>入站与来源</span>
-                <b className="mono ell" {...tip(inboundText, true)}>
-                  {inboundText}
-                </b>
-              </div>
-              <div className="cid-item">
-                <span>流量与耗时</span>
-                <b className="num">
-                  <em style={{ color: 'var(--up)', fontStyle: 'normal' }}>↑ {showBytes(x.up)}</em>
-                  {' · '}
-                  <em style={{ color: 'var(--down)', fontStyle: 'normal' }}>↓ {showBytes(x.down)}</em>
-                  {' · '}
-                  {clockStr(x.start)}
-                  {tab === 'closed' ? ' → ' + clockStr((x as ClosedConnection).end) : ''} ({durationStr(x.duration_ms)})
-                </b>
-              </div>
-              <div className="cid-item cid-span">
-                <span>进程路径</span>
-                <b className="mono ell" {...tip(x.process_path || x.process_name || '未知', true)}>
-                  {x.process_path || x.process_name || '未知'}
-                </b>
-              </div>
-              <div className="cid-item">
-                <span>命中规则</span>
-                <b>
-                  <ConnectionRule raw={x.rule} />
-                </b>
-              </div>
-            </div>
-
-            {x.error_text && <div className="cid-error">{x.error_text}</div>}
-
-            <div className="cid-bottom">
-              <div className="cid-chain">
-                <span className="cid-chain-label">出口链路</span>
-                {rawChain.length > 0 ? (
-                  rawChain.map((hop, idx) => {
-                    const isLast = idx === rawChain.length - 1;
-                    const proto = isLast ? nodeProtoMap.get(hop) : undefined;
+          <FlowDetail
+            e={tab === 'closed' ? (x as ClosedConnection) : { ...x, end: undefined }}
+            rawChain={rawChain}
+            labelOf={c.label}
+            nodeProtoMap={nodeProtoMap}
+            canCreateRule={c.connected && !c.doc.saving}
+            onCreateRule={() => setRuleFlow(x)}
+            extraActions={
+              tab === 'active'
+                ? (() => {
+                    const captured = captureCloseTargets(data, [x]);
                     return (
-                      <span className="cid-hop" key={idx + ':' + hop}>
-                        {idx > 0 && <span className="cid-arrow">→</span>}
-                        <b>{c.label(hop)}</b>
-                        {proto && !['direct', 'reject'].includes(proto) && <ProtocolTag type={proto} />}
-                      </span>
+                      <button
+                        type="button"
+                        className="btn sm danger"
+                        disabled={closing || !captured}
+                        onClick={() => void closeCaptured(captured)}
+                      >
+                        断开连接
+                      </button>
                     );
-                  })
-                ) : (
-                  <span className="muted">—</span>
-                )}
-              </div>
-
-              <div className="cid-actions">
-                <button
-                  type="button"
-                  className="btn sm primary"
-                  disabled={!c.connected || c.doc.saving}
-                  onClick={() => setRuleFlow(x)}
-                >
-                  生成规则
-                </button>
-                <button
-                  type="button"
-                  className="btn sm"
-                  onClick={() => void copyTarget(x.id, name || x.target)}
-                >
-                  <StableText current={copiedId === x.id ? '已复制' : '复制目标'} items={['复制目标', '已复制']} />
-                </button>
-                {tab === 'active' && (() => {
-                  const captured = captureCloseTargets(data, [x]);
-                  return (
-                    <button
-                      type="button"
-                      className="btn sm danger"
-                      disabled={closing || !captured}
-                      onClick={() => void closeCaptured(captured)}
-                    >
-                      断开连接
-                    </button>
-                  );
-                })()}
-              </div>
-            </div>
-          </div>
+                  })()
+                : undefined
+            }
+          />
         </PolicyReveal>
       </div>
     );
@@ -428,7 +318,6 @@ export function Connections({
       <section className="card table-card conn-card">
         <header className="table-toolbar">
           <Segmented
-            size="sm"
             value={tab}
             onChange={onTab}
             options={[
@@ -446,15 +335,7 @@ export function Connections({
               },
             ]}
           />
-          <label className="search">
-            <Icon name="search" size={14} />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="搜索"
-              aria-label="搜索连接"
-            />
-          </label>
+          <SearchInput value={q} onChange={setQ} ariaLabel="搜索连接" />
           <select
             className="inp sm conn-proc-select"
             aria-label="进程筛选"
@@ -514,22 +395,10 @@ export function Connections({
               items={['关闭全部', '关闭匹配 999']}
             />
           </button>
-          <button
-            type="button"
-            className="btn sm conn-pause-btn"
-            onClick={() => setPaused((p) => !p)}
-            disabled={!running}
-            aria-pressed={paused}
-          >
-            <StableText current={paused ? '继续' : '暂停'} items={['暂停', '继续']} />
-          </button>
+          <StreamControls paused={paused} pauseDisabled={!running} onTogglePause={() => setPaused((p) => !p)} />
         </header>
 
-        {error && (
-          <div className="form-error" style={{ margin: '8px 16px 0' }} role="alert">
-            {error}
-          </div>
-        )}
+        <LocalError text={error} inset />
 
         <div
           ref={tableRef}
@@ -644,7 +513,7 @@ export function Connections({
           )}
 
           {!sorted.length && (
-            <div className="empty">
+            <Empty>
               {!running
                 ? '内核未运行'
                 : needle || process !== '*'
@@ -652,7 +521,7 @@ export function Connections({
                   : tab === 'active'
                     ? '暂无活跃连接'
                     : '暂无已关闭连接'}
-            </div>
+            </Empty>
           )}
         </div>
       </section>

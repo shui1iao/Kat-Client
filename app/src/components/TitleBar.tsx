@@ -13,6 +13,40 @@ export function useWindowDrag(c: Client) {
   };
 }
 
+export function WindowButtons({
+  disabled = false,
+  closeLabel = '关闭窗口',
+  onMinimize,
+  onMaximize,
+  onClose,
+}: {
+  disabled?: boolean;
+  closeLabel?: string;
+  onMinimize: () => void;
+  onMaximize: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="winbtns">
+      <button type="button" {...tip('最小化')} aria-label="最小化" disabled={disabled} onClick={onMinimize}>
+        <svg width="10" height="10">
+          <path d="M0 5.5h10" stroke="currentColor" />
+        </svg>
+      </button>
+      <button type="button" {...tip('最大化')} aria-label="最大化" disabled={disabled} onClick={onMaximize}>
+        <svg width="10" height="10">
+          <rect x=".5" y=".5" width="9" height="9" rx="1" fill="none" stroke="currentColor" />
+        </svg>
+      </button>
+      <button type="button" className="close" {...tip(closeLabel)} aria-label="关闭窗口" disabled={disabled} onClick={onClose}>
+        <svg width="10" height="10">
+          <path d="M.5.5l9 9M9.5.5l-9 9" stroke="currentColor" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 export function TitleBar({
   c,
   title,
@@ -32,42 +66,13 @@ export function TitleBar({
         {meta && <span className="page-meta num">{meta}</span>}
       </div>
       <div className="titlebar-spacer" />
-      <div className="winbtns">
-        <button
-          type="button"
-          {...tip('最小化')}
-          aria-label="最小化"
-          disabled={!c.hasHost || c.busy.has('window')}
-          onClick={() => action('minimize')}
-        >
-          <svg width="10" height="10">
-            <path d="M0 5.5h10" stroke="currentColor" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          {...tip('最大化')}
-          aria-label="最大化"
-          disabled={!c.hasHost || c.busy.has('window')}
-          onClick={() => action('maximize')}
-        >
-          <svg width="10" height="10">
-            <rect x=".5" y=".5" width="9" height="9" rx="1" fill="none" stroke="currentColor" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          className="close"
-          {...tip(c.desktop?.preferences.close_action === 'quit' ? '恢复网络并退出' : '关闭到托盘')}
-          aria-label="关闭窗口"
-          disabled={!c.hasHost || c.busy.has('window')}
-          onClick={() => action('close')}
-        >
-          <svg width="10" height="10">
-            <path d="M.5.5l9 9M9.5.5l-9 9" stroke="currentColor" />
-          </svg>
-        </button>
-      </div>
+      <WindowButtons
+        disabled={!c.hasHost || c.busy.has('window')}
+        closeLabel={c.desktop?.preferences.close_action === 'quit' ? '恢复网络并退出' : '关闭到托盘'}
+        onMinimize={() => action('minimize')}
+        onMaximize={() => action('maximize')}
+        onClose={() => action('close')}
+      />
     </header>
   );
 }

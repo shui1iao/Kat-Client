@@ -36,13 +36,13 @@ test('round2B: source lookup uses only active snapshot, even if inactive interna
 });
 
 test('round2B: subscription form validation is field-local before any request',async()=>{
- const {subscriptionFieldErrors,sameSubscriptionObject,subscriptionRule}=await import('../src/client/subscription.ts');
+ const {subscriptionFieldErrors,subscriptionRule}=await import('../src/client/subscription.ts');
  assert.ok(subscriptionFieldErrors({mode:'remote',text:'http://fixture.invalid',name:'',interval:'3600'}).url);
  assert.ok(subscriptionFieldErrors({mode:'remote',text:'https://fixture.invalid',name:'x\n',interval:'follow'}).name);
  assert.deepEqual(subscriptionFieldErrors({mode:'remote',text:'https://fixture.invalid',name:'fixture',interval:'follow'}),{});
  const remote={domain:'fixture.invalid',action:'direct'},edited={action:'reject',domain:'fixture.invalid'};
  const d:DocumentSource={...source,subscriptions:[{...source.subscriptions![0],snapshot:{rules:[remote]},overlay:{rules:[{original:remote,value:edited,position:0}]}}]};
- assert.ok(sameSubscriptionObject(edited,{domain:'fixture.invalid',action:'reject'}));assert.equal(subscriptionRule(d,edited)?.remote,0);assert.equal(subscriptionRule(d,edited)?.patch,0);
+ assert.equal(subscriptionRule(d,edited)?.remote,0);assert.equal(subscriptionRule(d,edited)?.patch,0);
 });
 
 test('round2B: human failure text, Chinese attempts and original JSON stay consistent',async()=>{

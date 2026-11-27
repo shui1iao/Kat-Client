@@ -1,6 +1,6 @@
-import { useLayoutEffect, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 
-export interface AppRect {
+interface AppRect {
   top: number;
   left: number;
   right: number;
@@ -27,7 +27,79 @@ export function getAppRect(): AppRect {
   };
 }
 
-export interface TopNoticePos {
+interface DropdownPos {
+  left: number;
+  width: number;
+  maxHeight: number;
+  up: boolean;
+  top?: number;
+  bottom?: number;
+}
+
+/** Shared dropdown/listbox anchor math with automatic upward flip when space below is tight. */
+export function measureDropdown(
+  el: HTMLElement,
+  opts: { gap?: number; margin?: number; minBelow?: number; minMaxH?: number; capMaxH?: number } = {},
+): DropdownPos | null {
+  const r = el.getBoundingClientRect();
+  if (!r.width && !r.height) return null;
+  const gap = opts.gap ?? 6;
+  const margin = opts.margin ?? 10;
+  const minBelow = opts.minBelow ?? 200;
+  const minMaxH = opts.minMaxH ?? 120;
+  const capMaxH = opts.capMaxH ?? 300;
+  const below = window.innerHeight - r.bottom - gap - margin;
+  const above = r.top - gap - margin;
+  const up = below < minBelow && above > below;
+  const maxHeight = Math.max(minMaxH, Math.min(capMaxH, up ? above : below));
+  const left = Math.max(margin, Math.min(r.left, window.innerWidth - margin - r.width));
+  return {
+    left,
+    width: r.width,
+    maxHeight,
+    up,
+    ...(up ? { bottom: window.innerHeight - r.top + gap } : { top: r.bottom + gap }),
+  };
+}
+
+/** Shared dismissal listeners for portaled popups (outside mousedown, Escape refocus, resize & window blur). */
+export function useDismissablePopup(
+  open: boolean,
+  triggerRef: RefObject<HTMLElement | null>,
+  popRef: RefObject<HTMLElement | null>,
+  close: () => void,
+) {
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node | null;
+      if (triggerRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      closeRef.current();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        closeRef.current();
+        triggerRef.current?.focus({ preventScroll: true });
+      }
+    };
+    const dismiss = () => closeRef.current();
+    document.addEventListener('mousedown', onDown, true);
+    document.addEventListener('keydown', onKey, true);
+    window.addEventListener('resize', dismiss);
+    window.addEventListener('blur', dismiss);
+    return () => {
+      document.removeEventListener('mousedown', onDown, true);
+      document.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('resize', dismiss);
+      window.removeEventListener('blur', dismiss);
+    };
+  }, [open, triggerRef, popRef]);
+}
+
+interface TopNoticePos {
   top: number;
   left: number;
   maxWidth: number;
@@ -63,7 +135,7 @@ export function useTopNoticeAnchor(active: boolean): TopNoticePos | null {
   return pos;
 }
 
-export interface PopoverRectPos {
+interface PopoverRectPos {
   top: number;
   left: number;
   width: number;
@@ -104,6 +176,6 @@ export function useCardAnchor(
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
     };
-  }, [active, triggerRef, cardRef, desiredWidth]);
+  }, [active, desiredWidth, triggerRef, cardRef]);
   return pos;
 }

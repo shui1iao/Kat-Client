@@ -1,11 +1,38 @@
-import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { tip } from './Tooltip';
 import { ConnectionRule } from './labels';
-import { StableText } from './ui';
+import { CopyButton } from './ui';
 import { ProtocolTag } from './ProtocolTag';
 import { inboundLabel } from '../client/logDetails';
 import { clockStr, durationStr, showBytes } from '../client/display';
 import type { ConnLogEntry } from '../client/types';
+
+interface FlowDetailEntry {
+  target: string;
+  host?: string;
+  dest_host?: string;
+  dest_ip?: string;
+  dest_ips?: string[];
+  remote_dns?: boolean;
+  sniffed?: boolean;
+  inbound_kind?: string;
+  inbound?: string;
+  source_addr?: string;
+  source?: string;
+  up?: number;
+  down?: number;
+  start?: string;
+  time?: string;
+  end?: string;
+  duration_ms?: number;
+  process_path?: string;
+  process_name?: string;
+  rule: string;
+  outcome?: ConnLogEntry['outcome'];
+  error_text?: string;
+  code?: string;
+  error_stage?: string;
+}
 
 export function FlowDetail({
   e,
@@ -14,17 +41,16 @@ export function FlowDetail({
   nodeProtoMap,
   onCreateRule,
   canCreateRule = true,
+  extraActions,
 }: {
-  e: ConnLogEntry;
+  e: FlowDetailEntry;
   rawChain: string[];
   labelOf: (name: string) => string;
   nodeProtoMap: Map<string, string>;
   onCreateRule?: () => void;
   canCreateRule?: boolean;
+  extraActions?: ReactNode;
 }) {
-  const [copiedTarget, setCopiedTarget] = useState(false);
-  const [copiedErr, setCopiedErr] = useState<'idle' | 'ok' | 'fail'>('idle');
-
   const name = e.dest_host || e.host || e.target || '';
   const targetSub =
     [
@@ -36,33 +62,16 @@ export function FlowDetail({
       .filter(Boolean)
       .join(' · ') || '直接目标';
 
+  const rawIn = e.inbound_kind ?? e.inbound;
+  const rawSrc = e.source_addr ?? e.source;
   const inboundText =
-    [inboundLabel(e.inbound_kind) !== '—' ? inboundLabel(e.inbound_kind) : '', e.source_addr]
+    [inboundLabel(rawIn) !== '—' ? inboundLabel(rawIn) : rawIn ?? '', rawSrc]
       .filter(Boolean)
       .join(' · ') || '—';
 
-  const copyTarget = async () => {
-    if (!name) return;
-    try {
-      await navigator.clipboard.writeText(name);
-      setCopiedTarget(true);
-      window.setTimeout(() => setCopiedTarget(false), 1500);
-    } catch {
-      /* ignore clipboard denial */
-    }
-  };
 
-  const copyError = async () => {
-    try {
-      await navigator.clipboard.writeText([e.error_text, e.code, e.error_stage].filter(Boolean).join(' · '));
-      setCopiedErr('ok');
-      window.setTimeout(() => setCopiedErr('idle'), 1500);
-    } catch {
-      setCopiedErr('fail');
-    }
-  };
 
-  const hasError = (e.outcome !== 'ok' && e.outcome !== 'idle') || !!e.error_text || !!e.code;
+  const hasError = (e.outcome !== undefined && e.outcome!=='ok'&&e.outcome!=='idle') || !!e.error_text || !!e.code;
 
   return (
     <div className="conn-inline-detail">
@@ -113,9 +122,11 @@ export function FlowDetail({
             {e.code && <code>{e.code}</code>}
             {e.error_stage && <code>{e.error_stage}</code>}
           </div>
-          <button type="button" className="link-btn" onClick={() => void copyError()}>
-            <StableText current={copiedErr === 'ok' ? '已复制' : copiedErr === 'fail' ? '复制失败' : '复制原因'} items={['复制原因', '复制失败', '已复制']} />
-          </button>
+          <CopyButton
+            variant="link"
+            text={[e.error_text, e.code, e.error_stage].filter(Boolean).join(' · ')}
+            label="复制原因"
+          />
         </div>
       )}
 
@@ -145,9 +156,8 @@ export function FlowDetail({
               生成规则
             </button>
           )}
-          <button type="button" className="btn sm" disabled={!name} onClick={() => void copyTarget()}>
-            <StableText current={copiedTarget ? '已复制' : '复制目标'} items={['复制目标', '已复制']} />
-          </button>
+          <CopyButton text={name || e.target} label="复制目标" />
+          {extraActions}
         </div>
       </div>
     </div>

@@ -19,14 +19,12 @@
   color-scheme: dark;
   /* Unified Windows Dark Backdrop: seamless single-surface window + elevated cards */
   --canvas: #1B1D22;
-  --bg: var(--canvas);
   --window-material: var(--canvas);
-  --side-bg: transparent;
   --card: #24272E;
   --card-solid: #24272E;
   --card-2: rgba(255, 255, 255, 0.055);
-  --expand-lv1: rgba(255, 255, 255, 0.032);
-  --expand-lv2: rgba(255, 255, 255, 0.055);
+  --expand-lv1: rgba(0, 0, 0, 0.085);
+  --expand-lv2: rgba(0, 0, 0, 0.065);
   --btn-bg: rgba(255, 255, 255, 0.075);
   --btn-shadow: none;
   --pop: rgba(40, 44, 52, 0.84);
@@ -82,14 +80,12 @@
   color-scheme: light;
   /* Unified Windows Light Backdrop: seamless soft cool-neutral surface (#F2F4F7) + crisp white cards */
   --canvas: #F2F4F7;
-  --bg: var(--canvas);
   --window-material: var(--canvas);
-  --side-bg: transparent;
   --card: #FFFFFF;
   --card-solid: #FFFFFF;
   --card-2: rgba(15, 23, 42, 0.042);
-  --expand-lv1: rgba(15, 23, 42, 0.026);
-  --expand-lv2: rgba(15, 23, 42, 0.048);
+  --expand-lv1: rgba(15, 23, 42, 0.018);
+  --expand-lv2: rgba(15, 23, 42, 0.016);
   --btn-bg: rgba(15, 23, 42, 0.055);
   --btn-shadow: none;
   --pop: rgba(255, 255, 255, 0.86);
@@ -159,8 +155,6 @@
   /* Control heights: one ladder for the whole app */
   --h-ctl: 34px;        /* standard input / button */
   --h-ctl-sm: 30px;     /* toolbar & card-header controls */
-  --h-ctl-xs: 26px;     /* inline row controls */
-  --h-row: 42px;        /* table row */
   /* Soft Concentric Corner Radii */
   --r-modal: 12px;
   --r-pop: 10px;
@@ -179,40 +173,28 @@
   /* Soft gradient separators & dynamic scroll-only edge fade masks */
   --sep-fade: linear-gradient(90deg, transparent 0%, var(--line) 8%, var(--line) 92%, transparent 100%);
   --sep-fade-v: linear-gradient(180deg, transparent 0%, var(--line) 12%, var(--line) 88%, transparent 100%);
-  --s1: 4px;
-  --s2: 8px;
-  --s3: 12px;
-  --s4: 16px;
-  --s5: 20px;
-  --s6: 24px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --t-fast: 0.13s;
   --t: 0.19s;
-  --t-slow: 0.24s;
 }
 
 /* Native Backdrop Gate (Unified Seamless Window Material) */
 :root[data-native-acrylic="enabled"] {
   --window-material: rgba(27, 29, 34, 0.78);
-  --side-bg: transparent;
   --card: rgba(38, 41, 49, 0.70);
 }
 :root[data-native-acrylic="enabled"][data-theme="light"] {
   --window-material: rgba(242, 244, 247, 0.80);
-  --side-bg: transparent;
   --card: rgba(255, 255, 255, 0.70);
   --card-border: 0;
   --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 14px rgba(15, 23, 42, 0.025);
 }
 :root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"] {
   --window-material: rgba(27, 29, 34, 0.92);
-  --side-bg: transparent;
   --card: rgba(36, 39, 46, 0.86);
 }
 :root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"][data-theme="light"] {
   --window-material: rgba(242, 244, 247, 0.92);
-  --side-bg: transparent;
   --card: rgba(255, 255, 255, 0.86);
 }
 
@@ -222,24 +204,20 @@
     --card: #24272E;
     --pop: #282C34;
     --modal-bg: #282C34;
-    --side-bg: transparent;
   }
   :root[data-theme="light"] {
     --card: #FFFFFF;
     --pop: #FFFFFF;
     --modal-bg: #FFFFFF;
-    --side-bg: transparent;
   }
   :root[data-native-acrylic="enabled"],
   :root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"] {
     --window-material: #1B1D22;
-    --side-bg: transparent;
     --card: #24272E;
   }
   :root[data-native-acrylic="enabled"][data-theme="light"],
   :root[data-native-acrylic="enabled"][data-native-acrylic-focus="inactive"][data-theme="light"] {
     --window-material: #F2F4F7;
-    --side-bg: transparent;
     --card: #FFFFFF;
   }
 }
@@ -314,17 +292,6 @@ time {
   font-feature-settings: "tnum";
 }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
 
 .muted,
 .dim {
@@ -355,7 +322,7 @@ time {
   border: 2px solid transparent;
   background-clip: padding-box;
   background-color: var(--scroll);
-  border-radius: 9999px;
+  border-radius: var(--r-pill);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -449,7 +416,6 @@ time {
   :root[data-native-acrylic="enabled"][data-native-acrylic-focus],
   :root[data-native-acrylic="enabled"][data-native-acrylic-focus][data-theme] {
     --window-material: Canvas;
-    --side-bg: Canvas;
     --card: Canvas;
     --card-2: Canvas;
     --pop: Canvas;
@@ -474,8 +440,7 @@ time {
   .kat-pop,
   .kat-tip,
   .tip,
-  .toast,
-  .mode-seg,
+  .seg,
   .net-switch,
   .inp,
   .search,

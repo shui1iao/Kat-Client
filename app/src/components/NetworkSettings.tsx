@@ -2,7 +2,7 @@ import { Icon } from './Icon';
 import { tip } from './Tooltip';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useFormDraft } from '../lib/formDraft';
-import { Card, SettingSwitch, StableText } from './ui';
+import { Card, Empty, MoveButtons, SettingSwitch, StableText } from './ui';
 import { LocalError } from './Editors';
 import { networkDraft, patchNetwork, dnsCacheError, type DNSMode } from '../client/daily';
 import { errorText } from '../lib/errors';
@@ -14,7 +14,7 @@ export function NetworkSettings({ c, section = 'ports', bare = false, children }
   if (bare) {
     return (
       <div className="dns-bare-form">
-        {c.source ? <NetworkForm c={c} section={section} /> : <div className="empty">未连接</div>}
+        {c.source ? <NetworkForm c={c} section={section} /> : <Empty>未连接</Empty>}
         {children}
       </div>
     );
@@ -56,7 +56,7 @@ export function NetworkSettings({ c, section = 'ports', bare = false, children }
       title={section === 'dns' ? 'DNS 策略与上游' : '本地监听入口'}
       className={section === 'dns' ? 'dns-card' : ''}
     >
-      {c.source ? <NetworkForm c={c} section={section} /> : <div className="empty">未连接</div>}
+      {c.source ? <NetworkForm c={c} section={section} /> : <Empty>未连接</Empty>}
       {children}
     </Card>
   );
@@ -166,11 +166,7 @@ function NetworkForm({ c, section }: { c: Client; section: 'ports' | 'dns' }) {
             </select>
           </label>
 
-          {value.advanced_dns && (
-            <div className="form-error" role="alert">
-              此配置包含已停用的高级 DNS，请选择系统 DNS 或自定义 DNS 后保存
-            </div>
-          )}
+{value.advanced_dns && <LocalError text="此配置包含已停用的高级 DNS，请选择系统 DNS 或自定义 DNS 后保存" raw />}
 
           {value.dns_mode === 'custom' && (
             <div className="set-block">
@@ -191,26 +187,7 @@ function NetworkForm({ c, section }: { c: Client; section: 'ports' | 'dns' }) {
                       value={server}
                       onChange={(e) => set('servers', value.servers.map((s, j) => (j === i ? e.target.value : s)))}
                     />
-                    <button
-                      type="button"
-                      className="ib"
-                      {...tip('上移 DNS')}
-                      disabled={i === 0}
-                      onClick={() => move(i, -1)}
-                      aria-label="上移 DNS"
-                    >
-                      <Icon name="chevUp" size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      className="ib"
-                      {...tip('下移 DNS')}
-                      disabled={i === value.servers.length - 1}
-                      onClick={() => move(i, 1)}
-                      aria-label="下移 DNS"
-                    >
-                      <Icon name="chevDown" size={14} />
-                    </button>
+                    <MoveButtons subject=" DNS" index={i} count={value.servers.length} onMove={(dir) => move(i, dir)} />
                     <button
                       type="button"
                       className="ib danger"
@@ -245,7 +222,7 @@ function NetworkForm({ c, section }: { c: Client; section: 'ports' | 'dns' }) {
       )}
 
       <LocalError text={dnsCacheError(value) || error} />
-      {c.doc.dirty && <div className="form-error">原文有未保存草稿</div>}
+      {c.doc.dirty && <LocalError text="原文有未保存草稿" raw />}
 
       <div className="set-form-foot">
         <button

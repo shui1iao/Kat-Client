@@ -46,11 +46,11 @@ export function FlowTargetCell({
             <span className="ell">{processName || '未知'}</span>
           </span>
         )}
-        <NetworkTag network={network} />
+        <NetworkTag network={network} size="xs" />
         <span className="flow-rule" {...tip(rule, true)}>
           {parsed ? (
             <>
-              <KTag label={shortRuleType(parsed.type)} color={ruleColor(parsed.type)} />
+              <KTag size="xs" label={shortRuleType(parsed.type)} color={ruleColor(parsed.type)} />
               {parsed.payload && <span className="ell">{parsed.payload}</span>}
             </>
           ) : (
