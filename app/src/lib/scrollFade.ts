@@ -13,7 +13,7 @@ const STICKY_HEAD_SCROLL =
 const FADE_SCROLL =
   STICKY_HEAD_SCROLL +
   ', .nav-list, .modal > .form, .overview-bento, .pol-stream, .settings-scroll, .dns-addr-pop-list' +
-  ', .dns-settings-unified, .cfg-tools' +
+  ', .dns-pop-records, .cfg-tools' +
   ', .policy-editor-v2 .pe-form-body, .sparkle-notes-box, .pe-candidates, .diag-body';
 
 function updateOne(el: HTMLElement) {

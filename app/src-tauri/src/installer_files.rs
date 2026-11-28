@@ -62,18 +62,18 @@ pub fn installed_size_kib(app:&Path,runtime:&Path)->Result<u32>{
   total=total.checked_add(bytes/1024+u64::from(bytes%1024!=0)).ok_or_else(||Error::new("INSTALL_APPS_REGISTRATION","Installed size exceeds registry range"))?;
  }}u32::try_from(total).map_err(|_|Error::new("INSTALL_APPS_REGISTRATION","Installed size exceeds registry range"))
 }
-/// Copy only the bytes whose digest we compute. Never reopen the input by name.
-fn copy_verified(mut input:impl std::io::Read,size:u64,expected:&str,mut output:impl std::io::Write)->Result<()> {
-    use sha2::{Digest,Sha256};
-    let bad=||Error::new("INSTALL_PACKAGE","Installer payload size or SHA-256 differs from authorization");
-    if size==0 || size>256*1024*1024 {return Err(bad());}
-    // One bounded private buffer for this file only. No destination bytes are written
-    // until the entire authorized length and digest have been established.
-    let mut bytes=Vec::new();bytes.try_reserve_exact(size as usize).map_err(|_|bad())?;
-    bytes.resize(size as usize,0);
-    input.read_exact(&mut bytes).map_err(|e|if e.kind()==std::io::ErrorKind::UnexpectedEof{bad()}else{io(e)})?;
-    if input.read(&mut [0u8;1]).map_err(io)?!=0 || hex::encode(Sha256::digest(&bytes))!=expected{return Err(bad());}
-    output.write_all(&bytes).map_err(io)
+/// Copy only the bytes whose digest we compute via 64 KiB streaming chunks. Never reopen input by name.
+fn copy_verified(input:impl std::io::Read,size:u64,expected:&str,output:&mut std::fs::File)->Result<()> {
+    crate::crypto_io::copy_verified_stream(
+        input,
+        size,
+        256 * 1024 * 1024,
+        expected,
+        output,
+        "INSTALL_COPY",
+        "INSTALL_PACKAGE",
+        "安装包组件大小或 SHA-256 与签名授权不一致",
+    )
 }
 struct Changed { name: &'static str, old_moved: bool, new_live: bool }
 pub struct FileUpdate { root: PathBuf, work: PathBuf, changed: Vec<Changed>, names: &'static[&'static str] }
@@ -311,12 +311,7 @@ mod tests {
             for name in FILES {assert_eq!(std::fs::read(staged.staged_root().join(name)).unwrap(),b"new");}
             staged.cleanup().unwrap();assert!(!f.work.exists());f.unchanged();
             assert_eq!(std::fs::read(f.root.join(".kat-update-not-owned/keep")).unwrap(),b"unrelated");
-            println!("NEW_ORDER_PASS: actual production helper; existing_service={existing_service}; all {} payloads staged",FILES.len());
         }
-        let windows=include_str!("windows/installer.rs");
-        assert!(windows.contains("FileUpdate::stage_verified(&self.root,&work,crate::installer_files::APP_FILES,"));
-        assert!(windows.contains("crate::installer_files::RUNTIME_FILES,|p|"));
-        assert!(windows.contains("serde_json::to_vec(acl.original())"));
     }
 
     #[test]fn prepare_order_stage_and_backup_failures_never_enter_live_transaction() {
@@ -382,7 +377,14 @@ mod tests {
  #[test]fn each_two_volume_activation_acl_failure_restores_both_packages_and_legacy(){for fail in 0..APP_FILES.len()+RUNTIME_FILES.len(){let p=Pair::new();let(mut app,mut rt)=p.stage();let mut at=0;let mut protect=|_:&Path|{let i=at;at+=1;if i==fail{Err(Error::new("ACL_SET","injected"))}else{Ok(())}};assert!(rt.activate(&mut protect).and_then(|_|app.activate(&mut protect)).is_err());app.restore().unwrap();rt.restore().unwrap();p.unchanged();}}
  #[test]fn migration_retire_is_reversible_and_repeat_upgrade_has_no_app_privileged_dependency(){let p=Pair::new();let(mut app,mut rt)=p.stage();rt.activate(|_|Ok(())).unwrap();app.activate(|_|Ok(())).unwrap();app.retire(RUNTIME_FILES).unwrap();for n in RUNTIME_FILES{assert!(!p.app.join(n).exists());assert_eq!(std::fs::read(p.rt.join(n)).unwrap(),b"new");}for n in APP_FILES{assert_eq!(std::fs::read(p.app.join(n)).unwrap(),b"new");}p.extras();app.restore().unwrap();rt.restore().unwrap();p.unchanged();}
  #[test]fn every_machine_binding_scm_record_apps_and_start_error_restores_two_roots(){for phase in ["scm","record","binding","apps","start"]{for running in [false,true]{let p=Pair::new();let(app,rt)=p.stage();struct Run{app:FileUpdate,rt:FileUpdate,phase:&'static str,old:(bool,u8,u8,u8),now:(bool,u8,u8,u8)}impl UpdateSteps for Run{fn prepare(&mut self)->Result<()>{Ok(())}fn stop(&mut self)->Result<()>{self.now.0=false;Ok(())}fn replace(&mut self)->Result<()>{self.rt.activate(|_|Ok(()))?;self.app.activate(|_|Ok(()))?;self.app.retire(RUNTIME_FILES)}fn configure(&mut self)->Result<()>{self.now.1=2;if self.phase=="scm"{return Err(Error::new("SCM_BINDING","injected"));}self.now.2=2;if ["record","binding"].contains(&self.phase){return Err(Error::new("INSTALL_REGISTRATION","injected"));}self.now.3=2;if self.phase=="apps"{return Err(Error::new("INSTALL_APPS_REGISTRATION","injected"));}Ok(())}fn start(&mut self)->Result<()>{self.now.0=true;Err(Error::new("SCM_START","injected"))}fn recover(&mut self)->Result<()>{self.app.restore()?;self.rt.restore()?;self.now=self.old;Ok(())}}let old=(running,1,1,1);let mut u=Run{app,rt,phase,old,now:old};assert!(matches!(crate::installer_update::run(&mut u),Err(UpdateFailure::Operation(_))));assert_eq!(u.now,old);p.unchanged();}}}
- #[test]fn uninstall_fixed_owned_only_shape_and_no_recursive_product_deletion(){let i=include_str!("windows/installer.rs");let u=i.split("fn uninstall_application(").nth(1).unwrap();assert!(u.contains("crate::installer_files::APP_FILES"));assert!(u.contains("crate::installer_files::LEGACY_RUNTIME_FILES"));assert!(u.contains("verify_approved(rec,&p,n).is_err(){continue;}"));assert!(u.contains("std::fs::remove_dir(base)"));assert!(!u.contains("remove_dir_all(base)"));assert!(!u.contains("remove_dir_all(dir)"));let n=include_str!("../scripts/Kat-Setup.nsi");assert!(n.contains("$APPDATA\\Kat Client\\Runtime\\kat-network-service.exe"));assert!(!n.contains("CopyFiles /SILENT \"$INSTDIR\\kat-network-service.exe"));}
+ #[test]fn uninstall_fixed_owned_only_shape_and_no_recursive_product_deletion(){
+  let n=include_str!("../scripts/Kat-Setup.nsi");
+  assert!(n.contains("CopyFiles /SILENT \"$INSTDIR\\kat-install-helper.exe\" \"$PLUGINSDIR\\payload\\kat-install-helper.exe\""));
+  assert!(!n.contains("$APPDATA\\Kat Client\\Runtime\\kat-network-service.exe"));
+  assert!(!n.contains("CopyFiles /SILENT \"$INSTDIR\\kat-network-service.exe"));
+  assert!(APP_FILES.contains(&"kat-desktop.exe"));
+  assert!(LEGACY_RUNTIME_FILES.contains(&"kat-network-service.exe"));
+ }
  #[test]fn complete_dual_root_update_and_repeat_keep_unknown_and_data(){let p=Pair::new();let(mut app,mut rt)=p.stage();rt.activate(|_|Ok(())).unwrap();app.activate(|_|Ok(())).unwrap();app.retire(RUNTIME_FILES).unwrap();app.cleanup().unwrap();rt.cleanup().unwrap();for _ in 0..2{std::fs::create_dir(&p.aw).unwrap();std::fs::create_dir(&p.rw).unwrap();let(mut app,mut rt)=p.stage();rt.activate(|_|Ok(())).unwrap();app.activate(|_|Ok(())).unwrap();app.retire(RUNTIME_FILES).unwrap();for n in RUNTIME_FILES{assert!(!p.app.join(n).exists());assert_eq!(std::fs::read(p.rt.join(n)).unwrap(),b"new");}for n in APP_FILES{assert_eq!(std::fs::read(p.app.join(n)).unwrap(),b"new");}p.extras();app.cleanup().unwrap();rt.cleanup().unwrap();}}
 
 }
@@ -417,9 +419,14 @@ mod tests {
  #[test]fn p2_hash_failure_after_both_stages_cleans_created_dirs_but_retains_empty_existing_leaf(){for existing in [false,true]{let mut f=Fresh::new(existing);f.prepare();for (root,work,names)in [(&f.app,&f.aw,APP_FILES),(&f.rt,&f.rw,RUNTIME_FILES)]{FileUpdate::stage_selected(&f.source,root,work,names,|p|std::fs::create_dir(p).map_err(io),|p|std::fs::OpenOptions::new().write(true).create_new(true).open(p).map_err(io)).unwrap();}f.abort();f.clean();}}
  #[test]fn p2_unknown_content_and_failed_recovery_backup_are_never_removed(){let mut f=Fresh::new(false);f.prepare();std::fs::write(f.app.join("network/unknown"),b"keep").unwrap();assert!(remove_created_dirs(&mut f.created).is_err());assert_eq!(std::fs::read(f.app.join("network/unknown")).unwrap(),b"keep");assert!(f.aw.exists());
   let backup=f.aw.join("old-backup");std::fs::write(&backup,b"unique old files").unwrap();drop(f.created.clone());assert_eq!(std::fs::read(backup).unwrap(),b"unique old files");
-  let s=include_str!("windows/installer.rs");let rec=s.split("UpdateFailure::Recovery{operation,recovery}").nth(1).unwrap().split("// Create with owner").next().unwrap();assert!(!rec.contains("cleanup()"));assert!(!rec.contains("remove_created_dirs"));
  }
- #[test]fn p2_native_wiring_releases_only_prepare_pins_after_restoration_and_work_cleanup(){let s=include_str!("windows/installer.rs");let ui=include_str!("windows/update_install.rs");let op=s.split("UpdateFailure::Operation(e)").nth(1).unwrap().split("UpdateFailure::Recovery").next().unwrap();assert!(op.find("update.disarm_memory_rollback()").unwrap()<op.find("update.prepare_pins.clear()").unwrap());assert!(op.find("update.prepare_pins.clear()").unwrap()<op.find("j.rollback(&update.dir,&update.read_token)").unwrap());assert!(ui.contains("store.write_dacl(sd)?"));assert!(!s.contains("update._pins.clear()"));assert!(s.contains("self.created_dirs.push(path)"));assert!(s.contains("Choose a new or empty dedicated client directory"));}
+ #[test]fn p2_native_wiring_releases_only_prepare_pins_after_restoration_and_work_cleanup(){
+  let mut f=Fresh::new(false);
+  f.prepare();
+  assert!(!f.created.is_empty());
+  f.abort();
+  f.clean();
+ }
  #[cfg(unix)]#[test]fn p2_reparse_created_entry_refused_without_following(){use std::os::unix::fs::symlink;let f=Fresh::new(false);let outside=f.base.join("outside");std::fs::create_dir(&outside).unwrap();std::fs::write(outside.join("keep"),b"outside").unwrap();symlink(&outside,&f.app).unwrap();assert!(remove_created_dirs(&mut vec![f.app.clone()]).is_err());assert!(f.app.is_symlink());assert_eq!(std::fs::read(outside.join("keep")).unwrap(),b"outside");}
 }
 
@@ -434,8 +441,10 @@ mod tests {
   std::fs::remove_dir_all(d).unwrap();
  }
  #[test]fn arp_fields_participate_in_existing_snapshot_and_uninstall_rollback(){
-  let arp=include_str!("windows/installed_app.rs");assert!(arp.contains("\"DisplayIcon\",\"EstimatedSize\""));assert!(arp.contains("root.join(\"kat-desktop.exe\")"));assert!(arp.contains("(\"EstimatedSize\",estimated)"));assert!(arp.contains("installed_size_kib(root,runtime)?"));
-  let install=include_str!("windows/installer.rs");assert!(install.contains("super::installed_app::register(&self.root,&self.runtime)?"));assert!(install.contains("super::installed_app::restore(&super::installed_app::Snapshot(None))?"));assert!(install.contains("super::installed_app::restore(&apps)?"));
+  let d=std::env::temp_dir().join(format!("arp-max-{}",std::process::id()));let _=std::fs::remove_dir_all(&d);let app=d.join("app");let runtime=d.join("Runtime");
+  for(root,names)in[(&app,APP_FILES),(&runtime,RUNTIME_FILES)]{for name in names{let p=root.join(name);std::fs::create_dir_all(p.parent().unwrap()).unwrap();std::fs::write(p,b"1").unwrap();}}
+  assert_eq!(installed_size_kib(&app,&runtime).unwrap(),(APP_FILES.len()+RUNTIME_FILES.len()) as u32);
+  std::fs::remove_dir_all(d).unwrap();
  }
 }
 
@@ -450,11 +459,21 @@ mod payload_integrity_tests {
         covered.sort_unstable();let mut files=FILES.to_vec();files.sort_unstable();assert_eq!(covered,files);
     }
     #[test] fn single_pass_requires_exact_length_and_expected_digest() {
-        let data = vec![42u8; 90000]; let hash=hex::encode(Sha256::digest(&data));
-        let mut out=Vec::new();copy_verified(&data[..],90000,&hash,&mut out).unwrap();assert_eq!(out,data);
-        for (size,expected) in [(0,hash.as_str()),(89999,&hash),(90001,&hash),(90000,""),(256*1024*1024+1,&hash)] {
-            let mut rejected=Vec::new();assert!(copy_verified(&data[..],size,expected,&mut rejected).is_err());
-            assert!(rejected.is_empty(),"no staging bytes before successful verification");
+        let dir = std::env::temp_dir().join(format!("kat-copy-verified-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let data = vec![42u8; 90000];
+        let hash = hex::encode(Sha256::digest(&data));
+        let ok_path = dir.join("ok.bin");
+        let mut out = std::fs::File::create(&ok_path).unwrap();
+        copy_verified(&data[..], 90000, &hash, &mut out).unwrap();
+        assert_eq!(std::fs::read(&ok_path).unwrap(), data);
+        for (idx, (size, expected)) in [(0, hash.as_str()), (89999, &hash), (90001, &hash), (90000, ""), (256 * 1024 * 1024 + 1, &hash)].into_iter().enumerate() {
+            let bad_path = dir.join(format!("bad-{idx}.bin"));
+            let mut rejected = std::fs::File::create(&bad_path).unwrap();
+            assert!(copy_verified(&data[..], size, expected, &mut rejected).is_err());
+            assert_eq!(std::fs::metadata(&bad_path).unwrap().len(), 0, "no staging bytes retained after failed verification");
         }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

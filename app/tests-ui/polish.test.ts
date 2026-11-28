@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {configurationMeta,savedDocumentFilename} from '../src/client/daily.ts';
-import {delayLabel} from '../src/lib/format.ts';
+import {probeLabel} from '../src/lib/format.ts';
 
 test('sidebar and Config share the accepted filename, never the draft extension/name',()=>{
   for(const format of ['json','yaml','yml'] as const){
@@ -14,6 +14,6 @@ test('sidebar and Config share the accepted filename, never the draft extension/
 });
 
 test('latency never incorporates priority; non-default weights have a separate label',()=>{
-  assert.equal(delayLabel(80),'80 ms');assert.equal(delayLabel(80.125),'80 ms');assert.equal(delayLabel(0),'0 ms');
-  for(const raw of [null,undefined,NaN,Infinity])assert.equal(delayLabel(raw),'—');
+  assert.equal(probeLabel(80),'80 ms');assert.equal(probeLabel(80.125),'80 ms');assert.equal(probeLabel(0),'0 ms');
+  for(const raw of [null,undefined,NaN,Infinity])assert.equal(probeLabel(raw),'—');
 });

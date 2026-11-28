@@ -139,6 +139,7 @@ interface PopoverRectPos {
   top: number;
   left: number;
   width: number;
+  maxHeight: number;
 }
 
 /** Anchors a fixed-geometry floating card directly below a trigger button, clamped to the Kat window. */
@@ -164,9 +165,13 @@ export function useCardAnchor(
       const minLeft = Math.round(app.left + 14);
       const maxLeft = Math.round(app.right - width - 14);
       const left = Math.max(minLeft, Math.min(maxLeft, Math.round(rightEdge - width)));
-      const next: PopoverRectPos = { top, left, width };
+      const bottomLimit = Math.min(app.bottom, window.innerHeight);
+      const maxHeight = Math.max(180, Math.round(bottomLimit - top - 16));
+      const next: PopoverRectPos = { top, left, width, maxHeight };
       setPos((prev) =>
-        prev && prev.top === next.top && prev.left === next.left && prev.width === next.width ? prev : next,
+        prev && prev.top === next.top && prev.left === next.left && prev.width === next.width && prev.maxHeight === next.maxHeight
+          ? prev
+          : next,
       );
     };
     update();

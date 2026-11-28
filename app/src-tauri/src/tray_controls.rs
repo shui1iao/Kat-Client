@@ -35,11 +35,11 @@ impl Snapshot{
  pub listener_ready:bool,pub pending:Option<String>,delivery:u64,native_busy:bool,
  pub popup_epoch:u64,pub popup_read:u64,
  pub cached_size:Option<(u64,f64,u32,u32)>,
- #[cfg(all(windows,feature="desktop"))]
+ #[cfg(any(all(windows,feature="desktop"),test))]
  pub popup:Option<crate::tray_popup::Popup>,
 }
-impl Default for MenuState{fn default()->Self{Self{snapshot:Snapshot::default(),theme:"system",revision:1,listener_ready:false,pending:None,delivery:0,native_busy:false,popup_epoch:0,popup_read:0,cached_size:None,#[cfg(all(windows,feature="desktop"))]popup:None}}}
-#[derive(Serialize)]pub struct MenuReply{pub revision:String,pub nodes:Vec<Node>,pub theme:&'static str,#[cfg(all(windows,feature="desktop"))]pub popup:Option<crate::tray_popup::PopupReply>}
+impl Default for MenuState{fn default()->Self{Self{snapshot:Snapshot::default(),theme:"system",revision:1,listener_ready:false,pending:None,delivery:0,native_busy:false,popup_epoch:0,popup_read:0,cached_size:None,#[cfg(any(all(windows,feature="desktop"),test))]popup:None}}}
+#[derive(Serialize)]pub struct MenuReply{pub revision:String,pub nodes:Vec<Node>,pub theme:&'static str,#[cfg(any(all(windows,feature="desktop"),test))]pub popup:Option<crate::tray_popup::PopupReply>}
 #[derive(Clone,Serialize)]pub struct Delivery{pub delivery_id:String,#[serde(flatten)]pub action:Action}
 impl MenuState{
  pub fn revision(&self)->u64{self.revision}
@@ -52,7 +52,7 @@ impl MenuState{
  pub fn native_busy(&mut self,busy:bool){if self.native_busy!=busy{self.native_busy=busy;self.changed();}}
  pub fn nodes(&self)->Vec<Node>{self.snapshot.menu_with_busy(self.snapshot.busy||self.native_busy)}
  pub fn theme(&mut self,theme:&'static str){if self.theme!=theme{self.theme=theme;self.changed();}}
- pub fn reply(&mut self)->MenuReply{self.popup_read=self.popup_epoch;MenuReply{revision:self.revision.to_string(),nodes:self.nodes(),theme:self.theme,#[cfg(all(windows,feature="desktop"))]popup:self.popup.as_ref().map(|p|p.reply())}}
+ pub fn reply(&mut self)->MenuReply{self.popup_read=self.popup_epoch;MenuReply{revision:self.revision.to_string(),nodes:self.nodes(),theme:self.theme,#[cfg(any(all(windows,feature="desktop"),test))]popup:self.popup.as_ref().map(|p|p.reply())}}
  pub fn select(&mut self,revision:&str,id:&str)->crate::error::Result<Option<Delivery>>{
   use crate::error::Error;
   if revision!=self.revision.to_string(){return Err(Error::new("TRAY_MENU_STALE","托盘状态已更新，请重新打开菜单后选择"));}

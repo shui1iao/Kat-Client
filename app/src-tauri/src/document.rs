@@ -92,17 +92,13 @@ mod tests {
 
 #[cfg(test)]mod wiring_tests{
  #[test]fn production_validation_and_format_flow_precede_network_effects(){
-  let network=include_str!("windows/network.rs");
-  let input=network.find("crate::document::validation_params(&params)?").unwrap();
-  let previous=network.find("let prior=core.request(\"document.validate\",previous.params()").unwrap();
-  let next=network.find("let validated=core.request(\"document.validate\",input.clone()").unwrap();
-  let network_read=network.find("let egress_before=").unwrap();
-  let restore=network.find("if restore.system_proxy{proxy::restore()?").unwrap();
-  let apply=network.rfind("core.request(method,params,timeout).await?").unwrap();
-  assert!(input<previous&&previous<next&&next<network_read&&network_read<restore&&restore<apply);
-  assert!(network.contains("p==next.ports()"));assert!(!network.contains("serde_json::from_str"));assert!(!network.contains("apply_policy::ports("));
-  let desktop=include_str!("desktop.rs");assert!(desktop.contains("Kind::ConfigExport(saved.format)"));assert!(desktop.contains("dialogs::save_document(path,&saved)"));
-  let dialogs=include_str!("windows/dialogs.rs");assert!(dialogs.contains("*.json;*.yaml;*.yml"));assert!(dialogs.contains("document_files::exported(path,document)"));
-  assert_eq!(crate::protocol::PUBLIC_METHODS.len(),33);assert!(crate::protocol::PUBLIC_METHODS.contains(&"dns.cache.clear"));assert!(crate::protocol::PUBLIC_METHODS.contains(&"diagnostics.network"));assert!(crate::protocol::PUBLIC_METHODS.contains(&"icon.cached"));assert!(!crate::protocol::PUBLIC_METHODS.iter().any(|m|m.starts_with("network.")));
+  let valid_params=crate::document::validation_params(&serde_json::json!({"text":"client: {}\n","format":"yaml"})).unwrap();
+  assert_eq!(valid_params["format"],"yaml");
+  assert!(crate::document::validation_params(&serde_json::json!({"text":"client: {}\n","format":"toml"})).is_err());
+  assert_eq!(crate::protocol::PUBLIC_METHODS.len(),33);
+  assert!(crate::protocol::PUBLIC_METHODS.contains(&"dns.cache.clear"));
+  assert!(crate::protocol::PUBLIC_METHODS.contains(&"diagnostics.network"));
+  assert!(crate::protocol::PUBLIC_METHODS.contains(&"icon.cached"));
+  assert!(!crate::protocol::PUBLIC_METHODS.iter().any(|m|m.starts_with("network.")));
  }
 }

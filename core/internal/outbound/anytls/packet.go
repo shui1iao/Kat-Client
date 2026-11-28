@@ -25,6 +25,15 @@ type packetConn struct {
 	rbuf []byte
 }
 
+const uotOutPoolCap = 2048
+
+var uotOutPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, uotOutPoolCap)
+		return &b
+	},
+}
+
 func (c *packetConn) WriteTo(p []byte, dst outbound.Addr) (int, error) {
 	if len(p) > 65535 {
 		return 0, errDatagramTooLarge
@@ -36,7 +45,19 @@ func (c *packetConn) WriteTo(p []byte, dst outbound.Addr) (int, error) {
 	if !c.headerSent {
 		hdrCap += 1 + addrCap
 	}
-	wire := make([]byte, 0, len(p)+hdrCap)
+	need := len(p) + hdrCap
+	var wire []byte
+	var pooled *[]byte
+	if need <= uotOutPoolCap {
+		pooled = uotOutPool.Get().(*[]byte)
+		wire = (*pooled)[:0]
+		defer func() {
+			*pooled = (*pooled)[:uotOutPoolCap]
+			uotOutPool.Put(pooled)
+		}()
+	} else {
+		wire = make([]byte, 0, need)
+	}
 	var e error
 	if !c.headerSent {
 		wire = append(wire, 0) // non-connected: per-packet addresses

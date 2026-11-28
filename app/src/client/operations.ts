@@ -1,3 +1,4 @@
+import { clonePreservingRawEntity } from './document';
 import type { DocumentSource, Group, SourceObject } from './types';
 export const pinnable = (type:string) => ['smart','url-test','fallback','load-balance'].includes(type);
 export const weighted = (type: string) => type === 'smart' || type === 'url-test';
@@ -51,8 +52,8 @@ export function putEntity(d: DocumentSource, kind: 'outbounds'|'groups', previou
   if(previous && item.name !== previous && references(d,previous).some(p=>kind!=='groups'||!p.endsWith('.include_group'))) throw new Error('仍有引用，不能重命名');
   const items = d.kernel[kind] as SourceObject[] | undefined;
   if ((items ?? []).some(x=>x.name===item.name && x.name!==previous)) throw new Error('名称重复');
-  if(previous) { const i=items?.findIndex(x=>x.name===previous) ?? -1; if(i<0) throw new Error('条目已变更，请重新打开'); items![i]=structuredClone(item); }
-  else (d.kernel[kind] ??= [] as any).push(structuredClone(item) as any);
+  if(previous) { const i=items?.findIndex(x=>x.name===previous) ?? -1; if(i<0) throw new Error('条目已变更，请重新打开'); items![i]=clonePreservingRawEntity(item); }
+  else (d.kernel[kind] ??= [] as any).push(clonePreservingRawEntity(item) as any);
   if(kind==='groups' && previous && item.name!==previous) {
     for(const g of d.kernel.groups??[]) if(g.include_group===previous) g.include_group=item.name;
     // Never rewrite remote subscription snapshots; persist local references as overlays.

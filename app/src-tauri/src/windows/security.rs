@@ -31,10 +31,9 @@ pub fn require_installed()->Result<PathBuf>{
  verify_protected(&exe)?;if record.schema==2{let n=exe.file_name().and_then(|v|v.to_str()).ok_or_else(||Error::new("INSTALL_RELAUNCH","Unrecognized installed role"))?;verify_approved(&record,&exe,n)?;}Ok(root)
 }
 pub fn verify_approved(record:&crate::install_location::Record,path:&Path,name:&str)->Result<()>{
- use sha2::{Sha256,Digest};verify_protected(path)?;
- let expected=record.hashes.as_ref().and_then(|h|h.get(name)).ok_or_else(||Error::new("INSTALL_REGISTRATION","Approved package inventory missing"))?;
- let bytes=std::fs::read(path).map_err(|_|Error::new("INSTALL_PACKAGE","Cannot read approved installed component"))?;
- if hex::encode(Sha256::digest(bytes))!=*expected{return Err(Error::new("INSTALL_PACKAGE","Installed component differs from the elevated transaction approval"));}Ok(())
+ verify_protected(path)?;
+ let expected=record.hashes.as_ref().and_then(|h|h.get(name)).ok_or_else(||Error::new("INSTALL_REGISTRATION","缺少受保护安装包清单"))?;
+ crate::crypto_io::verify_path_sha256(path,256*1024*1024,expected,false,"INSTALL_PACKAGE","INSTALL_PACKAGE","已安装组件与授权安装事务不一致")
 }
 /// Runtime parent metadata is readable, not its private state files. Only the
 /// fixed Kat state directory receives this non-inheritable BU RC/traverse ACE.
@@ -47,19 +46,16 @@ pub struct ClientPins{_dirs:Vec<identity::Handle>,_files:Vec<std::fs::File>}
 /// SYSTEM pins every mutable ancestor and the approved image files for its whole
 /// lifetime. Not only a same-path test: pre-pin processes are never accepted.
 pub fn pin_approved_clients(record:&crate::install_location::Record)->Result<ClientPins>{
- use std::{io::Read,os::windows::io::FromRawHandle};use sha2::{Sha256,Digest};
- if record.schema!=2{return Err(Error::new("INSTALL_REGISTRATION","Use Setup to migrate the protected runtime"));}
+ if record.schema!=2{return Err(Error::new("INSTALL_REGISTRATION","请使用 Setup 升级受保护运行环境"));}
  let root=Path::new(&record.root);let dirs=super::install_location::pin_app_chain(root,true)?;verify_protected(root)?;let mut files=vec![];
  for n in ["kat-desktop.exe","kat-client-core.exe","kat-elevate-helper.exe"]{
-  let p=root.join(n);verify_protected(&p)?;let w:Vec<u16>=p.as_os_str().encode_wide().chain(Some(0)).collect();
-  let h=identity::Handle(unsafe{CreateFileW(w.as_ptr(),FILE_READ_DATA|FILE_READ_ATTRIBUTES|READ_CONTROL,FILE_SHARE_READ,std::ptr::null(),OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,std::ptr::null_mut())});
-  if h.0==INVALID_HANDLE_VALUE{return Err(Error::new("INSTALL_PACKAGE","Cannot pin approved client image"));}
-  let mut info=BY_HANDLE_FILE_INFORMATION::default();if unsafe{GetFileInformationByHandle(h.0,&mut info)}==0||info.dwFileAttributes&(FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT)!=0||info.nNumberOfLinks!=1{return Err(Error::new("INSTALL_PACKAGE","Approved image is not a single regular file"));}
-  let mut f=unsafe{std::fs::File::from_raw_handle(h.0)};std::mem::forget(h);let mut bytes=vec![];(&mut f).take(256*1024*1024+1).read_to_end(&mut bytes).map_err(|_|Error::new("INSTALL_PACKAGE","Cannot hash pinned client image"))?;
-  if bytes.len()>256*1024*1024||record.hashes.as_ref().and_then(|h|h.get(n))!=Some(&hex::encode(Sha256::digest(&bytes))){return Err(Error::new("INSTALL_PACKAGE","Approved client image hash mismatch"));}files.push(f);
+  let p=root.join(n);verify_protected(&p)?;
+  let expected=record.hashes.as_ref().and_then(|h|h.get(n)).ok_or_else(||Error::new("INSTALL_PACKAGE","缺少受保护客户端组件哈希"))?;
+  let f=crate::crypto_io::pin_verified_file(&p,None,256*1024*1024,expected,true,"INSTALL_PACKAGE","受保护客户端镜像校验或固定失败")?;
+  files.push(f);
  }
  let mut t=FILETIME::default();unsafe{windows_sys::Win32::System::SystemInformation::GetSystemTimeAsFileTime(&mut t)};let stamp=((t.dwHighDateTime as u64)<<32)|t.dwLowDateTime as u64;
- APP_PINNED_SINCE.set(stamp).map_err(|_|Error::new("INSTALL_PACKAGE","Client approval already initialized"))?;
+ APP_PINNED_SINCE.set(stamp).map_err(|_|Error::new("INSTALL_PACKAGE","客户端固定状态已初始化"))?;
  Ok(ClientPins{_dirs:dirs,_files:files})
 }
 pub fn approved_client(h:HANDLE,name:&str)->Result<()>{
@@ -68,7 +64,7 @@ pub fn approved_client(h:HANDLE,name:&str)->Result<()>{
  let root=identity::install_root()?;if !same_path(&image(h)?,&root.join(name)){return Err(Error::new("CALLER_DENIED","Only the approved bound-user client may use this fixed role"));}Ok(())
 }
 pub fn journal_dir()->Result<PathBuf>{let p=identity::known_folder(windows_sys::core::GUID::from_u128(0x62ab5d82_fdc1_4dc3_a9dd_070d1d495d97))?.join("Kat Client");Ok(p)}
-pub fn verify_vendor(root:&Path)->Result<()>{verify_protected(root)?;verify_protected(&root.join("network"))?;use sha2::{Sha256,Digest};for(name,hash)in[("wintun.dll","e5da8447dc2c320edc0fc52fa01885c103de8c118481f683643cacc3220dafce")]{let p=root.join("network").join(name);verify_protected(&p)?;let b=std::fs::read(p).map_err(|e|Error::io("VENDOR_READ",&e))?;if hex::encode(Sha256::digest(b))!=hash{return Err(Error::new("VENDOR_INTEGRITY","Installed network component hash mismatch"));}}Ok(())}
+pub fn verify_vendor(root:&Path)->Result<()>{verify_protected(root)?;verify_protected(&root.join("network"))?;for(name,hash)in[("wintun.dll","e5da8447dc2c320edc0fc52fa01885c103de8c118481f683643cacc3220dafce")]{let p=root.join("network").join(name);verify_protected(&p)?;crate::crypto_io::verify_path_sha256(&p,64*1024*1024,hash,false,"VENDOR_READ","VENDOR_INTEGRITY","已安装的网络组件哈希不匹配")?;}Ok(())}
 pub struct Wintun {module:HMODULE,open:unsafe extern "system" fn(*const u16)->HANDLE,close:unsafe extern "system" fn(HANDLE)}
 impl Wintun {pub fn load(root:&Path)->Result<Self>{verify_vendor(root)?;unsafe{let p=root.join("network/wintun.dll");let w:Vec<u16>=p.as_os_str().encode_wide().chain(Some(0)).collect();let module=LoadLibraryExW(w.as_ptr(),std::ptr::null_mut(),LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);if module.is_null(){return Err(Error::new("WINTUN_LOAD","Cannot load official Wintun DLL"));}
  let open=GetProcAddress(module,b"WintunOpenAdapter\0".as_ptr());let close=GetProcAddress(module,b"WintunCloseAdapter\0".as_ptr());match(open,close){(Some(o),Some(c))=>Ok(Self{module,open:std::mem::transmute(o),close:std::mem::transmute(c)}),_=>{FreeLibrary(module);Err(Error::new("WINTUN_API","Official Wintun API missing"))}}

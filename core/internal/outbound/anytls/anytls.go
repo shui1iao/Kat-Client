@@ -374,7 +374,6 @@ func (o *Outbound) acquire(ctx context.Context) (*session, bool, error) {
 	return s, true, nil
 }
 
-
 func (o *Outbound) waitWarmingChan() <-chan struct{} {
 	if o.warmTarget <= 0 {
 		return nil

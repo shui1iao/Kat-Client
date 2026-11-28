@@ -1,3 +1,5 @@
+import { moveItem } from '../client/presentation';
+import { useEntityRawToggle } from '../client/entityRawToggle';
 import { weightedProbe, smartProbe, groupSummary, groupTypeLabel, resolveGroupPath } from '../client/groupDisplay';
 import { subscriptionGroup } from '../client/subscription';
 import { Checkbox, DisplaySortSelect, Empty, MoveButtons, SearchInput, Segmented, StableText } from '../components/ui';
@@ -61,7 +63,7 @@ export function Policies({
       return next;
     });
     requestAnimationFrame(() => {
-      document.querySelector<HTMLElement>(`[data-group="${selectedGroup}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      document.querySelector<HTMLElement>(`[data-group="${CSS.escape(selectedGroup)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       onSelectGroup?.(null);
     });
   }, [selectedGroup]);
@@ -463,9 +465,6 @@ export function Policies({
 
 function GroupEditor({ c, value, previous, close }: { c: Client; value: Group; previous: string | null; close: () => void }) {
   const [g, setG] = useState<Group>(() => structuredClone(value));
-  const [raw, setRaw] = useState<string | null>(null);
-  const [error, setError] = useState('');
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [sourceChanged, setSourceChanged] = useState(false);
   const [weightDrafts, setWeightDrafts] = useState<Record<string, string>>({});
   const [query, setQuery] = useState('');
@@ -522,13 +521,7 @@ function GroupEditor({ c, value, previous, close }: { c: Client; value: Group; p
   const effective = [...written, ...dynamicMembers];
   const missing = [...new Set([...Object.keys(g.priority ?? {}), ...Object.keys(weightDrafts)])].filter((n) => !effective.includes(n));
 
-  useLayoutEffect(() => {
-    const el = document.querySelector<HTMLElement>('.policy-editor-v2 [aria-invalid="true"]');
-    if (!el) return;
-    for (let p = el.parentElement; p; p = p.parentElement) if (p instanceof HTMLDetailsElement) p.open = true;
-    el.focus();
-    el.scrollIntoView({ block: 'nearest' });
-  }, [fieldErrors]);
+
 
   const weightErrors = () =>
     Object.fromEntries(
@@ -597,12 +590,30 @@ function GroupEditor({ c, value, previous, close }: { c: Client; value: Group; p
       setG(next);
     } else set('members', [...written, n]);
   };
+  const { raw, setRaw, error, setError, fieldErrors, setFieldErrors, parseFromRaw, prepareForSave, toggleRaw } = useEntityRawToggle<Group>({
+    jsonLabel: '策略组 JSON',
+    invalidMessage: '原文不是有效的策略组配置',
+    sourceText: c.doc.saved,
+    sourceFormat: c.doc.savedFormat,
+    entityPath: previous ? ['kernel', 'groups', 'name:' + previous] : undefined,
+    toFormValue: () => groupFormSources(formGroup(), value, sourceChanged),
+    fromFormValue: groupFormValue,
+    onExitRaw: (next) => {
+      setG(next);
+      setWeightDrafts({});
+      setSourceChanged(false);
+    },
+  });
+
+  useLayoutEffect(() => {
+    const el = document.querySelector<HTMLElement>('.policy-editor-v2 [aria-invalid="true"]');
+    if (!el) return;
+    for (let p = el.parentElement; p; p = p.parentElement) if (p instanceof HTMLDetailsElement) p.open = true;
+    el.focus();
+    el.scrollIntoView({ block: 'nearest' });
+  }, [fieldErrors]);
   const move = (i: number, dir: number) => {
-    const next = [...written];
-    const j = i + dir;
-    if (j < 0 || j >= next.length) return;
-    [next[i], next[j]] = [next[j], next[i]];
-    set('members', next);
+    set('members', moveItem(written, i, dir as -1 | 1));
   };
   const save = async () => {
     setError('');
@@ -617,7 +628,9 @@ function GroupEditor({ c, value, previous, close }: { c: Client; value: Group; p
     }
     setValidating(true);
     try {
-      const next = groupFormValue(raw === null ? groupFormSources(formGroup(), value, sourceChanged) : JSON.parse(raw));
+      const parsedRaw = raw === null ? null : parseFromRaw(raw);
+      if (raw !== null && !parsedRaw) return;
+      const next = raw === null ? prepareForSave(groupFormValue(groupFormSources(formGroup(), value, sourceChanged))) : parsedRaw!;
       const urlError = groupProbeURLError(next);
       if (urlError) {
         setFieldErrors({ [raw === null ? '探测URL（必填）' : '策略组 JSON']: urlError });
@@ -681,30 +694,7 @@ function GroupEditor({ c, value, previous, close }: { c: Client; value: Group; p
       busy={validating || c.doc.saving || c.busy.has('save')}
       wide
       headerExtra={
-        <RawJsonToggle
-          active={raw !== null}
-          onToggle={() => {
-            setFieldErrors({});
-            if (raw === null) {
-              const errors = weightErrors();
-              if (Object.keys(errors).length) {
-                setFieldErrors(errors);
-                return;
-              }
-              setRaw(JSON.stringify(groupFormSources(formGroup(), value, sourceChanged), null, 2));
-            } else {
-              try {
-                setG(groupFormValue(JSON.parse(raw)));
-                setWeightDrafts({});
-                setSourceChanged(false);
-                setRaw(null);
-                setError('');
-              } catch {
-                setFieldErrors({ '策略组 JSON': '原文不是有效的策略组配置' });
-              }
-            }
-          }}
-        />
+        <RawJsonToggle active={raw !== null} onToggle={() => toggleRaw(weightErrors)} />
       }
     >
       <div className="pe-form-body">

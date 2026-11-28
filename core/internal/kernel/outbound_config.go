@@ -315,6 +315,7 @@ func (c *Config) validateOutbounds() error {
 	)
 	color := map[string]int{}
 	depth := map[string]int{}
+	groupDepth := map[string]int{}
 	var visit func(n string) error
 	visit = func(n string) error {
 		switch color[n] {
@@ -325,11 +326,13 @@ func (c *Config) validateOutbounds() error {
 		}
 		color[n] = grey
 		d := 0
+		gd := 0
 		for _, m := range edges[n] {
 			if e := visit(m); e != nil {
 				return e
 			}
 			d = max(d, depth[m])
+			gd = max(gd, groupDepth[m])
 		}
 		if ms, ok := relays[n]; ok {
 			d = depth[ms[0]] + len(ms) - 1
@@ -337,10 +340,17 @@ func (c *Config) validateOutbounds() error {
 		if kind[n] == 'o' {
 			d++
 		}
+		if kind[n] == 'g' {
+			gd++
+		}
 		if d > maxChainDepth {
 			return errors.New("proxy chain deeper than 4 hops")
 		}
+		if gd > group.MaxGroupDepth {
+			return fmt.Errorf("policy group nested deeper than %d levels", group.MaxGroupDepth)
+		}
 		depth[n] = d
+		groupDepth[n] = gd
 		color[n] = black
 		return nil
 	}

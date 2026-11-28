@@ -106,6 +106,105 @@ impl VerifiedManifest {
         }
     }
 }
+pub const UPDATE_CODES: &[&str] = &[
+    "UPDATE_VERSION",
+    "UPDATE_MANIFEST_SIZE",
+    "UPDATE_SIGNATURE",
+    "UPDATE_KEY",
+    "UPDATE_MANIFEST_SCHEMA",
+    "UPDATE_SOURCE",
+    "UPDATE_RELEASE_BINDING",
+    "UPDATE_PLATFORM",
+    "UPDATE_ASSET",
+    "UPDATE_COMPATIBILITY",
+    "UPDATE_CAPABILITIES",
+    "UPDATE_SOURCE_REVISION",
+    "UPDATE_INSTALLED_METADATA",
+    "UPDATE_ROLLBACK",
+    "UPDATE_SAME_VERSION_HASH",
+    "UPDATE_PACKAGE_SCHEMA",
+    "UPDATE_PACKAGE_COMPONENTS",
+    "UPDATE_SETUP_SCHEMA",
+    "UPDATE_SETUP_BRIDGE",
+    "UPDATE_SETUP_ASSETS",
+    "UPDATE_DOWNGRADE",
+    "UPDATE_TRANSPORT_CHANGED",
+    "UPDATE_TRANSPORT",
+    "UPDATE_TRANSPORT_NOT_READY",
+    "UPDATE_HTTP_CLIENT",
+    "UPDATE_CANCELLED",
+    "UPDATE_CORE_TAG",
+    "UPDATE_CORE_CONFLICT",
+    "UPDATE_OFFER_CHANGED",
+    "UPDATE_RELEASE_CHANGED",
+    "UPDATE_METADATA_SIZE",
+    "UPDATE_GITHUB_METADATA",
+    "UPDATE_ASSET_SIZE",
+    "UPDATE_DOWNLOAD_IO",
+    "UPDATE_CACHE_IO",
+    "UPDATE_ASSET_HASH",
+    "UPDATE_CACHE",
+    "UPDATE_URL",
+    "UPDATE_REDIRECT",
+    "UPDATE_RATE_LIMIT",
+    "UPDATE_HTTP_STATUS",
+    "UPDATE_TIMEOUT",
+    "UPDATE_NETWORK",
+    "UPDATE_CACHE_PATH",
+    "UPDATE_CACHE_CREATE",
+    "UPDATE_PE_ARCH",
+    "UPDATE_STALE",
+    "UPDATE_SAVE",
+];
+pub fn canonical_update_code(code: &'static str) -> &'static str {
+    match code {
+        "version" => "UPDATE_VERSION",
+        "manifest_size" => "UPDATE_MANIFEST_SIZE",
+        "signature" => "UPDATE_SIGNATURE",
+        "key" => "UPDATE_KEY",
+        "manifest_schema" => "UPDATE_MANIFEST_SCHEMA",
+        "source" => "UPDATE_SOURCE",
+        "release_binding" => "UPDATE_RELEASE_BINDING",
+        "platform" => "UPDATE_PLATFORM",
+        "asset" => "UPDATE_ASSET",
+        "compatibility" => "UPDATE_COMPATIBILITY",
+        "capabilities" => "UPDATE_CAPABILITIES",
+        "source_revision" => "UPDATE_SOURCE_REVISION",
+        "installed_metadata" => "UPDATE_INSTALLED_METADATA",
+        "rollback" => "UPDATE_ROLLBACK",
+        "same_version_hash" => "UPDATE_SAME_VERSION_HASH",
+        "package_schema" => "UPDATE_PACKAGE_SCHEMA",
+        "package_components" => "UPDATE_PACKAGE_COMPONENTS",
+        "setup_schema" => "UPDATE_SETUP_SCHEMA",
+        "setup_bridge" => "UPDATE_SETUP_BRIDGE",
+        "setup_assets" => "UPDATE_SETUP_ASSETS",
+        "transport_changed" => "UPDATE_TRANSPORT_CHANGED",
+        "transport" => "UPDATE_TRANSPORT",
+        "http_client" => "UPDATE_HTTP_CLIENT",
+        "cancelled" => "UPDATE_CANCELLED",
+        "core_tag" => "UPDATE_CORE_TAG",
+        "core_conflict" => "UPDATE_CORE_CONFLICT",
+        "offer_changed" => "UPDATE_OFFER_CHANGED",
+        "release_changed" => "UPDATE_RELEASE_CHANGED",
+        "metadata_size" => "UPDATE_METADATA_SIZE",
+        "github_metadata" => "UPDATE_GITHUB_METADATA",
+        "asset_size" => "UPDATE_ASSET_SIZE",
+        "download_io" => "UPDATE_DOWNLOAD_IO",
+        "cache_io" => "UPDATE_CACHE_IO",
+        "asset_hash" => "UPDATE_ASSET_HASH",
+        "cache" => "UPDATE_CACHE",
+        "url" => "UPDATE_URL",
+        "redirect" => "UPDATE_REDIRECT",
+        "rate_limit" => "UPDATE_RATE_LIMIT",
+        "http_status" => "UPDATE_HTTP_STATUS",
+        "timeout" => "UPDATE_TIMEOUT",
+        "network" => "UPDATE_NETWORK",
+        "cache_path" => "UPDATE_CACHE_PATH",
+        "cache_create" => "UPDATE_CACHE_CREATE",
+        "pe_arch" => "UPDATE_PE_ARCH",
+        other => other,
+    }
+}
 #[derive(Clone, Debug)]
 pub struct UpdateError {
     pub code: &'static str,
@@ -115,7 +214,10 @@ pub struct UpdateError {
 }
 impl UpdateError {
     pub(crate) fn new(code: &'static str, message: impl Into<String>) -> Self {
-        Self { code, message: message.into(), retry_after: None }
+        Self { code: canonical_update_code(code), message: message.into(), retry_after: None }
+    }
+    pub(crate) fn with_retry_after(code: &'static str, message: impl Into<String>, retry_after: Option<String>) -> Self {
+        Self { code: canonical_update_code(code), message: message.into(), retry_after }
     }
 }
 impl fmt::Display for UpdateError {
@@ -336,12 +438,12 @@ pub fn verify_forward_transition(
     let a = stable_version(old_gui_version)?;
     let b = stable_version(new_gui_version)?;
     if b < a || new_gui_sequence < old_gui_sequence || (b == a && new_gui_sha256 != old_gui_sha256) || (b > a && new_gui_sequence <= old_gui_sequence) {
-        return Err(UpdateError::new("UPDATE_DOWNGRADE", "Older, replayed, or same-version different-hash client is not permitted"));
+        return Err(UpdateError::new("UPDATE_DOWNGRADE", "禁止降级、重放或安装同版本不同摘要的客户端"));
     }
     let o = stable_version(old_core_version)?;
     let n = stable_version(new_core_version)?;
     if n < o || new_core_sequence < old_core_sequence || (n == o && new_core_sha256 != old_core_sha256) || (strict_core && (n <= o || new_core_sequence <= old_core_sequence)) {
-        return Err(UpdateError::new("UPDATE_DOWNGRADE", "Older, replayed, or same-version different-hash core is not permitted"));
+        return Err(UpdateError::new("UPDATE_DOWNGRADE", "禁止降级、重放或安装同版本不同摘要的内核"));
     }
     Ok(())
 }

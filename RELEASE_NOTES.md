@@ -1,30 +1,32 @@
-# Kat-Client v0.2.37 (Windows Core v0.8.22)
+# Kat-Client v0.2.38 (Windows Core v0.8.23)
 
-全站 UI 组件统一收口为单一权威基础原语、清理历史冗余代码并补齐静态架构与多视口浏览器几何自动化验收门禁（client sequence `1795793000`；内置未变动的零 gVisor 纯 Go System Stack Windows Core v0.8.22 `core_sequence 1795722000`；配套 Linux Server v0.8.3 与 Kat-Manager v0.1.3）。
+全栈深度稳定性加固、5 大列表虚拟滚动与渲染提速、Windows Go Core v0.8.23 热路径零分配优化与特权服务安全防御正式发布版（client sequence `1795859000`，内置零 gVisor 纯 Go System Stack Windows Core v0.8.23 `core_sequence 1795858000`；配套 Linux Server v0.8.4 与 Kat-Manager v0.1.4）。
 
 ## 本版更新
 
-### 1. 全站同类控件 100% 单一组件与像素尺寸统一
-- **右上角窗口按钮统一为 `34 × 28px` 圆角矩形（`6px` 圆角）**：摒弃正圆按钮特例，与工具栏及桌面标题栏视觉体系一致。
-- **表单、开关、搜索、分段滑块、标签胶囊、密钥框、浮层与弹窗全面收口**：
-  - 全站开关（含侧边栏、设置页、自绘托盘菜单）统一为 `<Switch />`（`32 × 18px`）；
-  - 全站搜索框统一为 `<SearchInput />`（工具栏 `30px`、弹窗内自动匹配 `34px`）；
-  - 全站分段切换（含概览时间/诊断切换、设置页、弹窗顶部/字段、托盘模式切换）统一为 `<Segmented />`；
-  - 节点、策略组、规则、订阅四类编辑弹窗统一 `<Modal headerExtra />`、`<ConfirmModal size="sm" />`、`<RawJsonToggle />`、`<MoveButtons />` 与 `<Secret />`（修复多行私密框默认遮罩 `.concealed`），弹窗内所有输入/下拉/密钥/分段控件严格统一 `34px` 高度；
-  - 规则判定、DNS 解析测试与 DNS 多 IP `+N` 浮层统一为 `<ToolPopover />`，DNS 最近解析与解析缓存共用 `<DnsAddrCell />`，4 处实时流页面共用 `<StreamControls />`，节点与策略组共用 `<DisplaySortSelect />`；
-  - 全站流式表格行收敛为紧凑单行主干 + 点击展开详情，清除所有原生浏览器 `title=` 延迟悬停框。
+### 1. 前端五大列表虚拟滚动、交互防竞态与大整数无损保真（`app/`）
+- **5 大高频/海量列表全面接入自适应虚拟滚动（`useVirtualRows`）**：
+  - 规则（29,000+ 条）、连接（2,000+ 并发）、连接日志、内核日志、DNS 最近解析与缓存全面支持虚拟滚动，5,000 条规则与 2,000 条并发连接渲染节点数压至千级以内、搜索响应 ~11–13 ms；
+  - 规则虚拟列表拖拽排序支持滑出视口源行首尾保活、高度守恒、专属 `application/x-kat-rule` MIME 与跨窗异常中断兜底；规则命中与连接定位支持跨虚拟视口精准预置滚动居中；退出虚拟化自动复位滚动位置消除空白闪屏。
+- **全链路状态防竞态与极端数据安全**：
+  - 节点编辑严格绑定原始 `n.name`（保留订阅 `filter_name` 原字段），节点名称复制强制 `<= 64` UTF-8 字节截断；
+  - 弹窗/浮层修复快速连按 `Escape` 残留锁死，补齐 `createEpochGuard` 拦截断开/清空/暂停后的在途陈旧轮询响应；
+  - 打通 `patchEntityRawJson` 字段级 span 增量合并，确保 JSON / YAML / 复杂规则源码切换与编辑全程 `> Number.MAX_SAFE_INTEGER` 大整数 100% 词法无损；严格校验 IPv6 `%zone` 与主机端口格式，清洗 `NaN`/`Infinity` 图表坐标并全覆盖 Go 空切片防护。
 
-### 2. 轮询省电、单例格式化与代码深度精简（净减 4,280+ 行）
-- **统一前台感知轮询（`useWindowPoll`）**：合并连接、DNS 与日志 5 处轮询逻辑，主窗口最小化或关闭至托盘时自动暂停后台 IPC 轮询并在恢复显示当帧立即补刷。
-- **统一弹层定位与东八区时间格式化**：抽离共享 `lib/floating.ts`（`measureDropdown` + `useDismissablePopup`）；全站日期/时间格式化统一收口至 `client/display.ts` 模块级 `Asia/Shanghai` 单例，消除列表渲染循环内重复创建 `Intl.DateTimeFormat` 实例；错误脱敏与中文化统一收口至唯一 `lib/errors.ts`。
-- **清零死代码与样式冲突**：开启 `tsconfig.json` 严格未使用检查（`noUnusedLocals` + `noUnusedParameters`），收紧 `<Icon />` 编译期 `IconName` 枚举，确保 `main.tsx` 生产依赖图 100% 可达、0 僵尸导出、0 未用 CSS 变量、0 跨文件重复选择器、业务样式 0 `!important`。
+### 2. Windows Core v0.8.23：网络边界修复、热路径加速与架构精简（`core/`）
+- **关键数据面与协议边界修复**：
+  - 修复 TCP/SOCKS5/HTTP 半关闭单向 EOF 提前中断反向响应流的问题；
+  - AnyTLS 出站流写支持无超时内联零分配直写，带流级 `WriteDeadline` 自动走池化异步队列严格隔离底层共享 TLS 连接并支持动态超时立即唤醒，彻底消除会话并发关闭时的缓冲区竞争；
+  - DNS 解析引入 `singleflight` 合并并发同域名上游查询（原子维护并入等待者最大截止时间防止短超时毒化，保留单调用者 `remaining/2` 链式回退），网关新增 `parseDNSQueryFast` 零分配字节快路径并严格拦截畸形 OPT 记录；
+  - TUN System Stack UDP 入站改为 Endpoint-Independent Filtering (EIF) 全锥形行为，补齐 IPv4 分片首包防伪造校验与 `TCPIdle` 对端黑洞断连保证；双端 `internal/{ss,anytls,udpmmsg}` 100% 字节级同源统一，归并 68 个历史碎片化源码文件。
 
-### 3. 固化静态架构与多视口真实浏览器几何双门禁（`npm run verify`）
-- 新增 `architecture-gate.test.ts` 与 `geometry-gate.mjs`：自动校验 4 档视口（`1080×810`、`900×600`、`880×600`、`1440×900`）× 深浅双色 × 全部 20 个子视图 × 自绘托盘菜单 × 全部编辑弹窗与测试浮层零横向溢出、同类控件像素等高及控制台零报错。
-
-### 4. 内核与底层能力保持不变
-- 继续内置 **Windows Core v0.8.22**（`KIDX0003` 4 字节紧凑引用零分配路由匹配、冷路径延迟加载 MMDB、内存分段诊断、零 gVisor 纯 Go System Stack 60K MTU、UDP 1420 自动 PMTUD 与 AnyTLS 热备连接池）。
+### 3. Rust 桌面宿主、特权服务与安装器安全加固（`app/src-tauri/`）
+- **Windows 原子写、DACL 权限锁与共享读取兼容**：
+  - 抽离统一 `fs_atomic` CSPRNG 随机后缀临时文件原子替换模块，修复固定 `.tmp` 并发写冲突，自动过滤并按期清理断电孤儿临时文件；
+  - `%ProgramData%\Kat Client` 下 `binding.json`、`network-last-error.json` 与 `diagnostic-retention.json` 原子写后统一强制 `security::protect(..., false)` 固化 `BA` Owner 与受保护 DACL，兼容企业 `Nodefaultadminowner=1` 策略；
+  - `user_store` Windows 文件读取补齐 `FILE_SHARE_DELETE`，消除并发原子替换 `ERROR_SHARING_VIOLATION`；
+  - 托盘自绘菜单在跨异构 DPI 屏幕边界 `RePrepare` 时同步刷新目标显示器物理工作区并重锚定坐标；精简归并 CLI 解析、流式哈希与 ACL 辅助模块，清理旧版 NSIS 残留死分支。
 
 ## 升级与边界说明
-- 已安装 v0.2.36 及更早版本的用户可直接通过 `Kat-Setup-x64.exe` 或客户端内在线更新平滑升级至 v0.2.37。
+- `windows-core-v0.8.23` 保持 `gui_compatibility` 为 `>=0.2.34, <0.3.0`，已安装 v0.2.34–v0.2.37 的客户端可直接在应用内平滑在线升级，更早版本请使用 `Kat-Setup-x64.exe` 整包升级。
 - Ed25519 签名为产品包与在线更新身份验证（`key_id 0afa646ee76f17d8`），非 Windows Authenticode 代码签名。Kat 自研代码 source-available、保留所有权利（非 MIT）；第三方原许可保留，见 `RIGHTS.md`。

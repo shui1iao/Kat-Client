@@ -1,10 +1,12 @@
 package clientcore
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"github.com/shui1iao/Kat/internal/kernel"
+	"gopkg.in/yaml.v3"
 	"sync"
 )
 
@@ -153,4 +155,121 @@ func (h *Host) queryDNS(ctx context.Context, raw json.RawMessage) (any, *Error) 
 		return nil, fail("dns_failed", "params.name", "DNS chain did not return an answer")
 	}
 	return result, nil
+}
+
+const advancedDNSMessage = "此配置包含已停用的高级 DNS，请选择系统 DNS 或自定义 DNS 后保存"
+
+func advancedDNSFields(client, kernel map[string]json.RawMessage) bool {
+	var dns map[string]json.RawMessage
+	_ = json.Unmarshal(kernel["dns"], &dns)
+	// Presence is deliberate: empty/latent retired structures still must not
+	// become a future effective capability via another input path.
+	for _, k := range []string{"hosts", "rules", "nameserver-policy"} {
+		if _, ok := dns[k]; ok {
+			return true
+		}
+	}
+	if b, ok := client["tun_dns"]; ok && !bytes.Equal(bytes.TrimSpace(b), []byte("null")) {
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(b, &fields) == nil {
+			for _, k := range []string{"remote", "fake_ip", "fake_ip_filter"} {
+				if _, ok := fields[k]; ok {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+func sanitizeDNSProjection(kernel map[string]json.RawMessage) {
+	var dns map[string]json.RawMessage
+	_ = json.Unmarshal(kernel["dns"], &dns)
+	if dns == nil {
+		dns = map[string]json.RawMessage{}
+	}
+	for _, k := range []string{"hosts", "rules", "nameserver-policy"} {
+		delete(dns, k)
+	}
+	kernel["dns"], _ = json.Marshal(dns)
+}
+func (d document) dnsEnableError() *Error {
+	if d.advancedDNS {
+		return fail("advanced_dns_retired", "kernel.dns", advancedDNSMessage)
+	}
+	return nil
+}
+
+// Object order is normally immaterial, but mihomo nameserver-policy uses
+// declaration order for first-match semantics. yamlJSON intentionally builds
+// ordinary Go maps, so retain this one ordered object's source-node order in
+// the runtime projection. The authoritative YAML text is not rewritten.
+func preserveYAMLDNSPolicy(text string, kernel map[string]json.RawMessage) error {
+	if len(kernel["dns"]) == 0 || !bytes.Contains(kernel["dns"], []byte(`"nameserver-policy"`)) {
+		return nil
+	}
+	var tree yaml.Node
+	if yaml.Unmarshal([]byte(text), &tree) != nil || len(tree.Content) != 1 {
+		return errYAML
+	}
+	field := func(node *yaml.Node, key string) *yaml.Node {
+		if node == nil || node.Kind != yaml.MappingNode {
+			return nil
+		}
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			if node.Content[i].Value == key {
+				return node.Content[i+1]
+			}
+		}
+		return nil
+	}
+	node := field(field(field(tree.Content[0], "kernel"), "dns"), "nameserver-policy")
+	if node == nil {
+		return nil
+	}
+	if node.Kind != yaml.MappingNode {
+		return errYAML
+	}
+	var policy bytes.Buffer
+	policy.WriteByte('{')
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if i > 0 {
+			policy.WriteByte(',')
+		}
+		key, _ := json.Marshal(node.Content[i].Value)
+		budget := maxYAMLNodes
+		value, e := yamlValue(node.Content[i+1], 0, &budget)
+		if e != nil {
+			return e
+		}
+		encoded, e := json.Marshal(value)
+		if e != nil {
+			return e
+		}
+		policy.Write(key)
+		policy.WriteByte(':')
+		policy.Write(encoded)
+	}
+	policy.WriteByte('}')
+	var dns map[string]json.RawMessage
+	if json.Unmarshal(kernel["dns"], &dns) != nil {
+		return errYAML
+	}
+	dns["nameserver-policy"] = policy.Bytes()
+	kernel["dns"] = rawJSON(dns)
+	return nil
+}
+
+func validateTunDNS(raw json.RawMessage) *Error {
+	var fields map[string]json.RawMessage
+	_ = json.Unmarshal(raw, &fields)
+	if b, ok := fields["tun_dns"]; ok {
+		if string(b) == "null" {
+			return fail("invalid_document", "client.tun_dns", "Expected object")
+		}
+		var o kernel.ClientDNSOptions
+		if json.Unmarshal(b, &o) != nil {
+			return fail("invalid_document", "client.tun_dns", "Invalid TUN DNS policy")
+		}
+	}
+	return nil
 }

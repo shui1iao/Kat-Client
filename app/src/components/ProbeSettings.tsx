@@ -37,13 +37,8 @@ function ProbeForm({ c }: { c: Client }) {
         </div>
         <SettingSwitch
           ariaLabel="手动切换节点时断开该组的旧连接"
-          on={c.source?.client.close_on_switch !== false}
-          locked={c.doc.dirty}
-          onToggle={(next) =>
-            c.edit((d) => {
-              d.client.close_on_switch = next;
-            })
-          }
+          on={value.close_on_switch}
+          onToggle={(next) => set('close_on_switch', next)}
         />
       </div>
 
@@ -150,6 +145,7 @@ function ProbeForm({ c }: { c: Client }) {
           onClick={() => {
             draft.reset();
             setCustom(false);
+            setError('');
           }}
         >
           取消更改

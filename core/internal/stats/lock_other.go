@@ -33,4 +33,4 @@ func Lock(path string) (release func(), err error) {
 	return func() { f.Close(); userio.Remove(name) }, nil
 }
 
-func syncDir(string) {}
+func syncDir(string) error { return nil }

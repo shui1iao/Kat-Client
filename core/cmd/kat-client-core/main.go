@@ -57,7 +57,7 @@ func startMemoryTrimmer(ctx context.Context, host *atomic.Pointer[clientcore.Hos
 					if dropped > 0 || free > (2<<20) {
 						debug.FreeOSMemory()
 					}
-				} else if free > (4<<20) {
+				} else if free > (4 << 20) {
 					debug.FreeOSMemory()
 				}
 			}

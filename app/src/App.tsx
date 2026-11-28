@@ -149,7 +149,7 @@ export default function App() {
             onDrag={drag}
             activeConnections={running ? activeCount : null}
             configDirty={c.doc.dirty}
-            hasUpdate={(updates.data?.rows ?? []).some((r) => !!(r.offer && r.latest && r.latest !== r.current))}
+            hasUpdate={(updates.data?.rows ?? []).some((r) => Boolean(r && r.offer && r.latest && r.latest !== r.current))}
             controls={
               <SideControls
                 c={c}

@@ -1,8 +1,12 @@
+import { useMemo } from 'react';
+import { useVirtualRows } from '../lib/virtualRows';
+import { useEntityRawToggle } from '../client/entityRawToggle';
+import { attachRawEntityJson, extractEntityRawJson } from '../client/document';
 import { flowRuleValues, type FlowRuleSource } from '../client/flowRule';
 import { Checkbox, Empty, MoveButtons, SearchInput, Segmented, StableText } from '../components/ui';
 import { ToolPopover } from '../components/ToolPopover';
 import { subscriptionRule } from '../client/subscription';
-import { policyColor, ruleType, ruleKeys, reorderRule, ruleKindLabel } from '../client/presentation';
+import { policyColor, ruleType, ruleKeys, moveItem, reorderRule, ruleKindLabel } from '../client/presentation';
 import { useEffect, useRef, useState } from 'react';
 import { KState, KTag, PolicyPill, RuleTag } from '../components/labels';
 import { Icon } from '../components/Icon';
@@ -110,6 +114,24 @@ export function Rules({
   }, []);
 
   useEffect(() => {
+    if (dragging === null) return;
+    const clear = () => setDragging(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDragging(null);
+    };
+    window.addEventListener('dragend', clear);
+    window.addEventListener('drop', clear);
+    window.addEventListener('blur', clear);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('dragend', clear);
+      window.removeEventListener('drop', clear);
+      window.removeEventListener('blur', clear);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [dragging]);
+
+  useEffect(() => {
     const epoch = ++resGen.current;
     const active = () => resGen.current === epoch;
     if (c.hasHost && c.connected) {
@@ -188,7 +210,10 @@ export function Rules({
     }
   };
 
-  const scrollToHitRow = (res: TargetPreview, clearFilters = false) => {
+  const visibleRef = useRef<{ i: number }[]>([]);
+  const indexedRulesRef = useRef<{ i: number }[]>([]);
+
+  const scrollToHitRow = (res: TargetPreview) => {
     const selector =
       res.matched.source === 'final'
         ? '[data-rule="final"]'
@@ -196,13 +221,51 @@ export function Rules({
           ? `[data-rule="${res.matched.index - 1}"]`
           : '';
     if (!selector) return;
-    if (clearFilters) {
+    if (res.matched.source === 'final') {
+      requestAnimationFrame(() => {
+        const sc = ruleScrollRef.current;
+        if (!sc) return;
+        sc.scrollTop = sc.scrollHeight;
+        requestAnimationFrame(() => {
+          sc.querySelector<HTMLElement>(selector)?.scrollIntoView({ block: 'center' });
+        });
+      });
+      return;
+    }
+    const targetIdx = res.matched.index! - 1;
+    const inVisible = visibleRef.current.some((item) => item.i === targetIdx);
+    const rowIdx = inVisible
+      ? visibleRef.current.findIndex((item) => item.i === targetIdx)
+      : indexedRulesRef.current.findIndex((item) => item.i === targetIdx);
+    if (!inVisible) {
       setQ('');
       setFt('全部');
     }
+    const preScroll = () => {
+      const sc = ruleScrollRef.current;
+      if (!sc || rowIdx < 0) return;
+      if (!sc.querySelector(selector)) {
+        sc.scrollTop = Math.max(0, rowIdx * 40 - Math.max(0, (sc.clientHeight - 40) / 2));
+      }
+    };
+    if (inVisible) preScroll();
     requestAnimationFrame(() => {
-      const el = ruleScrollRef.current?.querySelector<HTMLElement>(selector);
-      el?.scrollIntoView({ block: 'center' });
+      preScroll();
+      const hitNow = ruleScrollRef.current?.querySelector<HTMLElement>(selector);
+      if (hitNow) {
+        hitNow.scrollIntoView({ block: 'center' });
+        return;
+      }
+      requestAnimationFrame(() => {
+        const hitNext = ruleScrollRef.current?.querySelector<HTMLElement>(selector);
+        if (hitNext) {
+          hitNext.scrollIntoView({ block: 'center' });
+        } else {
+          requestAnimationFrame(() => {
+            ruleScrollRef.current?.querySelector<HTMLElement>(selector)?.scrollIntoView({ block: 'center' });
+          });
+        }
+      });
     });
   };
 
@@ -217,15 +280,7 @@ export function Rules({
       const reply = normalizeTargetPreview<TargetPreview>(await core<unknown>('routing.previewTarget', { target: input }));
       if (judgeReq.current === id) {
         setJudgeResult(reply);
-        // Auto-scroll to the matched rule row; if current filter hides it, clear filters so the user sees it immediately
-        const rowSelector =
-          reply.matched.source === 'final'
-            ? '[data-rule="final"]'
-            : reply.matched.index != null
-              ? `[data-rule="${reply.matched.index - 1}"]`
-              : '';
-        const existsNow = rowSelector ? !!ruleScrollRef.current?.querySelector(rowSelector) : true;
-        scrollToHitRow(reply, !existsNow);
+        scrollToHitRow(reply);
       }
     } catch (e) {
       if (judgeReq.current === id) setJudgeError(errorText(e));
@@ -236,23 +291,45 @@ export function Rules({
 
   const move = (i: number, dir: number) =>
     void c.edit((d) => {
-      const list = d.kernel.routing?.rules ?? [];
-      reorderRule(list, i, i + dir);
+      if (!d.kernel.routing?.rules) return;
+      d.kernel.routing.rules = moveItem(d.kernel.routing.rules, i, dir as -1 | 1);
     });
 
   const overlayOwner = c.source?.subscriptions?.find((s) => s.active !== false && !!s.overlay?.rules?.length);
-  const types = [...new Set(rules.map(ruleType))];
-  const keys = ruleKeys(rules);
-  const hits = new Map(c.status?.traffic.rules?.map((r) => [r.name, r.hits]) ?? []);
-  const visible = rules
-    .map((r, i) => ({ r, i }))
-    .filter(
-      ({ r }) =>
-        (ft === '全部' || ruleType(r) === ft) &&
-        (!q ||
-          JSON.stringify(r).toLowerCase().includes(q.toLowerCase()) ||
-          c.label(targetOf(r)).toLowerCase().includes(q.toLowerCase())),
-    );
+  const { types, keys, indexedRules } = useMemo(() => {
+    const rTypes = rules.map(ruleType);
+    const uniqTypes = [...new Set(rTypes)];
+    const rKeys = ruleKeys(rules);
+    const indexed = rules.map((r, i) => {
+      const tgt = targetOf(r);
+      const matchField = simpleMatch(r);
+      const fastText = matchField
+        ? `${matchField} ${String(r[matchField] ?? '')} ${tgt} ${r.no_resolve ? 'no_resolve' : ''}`.toLowerCase()
+        : JSON.stringify(r).toLowerCase();
+      return { r, i, type: rTypes[i], tgt, searchText: fastText };
+    });
+    return { types: uniqTypes, keys: rKeys, indexedRules: indexed };
+  }, [rules]);
+  const hits = useMemo(() => new Map(c.status?.traffic.rules?.map((r) => [r.name, r.hits]) ?? []), [c.status?.traffic.rules]);
+  const qLower = q.trim().toLowerCase();
+  const visible = useMemo(
+    () =>
+      indexedRules.filter(
+        (item) =>
+          (ft === '全部' || item.type === ft) &&
+          (!qLower || item.searchText.includes(qLower) || c.label(item.tgt).toLowerCase().includes(qLower)),
+      ),
+    [indexedRules, ft, qLower, c.label],
+  );
+  visibleRef.current = visible;
+  indexedRulesRef.current = indexedRules;
+  const vRules = useVirtualRows(ruleScrollRef, visible.length, 40);
+  const dragVisIdx = dragging !== null ? visible.findIndex((item) => item.i === dragging) : -1;
+  const pinnedBefore = vRules.virtual && dragVisIdx >= 0 && dragVisIdx < vRules.start ? visible[dragVisIdx] : null;
+  const pinnedAfter = vRules.virtual && dragVisIdx >= vRules.end ? visible[dragVisIdx] : null;
+  const effectiveTopPad = pinnedBefore ? Math.max(0, (vRules.start - 1) * 40) : vRules.topPad;
+  const effectiveBottomPad = pinnedAfter ? Math.max(0, (visible.length - vRules.end - 1) * 40) : vRules.bottomPad;
+  const isRuleDrag = (dt: DataTransfer | null) => !!dt && Array.from(dt.types).includes('application/x-kat-rule');
 
   const badge = (type: string) => <RuleTag type={type} />;
   const policy = (target: string) => (
@@ -357,87 +434,101 @@ export function Rules({
                 <span className="r">操作</span>
               </div>
               <div className="live-rules-body">
-                {visible.map(({ r, i }) => {
-                  const match = simpleMatch(r);
-                  const isHit = hitRuleIdx === i;
-                  const subOwn = subscriptionRule(c.source, r);
-                  const srcLabel = subOwn ? (subOwn.patch >= 0 ? '本地修改' : subOwn.owner.name) : '手动';
-                  return (
-                    <div
-                      className={'live-rule-row' + (isHit ? ' is-hit' : '')}
-                      key={i}
-                      data-rule={i}
-                      onDragOver={(e) => {
-                        if (dragging !== null) {
-                          e.preventDefault();
-                          e.dataTransfer.dropEffect = 'move';
-                        }
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        if (dragging !== null && !c.doc.saving) {
-                          const from = dragging;
-                          void c.edit((d) => reorderRule(d.kernel.routing?.rules ?? [], from, i));
-                        }
-                        setDragging(null);
-                      }}
-                    >
-                      <span className="rule-idx-cell">
-                        <span
-                          className="rule-grip"
-                          draggable={!c.doc.saving}
-                          {...tip('拖动排序')}
-                          onDragStart={(e) => {
-                            setDragging(i);
-                            e.dataTransfer.effectAllowed = 'move';
-                            e.dataTransfer.setData('text/plain', String(i));
-                          }}
-                          onDragEnd={() => setDragging(null)}
-                        >
-                          <Icon name="grip" size={14} />
-                        </span>
-                        <span className="muted num">{i + 1}</span>
-                      </span>
-                      <span>{badge(ruleType(r))}</span>
-                      <span className="rule-value" {...tip(match ? String(r[match]) : JSON.stringify(r), !!match)}>
-                        <span className="ell">{match ? r[match] : '复杂条件'}</span>
-                        {r.no_resolve && <KTag className="rule-param" label="no-resolve" color="#64748B" />}
-                      </span>
-                      <span>{policy(targetOf(r))}</span>
-                      <span className={'rule-origin ell' + (subOwn && subOwn.patch >= 0 ? ' is-modified' : '')} {...tip(srcLabel, true)}>
-                        {srcLabel}
-                      </span>
-                      <span className="rule-hit-count num">{countStr(hits.get(keys[i]))}</span>
-                      <div className="row-actions">
-                        <MoveButtons subject="规则" index={i} count={rules.length} disabled={c.doc.saving} onMove={(dir) => move(i, dir)} />
-                        <button
-                          type="button"
-                          className="ib"
-                          {...tip('编辑规则')}
-                          disabled={c.doc.saving}
-                          onClick={() => setDraft({ index: i, value: r })}
-                          aria-label="编辑规则"
-                        >
-                          <Icon name="edit" size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          className="ib danger"
-                          {...tip('删除规则')}
-                          disabled={c.doc.saving}
-                          onClick={() =>
-                            void c.edit((d) => {
-                              d.kernel.routing!.rules!.splice(i, 1);
-                            })
+                {(() => {
+                  const renderRuleRow = ({ r, i }: { r: SourceObject; i: number }) => {
+                    const match = simpleMatch(r);
+                    const isHit = hitRuleIdx === i;
+                    const subOwn = subscriptionRule(c.source, r);
+                    const srcLabel = subOwn ? (subOwn.patch >= 0 ? '本地修改' : subOwn.owner.name) : '手动';
+                    return (
+                      <div
+                        className={'live-rule-row' + (isHit ? ' is-hit' : '')}
+                        key={i}
+                        data-rule={i}
+                        onDragOver={(e) => {
+                          if (dragging !== null && isRuleDrag(e.dataTransfer)) {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = 'move';
                           }
-                          aria-label="删除规则"
-                        >
-                          <Icon name="trash" size={14} />
-                        </button>
+                        }}
+                        onDrop={(e) => {
+                          if (dragging !== null && isRuleDrag(e.dataTransfer)) {
+                            e.preventDefault();
+                            if (!c.doc.saving && dragging !== i) {
+                              const from = dragging;
+                              void c.edit((d) => reorderRule(d.kernel.routing?.rules ?? [], from, i));
+                            }
+                            setDragging(null);
+                          }
+                        }}
+                      >
+                        <span className="rule-idx-cell">
+                          <span
+                            className="rule-grip"
+                            draggable={!c.doc.saving}
+                            {...tip('拖动排序')}
+                            onDragStart={(e) => {
+                              setDragging(i);
+                              e.dataTransfer.effectAllowed = 'move';
+                              e.dataTransfer.setData('application/x-kat-rule', String(i));
+                              e.dataTransfer.setData('text/plain', String(i));
+                            }}
+                            onDragEnd={() => setDragging(null)}
+                          >
+                            <Icon name="grip" size={14} />
+                          </span>
+                          <span className="muted num">{i + 1}</span>
+                        </span>
+                        <span>{badge(ruleType(r))}</span>
+                        <span className="rule-value" {...tip(match ? String(r[match]) : JSON.stringify(r), !!match)}>
+                          <span className="ell">{match ? r[match] : '复杂条件'}</span>
+                          {r.no_resolve && <KTag className="rule-param" label="no-resolve" color="#64748B" />}
+                        </span>
+                        <span>{policy(targetOf(r))}</span>
+                        <span className={'rule-origin ell' + (subOwn && subOwn.patch >= 0 ? ' is-modified' : '')} {...tip(srcLabel, true)}>
+                          {srcLabel}
+                        </span>
+                        <span className="rule-hit-count num">{countStr(hits.get(keys[i]))}</span>
+                        <div className="row-actions">
+                          <MoveButtons subject="规则" index={i} count={rules.length} disabled={c.doc.saving} onMove={(dir) => move(i, dir)} />
+                          <button
+                            type="button"
+                            className="ib"
+                            {...tip('编辑规则')}
+                            disabled={c.doc.saving}
+                            onClick={() => setDraft({ index: i, value: r })}
+                            aria-label="编辑规则"
+                          >
+                            <Icon name="edit" size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="ib danger"
+                            {...tip('删除规则')}
+                            disabled={c.doc.saving}
+                            onClick={() =>
+                              void c.edit((d) => {
+                                d.kernel.routing!.rules!.splice(i, 1);
+                              })
+                            }
+                            aria-label="删除规则"
+                          >
+                            <Icon name="trash" size={14} />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  };
+                  const items: React.ReactNode[] = [];
+                  if (pinnedBefore) items.push(renderRuleRow(pinnedBefore));
+                  if (effectiveTopPad > 0) items.push(<div key="__pad_top" style={{ height: effectiveTopPad }} aria-hidden="true" />);
+                  for (const entry of vRules.virtual ? visible.slice(vRules.start, vRules.end) : visible) {
+                    items.push(renderRuleRow(entry));
+                  }
+                  if (effectiveBottomPad > 0) items.push(<div key="__pad_bottom" style={{ height: effectiveBottomPad }} aria-hidden="true" />);
+                  if (pinnedAfter) items.push(renderRuleRow(pinnedAfter));
+                  return items;
+                })()}
                 {!visible.length && <Empty>{c.connected ? '没有匹配的规则' : '未连接'}</Empty>}
               </div>
 
@@ -603,7 +694,7 @@ export function Rules({
                         <button
                           type="button"
                           className="link-btn"
-                          onClick={() => scrollToHitRow(judgeResult, true)}
+                          onClick={() => scrollToHitRow(judgeResult)}
                         >
                           定位到行
                         </button>
@@ -710,9 +801,33 @@ export function RuleEditor({ c, draft, close }: { c: Client; draft: Draft; close
   const [target, setTarget] = useState(targetOf(draft.value) || 'direct');
   const [noResolve, setNoResolve] = useState(!!draft.value.no_resolve);
   const [position, setPosition] = useState(draft.flow ? 'top' : 'end');
-  const [raw, setRaw] = useState<string | null>(simpleMatch(draft.value) ? null : JSON.stringify(draft.value, null, 2));
-  const [error, setError] = useState('');
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const entityPath = draft.index !== null && !owned ? (['kernel', 'routing', 'rules', draft.index] as const) : undefined;
+  const { raw, setRaw, error, setError, fieldErrors, setFieldErrors, parseFromRaw, prepareForSave, toggleRaw } = useEntityRawToggle<any>({
+    initialRaw: simpleMatch(draft.value)
+      ? null
+      : (entityPath && c.doc.saved
+          ? extractEntityRawJson(null, c.doc.saved, c.doc.savedFormat, entityPath)
+          : null) ?? JSON.stringify(draft.value, null, 2),
+    jsonLabel: '规则 JSON',
+    invalidMessage: '复杂规则请用原文编辑',
+    sourceText: c.doc.saved,
+    sourceFormat: c.doc.savedFormat,
+    entityPath,
+    toFormValue: () => editRule(base, field, value, target, noResolve),
+    fromFormValue: (r) => {
+      const f = simpleMatch(r);
+      if (!f) throw new Error('complex');
+      return r;
+    },
+    onExitRaw: (r) => {
+      const f = simpleMatch(r)!;
+      setBase(r);
+      setField(f);
+      setValue(r[f]);
+      setTarget(targetOf(r));
+      setNoResolve(!!r.no_resolve);
+    },
+  });
 
   const save = async () => {
     setError('');
@@ -722,7 +837,21 @@ export function RuleEditor({ c, draft, close }: { c: Client; draft: Draft; close
       return;
     }
     try {
-      const rule = raw === null ? editRule(base, field, value, target, noResolve) : JSON.parse(raw);
+      const rule =
+        raw === null
+          ? prepareForSave(editRule(base, field, value, target, noResolve))
+          : (() => {
+              const parsed = JSON.parse(raw);
+              if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                throw new Error('规则须为 JSON 对象');
+              }
+              try {
+                return parseFromRaw(raw);
+              } catch (err) {
+                if ((err as Error)?.message === 'complex') return attachRawEntityJson(parsed, raw);
+                throw err;
+              }
+            })();
       const flowOwner = draft.flow ? c.source?.subscriptions?.find((s) => s.active !== false) : undefined;
       if (flowOwner) {
         if (await c.selectSubscription(flowOwner.id, { add_rule: rule, rule_position: position, edit_only: true })) close();
@@ -761,32 +890,7 @@ export function RuleEditor({ c, draft, close }: { c: Client; draft: Draft; close
       busy={c.doc.saving || c.busy.has('save')}
       headerExtra={
         !draft.flow && simpleMatch(draft.value) ? (
-          <RawJsonToggle
-            active={raw !== null}
-            onToggle={() => {
-              if (raw === null) {
-                try {
-                  setRaw(JSON.stringify(editRule(base, field, value, target, noResolve), null, 2));
-                } catch (e) {
-                  setError(errorText(e));
-                }
-              } else {
-                try {
-                  const r = JSON.parse(raw);
-                  const f = simpleMatch(r);
-                  if (!f) throw new Error();
-                  setBase(r);
-                  setField(f);
-                  setValue(r[f]);
-                  setTarget(targetOf(r));
-                  setNoResolve(!!r.no_resolve);
-                  setRaw(null);
-                } catch {
-                  setFieldErrors({ '规则 JSON': '复杂规则请用原文编辑' });
-                }
-              }
-            }}
-          />
+          <RawJsonToggle active={raw !== null} onToggle={() => toggleRaw()} />
         ) : undefined
       }
     >

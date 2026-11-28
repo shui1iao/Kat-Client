@@ -13,7 +13,7 @@ struct Inner {
     #[cfg(windows)] stamp:u64, checkpoint:Mutex<Option<crate::elevated_protocol::Checkpoint>>,
     pid: u32, exited: watch::Sender<bool>, exit: watch::Sender<Option<ChildExit>>,
     update: AtomicBool, update_prepare_sent: AtomicBool, update_closing: AtomicBool, transport_closed: AtomicBool, unexpected_eof: AtomicBool,
-    mutation: Mutex<Option<Arc<MutationFlight>>>, reconcile: tokio::sync::Mutex<()>,
+    mutation: Mutex<Option<Arc<MutationFlight>>>, mutation_hard_timeout_ms: AtomicU64, reconcile: tokio::sync::Mutex<()>,
     #[cfg(windows)] _job: Option<crate::windows::identity::Handle>,
 }
 // The result belongs to the original spawned child handle, never EOF or a PID lookup.
@@ -132,7 +132,7 @@ impl Supervisor {
         let (exited,_) = watch::channel(false);
         let (exit,_) = watch::channel(None);
         let (stderr_result,stderr_done)=watch::channel(None);
-        let inner = Arc::new(Inner { transport:"stdio",remote_owned:false,#[cfg(windows)] stamp,checkpoint:Mutex::new(None),component_instance:AtomicU64::new(0),primary:AtomicU64::new(0),recent:Mutex::new(None),pending: Mutex::new(HashMap::new()), permits: Arc::new(Semaphore::new(MAX_INFLIGHT)), log_permits: Arc::new(Semaphore::new(2)), probe_permits:Arc::new(Semaphore::new(MAX_INFLIGHT-4)), next: AtomicU64::new(1), write, control, life, pid, exited, exit, update:AtomicBool::new(false), update_prepare_sent:AtomicBool::new(false), update_closing:AtomicBool::new(false), transport_closed:AtomicBool::new(false),unexpected_eof:AtomicBool::new(false), mutation:Mutex::new(None), reconcile:tokio::sync::Mutex::new(()), #[cfg(windows)] _job: Some(job) });
+        let inner = Arc::new(Inner { transport:"stdio",remote_owned:false,#[cfg(windows)] stamp,checkpoint:Mutex::new(None),component_instance:AtomicU64::new(0),primary:AtomicU64::new(0),recent:Mutex::new(None),pending: Mutex::new(HashMap::new()), permits: Arc::new(Semaphore::new(MAX_INFLIGHT)), log_permits: Arc::new(Semaphore::new(2)), probe_permits:Arc::new(Semaphore::new(MAX_INFLIGHT-4)), next: AtomicU64::new(1), write, control, life, pid, exited, exit, update:AtomicBool::new(false), update_prepare_sent:AtomicBool::new(false), update_closing:AtomicBool::new(false), transport_closed:AtomicBool::new(false),unexpected_eof:AtomicBool::new(false), mutation:Mutex::new(None), mutation_hard_timeout_ms:AtomicU64::new(90_000), reconcile:tokio::sync::Mutex::new(()), #[cfg(windows)] _job: Some(job) });
         let i = inner.clone();
         let marker=stderr_done.clone();
         tokio::spawn(async move {
@@ -207,7 +207,7 @@ impl Supervisor {
         Ok(Self(inner))
     }
     fn observe_admission(&self){let mut d=crate::safe_log::RuntimeEvidence::new("ipc_admission","busy",self.0.transport);d.inflight=Some(self.pending()as u64);d.queued=Some((MAX_INFLIGHT-self.0.write.capacity())as u64);crate::safe_log::runtime_event_at(self.0.component_instance.load(Ordering::Acquire),crate::log_context::Component::Core,"diagnostics.collect",None,d);}
-    #[cfg(windows)]
+    #[cfg(all(windows, feature = "desktop"))]
     pub(crate) fn same_instance(&self,other:&Self)->bool{Arc::ptr_eq(&self.0,&other.0)}
     pub fn life(&self) -> watch::Receiver<Life> { self.0.life.subscribe() }
     pub fn pid(&self) -> u32 { self.0.pid }
@@ -249,14 +249,34 @@ impl Supervisor {
         let saved=tokio::time::timeout(timeout,reconcile).await.map_err(|_|mutation_uncertain())??;
         let mut pending=self.0.mutation.lock().unwrap();if pending.as_ref().is_some_and(|p|Arc::ptr_eq(p,&flight)){pending.take();}Ok(saved)
     }
+    pub fn set_mutation_hard_timeout(&self, timeout: Duration) {
+        let ms = timeout.as_millis().clamp(1, u64::MAX as u128) as u64;
+        self.0.mutation_hard_timeout_ms.store(ms, Ordering::Release);
+    }
     async fn request_mutation(&self,method:&str,params:Value,timeout:Duration)->Result<Value>{
         self.ensure_mutation_settled().await?;
         let flight=Arc::new(MutationFlight{terminal:AtomicBool::new(false)});
         {let mut pending=self.0.mutation.lock().unwrap();if self.0.update.load(Ordering::Acquire){return Err(update_in_progress());}if pending.is_some(){return Err(mutation_uncertain());}*pending=Some(flight.clone());}
         let core=self.clone();let method=method.to_owned();let done=flight.clone();let(tx,rx)=oneshot::channel();
-        // Owned by the supervisor, not the caller future. No busy polling, no retry,
-        // no widened wire/public timeout. EOF/fail releases the original pending slot.
-        tokio::spawn(async move{let result=core.request_raw(&method,params,None).await;done.terminal.store(true,Ordering::Release);let _=tx.send(result);});
+        let hard_timeout=Duration::from_millis(self.0.mutation_hard_timeout_ms.load(Ordering::Acquire).max(1)).max(timeout);
+        // Owned by the supervisor, not the caller future. Bounded by hard_timeout (default 90s):
+        // if core hangs indefinitely on a mutation, actively fuse the stalled session to unblock recovery.
+        tokio::spawn(async move{
+            let result=core.request_raw(&method,params,Some(hard_timeout)).await;
+            if result.as_ref().err().is_some_and(|e|e.code=="CORE_TIMEOUT") {
+                let stalled=Error::new("CORE_MUTATION_STALLED","内核变更请求长时间无响应，已熔断僵死会话以允许受控恢复");
+                core.0.fail(stalled.clone());
+                {
+                    let mut pending=core.0.mutation.lock().unwrap();
+                    if pending.as_ref().is_some_and(|p|Arc::ptr_eq(p,&done)){pending.take();}
+                }
+                done.terminal.store(true,Ordering::Release);
+                let _=tx.send(Err(stalled));
+                return;
+            }
+            done.terminal.store(true,Ordering::Release);
+            let _=tx.send(result);
+        });
         match tokio::time::timeout(timeout,rx).await{
             Ok(Ok(result))=>{let mut pending=self.0.mutation.lock().unwrap();if pending.as_ref().is_some_and(|p|Arc::ptr_eq(p,&flight)){pending.take();}result},
             Ok(Err(_))|Err(_)=>Err(mutation_uncertain()),

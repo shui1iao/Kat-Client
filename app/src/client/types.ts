@@ -13,7 +13,7 @@ export interface SubscriptionPreview { kind?:'full'|'nodes'|'native';token?:stri
 export interface DocumentSource extends SourceObject {
   schema_version: 1;
   subscriptions?:FullSubscription[];
-  client: SourceObject & { ipv6?:boolean; mode: Mode; global_group?: string; probe_url?: string; probe_timeout?: string; probe_round_timeout?: string; probe_concurrency?: number; unified_delay?:boolean; http_port?: number; socks_port?: number; sniff?: SniffSettings };
+  client: SourceObject & { ipv6?:boolean; close_on_switch?:boolean; mode: Mode; global_group?: string; probe_url?: string; probe_timeout?: string; probe_round_timeout?: string; probe_concurrency?: number; unified_delay?:boolean; http_port?: number; socks_port?: number; sniff?: SniffSettings };
   kernel: SourceObject & { outbounds?: Outbound[]; groups?: Group[]; providers?: LegacyProvider[]; routing?: SourceObject & { rules?: SourceObject[]; final?: string } };
 }
 interface ScoreParts {response_ms:number;failure_ms:number;jitter_ms:number;probe_ms:number|null;real_ms:number|null;real_share:number;weight:number}
@@ -153,3 +153,34 @@ interface RuntimeEvidence {elevation?:ElevationReport;stage:'elevation'|'http_br
 interface ElevationObservation {stage:string;outcome:'started'|'ok'|'failed';code:string;native?:number;child_exit?:number;}
 interface ElevationLaunchState {last:ElevationObservation;failure?:ElevationObservation;child_exit?:number;}
 interface ElevationReport {gui?:ElevationObservation;service?:ElevationLaunchState;helper_exit?:number;control_connected?:boolean;status_error?:ElevationObservation;}
+
+type UpdateKind = 'client' | 'core';
+export interface UpdateRow {
+  kind: UpdateKind;
+  current: string;
+  latest: string | null;
+  phase: string;
+  message: string;
+  offer: string | null;
+  received: number;
+  total: number | null;
+  downloaded: boolean;
+  notes?: string | null;
+  size_bytes?: number | null;
+}
+export interface UpdateProposal {
+  nonce: string;
+  kind: UpdateKind | 'rollback' | 'rollback-core';
+  version: string;
+}
+export interface UpdateState {
+  confirmation: { pending: boolean; running: boolean; message: string };
+  auto_check: boolean;
+  last_check: number;
+  checking: boolean;
+  rows: UpdateRow[];
+  proposal: UpdateProposal | null;
+  notice: boolean;
+  preparing: boolean;
+  error: string;
+}

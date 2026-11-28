@@ -5,7 +5,9 @@ import (
 	"net"
 	"net/netip"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func ap(s string) netip.AddrPort { return netip.MustParseAddrPort(s) }
@@ -207,4 +209,242 @@ func TestExactTupleSameDestinationAndConcurrentRegistry(t *testing.T) {
 	}
 	wrapped.Close()
 	wg.Wait()
+}
+
+func TestC50RetiredSessionIdentityFence(t *testing.T) {
+	// Epoch zero only bypasses the retired bridge fence; it is NOT a replacement
+	// for lookupLocal/resolveCurrent's PID, path and process-creation proof.
+	ordinary := Identity{Name: "ordinary.exe", Path: `C:\Apps\ordinary.exe`, Status: "known", PID: 42, Stamp: 100}
+	before := ordinary
+	if !IdentityCurrent(ordinary) || ordinary != before {
+		t.Fatal("ordinary identity altered or rejected")
+	}
+	for _, epoch := range []uint64{1, 2, 0xffff, 1 << 63, ^uint64(0)} {
+		old := ordinary
+		old.SessionEpoch = epoch
+		if IdentityCurrent(old) {
+			t.Fatalf("retired bridge identity accepted: epoch=%d", epoch)
+		}
+	}
+}
+
+func TestC50LookupTupleCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	q := Query{Network: "udp", Source: netip.MustParseAddrPort("127.0.0.1:45000"), Destination: netip.MustParseAddrPort("203.0.113.50:443")}
+	got := LookupTuple(ctx, q)
+	// The common budget rejects cancellation before platform/native lookup.
+	if got.Status != "unknown" || got.Cause != "process:unknown" || got.SessionEpoch != 0 || got.Name != "" {
+		t.Fatalf("tuple lookup used stale proxy/session identity: %+v", got)
+	}
+}
+
+func TestRound2HTTPOriginalTuple(t *testing.T) {
+	l, e := net.Listen("tcp", "127.0.0.1:0")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer l.Close()
+	a, e := net.Dial("tcp", l.Addr().String())
+	if e != nil {
+		t.Fatal(e)
+	}
+	b, e := l.Accept()
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer b.Close()
+	origin := NewOrigin(&net.TCPAddr{IP: net.ParseIP("192.0.2.1"), Port: 45001}, &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 8080})
+	c := RegisterHTTP(a, origin)
+	defer c.Close()
+	src, kind := FlowOrigin(context.Background(), Query{ControlSource: Addr(a.LocalAddr()), ControlDestination: Addr(a.RemoteAddr())})
+	if src != "192.0.2.1:45001" || kind != "system_proxy" {
+		t.Fatal(src, kind)
+	}
+}
+
+func TestStage4TupleBudgetAndSaturation(t *testing.T) {
+	block := make(chan struct{})
+	done := make(chan struct{}, 4)
+	var active, max atomic.Int32
+	lookup := func(context.Context, Query) Identity {
+		n := active.Add(1)
+		for old := max.Load(); n > old; old = max.Load() {
+			if max.CompareAndSwap(old, n) {
+				break
+			}
+		}
+		<-block
+		active.Add(-1)
+		done <- struct{}{}
+		return Identity{Status: "known", PID: 44, Stamp: 55}
+	}
+	for i := 0; i < 8; i++ {
+		start := time.Now()
+		id := budgetTuple(context.Background(), Query{}, lookup)
+		if id.Status != "unknown" || id.Cause != "process:unknown" || id.PID != 0 || time.Since(start) > 100*time.Millisecond {
+			t.Fatal("lookup blocked forwarding or trusted late proof")
+		}
+	}
+	if max.Load() != 4 {
+		t.Fatal("native concurrency", max.Load())
+	}
+	close(block)
+	for i := 0; i < 4; i++ {
+		<-done
+	}
+	// Worker slot is released by worker, not by forwarding timeout.
+	end := time.Now().Add(time.Second)
+	for len(tupleSlots) > 0 && time.Now().Before(end) {
+		time.Sleep(time.Millisecond)
+	}
+	if len(tupleSlots) != 0 {
+		t.Fatal("slots leaked")
+	}
+	fresh := budgetTuple(context.Background(), Query{}, func(context.Context, Query) Identity {
+		return Identity{Status: "known", Name: "fresh.exe", Path: `C:\Apps\fresh.exe`, PID: 45, Stamp: 56}
+	})
+	if fresh.Status != "known" || fresh.PID != 45 {
+		t.Fatal("late result or global positive reused", fresh)
+	}
+}
+func TestStage4OwnerUnknownAmbiguousAndPIDReuse(t *testing.T) {
+	q := Query{Network: "udp", Source: netip.MustParseAddrPort("10.0.0.2:6000")}
+	for _, netw := range []string{"udp", "tcp"} {
+		q.Network = netw
+		q.Destination = netip.MustParseAddrPort("203.0.113.1:443")
+		row := Row{Source: q.Source, Destination: q.Destination, PID: 9}
+		calls := 0
+		r := resolveCurrent(q, func(Query) ([]Row, string) {
+			calls++
+			if calls == 2 {
+				row.PID = 10
+			}
+			return []Row{row}, "known"
+		}, func(uint32) (Identity, func() bool, func()) {
+			return Identity{Status: "known", PID: 9, Stamp: 1}, func() bool { return true }, func() {}
+		})
+		if r.Status != "changed" {
+			t.Fatal("PID owner changed accepted", r)
+		}
+		r = resolveCurrent(q, func(Query) ([]Row, string) { return []Row{row, row}, "known" }, nil)
+		if r.Status != "ambiguous" {
+			t.Fatal(r)
+		}
+		r = resolveCurrent(q, func(Query) ([]Row, string) { return nil, "known" }, nil)
+		if r.Status == "known" {
+			t.Fatal("empty table accepted")
+		}
+		r = resolveCurrent(q, func(Query) ([]Row, string) { return []Row{row}, "known" }, func(uint32) (Identity, func() bool, func()) {
+			return Identity{Status: "known", PID: 10, Stamp: 1}, func() bool { return false }, func() {}
+		})
+		if r.Status != "changed" {
+			t.Fatal("creation/handle stale accepted")
+		}
+	}
+}
+
+func TestStage4UDPLocalEvidenceNotRemote(t *testing.T) {
+	for _, f := range []struct{ source, wildcard, other string }{
+		{"192.0.2.1:6000", "0.0.0.0:6000", "192.0.2.2:6000"},
+		{"[2001:db8::1]:6000", "[::]:6000", "[2001:db8::2]:6000"},
+	} {
+		q := Query{Network: "udp", Source: ap(f.source), Destination: ap("203.0.113.1:443")}
+		exact := Row{Source: q.Source, PID: 9}
+		wild := Row{Source: ap(f.wildcard), PID: 10}
+		for _, tc := range []struct {
+			name   string
+			rows   []Row
+			status string
+		}{
+			{"unique local", []Row{exact}, "known"},
+			{"wildcard only", []Row{wild}, "unknown"},
+			{"exact plus wildcard", []Row{exact, wild}, "ambiguous"},
+			{"same PID reused bind", []Row{exact, exact}, "ambiguous"},
+			{"different PID reused bind", []Row{exact, {Source: q.Source, PID: 11}}, "ambiguous"},
+			{"other interface", []Row{{Source: ap(f.other), PID: 11}}, "closed"},
+		} {
+			t.Run(f.source+"/"+tc.name, func(t *testing.T) {
+				pid, status := unique(tc.rows, q)
+				if status != tc.status || status != "known" && pid != 0 {
+					t.Fatal(pid, status)
+				}
+				q.Destination = ap("198.51.100.2:53")
+				if p, s := unique(tc.rows, q); p != pid || s != status {
+					t.Fatal("UDP table fabricated remote evidence", p, s)
+				}
+			})
+		}
+	}
+	q := Query{Network: "tcp", Source: ap("192.0.2.1:6000"), Destination: ap("203.0.113.1:443")}
+	if _, status := unique([]Row{{Source: q.Source, Destination: ap("203.0.113.2:443"), PID: 9}}, q); status != "closed" {
+		t.Fatal("TCP remote endpoint ignored", status)
+	}
+}
+
+func TestStage4SecondSnapshotAndProofFailuresRevoke(t *testing.T) {
+	q := Query{Network: "udp", Source: ap("192.0.2.1:6000")}
+	row := Row{Source: q.Source, PID: 9}
+	for _, tc := range []struct {
+		name              string
+		rows              []Row
+		tableStatus, want string
+	}{
+		{"new ambiguity", []Row{row, row}, "known", "ambiguous"},
+		{"wildcard replaced exact", []Row{{Source: ap("0.0.0.0:6000"), PID: 9}}, "known", "unknown"},
+		{"new owner", []Row{{Source: q.Source, PID: 10}}, "known", "changed"},
+		{"closed", nil, "known", "changed"},
+		{"permission lost", nil, "denied", "denied"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls, closes := 0, 0
+			id := resolveCurrent(q, func(Query) ([]Row, string) {
+				calls++
+				if calls == 1 {
+					return []Row{row}, "known"
+				}
+				return tc.rows, tc.tableStatus
+			}, func(uint32) (Identity, func() bool, func()) {
+				return Identity{Status: "known", Name: "app.exe", Path: `C:\Apps\app.exe`, PID: 9, Stamp: 100}, func() bool { return true }, func() { closes++ }
+			})
+			if id.Status != tc.want || id.Cause != "process:"+tc.want || id.Name != "" || id.PID != 0 || id.Stamp != 0 || closes != 1 {
+				t.Fatal(id, closes)
+			}
+		})
+	}
+	for _, proof := range []Identity{{Status: "known", PID: 10, Stamp: 100}, {Status: "known", PID: 9}} {
+		id := resolveCurrent(q, func(Query) ([]Row, string) { return []Row{row}, "known" }, func(uint32) (Identity, func() bool, func()) { return proof, func() bool { return true }, func() {} })
+		if id.Status != "changed" || id.PID != 0 {
+			t.Fatal("invalid PID/creation proof accepted", id)
+		}
+	}
+}
+
+func TestStage4CreationAndHandleProof(t *testing.T) {
+	if !processCreatedBefore(100, 101) || !processCreatedBefore(100, 100) || processCreatedBefore(102, 101) || processCreatedBefore(0, 101) {
+		t.Fatal("snapshot-to-open recycled PID accepted")
+	}
+	if !processProofCurrent(100, 100, true) || processProofCurrent(100, 101, true) || processProofCurrent(0, 0, true) || processProofCurrent(100, 100, false) {
+		t.Fatal("creation change or dead process accepted")
+	}
+}
+
+func TestStage4BudgetCancellationAndFailureEvidence(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	id := budgetTuple(ctx, Query{}, func(context.Context, Query) Identity {
+		t.Error("canceled query entered native lookup")
+		return Identity{}
+	})
+	if id.Status != "unknown" || id.Cause != "process:unknown" {
+		t.Fatal(id)
+	}
+	for _, status := range []string{"ambiguous", "unknown", "denied"} {
+		id = budgetTuple(context.Background(), Query{}, func(context.Context, Query) Identity {
+			return Identity{Status: status, Cause: "process:" + status, Win32: 5, Name: "stale.exe", Path: `C:\stale.exe`, PID: 9, Stamp: 100}
+		})
+		if id.Status != status || id.Cause != "process:"+status || id.Win32 != 5 || id.Name != "" || id.Path != "" || id.PID != 0 || id.Stamp != 0 {
+			t.Fatal(id)
+		}
+	}
 }

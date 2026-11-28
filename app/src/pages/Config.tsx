@@ -6,7 +6,7 @@ import { LocalError, Modal } from '../components/Editors';
 import { KState } from '../components/labels';
 import { StableText } from '../components/ui';
 import { errorText, errorLocation } from '../lib/errors';
-import { yamlHighlightRanges, yamlKeyOffset } from '../client/yaml';
+import { yamlHighlightRanges } from '../client/yaml';
 import { useConfirmation } from '../components/Confirm';
 import { host } from '../client/ipc';
 import {
@@ -19,7 +19,7 @@ import {
 } from '../client/daily';
 import type { DocumentFormat, ImportedDocument, SaveReply } from '../client/types';
 import { Icon, type IconName } from '../components/Icon';
-import { convertDocument, editDocument, formatDocument, parseDocument, readDocument } from '../client/document';
+import { convertDocument, editDocument, locatePath, formatDocument, parseDocument, readDocument } from '../client/document';
 import type { Client } from '../client/useClient';
 
 const LINE = 22;
@@ -204,13 +204,8 @@ export function Config({ c }: { c: Client }) {
     }
   };
 
-  const locate = (key: string) => {
-    let offset = -1;
-    try {
-      offset = format === 'json' ? text.search(new RegExp('"' + key + '"\\s*:')) : yamlKeyOffset(text, key);
-    } catch {
-      return;
-    }
+  const locate = (path: readonly string[]) => {
+    const offset = locatePath(text, format, path);
     const idx = offset < 0 ? -1 : text.slice(0, offset).split('\n').length - 1;
     if (idx < 0 || !ta.current) return;
     const start = lines.slice(0, idx).reduce((s, l) => s + l.length + 1, 0);
@@ -222,13 +217,13 @@ export function Config({ c }: { c: Client }) {
   };
 
   const errLine = parsed.ok ? null : parsed.line;
-  const sections: { key: string; label: string; count: number; icon: IconName }[] = v
+  const sections: { key: string; path: readonly string[]; label: string; count: number; icon: IconName }[] = v
     ? [
-        { key: 'subscriptions', label: '订阅来源', count: v.subscriptions?.length ?? 0, icon: 'link' },
-        { key: 'outbounds', label: '代理节点', count: v.kernel.outbounds?.length ?? 0, icon: 'nodes' },
-        { key: 'groups', label: '策略组', count: v.kernel.groups?.length ?? 0, icon: 'policies' },
-        { key: 'rules', label: '分流规则', count: v.kernel.routing?.rules?.length ?? 0, icon: 'rules' },
-        { key: 'dns', label: 'DNS 服务', count: v.kernel.dns?.servers?.length ?? 0, icon: 'route' },
+        { key: 'subscriptions', path: ['subscriptions'], label: '订阅来源', count: v.subscriptions?.length ?? 0, icon: 'link' },
+        { key: 'outbounds', path: ['kernel', 'outbounds'], label: '代理节点', count: v.kernel.outbounds?.length ?? 0, icon: 'nodes' },
+        { key: 'groups', path: ['kernel', 'groups'], label: '策略组', count: v.kernel.groups?.length ?? 0, icon: 'policies' },
+        { key: 'rules', path: ['kernel', 'routing', 'rules'], label: '分流规则', count: v.kernel.routing?.rules?.length ?? 0, icon: 'rules' },
+        { key: 'dns', path: ['kernel', 'dns'], label: 'DNS 服务', count: v.kernel.dns?.servers?.length ?? 0, icon: 'route' },
       ]
     : [];
 
@@ -293,7 +288,7 @@ export function Config({ c }: { c: Client }) {
                   {...tip(`点击定位到「${s.label}」配置段`)}
                   onClick={() => {
                     setActiveKey(s.key);
-                    locate(s.key);
+                    locate(s.path);
                   }}
                 >
                   <span className="vsec-label">

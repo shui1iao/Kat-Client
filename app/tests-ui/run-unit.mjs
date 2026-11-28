@@ -31,6 +31,10 @@ const suite = [
   "tests-ui/uncertain.test.ts",
   "tests-ui/white-errors.test.ts",
   "tests-ui/yaml.test.ts",
+  "tests-ui/ipc-null-fuzz.test.ts",
+  "tests-ui/net-addr-format.test.ts",
+  "tests-ui/controlled-input-and-race.test.ts",
+  "tests-ui/round2-recheck-regressions.test.ts",
 ];
 
 const res = spawnSync(

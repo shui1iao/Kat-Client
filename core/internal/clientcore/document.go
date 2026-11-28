@@ -68,6 +68,73 @@ func (s ClientSniff) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m)
 }
 
+func validateSniff(cb []byte) *Error {
+	var c map[string]json.RawMessage
+	_ = json.Unmarshal(cb, &c)
+	raw, ok := c["sniff"]
+	if !ok {
+		return nil
+	}
+	var fields map[string]json.RawMessage
+	if len(raw) == 0 || raw[0] != '{' || json.Unmarshal(raw, &fields) != nil {
+		return fail("invalid_document", "client.sniff", "Expected sniff object")
+	}
+	for name := range fields {
+		switch name {
+		case "enabled", "override_destination", "tcp_ports", "udp_ports", "timeout", "skip_domain":
+		default:
+			return fail("invalid_document", "client.sniff."+name, "Unknown sniff field")
+		}
+	}
+	for _, name := range []string{"enabled", "override_destination"} {
+		v := bytes.TrimSpace(fields[name])
+		if !bytes.Equal(v, []byte("true")) && !bytes.Equal(v, []byte("false")) {
+			return fail("invalid_document", "client.sniff."+name, "Expected boolean")
+		}
+	}
+	for _, name := range []string{"tcp_ports", "udp_ports", "timeout"} {
+		raw, present := fields[name]
+		if !present {
+			continue
+		}
+		var value string
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) || json.Unmarshal(raw, &value) != nil {
+			return fail("invalid_document", "client.sniff."+name, "Expected string")
+		}
+		if name != "timeout" {
+			if !kernel.ValidateSniffPortSpec(value) {
+				return fail("invalid_document", "client.sniff."+name, "Expected ports, ranges a-b or none")
+			}
+		} else {
+			var timeout kernel.Duration
+			if timeout.UnmarshalJSON(raw) != nil || !kernel.ValidateSniffTimeout(timeout) {
+				return fail("invalid_document", "client.sniff.timeout", "Expected duration 1ms–2s (0 uses default)")
+			}
+		}
+	}
+	if rawSkip, present := fields["skip_domain"]; present {
+		trimmed := bytes.TrimSpace(rawSkip)
+		if len(trimmed) == 0 || trimmed[0] != '[' {
+			return fail("invalid_document", "client.sniff.skip_domain", "Expected string array")
+		}
+		var items []json.RawMessage
+		if json.Unmarshal(trimmed, &items) != nil {
+			return fail("invalid_document", "client.sniff.skip_domain", "Expected string array")
+		}
+		values := make([]string, len(items))
+		for i, item := range items {
+			it := bytes.TrimSpace(item)
+			if len(it) == 0 || it[0] != '"' || json.Unmarshal(it, &values[i]) != nil {
+				return fail("invalid_document", "client.sniff.skip_domain", "Expected string array")
+			}
+		}
+		if err := kernel.ValidateSkipDomains(values); err != nil {
+			return fail("invalid_document", "client.sniff.skip_domain", err.Error())
+		}
+	}
+	return nil
+}
+
 type Client struct {
 	TunDNS            *kernel.ClientDNSOptions `json:"tun_dns,omitempty"`
 	IPv6              bool                     `json:"ipv6"`

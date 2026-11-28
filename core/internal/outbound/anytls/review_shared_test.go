@@ -1197,8 +1197,8 @@ func TestSendPathIdealConnWriteAndTLSRecordCounts(t *testing.T) {
 		t.Fatalf("cold-start 32KiB write: legacy=%d (want 7) opt=%d (want 1)", coldLegW, coldOptW)
 	}
 
-	// 2. Steady-state (warm TLS after 128KiB) across 1B, 32KiB, 64KiB, and 256KiB:
-	for _, sz := range []int{1, 32 << 10, 64 << 10, 256 << 10} {
+	// 2. Steady-state (warm TLS after 128KiB) across 1B, tlsAlignedFrame (32761B), writeChunk (65522B), 32KiB, 64KiB, and 256KiB:
+	for _, sz := range []int{1, tlsAlignedFrame, writeChunk, 32 << 10, 64 << 10, 256 << 10} {
 		legWrites, legSizes, legRecs := runCase(false, true, sz)
 		optWrites, optSizes, optRecs := runCase(true, true, sz)
 		t.Logf("steady-state size=%dB: legacy idealConn.Write=%d (sizes=%v, TLSrecords=%d %v) -> optimized idealConn.Write=%d (sizes=%v, TLSrecords=%d %v)",
@@ -1209,24 +1209,32 @@ func TestSendPathIdealConnWriteAndTLSRecordCounts(t *testing.T) {
 			if legWrites != 1 || optWrites != 1 || len(legRecs) != 1 || len(optRecs) != 1 {
 				t.Fatalf("1B write: legacy=%d/%d opt=%d/%d, want 1", legWrites, len(legRecs), optWrites, len(optRecs))
 			}
+		case tlsAlignedFrame:
+			// 32761B + 7B header = 32768B = exact 2 full TLS 1.3 records (zero 7B tail record!).
+			if optWrites != 1 || len(optRecs) != 2 {
+				t.Fatalf("steady tlsAlignedFrame write: opt=%d (recs=%d), want 1 write and exact 2 TLS records", optWrites, len(optRecs))
+			}
+		case writeChunk:
+			// 65522B (2x32761B) + 14B headers = 65536B = exact 4 full TLS 1.3 records (zero tail record!).
+			if optWrites != 1 || len(optRecs) != 4 {
+				t.Fatalf("steady writeChunk write: opt=%d (recs=%d), want 1 write and exact 4 TLS records", optWrites, len(optRecs))
+			}
 		case 32 << 10:
-			// Steady-state 32KiB + 7B header = 32775B plaintext -> 3 TLS records (16384 + 16384 + 7B).
-			// Legacy issues 3 underlying conn.Write calls; optimized coalesces into 1 conn.Write.
+			// 32768B splits into 32761B + 7B (32782B wire = 3 TLS records), coalesced into 1 conn.Write.
 			if legWrites != 3 || len(legRecs) != 3 || optWrites != 1 || len(optRecs) != 3 {
 				t.Fatalf("steady 32KiB write: legacy=%d (recs=%d) opt=%d (recs=%d), want 3->1 writes and 3 TLS records",
 					legWrites, len(legRecs), optWrites, len(optRecs))
 			}
 		case 64 << 10:
-			// Legacy splits 65536B into 65535B (5 TLS records) + 1B (1 TLS record) = 6 conn.Write calls across 2 writeData requests.
-			// Optimized frames 2x32KiB (65550B wire = 5 TLS records) in 1 writeData request and flushes in 1 conn.Write call.
-			if legWrites != 6 || len(legRecs) != 6 || optWrites != 1 || len(optRecs) != 5 {
-				t.Fatalf("steady 64KiB write: legacy=%d (recs=%d, want 6/6) opt=%d (recs=%d, want 1/5)",
+			// With writeChunk=65522B, 65536B emits 1 exact 4-TLS-record chunk (65536B wire) + 14B tail (5 TLS records total vs legacy 6).
+			if legWrites != 6 || len(legRecs) != 6 || optWrites != 2 || len(optRecs) != 5 {
+				t.Fatalf("steady 64KiB write: legacy=%d (recs=%d, want 6/6) opt=%d (recs=%d, want 2/5)",
 					legWrites, len(legRecs), optWrites, len(optRecs))
 			}
 		case 256 << 10:
-			// 256KiB = 4 * 64KiB chunks: optimized performs 4 underlying conn.Write calls vs legacy 21.
-			if optWrites != 4 || legWrites != 21 {
-				t.Fatalf("steady 256KiB write: legacy=%d (want 21) opt=%d (want 4)", legWrites, optWrites)
+			// 256KiB = 4 * 65522B full 4-record chunks + 56B tail = 5 underlying conn.Write calls (17 TLS records vs legacy 21).
+			if optWrites != 5 || legWrites != 21 || len(optRecs) != 17 {
+				t.Fatalf("steady 256KiB write: legacy=%d (want 21) opt=%d (recs=%d, want 5/17)", legWrites, optWrites, len(optRecs))
 			}
 		}
 	}
@@ -1250,7 +1258,7 @@ func TestSendPathMatrixAndSafetyBoundaries(t *testing.T) {
 	// 1. Exact 64KiB framing: verify 65536B emits two 32768B PSH frames in one request (never 65535 + 1),
 	// and maxFrame (65535B) limit is never exceeded for any input size.
 	t.Run("framing_64k_and_maxframe_invariants", func(t *testing.T) {
-		for _, sz := range []int{1, 7, 512, 16384, 32768, 65535, 65536, 65537, 100000, 256 << 10} {
+		for _, sz := range []int{1, 7, 512, 16384, tlsAlignedFrame, 32768, writeChunk, 65535, 65536, 65537, 100000, 256 << 10} {
 			c1, c2 := net.Pipe()
 			stop1, _ := parsePaddingScheme("stop=1\n0=30-30")
 			s := &session{
@@ -1312,9 +1320,14 @@ func TestSendPathMatrixAndSafetyBoundaries(t *testing.T) {
 			if !bytes.Equal(got, src) {
 				t.Fatalf("size=%d: payload mismatch", sz)
 			}
-			if sz == 65536 {
-				if len(frameLengths) != 2 || frameLengths[0] != 32768 || frameLengths[1] != 32768 {
-					t.Fatalf("64KiB frame lengths = %v, want [32768 32768]", frameLengths)
+			if sz == writeChunk {
+				if len(frameLengths) != 2 || frameLengths[0] != tlsAlignedFrame || frameLengths[1] != tlsAlignedFrame {
+					t.Fatalf("writeChunk frame lengths = %v, want [%d %d]", frameLengths, tlsAlignedFrame, tlsAlignedFrame)
+				}
+			}
+			for _, fl := range frameLengths {
+				if fl <= 0 || fl > tlsAlignedFrame {
+					t.Fatalf("size=%d: frame length %d outside (0, %d]", sz, fl, tlsAlignedFrame)
 				}
 			}
 			s.fail(net.ErrClosed)
@@ -1566,9 +1579,9 @@ func TestSendPathMatrixAndSafetyBoundaries(t *testing.T) {
 			_, _ = io.Copy(io.Discard, c2)
 		}()
 
-		// Allow exactly the first 64KiB write (2 * (32768 + 7) = 65550 wire bytes) to succeed,
-		// then fail partway through the second 64KiB write.
-		const firstChunkWire = (64 << 10) + 2*headerSize
+		// Allow exactly the first writeChunk write (2 * (tlsAlignedFrame + 7) = 65536 wire bytes) to succeed,
+		// then fail partway through the second writeChunk write.
+		const firstChunkWire = writeChunk + 2*headerSize
 		rec := &sendWriteRecordConn{
 			Conn:       c1,
 			shortLimit: 4096,
@@ -1596,8 +1609,8 @@ func TestSendPathMatrixAndSafetyBoundaries(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error on second chunk failure, got nil")
 		}
-		if n != 64<<10 {
-			t.Fatalf("partial Write returned n=%d, want %d (exact first committed chunk)", n, 64<<10)
+		if n != writeChunk {
+			t.Fatalf("partial Write returned n=%d, want %d (exact first committed chunk)", n, writeChunk)
 		}
 	})
 

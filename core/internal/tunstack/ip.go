@@ -351,21 +351,43 @@ type reasmHole struct {
 	end   int
 }
 
+const reasmHdrReserve = 60
+
+var reasmScratchPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, 65535)
+		return &b
+	},
+}
+
 type reasmEntry struct {
-	created   time.Time
-	v6        bool
-	proto     uint8
-	ttl       uint8
-	tos       uint8
-	df        bool
-	src       netip.Addr
-	dst       netip.Addr
-	firstHdr  []byte
-	buf       []byte
-	gotLast   bool
-	finalLen  int
-	holes     []reasmHole
-	storedLen int
+	created     time.Time
+	v6          bool
+	proto       uint8
+	ttl         uint8
+	tos         uint8
+	df          bool
+	src         netip.Addr
+	dst         netip.Addr
+	firstHdrBuf [reasmHdrReserve]byte
+	firstHdrLen int
+	buf         []byte // either exact owned [reasmHdrReserve+finalLen] or pooled [65535]
+	exactOwned  bool
+	pooledBuf   *[]byte
+	gotLast     bool
+	finalLen    int
+	holeBacking [16]reasmHole
+	holes       []reasmHole
+	storedLen   int
+}
+
+func (e *reasmEntry) releaseScratch() {
+	if e.pooledBuf != nil {
+		*e.pooledBuf = (*e.pooledBuf)[:65535]
+		reasmScratchPool.Put(e.pooledBuf)
+		e.pooledBuf = nil
+		e.buf = nil
+	}
 }
 
 type ipReassembler struct {
@@ -382,6 +404,7 @@ func (ra *ipReassembler) gcLocked(now time.Time) {
 	for k, e := range ra.entries {
 		if now.Sub(e.created) > reasmTimeout {
 			ra.totalBytes -= e.storedLen
+			e.releaseScratch()
 			delete(ra.entries, k)
 		}
 	}
@@ -418,42 +441,63 @@ func (ra *ipReassembler) push(f *ipFragMeta) (ipPacket, bool) {
 			df:      f.df,
 			src:     f.src,
 			dst:     f.dst,
-			holes:   []reasmHole{{start: 0, end: 65535}},
+		}
+		e.holeBacking[0] = reasmHole{start: 0, end: 65535}
+		e.holes = e.holeBacking[:1]
+		if !f.more {
+			// Tail fragment arrived first: exact total payload size is known upfront!
+			// Allocate a single contiguous buffer with 60B L3 header reserve so zero
+			// re-copy is needed upon completion.
+			e.buf = make([]byte, reasmHdrReserve+end)
+			e.exactOwned = true
+		} else {
+			bp := reasmScratchPool.Get().(*[]byte)
+			e.pooledBuf = bp
+			e.buf = *bp
 		}
 		ra.entries[key] = e
 	}
 
-	if f.offset == 0 && len(e.firstHdr) == 0 {
-		e.firstHdr = append([]byte(nil), f.hdr...)
+	if f.offset == 0 && e.firstHdrLen == 0 {
+		if len(f.hdr) > reasmHdrReserve {
+			ra.totalBytes -= e.storedLen
+			e.releaseScratch()
+			delete(ra.entries, key)
+			return ipPacket{}, false
+		}
+		e.firstHdrLen = copy(e.firstHdrBuf[:], f.hdr)
 		e.ttl = f.ttl
 		e.tos = f.tos
 		e.df = f.df
 	}
-	if end > len(e.buf) {
-		growth := end - len(e.buf)
-		if ra.totalBytes+growth > maxReasmBytes {
+	if end > e.storedLen {
+		growth := end - e.storedLen
+		if ra.totalBytes+growth > maxReasmBytes || (e.exactOwned && reasmHdrReserve+end > len(e.buf)) {
 			ra.totalBytes -= e.storedLen
+			e.releaseScratch()
 			delete(ra.entries, key)
 			return ipPacket{}, false
 		}
-		nb := make([]byte, end)
-		copy(nb, e.buf)
-		e.buf = nb
-		e.storedLen = len(e.buf)
+		e.storedLen = end
 		ra.totalBytes += growth
 	}
-	copy(e.buf[f.offset:end], f.payload)
+	if e.exactOwned {
+		copy(e.buf[reasmHdrReserve+f.offset:reasmHdrReserve+end], f.payload)
+	} else {
+		copy(e.buf[f.offset:end], f.payload)
+	}
 
 	if !f.more {
 		if e.gotLast && e.finalLen != end {
 			ra.totalBytes -= e.storedLen
+			e.releaseScratch()
 			delete(ra.entries, key)
 			return ipPacket{}, false
 		}
 		e.gotLast = true
 		e.finalLen = end
-		// Trim trailing hole to finalLen.
-		var trimmed []reasmHole
+		// Trim trailing hole to finalLen in place.
+		w := 0
 		for _, h := range e.holes {
 			if h.start >= end {
 				continue
@@ -461,13 +505,20 @@ func (ra *ipReassembler) push(f *ipFragMeta) (ipPacket, bool) {
 			if h.end > end {
 				h.end = end
 			}
-			trimmed = append(trimmed, h)
+			e.holes[w] = h
+			w++
 		}
-		e.holes = trimmed
+		e.holes = e.holes[:w]
 	}
 
-	// Carve [f.offset, end) out of holes (RFC 815).
+	// Carve [f.offset, end) out of holes (RFC 815) with zero slice allocation in common order.
+	var stackHoles [16]reasmHole
 	var nextHoles []reasmHole
+	if len(e.holes)+1 <= len(stackHoles) {
+		nextHoles = stackHoles[:0]
+	} else {
+		nextHoles = make([]reasmHole, 0, len(e.holes)+1)
+	}
 	for _, h := range e.holes {
 		if f.offset >= h.end || end <= h.start {
 			nextHoles = append(nextHoles, h)
@@ -480,9 +531,14 @@ func (ra *ipReassembler) push(f *ipFragMeta) (ipPacket, bool) {
 			nextHoles = append(nextHoles, reasmHole{start: end, end: h.end})
 		}
 	}
-	e.holes = nextHoles
+	if len(nextHoles) <= len(e.holeBacking) {
+		n := copy(e.holeBacking[:], nextHoles)
+		e.holes = e.holeBacking[:n]
+	} else {
+		e.holes = nextHoles
+	}
 
-	if !e.gotLast || len(e.holes) != 0 || len(e.firstHdr) == 0 {
+	if !e.gotLast || len(e.holes) != 0 || e.firstHdrLen == 0 {
 		return ipPacket{}, false
 	}
 
@@ -490,15 +546,23 @@ func (ra *ipReassembler) push(f *ipFragMeta) (ipPacket, bool) {
 	ra.totalBytes -= e.storedLen
 	delete(ra.entries, key)
 
-	payload := e.buf[:e.finalLen]
-	hdrLen := len(e.firstHdr)
+	hdrLen := e.firstHdrLen
 	if !e.v6 {
-		if hdrLen+len(payload) > 65535 {
+		if hdrLen+e.finalLen > 65535 {
+			e.releaseScratch()
 			return ipPacket{}, false
 		}
-		full := make([]byte, hdrLen+len(payload))
-		copy(full, e.firstHdr)
-		copy(full[hdrLen:], payload)
+		var full []byte
+		if e.exactOwned {
+			start := reasmHdrReserve - hdrLen
+			full = e.buf[start : reasmHdrReserve+e.finalLen]
+			copy(full[:hdrLen], e.firstHdrBuf[:hdrLen])
+		} else {
+			full = make([]byte, hdrLen+e.finalLen)
+			copy(full[:hdrLen], e.firstHdrBuf[:hdrLen])
+			copy(full[hdrLen:], e.buf[:e.finalLen])
+			e.releaseScratch()
+		}
 		binary.BigEndian.PutUint16(full[2:4], uint16(len(full)))
 		flags := uint16(0)
 		if e.df {
@@ -522,13 +586,22 @@ func (ra *ipReassembler) push(f *ipFragMeta) (ipPacket, bool) {
 		}, true
 	}
 
-	if len(payload) > 65535 {
+	if e.finalLen > 65535 {
+		e.releaseScratch()
 		return ipPacket{}, false
 	}
-	full := make([]byte, 40+len(payload))
-	copy(full[:40], e.firstHdr[:40])
-	copy(full[40:], payload)
-	binary.BigEndian.PutUint16(full[4:6], uint16(len(payload)))
+	var full []byte
+	if e.exactOwned {
+		start := reasmHdrReserve - 40
+		full = e.buf[start : reasmHdrReserve+e.finalLen]
+		copy(full[:40], e.firstHdrBuf[:40])
+	} else {
+		full = make([]byte, 40+e.finalLen)
+		copy(full[:40], e.firstHdrBuf[:40])
+		copy(full[40:], e.buf[:e.finalLen])
+		e.releaseScratch()
+	}
+	binary.BigEndian.PutUint16(full[4:6], uint16(e.finalLen))
 	full[6] = e.proto
 	return ipPacket{
 		ver:      6,

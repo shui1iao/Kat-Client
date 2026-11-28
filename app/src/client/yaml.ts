@@ -10,6 +10,38 @@ const same = (a: any, b: any): boolean => {
   return ak.length === bk.length && ak.every((k, i) => k === bk[i] && same(a[k], b[k]));
 };
 const object = (v: any) => !!v && typeof v === 'object' && !Array.isArray(v);
+export const RAW_ENTITY_JSON = Symbol('RAW_ENTITY_JSON');
+export function hasRawEntityJson(v: any): boolean {
+  if (!v || typeof v !== 'object') return false;
+  if (typeof (v as any)[RAW_ENTITY_JSON] === 'string') return true;
+  if (Array.isArray(v)) return v.some(hasRawEntityJson);
+  return Object.values(v).some(hasRawEntityJson);
+}
+function exactNumberText(n: any): string | null {
+  if (!isScalar(n) || typeof n.value !== 'number' || typeof n.source !== 'string') return null;
+  let src = n.source.replace(/_/g, '');
+  if (/^[+-]?0[xob]/i.test(src)) { const neg = src[0] === '-'; src = src.replace(/^[+-]/, ''); return (neg ? '-' : '') + BigInt(src).toString(); }
+  if (n.format === 'OCT' && /^[+-]?0[0-7]+$/.test(src)) { const neg = src[0] === '-'; return (neg ? '-' : '') + BigInt('0o' + src.replace(/^[+-]?0/, '')).toString(); }
+  if (/^[+-]?\d+$/.test(src)) return BigInt(src).toString();
+  return src;
+}
+function toExactJson(value: any, rawAst?: any): string {
+  if (value && typeof value === 'object' && typeof (value as any)[RAW_ENTITY_JSON] === 'string') {
+    return (value as any)[RAW_ENTITY_JSON];
+  }
+  if (value === null || value === undefined) return 'null';
+  if (typeof value === 'number') return exactNumberText(rawAst) ?? JSON.stringify(value);
+  if (typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    const items = isSeq(rawAst) ? rawAst.items : [];
+    return '[' + value.map((v, i) => toExactJson(v, items[i])).join(', ') + ']';
+  }
+  const keys = Object.keys(value).filter((k) => value[k] !== undefined);
+  return '{' + keys.map((k) => {
+    const pair = isMap(rawAst) ? rawAst.items.find((it: any) => (it.key as any)?.value === k) : undefined;
+    return JSON.stringify(k) + ': ' + toExactJson(value[k], pair?.value);
+  }).join(', ') + '}';
+}
 const raw = (t: any): string => t ? CST.stringify(t) : '';
 const tokens = (ts: any[] | undefined): string => (ts ?? []).map(raw).join('');
 const allowedTags = new Set(['str', 'int', 'float', 'bool', 'null', 'map', 'seq'].map(t => 'tag:yaml.org,2002:' + t));
@@ -100,13 +132,26 @@ function flowPrefix(prefix: string, first: boolean): string {
   if (first) return prefix.replace(/^([ \t]*),[ \t]?/, '$1');
   return /^[ \t]*,/.test(prefix) ? prefix : ', ' + prefix;
 }
-function fresh(value: any, indent: number, flow: boolean): string {
+function parseExactFragment(exactJson: string) {
+  const d = preserveNumbers(readYAML('{"_": ' + exactJson + '}'));
+  d.contents = (d.contents as any).items[0].value;
+  return d;
+}
+function fresh(value: any, indent: number, flow: boolean, rawAst?: any): string {
+  if (rawAst !== undefined || hasRawEntityJson(value)) {
+    const exact = toExactJson(value, rawAst);
+    if (flow) return exact;
+    const d = parseExactFragment(exact);
+    const block = (n: any) => { if (isMap(n)) { n.flow = false; n.items.forEach((it: any) => block(it.value)); } else if (isSeq(n)) { n.flow = false; n.items.forEach(block); } };
+    block(d.contents);
+    return d.toString({ lineWidth: 0 }).replace(/\n$/, '').replace(/\n/g, '\n' + ' '.repeat(indent));
+  }
   if (flow) return JSON.stringify(value);
   return stringify(value, { lineWidth: 0, aliasDuplicateObjects: false, customTags: yamlTags }).replace(/\n$/, '').replace(/\n/g, '\n' + ' '.repeat(indent));
 }
-function scalar(n: any, value: any, inFlow: boolean, afterKey: boolean): string {
+function scalar(n: any, value: any, inFlow: boolean, afterKey: boolean, rawAst?: any): string {
   const t = structuredClone(n?.srcToken);
-  if (!t) return (afterKey ? ' ' : '') + JSON.stringify(value);
+  if (!t) return (afterKey ? ' ' : '') + toExactJson(value, rawAst);
   if (isScalar(n) && (value === null || ['string', 'boolean', 'number'].includes(typeof value))) {
     let type: Scalar.Type = Scalar.PLAIN;
     if (typeof value === 'string') {
@@ -118,35 +163,48 @@ function scalar(n: any, value: any, inFlow: boolean, afterKey: boolean): string 
         type = s[0] === '"' || s[0] === "'" || s[0] === '|' || s.includes('\n') ? Scalar.QUOTE_DOUBLE : Scalar.PLAIN;
       }
     }
-    CST.setScalarValue(t, value === null ? 'null' : String(value), { inFlow, afterKey, type });
+    const exactNum = typeof value === 'number' ? exactNumberText(rawAst) : null;
+    CST.setScalarValue(t, value === null ? 'null' : exactNum ?? String(value), { inFlow, afterKey, type });
     return raw(t);
   }
   // Type changes are local to this value. Keep all its comments, including
   // comments formerly attached to children that were explicitly removed.
   const indent = n.srcToken.indent ?? 0;
   const comments = commentTokens(t);
-  return fresh(value, indent, true) + (comments.length ? ' ' + comments.join('\n' + ' '.repeat(indent)) : '') + (inFlow ? '' : '\n');
+  return fresh(value, indent, true, rawAst) + (comments.length ? ' ' + comments.join('\n' + ' '.repeat(indent)) : '') + (inFlow ? '' : '\n');
 }
-function render(n: any, old: any, value: any, inFlow = false, afterKey = false): string {
-  if (same(old, value)) return raw(n?.srcToken);
+function render(n: any, old: any, value: any, inFlow = false, afterKey = false, rawAst?: any): string {
+  const curRawAst = value && typeof value === 'object' && typeof (value as any)[RAW_ENTITY_JSON] === 'string'
+    ? readYAML((value as any)[RAW_ENTITY_JSON]).contents
+    : rawAst;
+  if (same(old, value) && !curRawAst && !hasRawEntityJson(value)) return raw(n?.srcToken);
+  if (same(old, value) && curRawAst && isScalar(n) && isScalar(curRawAst)) {
+    if (typeof value !== 'number' || exactNumberText(n) === exactNumberText(curRawAst)) return raw(n?.srcToken);
+  }
   const t: any = n?.srcToken;
-  if (!t) return scalar(n, value, inFlow, afterKey);
+  if (!t) return scalar(n, value, inFlow, afterKey, curRawAst);
   if ((isMap(n) && object(value)) || (isSeq(n) && Array.isArray(value))) {
     const map = isMap(n), flow = t.type === 'flow-collection', indent = t.indent ?? 0;
     const originals: any[] = n.items.map((entry: any, i: number) => map ? entry.srcToken : t.items[i]);
     const oldKeys = map ? n.items.map((p: any) => p.key.value) : [];
     // JS enumerates integer-like keys numerically. That must not reorder a
     // source mapping when only one of its values is edited.
-    const keys = map ? [...oldKeys.filter((k:string)=>Object.hasOwn(value,k)),...Object.keys(value).filter(k=>!oldKeys.includes(k))] : value.map((_: any, i: number) => i);
+    const keys = map ? [...oldKeys.filter((k:string)=>Object.hasOwn(value,k)&&value[k]!==undefined),...Object.keys(value).filter(k=>value[k]!==undefined&&!oldKeys.includes(k))] : value.map((_: any, i: number) => i);
     const chosen = map ? keys.map((k: any) => oldKeys.indexOf(k)) : assignments(old, value);
     const structural = chosen.length !== originals.length || chosen.some((v: number, i: number) => v !== i);
     const removed = originals.filter((_, i) => !chosen.includes(i));
     const orphans = removed.flatMap(commentTokens);
     const out: string[] = keys.map((key: any, pos: number) => {
+      const childRawAst = map
+        ? (isMap(curRawAst) ? curRawAst.items.find((p: any) => (p.key as any)?.value === key)?.value : undefined)
+        : (isSeq(curRawAst) ? curRawAst.items[key] : undefined);
       const idx = chosen[pos], item = originals[idx];
       if (!item) {
         const v = map ? { [key]: value[key] } : [value[key]];
-        let src = flow ? (map ? JSON.stringify(key) + ': ' : '') + fresh(value[key], indent, true) : fresh(v, indent, false) + '\n';
+        const wrappedAst = childRawAst !== undefined
+          ? parseExactFragment(map ? '{' + JSON.stringify(key) + ': ' + toExactJson(value[key], childRawAst) + '}' : '[' + toExactJson(value[key], childRawAst) + ']').contents
+          : undefined;
+        let src = flow ? (map ? JSON.stringify(key) + ': ' : '') + fresh(value[key], indent, true, childRawAst) : fresh(v, indent, false, wrappedAst) + '\n';
         return flow ? (pos ? ', ' : '') + src : (pos ? ' '.repeat(indent) : '') + src;
       }
       let prefix = tokens(item.start);
@@ -154,12 +212,12 @@ function render(n: any, old: any, value: any, inFlow = false, afterKey = false):
       const child: any = map ? n.items[idx].value : n.items[idx];
       const prev = map ? old[oldKeys[idx]] : old[idx];
       let sep = tokens(item.sep);
-      const body = render(child, prev, value[key], flow, map);
+      const body = render(child, prev, value[key], flow, map, childRawAst);
       // Empty implicit nulls may have their line break in sep, not the value.
-      if (!child?.srcToken && !same(prev, value[key])) {
+      if (!child?.srcToken && (!same(prev, value[key]) || childRawAst !== undefined || hasRawEntityJson(value[key]))) {
         let tail = tokens(item.sep?.filter((v: any) => v.type !== 'map-value-ind'));
         if (!flow && !tail.endsWith('\n')) tail += '\n';
-        return prefix + raw(item.key) + ': ' + fresh(value[key],indent,true) + tail;
+        return prefix + raw(item.key) + ': ' + fresh(value[key], indent, true, childRawAst) + tail;
       }
       return prefix + raw(item.key) + sep + body;
     });
@@ -175,10 +233,10 @@ function render(n: any, old: any, value: any, inFlow = false, afterKey = false):
     for (const piece of out) { if (result && !result.endsWith('\n') && !/\n *$/.test(result)) result += '\n'; result += piece; }
     return result;
   }
-  return scalar(n, value, inFlow, afterKey);
+  return scalar(n, value, inFlow, afterKey, curRawAst);
 }
 export function editYAML(text: string, old: any, next: any): string {
-  if (same(old, next)) return text;
+  if (same(old, next) && !hasRawEntityJson(next)) return text;
   const doc = readYAML(text), n: any = doc.contents;
   const start = n.range[0], original = raw(n.srcToken);
   const result = text.slice(0, start) + render(n, old, next) + text.slice(start + original.length);
@@ -220,7 +278,21 @@ export function yamlToJSON(text: string): string {
   return write(d.contents, 0) + '\n';
 }
 
+export function yamlPathOffset(text: string, path: readonly string[]): number {
+  if (!path.length) return -1;
+  let cur: any = readYAML(text).contents;
+  for (let i = 0; i < path.length; i++) {
+    if (!isMap(cur)) return -1;
+    const pair = cur.items.find((p: any) => (p.key as any)?.value === path[i]);
+    if (!pair) return -1;
+    if (i === path.length - 1) return (pair.key as any)?.range?.[0] ?? -1;
+    cur = pair.value;
+  }
+  return -1;
+}
 export function yamlKeyOffset(text: string, key: string): number {
+  const direct = yamlPathOffset(text, [key]);
+  if (direct >= 0) return direct;
   const find = (n: any): number => {
     if (isMap(n)) for (const p of n.items) { if ((p.key as any)?.value === key) return (p.key as any).range[0]; const at = find(p.value); if (at >= 0) return at; }
     else if (isSeq(n)) for (const v of n.items) { const at = find(v); if (at >= 0) return at; }

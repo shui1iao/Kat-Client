@@ -19,8 +19,13 @@ import (
 )
 
 // Counter is one up/down byte pair. Up = client to target, Down = target to client.
+// Each atomic field occupies its own 64-byte cache line to avoid false sharing
+// across concurrent upload and download cores.
 type Counter struct {
-	up, down atomic.Uint64
+	up   atomic.Uint64
+	_    [56]byte
+	down atomic.Uint64
+	_    [56]byte
 }
 
 func (c *Counter) AddUp(n uint64)   { c.up.Add(n) }
@@ -409,8 +414,7 @@ func (r *Registry) Save(path string, now time.Time) error {
 		return e
 	}
 	ok = true
-	syncDir(dir)
-	return nil
+	return syncDir(dir)
 }
 
 // QuarantineCorrupt renames an unreadable statistics file aside so that it

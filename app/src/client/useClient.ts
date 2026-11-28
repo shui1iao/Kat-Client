@@ -1,3 +1,4 @@
+import { normalizeDesktopSettings, normalizeNetworkStatus } from './normalize';
 import {handleTrayAction,selectGroupMember,traySnapshot,type TrayAPI} from './tray';
 import {connectionRates,withConnectionSnapshot} from './presentation';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -184,7 +185,7 @@ export function useClient() {
     });
     return s;
   }
-  async function refreshNetwork() { const request=++networkRequest.current,life=lifetime.current;try { const n=await host<NetworkStatus>('network_status');if(active(life)&&request===networkRequest.current)setNetwork(n);return n; } catch(e) { if(active(life)&&request===networkRequest.current){observeUncertain(e);setNetwork(null);}throw e; } }
+  async function refreshNetwork() { const request=++networkRequest.current,life=lifetime.current;try { const n=normalizeNetworkStatus(await host<unknown>('network_status'));if(active(life)&&request===networkRequest.current)setNetwork(n);return n; } catch(e) { if(active(life)&&request===networkRequest.current){observeUncertain(e);setNetwork(null);}throw e; } }
   // Shared by the existing poll and reconnect. Only a stable public get may
   // release this local gate; status/diagnostics and ordinary refreshes cannot.
   async function reconcileAccepted() {
@@ -213,8 +214,8 @@ export function useClient() {
     catch (e) { if(active(life)){observeUncertain(e,revision);if(onError)onError(e);else setError(errorText(e));} return false; }
     finally { jobs.current.delete(key);if(active(life))setBusy(new Set(jobs.current)); }
   }
-  async function refreshDesktop() { const life=lifetime.current;try { const r=await host<DesktopSettingsReply>('desktop_settings_get');if(active(life))setDesktop(r);return r; } catch(e) { if(active(life)){observeUncertain(e);setDesktop(null);}throw e; } }
-  const setPreferences=(patch:Partial<DesktopPreferences>)=>run('preferences',()=>updatePreferences({get:()=>host<DesktopSettingsReply>('desktop_settings_get'),set:p=>host<DesktopSettingsReply>('desktop_settings_set',{patch:p})},patch,setDesktop));
+  async function refreshDesktop() { const life=lifetime.current;try { const r=normalizeDesktopSettings(await host<unknown>('desktop_settings_get'));if(active(life))setDesktop(r);return r; } catch(e) { if(active(life)){observeUncertain(e);setDesktop(null);}throw e; } }
+  const setPreferences=(patch:Partial<DesktopPreferences>)=>run('preferences',()=>updatePreferences({get:async()=>normalizeDesktopSettings(await host<unknown>('desktop_settings_get')),set:async p=>normalizeDesktopSettings(await host<unknown>('desktop_settings_set',{patch:p}))},patch,setDesktop));
   async function connect() {
     const life=lifetime.current;
     await run('connect', async () => {
@@ -480,7 +481,22 @@ export function useClient() {
   const trayAPI=useRef<TrayAPI|null>(null);trayAPI.current={blocked:trayBlocked,lifecycleBlocked,restartCore,restartApp,quit:()=>run('window',()=>host('window_action',{action:'quit'}),reportOperationError),mode:m=>edit(d=>{d.client.mode=m;if(m==='global'){const gs=d.kernel.groups??[];if(gs.length&&(!d.client.global_group||!gs.some(g=>g.name===d.client.global_group)))d.client.global_group=gs[0].name;}},reportOperationError),select:selectMember,network:(cmd,enabled)=>os(cmd,{enabled}),show:()=>host('window_action',{action:'show'}),error:reportOperationError};
   const trayListenerReady=useRef(false);
   const lastTray=useRef<{state:string;payload:ReturnType<typeof traySnapshot>}|null>(null);
-  const nextTray=traySnapshot(projectedSource,projectedStatus,network,trayProjectionBlocked(),label),trayState=JSON.stringify(nextTray);
+  const trayBlockedNow = trayProjectionBlocked();
+  const statusRuntimeState = projectedStatus?.runtime.state;
+  const statusMode = projectedStatus?.mode;
+  const statusGroups = projectedStatus?.groups;
+  const trayStatusNodes = projectedStatus?.nodes;
+  const statusLocal = projectedStatus?.local;
+  const { nextTray, trayState } = useMemo(() => {
+    const snap = traySnapshot(
+      projectedSource,
+      statusRuntimeState ? ({ runtime: { state: statusRuntimeState }, mode: statusMode, groups: statusGroups, nodes: trayStatusNodes, local: statusLocal } as CoreStatus) : null,
+      network,
+      trayBlockedNow,
+      label,
+    );
+    return { nextTray: snap, trayState: JSON.stringify(snap) };
+  }, [projectedSource, statusRuntimeState, statusMode, statusGroups, trayStatusNodes, statusLocal, network, trayBlockedNow, label]);
   if(lastTray.current?.state!==trayState)lastTray.current={state:trayState,payload:nextTray};
   const trayPayload=lastTray.current.payload;
   const trayStateRef=useRef(trayPayload);trayStateRef.current=trayPayload;

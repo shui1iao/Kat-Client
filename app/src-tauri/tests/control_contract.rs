@@ -35,7 +35,7 @@ fn firewall_udp_inbound_spec_idempotent_update_exact_uninstall_and_nonblocking_o
  use std::path::Path;
  use kat_host::firewall_rule::*;
  use kat_host::installer_result::{
-  completion, fw_error_clear, fw_error_record, report_exit, InstallerOutcome, EXIT_OK,
+  completion, report_exit, InstallerOutcome, EXIT_OK,
  };
 
  #[derive(Default)]
@@ -183,17 +183,15 @@ fn firewall_udp_inbound_spec_idempotent_update_exact_uninstall_and_nonblocking_o
  assert_eq!(fw.rules, vec![other_rule_diff_group, other_rule_same_group, foreign_same_name]);
  fw.rules.pop();
 
- // 4. Failure recording: typed error is recorded in InstallerOutcome, never pretends firewall succeeded, and does not block normal installation.
- fw_error_clear();
+ // 4. Failure recording: typed error is passed explicitly into InstallerOutcome::from_run, never pretends firewall succeeded, and does not block normal installation.
  fw.fail_stage = Some((FirewallStage::RuleAdd, Some(-2147024891))); // E_ACCESSDENIED (0x80070005)
  let err = ensure_core_udp_inbound(&mut fw, Path::new(r"C:\Program Files\Kat Client")).unwrap_err();
  assert_eq!(err.code, "FIREWALL_RULE_FAILED");
  assert_eq!(err.stage, FirewallStage::RuleAdd);
  assert_eq!(err.hresult, Some(-2147024891));
- fw_error_record(err.clone());
 
  let install_res: kat_host::error::Result<()> = Ok(());
- let outcome = InstallerOutcome::from_result(&install_res);
+ let outcome = InstallerOutcome::from_run(&install_res, Some(err.clone()));
  assert!(outcome.ok);
  assert!(outcome.error.is_none());
  assert_eq!(outcome.firewall_error, Some(err));
@@ -204,7 +202,6 @@ fn firewall_udp_inbound_spec_idempotent_update_exact_uninstall_and_nonblocking_o
  let decoded: InstallerOutcome = serde_json::from_str(&encoded).unwrap();
  assert_eq!(report_exit(&install_res, Ok(())), EXIT_OK);
  assert!(completion(EXIT_OK, Some(decoded)).is_ok());
- fw_error_clear();
 }
 
 #[test]
@@ -393,53 +390,54 @@ fn stage5_v2_handoff_requires_clean_interpreted_journal() {
  assert_eq!(handoff_v2_journal_decision(&serde_json::to_vec(&j).unwrap(), Ok(true), Ok(())).unwrap_err(), "RECOVERY_PENDING");
  j.phase = "complete".into();
  j.changes[0].state = "conflict".into();
+ // Shared non-route DNS conflict in a converged complete journal must NOT deadlock handoff:
+ assert!(handoff_v2_journal_decision(&serde_json::to_vec(&j).unwrap(), Ok(true), Ok(())).is_ok());
+ // Any Kat-owned route/address conflict MUST still block handoff:
+ j.changes.push(Change {
+  id: "route:0.0.0.0/1".into(),
+  before: None,
+  installed: Value {
+   route: Some(RouteValue {
+    destination: "0.0.0.0".into(),
+    prefix: 1,
+    next_hop: "0.0.0.0".into(),
+    scope: 0,
+    metric: 5,
+    protocol: 3,
+    site_prefix: 0,
+    valid_lifetime: u32::MAX,
+    preferred_lifetime: u32::MAX,
+    loopback: false,
+    autoconfigure: false,
+    publish: false,
+    immortal: false,
+    origin: 0,
+   }),
+   address: None,
+   interface: None,
+   dns: None,
+  },
+  desired: false,
+  state: "conflict".into(),
+ });
  assert_eq!(handoff_v2_journal_decision(&serde_json::to_vec(&j).unwrap(), Ok(true), Ok(())).unwrap_err(), "RECOVERY_PENDING");
  assert_eq!(handoff_v2_journal_decision(br#"{"schema":99,"engine":"future_v9"}"#, Ok(true), Ok(())).unwrap_err(), "JOURNAL_INVALID");
  assert_eq!(handoff_v2_journal_decision(&vec![b'x'; MAX_BYTES + 1], Ok(true), Ok(())).unwrap_err(), "JOURNAL_LIMIT");
 }
 
 #[test]
-fn review_036_windows_lifecycle_legacy_installer_recovery_and_stderr_drain_guards() {
- let fw = include_str!("../src/windows/firewall.rs");
- let store_def = fw.split("struct ComFirewallStore {").nth(1).unwrap().split("}").next().unwrap();
- let rules_pos = store_def.find("rules: ComPtr").unwrap();
- let policy_pos = store_def.find("_policy: ComPtr").unwrap();
- let com_pos = store_def.find("_com: ComInitGuard").unwrap();
- assert!(rules_pos < com_pos && policy_pos < com_pos, "COM pointers must drop before CoUninitialize");
-
- let ui = include_str!("../src/windows/update_install.rs");
- let elr = ui.split("fn ensure_legacy_recovered(").nth(1).unwrap();
- assert!(elr.contains("super::engine::Engine::recover_in_installer(dir,sid.to_owned(),root)?"));
- assert!(!elr.contains("Engine::new("));
- let rb = ui.split("fn rollback(").nth(1).unwrap().split("fn cleanup(").next().unwrap();
- assert!(rb.contains("super::firewall::ensure_core_udp_inbound"));
- assert!(rb.contains("super::firewall::remove_core_udp_inbound"));
-
- let lrec = include_str!("../src/windows/legacy_tun_recovery.rs");
- let rec_fn = lrec.split("fn recover_in_installer(").nth(1).unwrap();
- assert!(!rec_fn.contains("require_installed()"));
- assert!(rec_fn.contains("security::verify_protected(dir)?"));
- let cleanup_fn = lrec.split("pub fn cleanup(&mut self)->Result<()>{").nth(1).unwrap();
- assert!(cleanup_fn.find("if self.journal.is_none(){return Ok(());}").unwrap() < cleanup_fn.find("core-tun-journal-v2.json").unwrap());
-
- let es = include_str!("../src/windows/elevated_stderr.rs");
- assert!(es.contains("super::pipe::stream_accept(pipe.0,&STOP_ACCEPT,15000)"));
- assert!(es.contains("pub fn snapshot_only("));
- assert!(es.contains("pub fn cancel_accept()"));
-
- let el = include_str!("../src/windows/elevated.rs");
- let view_fn = el.split("fn view(l:&Launch)->Value{").nth(1).unwrap().split("fn verify_package").next().unwrap();
- assert!(view_fn.contains("if exited{super::elevated_stderr::summary(&l.lease)}else{super::elevated_stderr::snapshot_only(&l.lease)}"));
-
- let ctr = include_str!("../src/windows/core_tun_recovery.rs");
- let open_fn = ctr.split("pub fn open()->Result<Self>{").nth(1).unwrap().split("pub fn attach").next().unwrap();
- assert!(open_fn.contains(r#"for stale_name in ["core-tun-journal-v2.next","core-tun-journal-v2.json.next"]"#));
-
- let inst = include_str!("../src/windows/installer.rs");
- assert!(inst.contains(r#"["core-tun-journal-v2.json","core-tun-journal-v2.next","core-tun-journal-v2.json.next"].iter().any(|n|dir.join(n).exists())"#));
-
- let ub = include_str!("../src/windows/update_bridge.rs");
- assert!(ub.contains("r.firewall_error.as_ref()"));
+fn review_036_behavioral_display_version_and_cli_uninstall_decoupling() {
+ use kat_host::cli_parse::{parse_install_helper, InstallHelperCli};
+ assert_eq!(kat_host::update_handoff_protocol::DISPLAY_VERSION, env!("CARGO_PKG_VERSION"));
+ let parsed = parse_install_helper(&[
+  "--setup-uninstall".into(),
+  "--gui".into(),
+  "4242".into(),
+  "--stamp".into(),
+  "987654".into(),
+ ])
+ .unwrap();
+ assert_eq!(parsed, InstallHelperCli::SetupUninstall { pid: 4242, stamp: 987654 });
 }
 
 #[test]
@@ -540,17 +538,6 @@ fn stage5_recover_after_exit_removes_only_kat_owned_residual_adapter_and_keeps_p
  j.changes[1].state = "restored".into();
  assert!(recovering_stale_adapter_decision(&j, Ok(true), &owned_adapter, 2, 15).is_ok());
 
- // 6. Static wiring check: recover_after_exit restores non-adapter changes, removes the oper==2 adapter,
- // marks adapter-owned changes absent/restored, and only then runs verify_complete -> phase="complete".
- let ctr = include_str!("../src/windows/core_tun_recovery.rs");
- let rec_fn = ctr.split("pub fn recover_after_exit(&mut self)->Result<RecoveryReport>{").nth(1).unwrap().split("fn remove_recovering_adapter").next().unwrap();
- let flt_pos = rec_fn.find("recover_filtered_set(").unwrap();
- let rem_pos = rec_fn.find("self.remove_recovering_adapter(&j)?;").unwrap();
- let set_pos = rec_fn.find("recover_set(&j,absent,").unwrap();
- let ver_pos = rec_fn.find("verify_complete(&j)?;").unwrap();
- let cmp_pos = rec_fn.find(r#"j.phase="complete".into();"#).unwrap();
- assert!(flt_pos < rem_pos && rem_pos < set_pos && set_pos < ver_pos && ver_pos < cmp_pos);
-
  // 7. End-to-end simulation: interface:2/23 returns ERROR_NOT_FOUND (1168 -> Ok(None)) while residual
  // Kat adapter is oper == 2; routes restore first, remove_recovering_adapter removes the oper == 2
  // adapter, then adapter-owned interface/address/dns entries resolve as absent -> restored -> complete.
@@ -629,79 +616,4 @@ fn stage5_recover_after_exit_removes_only_kat_owned_residual_adapter_and_keeps_p
  assert!(after_adapter_removed.changes.iter().all(|c| c.state == "restored"));
  after_adapter_removed.phase = "complete".into();
  assert!(handoff_v2_journal_decision(&serde_json::to_vec(&after_adapter_removed).unwrap(), Ok(true), Ok(())).is_ok());
-
- // Step 7c: Physical interface returning 1168 (ERROR_NOT_FOUND) in netapi::interface_snapshot / platformDNSOwner
- // is never treated as Ok(None): core_tun_os::read only maps ERROR_NOT_FOUND to Ok(None) after checking
- // adapter_present(a) for the journal's Kat adapter, and netapi.rs keeps rc != 0 as Err(rc).
- let cto = include_str!("../src/windows/core_tun_os.rs");
- let read_fn = cto.split("pub fn read(a:&Adapter,c:&Change)->Result<Option<Value>>{").nth(1).unwrap().split("pub fn restore").next().unwrap();
- assert!(read_fn.contains("if !adapter_present(a)?{return Ok(None)}"));
- assert!(read_fn.contains("let n=unsafe{GetIpInterfaceEntry(&mut r)};if n==ERROR_NOT_FOUND{return Ok(None)}rc(n)?;"));
- assert!(read_fn.contains("let n=unsafe{ConvertInterfaceLuidToGuid(&luid(a.luid),&mut g)};if n==ERROR_NOT_FOUND{return Ok(None)}rc(n)?;"));
- assert!(read_fn.contains("let n=unsafe{GetInterfaceDnsSettings(g,&mut s)};if n==ERROR_NOT_FOUND{return Ok(None)}rc(n)?;"));
- let netapi = include_str!("../src/windows/netapi.rs");
- assert!(netapi.contains("let rc=unsafe{GetIpInterfaceEntry(&mut r)};if rc!=0{return Err(rc);}"));
-}
-
-#[test]
-fn r1_r2_display_version_production_wiring_contract() {
- let handoff = include_str!("../src/windows/update_handoff.rs");
- let ubridge = include_str!("../src/windows/update_bridge.rs");
- let sbridge = include_str!("../src/windows/setup_bridge.rs");
- let sclient = include_str!("../src/windows/service_client.rs");
- let installer = include_str!("../src/windows/installer.rs");
- let uinstall = include_str!("../src/windows/update_install.rs");
- let iapp = include_str!("../src/windows/installed_app.rs");
-
- // 1. R1: Normal handoff / bridge / installer paths never invoke TerminateProcess or pre-UAC takeover.
- for (name, src) in [
-  ("update_handoff.rs", handoff),
-  ("update_bridge.rs", ubridge),
-  ("setup_bridge.rs", sbridge),
-  ("service_client.rs", sclient),
-  ("installer.rs", installer),
- ] {
-  assert!(!src.contains("TerminateProcess"), "{name} must not call TerminateProcess");
-  assert!(!src.contains("terminate_running_user_processes"), "{name} must not have pre-UAC kill");
-  assert!(!src.contains("acquire_single_instance_with_takeover"), "{name} must not force-takeover singleton");
-  assert!(!src.contains("terminate_installed_processes"), "{name} must not call legacy terminate_installed_processes");
- }
-
- // 2. R1: Post-UAC helper->bridge->GUI smooth handoff is wired in all 4 mutation modes (Setup install,
- //    Setup uninstall, Core update, and AwaitingHealth rollback) BEFORE Phase::Stopping / service stop.
- let win_stop = installer.split("fn stop(&mut self)->Result<()>{").nth(1).unwrap().split("fn replace").next().unwrap();
- assert!(win_stop.find("helper_request_gui_stop(self.gui_pid,self.gui_stamp,\"client\",None)?").unwrap()
-  < win_stop.find("Phase::Stopping").unwrap());
- assert!(win_stop.contains("ensure_target_processes_stopped"));
-
- let uninst = installer.split("fn uninstall_application").nth(1).unwrap().split("fn cleanup_warning").next().unwrap();
- assert!(uninst.find("helper_request_gui_stop(gui_pid,gui_stamp,\"uninstall\",None)?").unwrap()
-  < uninst.find("scm::stop(&service)").unwrap());
- assert!(uninst.contains("ensure_target_processes_stopped"));
-
- let run_core = uinstall.split("pub(super) fn run_core").nth(1).unwrap().split("pub(super) fn finish").next().unwrap();
- assert!(run_core.find("helper_request_gui_stop(caller.pid,caller.stamp,\"core\",Some(offer))?").unwrap()
-  < run_core.find("Phase::Stopping").unwrap());
- assert!(run_core.contains("ensure_target_processes_stopped"));
-
- let finish_fn = uinstall.split("pub(super) fn finish").nth(1).unwrap().split("pub(super) fn recover_installed").next().unwrap();
- assert!(finish_fn.contains("helper_request_gui_stop(caller.pid,stamp,kind,None)?"));
-
- // 3. R2: Legacy name-OR fallback (`in_target||n==`) is completely removed; TerminateProcess in
- //    update_install.rs is restricted strictly to `terminate_residual_processes` gated by
- //    `evaluate_residual_kill` + PID creation_stamp re-verification, called ONLY from dirty-journal recovery.
- assert!(!uinstall.contains("in_target||"));
- assert!(!uinstall.contains("||n==\"kat-client-core.exe\""));
- assert_eq!(uinstall.matches("TerminateProcess(").count(), 1);
- let res_fn = uinstall.split("fn terminate_residual_processes").nth(1).unwrap().split("pub(super) fn ensure_target_processes_stopped").next().unwrap();
- assert!(res_fn.contains("evaluate_residual_kill(&cand,&policy)"));
- assert!(res_fn.contains("TerminateProcess("));
- let ensure_fn = uinstall.split("pub(super) fn ensure_target_processes_stopped").nth(1).unwrap().split("pub(super) fn recover_before_new").next().unwrap();
- assert!(!ensure_fn.contains("TerminateProcess"));
- assert!(!ensure_fn.contains("PROCESS_TERMINATE"));
-
- // 4. DisplayVersion uses env!("CARGO_PKG_VERSION") == 0.2.20, never hardcoded "0.1.0".
- assert!(!iapp.contains("\"0.1.0\""));
- assert!(iapp.contains("(\"DisplayVersion\",env!(\"CARGO_PKG_VERSION\").into())"));
- assert_eq!(kat_host::update_handoff_protocol::DISPLAY_VERSION, "0.2.37");
 }

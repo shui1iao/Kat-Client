@@ -25,8 +25,10 @@ function ghost(node: HTMLElement) {
     else if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) (c as HTMLInputElement).checked = el.checked;
     else c.value = el.value;
   });
-  g.removeAttribute('id');
-  g.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
+  for (const attr of ['id', 'role', 'tabindex', 'autofocus']) {
+    g.removeAttribute(attr);
+    g.querySelectorAll(`[${attr}]`).forEach((n) => n.removeAttribute(attr));
+  }
   g.setAttribute('aria-hidden', 'true');
   g.inert = true;
   g.style.pointerEvents = 'none';

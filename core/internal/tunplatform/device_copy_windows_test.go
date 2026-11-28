@@ -10,10 +10,7 @@ import (
 
 // Checks the user-mode copy ABI without Wintun, elevation or a network change.
 func TestNativeRingCopyABI(t *testing.T) {
-	if err := ringMove.Find(); err != nil {
-		t.Fatal(err)
-	}
-	d := nativeDevice{moveMemory: ringMove.Addr()}
+	d := nativeDevice{}
 	for _, n := range []int{1, MTU, 65535} {
 		func() {
 			mem, err := windows.LocalAlloc(0, uint32(n+2))

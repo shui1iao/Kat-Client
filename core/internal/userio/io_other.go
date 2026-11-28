@@ -70,3 +70,4 @@ func OpenRoot(p string) (*os.Root, error) {
 	}
 	return os.OpenRoot(p)
 }
+func ReleaseMedium() {}

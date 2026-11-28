@@ -571,7 +571,6 @@ func BenchmarkTCP2022Read64K(b *testing.B) {
 	}
 }
 
-
 // --- SS2022 64KiB upload boundary & record balancing verification ---
 
 type writeTraceConn struct {
@@ -1084,8 +1083,8 @@ func TestTCP2017WriteCallsAndRecordsUnchanged(t *testing.T) {
 			}
 			wantRecs := []int{
 				16383, 16383, 16383, 16383, 11, // 1st Write (7B addr + 65536B = 65543B)
-				16383, 16383, 16383, 16383, 4,  // 2nd Write (65532B + 4B)
-				16383, 16383, 2,                // 3rd Write (32768B)
+				16383, 16383, 16383, 16383, 4, // 2nd Write (65532B + 4B)
+				16383, 16383, 2, // 3rd Write (32768B)
 			}
 			if len(dec.plaintextRecords) != len(wantRecs) {
 				t.Fatalf("2017 records = %v, want %v", dec.plaintextRecords, wantRecs)

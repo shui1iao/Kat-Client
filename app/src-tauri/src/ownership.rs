@@ -1,6 +1,6 @@
 use crate::error::{Error, Result};
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
-use std::{path::Path, io::{Read,Write}};
+use std::{path::Path, io::Read};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ProxyValue {
@@ -58,21 +58,18 @@ pub fn load<T:DeserializeOwned>(path:&Path)->Result<Option<T>> {
  }
 }
 pub fn save<T:Serialize>(path:&Path,value:&T)->Result<()> {
- let b=serde_json::to_vec(value).map_err(|_|Error::new("JOURNAL_INVALID","Recovery journal serialization failed"))?;
- if b.len()>1024*1024 {return Err(Error::new("JOURNAL_INVALID","Recovery journal too large"));}
- let tmp=path.with_extension("next");
- let mut f=std::fs::OpenOptions::new().create(true).truncate(true).write(true).open(&tmp).map_err(|e|Error::io("JOURNAL_WRITE",&e))?;
- f.write_all(&b).and_then(|_|f.sync_all()).map_err(|e|Error::io("JOURNAL_WRITE",&e))?;drop(f);
- #[cfg(windows)]
- {
-  use std::os::windows::ffi::OsStrExt;
-  let a:Vec<u16>=tmp.as_os_str().encode_wide().chain(Some(0)).collect();
-  let z:Vec<u16>=path.as_os_str().encode_wide().chain(Some(0)).collect();
-  if unsafe{windows_sys::Win32::Storage::FileSystem::MoveFileExW(a.as_ptr(),z.as_ptr(),0x1|0x8)}==0 {return Err(Error::new("JOURNAL_REPLACE","Cannot commit recovery journal"));}
- }
- #[cfg(not(windows))]
- {std::fs::rename(&tmp,path).map_err(|e|Error::io("JOURNAL_REPLACE",&e))?;if let Some(p)=path.parent(){std::fs::File::open(p).and_then(|f|f.sync_all()).map_err(|e|Error::io("JOURNAL_SYNC",&e))?;}}
- Ok(())
+ let b=serde_json::to_vec(value).map_err(|_|Error::new("JOURNAL_INVALID","恢复日志序列化失败"))?;
+ crate::fs_atomic::write_atomic_with_codes(
+  path,
+  &b,
+  1024*1024,
+  "JOURNAL_INVALID",
+  "UNTRUSTED_PATH",
+  "UNTRUSTED_PATH",
+  "JOURNAL_WRITE",
+  "JOURNAL_REPLACE",
+  "JOURNAL_SYNC",
+ )
 }
 #[cfg(test)]
 mod tests {
@@ -86,7 +83,17 @@ mod tests {
 
 #[cfg(test)]mod bypass_tests{use super::*;#[test]fn inherit_custom_empty_full_tuple_journal_and_onlyown(){let original=ProxyValue{flags:13,flags_ui:13,server:"prior".into(),bypass:"*.company;<local>".into(),pac:"https://intranet/pac".into(),autodiscovery_flags:9};let inherited=original.installed_with_bypass(8123,None);assert_eq!(inherited,original.installed(8123));assert_eq!(inherited.bypass,original.bypass);
  for text in ["*.custom;10.*","","界"]{let installed=original.installed_with_bypass(8123,Some(text));let mut expected=inherited.clone();expected.bypass=text.into();assert_eq!(installed,expected);assert_eq!(installed.pac,original.pac);assert_eq!(installed.autodiscovery_flags,9);let journal=ProxyJournal{schema:1,owner_sid:"sid".into(),session:7,changes:vec![ProxyChange{connection:None,original:original.clone(),installed:installed.clone(),restored:false}]};let encoded=serde_json::to_vec(&journal).unwrap();let journal:ProxyJournal=serde_json::from_slice(&encoded).unwrap();journal.validate("sid").unwrap();assert_eq!(journal.changes[0].original,original);assert_eq!(restore_decision(&installed,&original,&journal.changes[0].installed),RestoreDecision::Restore);assert_eq!(restore_decision(&original,&original,&installed),RestoreDecision::AlreadyOriginal);let mut foreign=installed.clone();foreign.bypass="third-party".into();assert_eq!(restore_decision(&foreign,&original,&installed),RestoreDecision::ForeignChange);assert!(journal.owned(&None,&foreign).is_none());}}
- #[test]fn startup_and_explicit_enable_use_same_current_prefs(){let s=include_str!("windows/network.rs");let enable=s.split("pub async fn proxy_set").nth(1).unwrap().split("pub async fn status").next().unwrap();assert!(enable.contains("preferences::load"));assert!(enable.contains("proxy::enable(port,preferences.custom_bypass())"));assert!(s.contains("async fn proxy(&self)->Result<()>{self.proxy_set(true).await?;Ok(())}"));let proxy=include_str!("windows/proxy.rs");assert!(proxy.contains("let installed=original.installed_with_bypass(port,custom_bypass)"));assert!(proxy.contains("journal.changes[i].installed=captured"));assert!(proxy.contains("if current.$f==c.installed.$f{desired.$f=c.original.$f.clone();}else if current.$f!=c.original.$f{conflict=true;}"));}
+ #[test]fn startup_and_explicit_enable_use_same_current_prefs(){
+  let mut prefs=crate::preferences::DesktopPreferences::default();
+  assert_eq!(prefs.custom_bypass(),None);
+  prefs.proxy_bypass_mode=crate::preferences::ProxyBypassMode::Custom;
+  prefs.proxy_bypass="10.*;*.local".into();
+  assert_eq!(prefs.custom_bypass(),Some("10.*;*.local"));
+  let orig=ProxyValue{flags:1,flags_ui:1,server:String::new(),bypass:"<local>".into(),pac:String::new(),autodiscovery_flags:0};
+  let inst=orig.installed_with_bypass(7890,prefs.custom_bypass());
+  assert_eq!(inst.bypass,"10.*;*.local");
+  assert_eq!(restore_decision(&inst,&orig,&inst),RestoreDecision::Restore);
+ }
 }
 
 #[cfg(all(test,unix))]mod bounded_load_tests{

@@ -46,13 +46,13 @@ type tcpSystemStack struct {
 	port4 uint16
 	port6 uint16
 
-	mu         sync.RWMutex
-	byTuple    map[tcpTuple]*tcpNATEntry
-	byPort4    [65536]*tcpNATEntry
-	byPort6    [65536]*tcpNATEntry
-	nextPort4  uint16
-	nextPort6  uint16
-	closed     bool
+	mu        sync.RWMutex
+	byTuple   map[tcpTuple]*tcpNATEntry
+	byPort4   [65536]*tcpNATEntry
+	byPort6   [65536]*tcpNATEntry
+	nextPort4 uint16
+	nextPort6 uint16
+	closed    bool
 }
 
 // derivePeerIP derives a deterministic on-link peer address inside the same

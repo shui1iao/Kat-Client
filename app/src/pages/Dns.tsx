@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { ToolPopover } from '../components/ToolPopover';
 import { LocalError } from '../components/Editors';
 import { DomainIcon } from '../components/EntityIcons';
-import { canClearDnsCache } from '../client/sniff';
+import { canClearDnsCache, useClearDnsCache } from '../client/dnsCacheAction';
+import { useSeqLogStream } from '../client/seqLogStream';
+import { useClipboardCopy } from '../lib/clipboard';
+import { useVirtualRows } from '../lib/virtualRows';
 import { NetworkSettings } from '../components/NetworkSettings';
 import { Icon } from '../components/Icon';
 import { CopyButton, Empty, SearchInput, Segmented, StableText, StreamControls } from '../components/ui';
@@ -107,87 +110,77 @@ export function Dns({
   const readable = c.hasHost && c.status !== null;
 
   // --- Recent DNS state ---
-  const [entries, setEntries] = useState<DNSLogEntry[]>([]);
-  const [recentError, setRecentError] = useState('');
   const [recentQ, setRecentQ] = useState('');
   const [filter, setFilter] = useState('all');
-  const [paused, setPaused] = useState(false);
   const [addrPop, setAddrPop] = useState<AddrPopState | null>(null);
   const [queryOpen, setQueryOpen] = useState(false);
   const queryBtnRef = useRef<HTMLButtonElement>(null);
   const dnsCardRef = useRef<HTMLElement>(null);
-  const cursor = useRef(0);
-  const instance = useRef(0);
+  const recentScrollRef = useRef<HTMLDivElement>(null);
+  const cacheScrollRef = useRef<HTMLDivElement>(null);
 
-  const pullNow = async () => {
-    try {
-      const r = normalizeDNSLogs(
-        await core<unknown>('logs.dns', {
-          instance: instance.current,
-          after: cursor.current,
-          limit: 500,
-        }),
-      );
-      const reset = instance.current !== r.instance;
-      instance.current = r.instance;
-      cursor.current = r.next_seq ?? 0;
-      const incoming = Array.isArray(r.entries) ? r.entries : [];
-      setEntries((old) => mergeDNSLogs(reset ? [] : old, incoming));
-      setRecentError('');
-    } catch (e) {
-      setRecentError(errorText(e));
-    }
-  };
-
-  useWindowPoll(activeTab === 'recent' && readable && !paused, POLL_MS, pullNow);
+  const {
+    entries,
+    error: recentError,
+    paused,
+    togglePause: toggleRecentPause,
+    clear: clearRecent,
+    pullNow,
+  } = useSeqLogStream<DNSLogEntry>({
+    method: 'logs.dns',
+    active: activeTab === 'recent' && readable,
+    pollMs: POLL_MS,
+    keep: KEEP,
+    normalize: normalizeDNSLogs,
+    merge: mergeDNSLogs,
+  });
 
   // --- DNS Cache state ---
   const [cacheData, setCacheData] = useState<DNSCacheListReply | null>(null);
   const [cacheError, setCacheError] = useState('');
   const [cacheQ, setCacheQ] = useState('');
-  const [cleared, setCleared] = useState<number | null>(null);
+  const cacheReqId = useRef(0);
 
   const loadCache = async () => {
     if (!running) {
+      cacheReqId.current += 1;
       setCacheData(null);
       return;
     }
+    const reqId = ++cacheReqId.current;
     try {
       const r = await core<DNSCacheListReply>('dns.cache.list');
-      setCacheData(r ? { capacity: r.capacity ?? 0, entries: Array.isArray(r.entries) ? r.entries : [] } : null);
+      if (reqId !== cacheReqId.current) return;
+      setCacheData(r ? { capacity: r.capacity ?? 0, entries: Array.isArray(r.entries) ? r.entries.filter(Boolean) : [] } : null);
       setCacheError('');
     } catch (e) {
+      if (reqId !== cacheReqId.current) return;
       setCacheError(errorText(e));
     }
   };
 
   useEffect(() => {
-    if (!running) setCacheData(null);
+    if (!running) {
+      cacheReqId.current += 1;
+      setCacheData(null);
+    }
   }, [running]);
 
   useWindowPoll(activeTab === 'cache' && running, 1500, loadCache);
 
-  useEffect(() => {
-    if (cleared === null) return;
-    const t = window.setTimeout(() => setCleared(null), 2200);
-    return () => window.clearTimeout(t);
-  }, [cleared]);
+  const { cleared, resetCleared, clearCache } = useClearDnsCache(c, async () => {
+    if (activeTab === 'cache') await loadCache();
+  });
 
   useEffect(() => {
-    setCleared(null);
+    resetCleared();
     setAddrPop(null);
-  }, [activeTab]);
+  }, [activeTab, resetCleared]);
 
-  const clearAllCache = () =>
-    c.run(
-      'dns-clear',
-      async () => {
-        const r = await core<{ cleared: number }>('dns.cache.clear');
-        setCleared(r?.cleared ?? 0);
-        if (activeTab === 'cache') await loadCache();
-      },
-      c.reportOperationError,
-    );
+  const clearAllCache = () => {
+    cacheReqId.current += 1;
+    return clearCache();
+  };
 
   const recentNeedle = recentQ.trim().toLowerCase();
   const shownRecent = entries.filter((e) => {
@@ -215,7 +208,9 @@ export function Dns({
       ? [c.source.kernel.dns.server]
       : [];
   const isCustom = rawServers.length > 0 && !(rawServers.length === 1 && rawServers[0] === 'system');
-  const tunOn = !!c.network?.tun.enabled;
+  const tunOn = !!c.network?.tun?.enabled;
+  const vRecent = useVirtualRows(recentScrollRef, shownRecent.length, 40);
+  const vCache = useVirtualRows(cacheScrollRef, shownCache.length, 40);
   const ipv6On = !!c.source?.client?.ipv6;
 
   const toggleAddrPop = (key: string, domain: string, qtype: string, addrs: string[], anchor: HTMLElement) => {
@@ -255,8 +250,8 @@ export function Dns({
               </button>
               <StreamControls
                 paused={paused}
-                onTogglePause={() => setPaused((p) => !p)}
-                onClear={() => setEntries([])}
+                onTogglePause={toggleRecentPause}
+                onClear={clearRecent}
                 clearDisabled={!entries.length}
               />
             </>
@@ -309,7 +304,7 @@ export function Dns({
         {activeTab === 'recent' && (
           <>
             <LocalError text={recentError} inset />
-            <div className="log-scroll" role="table" aria-label="最近 DNS 解析">
+            <div className="log-scroll" ref={recentScrollRef} role="table" aria-label="最近 DNS 解析">
               <div className="dns-log-grid dns-grid-head" role="row">
                 <span>时间</span>
                 <span>查询域名</span>
@@ -320,7 +315,8 @@ export function Dns({
                 <span className="r">状态</span>
               </div>
 
-              {shownRecent.map((e) => {
+              {vRecent.topPad > 0 && <div style={{ height: vRecent.topPad }} aria-hidden="true" />}
+              {(vRecent.virtual ? shownRecent.slice(vRecent.start, vRecent.end) : shownRecent).map((e) => {
                 const addrs = asStringArray(e.addresses);
                 const serverText = formatServer(e.server);
                 const srcLabel = SOURCE_LABEL[e.source] ?? e.source ?? '路由';
@@ -394,6 +390,7 @@ export function Dns({
                 );
               })}
 
+              {vRecent.bottomPad > 0 && <div style={{ height: vRecent.bottomPad }} aria-hidden="true" />}
               {!shownRecent.length && (
                 <Empty>
                   {entries.length ? '无匹配的 DNS 解析记录' : running ? '等待新的 DNS 解析请求…' : '内核未运行'}
@@ -406,7 +403,7 @@ export function Dns({
         {activeTab === 'cache' && (
           <>
             <LocalError text={cacheError} inset />
-            <div className="log-scroll" role="table" aria-label="DNS 解析缓存">
+            <div className="log-scroll" ref={cacheScrollRef} role="table" aria-label="DNS 解析缓存">
               <div className="dns-cache-grid dns-grid-head" role="row">
                 <span>缓存域名</span>
                 <span>类型</span>
@@ -415,7 +412,9 @@ export function Dns({
                 <span className="r">剩余 TTL</span>
               </div>
 
-              {shownCache.map((it, idx) => {
+              {vCache.topPad > 0 && <div style={{ height: vCache.topPad }} aria-hidden="true" />}
+              {(vCache.virtual ? shownCache.slice(vCache.start, vCache.end) : shownCache).map((it, relIdx) => {
+                const idx = vCache.start + relIdx;
                 const addrs = asStringArray(it.addresses);
                 const qtype = it.qtype || 'A';
                 const rowKey = `${it.name || idx}:${qtype}:${idx}`;
@@ -455,6 +454,7 @@ export function Dns({
                 );
               })}
 
+              {vCache.bottomPad > 0 && <div style={{ height: vCache.bottomPad }} aria-hidden="true" />}
               {!shownCache.length && (
                 <Empty>
                   {!running
@@ -523,23 +523,13 @@ function DnsAddrCell({
   activePopKey?: string;
   onTogglePop: (key: string, domain: string, qtype: string, addrs: string[], anchor: HTMLElement) => void;
 }) {
-  const [copied, setCopied] = useState(false);
-  const timer = useRef<number | null>(null);
-  useEffect(
-    () => () => {
-      if (timer.current !== null) window.clearTimeout(timer.current);
-    },
-    [],
-  );
+  const { copied, copy: copyClipboard } = useClipboardCopy(1400);
   const primaryIp = addrs[0] ?? '';
   const extraCount = Math.max(0, addrs.length - 1);
   const isOpen = activePopKey === popKey;
   const copyPrimary = () => {
     if (!primaryIp) return;
-    void navigator.clipboard?.writeText(primaryIp);
-    setCopied(true);
-    if (timer.current !== null) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setCopied(false), 1400);
+    void copyClipboard(primaryIp);
   };
   return (
     <span className="dns-addr-cell" role="cell">
@@ -573,20 +563,10 @@ function DnsAddrCell({
 }
 
 function DnsRecordRow({ type, addr }: { type: string; addr: string }) {
-  const [copied, setCopied] = useState(false);
-  const timer = useRef<number | null>(null);
-  useEffect(
-    () => () => {
-      if (timer.current !== null) window.clearTimeout(timer.current);
-    },
-    [],
-  );
+  const { copied, copy: copyClipboard } = useClipboardCopy(1500);
   const copy = () => {
     if (!addr) return;
-    void navigator.clipboard?.writeText(addr);
-    setCopied(true);
-    if (timer.current !== null) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setCopied(false), 1500);
+    void copyClipboard(addr);
   };
   return (
     <button type="button" className="dns-rec-row" onClick={copy} {...tip(`点击复制 ${addr}`)}>
@@ -647,11 +627,22 @@ function DnsQueryPopover({
   const [notice, setNotice] = useState<QuickNotice | null>(null);
   const noticeSeq = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const busy = c.busy.has('dns-quick-query');
+  const querySeq = useRef(0);
+  const [querying, setQuerying] = useState(false);
+  const busy = querying || c.busy.has('dns-quick-query');
+
+  useEffect(() => {
+    if (!open) {
+      querySeq.current += 1;
+      setQuerying(false);
+    }
+  }, [open]);
 
   const submit = () => {
     const parsed = parseDnsQueryInput(name);
     if (!parsed.ok) {
+      querySeq.current += 1;
+      setQuerying(false);
       setNotice({
         id: ++noticeSeq.current,
         tone: 'err',
@@ -661,9 +652,12 @@ function DnsQueryPopover({
       return;
     }
 
-    void c.run('dns-quick-query', async () => {
+    const mySeq = ++querySeq.current;
+    setQuerying(true);
+    void (async () => {
       try {
         const res = normalizeDNSQuery(await core<unknown>('dns.query', { name: parsed.domain, type }));
+        if (mySeq !== querySeq.current) return;
         const records: QuickRecord[] = res.addresses
           .filter((a) => typeof a.addr === 'string' && a.addr.trim())
           .map((a) => ({
@@ -683,6 +677,7 @@ function DnsQueryPopover({
         });
         onQueried?.();
       } catch (e) {
+        if (mySeq !== querySeq.current) return;
         setNotice({
           id: ++noticeSeq.current,
           tone: 'err',
@@ -690,8 +685,10 @@ function DnsQueryPopover({
           detail: errorText(e),
           fromUrl: parsed.fromUrl,
         });
+      } finally {
+        if (mySeq === querySeq.current) setQuerying(false);
       }
-    });
+    })();
   };
 
   return (
@@ -724,6 +721,8 @@ function DnsQueryPopover({
           value={name}
           disabled={!running || busy}
           onChange={(e) => {
+            querySeq.current += 1;
+            setQuerying(false);
             setName(e.target.value);
             if (!e.target.value.trim()) setNotice(null);
           }}

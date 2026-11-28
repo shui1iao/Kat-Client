@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { tip } from './Tooltip';
 import { Icon } from './Icon';
@@ -9,7 +9,7 @@ import { resolveGroupPath } from '../client/groupDisplay';
 import { errorText } from '../lib/errors';
 import type { Client } from '../client/useClient';
 
-export function SideControls({ c, onOpenGlobalGroup, collapsed = false }: { c: Client; onOpenGlobalGroup?: (groupName?: string) => void; collapsed?: boolean }) {
+export const SideControls = memo(function SideControls({ c, onOpenGlobalGroup, collapsed = false }: { c: Client; onOpenGlobalGroup?: (groupName?: string) => void; collapsed?: boolean }) {
   const mode = c.status?.mode ?? c.source?.client.mode;
   const network = c.network;
   const sys = network?.system_proxy;
@@ -17,8 +17,8 @@ export function SideControls({ c, onOpenGlobalGroup, collapsed = false }: { c: C
   const service = network?.service;
   const busy = c.busy.has('network');
   const running = c.status?.runtime.state === 'running';
-  const sysReady = running && c.status?.local?.http.ready;
-  const tunReady = running && c.status?.local?.socks.ready;
+  const sysReady = running && Boolean(c.status?.local?.http?.ready);
+  const tunReady = running && Boolean(c.status?.local?.socks?.ready);
   const modes: Mode[] = ['rule', 'global', 'direct'];
 
   const [pending, setPending] = useState<Mode | null>(null);
@@ -86,6 +86,23 @@ export function SideControls({ c, onOpenGlobalGroup, collapsed = false }: { c: C
     target?.focus({ preventScroll: true });
     target?.scrollIntoView({ block: 'nearest' });
   }, [!!menuPos]);
+  useEffect(() => {
+    if (!railMenu) return;
+    const pop = railPopRef.current;
+    const target = pop?.querySelector<HTMLElement>('.kat-opt[aria-selected="true"]') ?? pop?.querySelector<HTMLElement>('.kat-opt');
+    target?.focus({ preventScroll: true });
+  }, [!!railMenu]);
+  const onRailPopKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = [...(railPopRef.current?.querySelectorAll<HTMLElement>('.kat-opt:not(:disabled)') ?? [])];
+    if (!items.length) return;
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    const go = (n: number) => { e.preventDefault(); items[(n + items.length) % items.length].focus(); };
+    if (e.key === 'ArrowDown') go(i + 1);
+    else if (e.key === 'ArrowUp') go(i < 0 ? items.length - 1 : i - 1);
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(items.length - 1);
+    else if (e.key === 'Tab' || e.key === 'Escape') { e.preventDefault(); setRailMenu(null); railModeRef.current?.focus({ preventScroll: true }); }
+  };
   const onPopKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const items = [...(popRef.current?.querySelectorAll<HTMLElement>('.kat-opt:not(:disabled)') ?? [])];
     if (!items.length) return;
@@ -163,7 +180,7 @@ export function SideControls({ c, onOpenGlobalGroup, collapsed = false }: { c: C
         </button>
         {railMenu &&
           createPortal(
-            <div ref={railPopRef} className="kat-pop rail-mode-pop" role="listbox" aria-label="代理模式" style={{ left: railMenu.left, top: railMenu.top }}>
+            <div ref={railPopRef} className="kat-pop rail-mode-pop" role="listbox" aria-label="代理模式" style={{ left: railMenu.left, top: railMenu.top }} onKeyDown={onRailPopKey}>
               {modes.map((m) => (
                 <button
                   key={m}
@@ -331,4 +348,4 @@ export function SideControls({ c, onOpenGlobalGroup, collapsed = false }: { c: C
       </div>
     </div>
   );
-}
+});

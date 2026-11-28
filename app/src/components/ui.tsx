@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes
 import { Icon, type IconName } from './Icon';
 import type { DisplaySort } from '../client/settings';
 import { tip } from './Tooltip';
+import { useClipboardCopy } from '../lib/clipboard';
 
 export function Switch({ on }: { on: boolean }) {
   return <span className={'sw' + (on ? ' on' : '')} aria-hidden="true"><i /></span>;
@@ -291,27 +292,11 @@ export function CopyButton({
   className?: string;
   onError?: () => void;
 }) {
-  const [state, setState] = useState<'idle' | 'ok' | 'fail'>('idle');
-  const timer = useRef<number | null>(null);
-
-  useEffect(
-    () => () => {
-      if (timer.current !== null) window.clearTimeout(timer.current);
-    },
-    [],
-  );
+  const { state, copy } = useClipboardCopy(1500);
 
   const handleCopy = async () => {
     if (disabled || !text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      setState('ok');
-    } catch {
-      setState('fail');
-      onError?.();
-    }
-    if (timer.current !== null) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setState('idle'), 1500);
+    await copy(text, onError);
   };
 
   if (variant === 'icon') {

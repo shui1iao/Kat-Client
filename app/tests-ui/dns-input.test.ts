@@ -82,3 +82,34 @@ test('unified overlay glass, radius and soft fade CSS rules remain standard-prop
   assert.match(pages, /\.dns-query-pop\s*\{/s);
   assert.match(pages, /\.dns-addr-pop\s*\{[^}]*border-radius:\s*var\(--r-pop\)[^}]*backdrop-filter:\s*blur\(20px\)\s*saturate\(200%\)/s);
 });
+
+test('parseDnsQueryInput handles hex-label domains with port and rejects malformed triple-colon as invalid format rather than IP', () => {
+  assert.deepEqual(parseDnsQueryInput('face.de:443'), {
+    ok: true,
+    domain: 'face.de',
+    fromUrl: true,
+  });
+  assert.deepEqual(parseDnsQueryInput('cafe.ba:8080'), {
+    ok: true,
+    domain: 'cafe.ba',
+    fromUrl: true,
+  });
+  assert.deepEqual(parseDnsQueryInput('dead.be:443'), {
+    ok: true,
+    domain: 'dead.be',
+    fromUrl: true,
+  });
+
+  const tripleColon = parseDnsQueryInput(':::');
+  assert.equal(tripleColon.ok, false);
+  if (!tripleColon.ok) {
+    assert.doesNotMatch(tripleColon.error, /已是 IP/);
+    assert.match(tripleColon.error, /有效的域名/);
+  }
+
+  const bracketV6 = parseDnsQueryInput('[2001:db8:85a3::8a2e:370:7334]:65535');
+  assert.equal(bracketV6.ok, false);
+  if (!bracketV6.ok) {
+    assert.match(bracketV6.error, /IP/);
+  }
+});

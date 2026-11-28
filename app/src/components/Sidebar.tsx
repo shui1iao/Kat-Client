@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, memo, type ReactNode } from 'react';
 import { tip } from './Tooltip';
 import { Icon, type IconName } from './Icon';
 
@@ -45,7 +45,7 @@ export const PAGE_LABEL = Object.fromEntries(
   NAV.flatMap((group) => group.items.map((item) => [item.id, item.label])),
 ) as Record<PageId, string>;
 
-export function Sidebar({
+export const Sidebar = memo(function Sidebar({
   page,
   onGo,
   collapsed,
@@ -145,4 +145,4 @@ export function Sidebar({
       {footer}
     </nav>
   );
-}
+});

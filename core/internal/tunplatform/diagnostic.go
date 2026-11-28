@@ -37,6 +37,9 @@ func SafeDiagnostic(d Diagnostic) Diagnostic {
 	if d.Native != nil && *d.Native == 0 {
 		d.Native = nil
 	}
+	if d.Removal != nil && d.Removal.Rows == nil {
+		d.Removal.Rows = []GoneRow{}
+	}
 	return d
 }
 func At(stage, code string, e error) error {

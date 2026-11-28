@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/shui1iao/Kat/internal/outbound"
-	"github.com/shui1iao/Kat/internal/udpmmsg"
 	"github.com/shui1iao/Kat/internal/stats"
+	"github.com/shui1iao/Kat/internal/udpmmsg"
 )
 
 // proxySession is one association's datagram channel through one outbound or
@@ -40,7 +40,7 @@ func (a *udpAssociation) sendProxyFast(name string, dst Address, payload []byte,
 	ses := a.proxySessionFor(name)
 	if ses == nil {
 		a.rcValid.Store(false)
-	a.rcSnap.Store(nil)
+		a.rcSnap.Store(nil)
 		if a.flow != nil {
 			a.flow.udpFailure(target, rule, []string{name}, "udp_setup_failed")
 		}
@@ -55,7 +55,7 @@ func (a *udpAssociation) sendProxyFast(name string, dst Address, payload []byte,
 	}
 	if _, e := ses.pc.WriteTo(payload, outbound.Addr{Host: dst.Host, Port: dst.Port}); e != nil {
 		a.rcValid.Store(false)
-	a.rcSnap.Store(nil)
+		a.rcSnap.Store(nil)
 		a.flow.udpFailure(target, rule, ses.chain, dialResult(e), e)
 		s.counters.Dropped.Add(1)
 		switch {
@@ -74,13 +74,12 @@ func (a *udpAssociation) sendProxyFast(name string, dst Address, payload []byte,
 	a.activity.Store(nowNano)
 }
 
-
 func (a *udpAssociation) sendProxyFastBatch(name string, dst Address, payloads [][]byte, target Address, rule int, rt *udpRoute) {
 	s := a.server
 	ses := a.proxySessionFor(name)
 	if ses == nil {
 		a.rcValid.Store(false)
-	a.rcSnap.Store(nil)
+		a.rcSnap.Store(nil)
 		if a.flow != nil {
 			a.flow.udpFailure(target, rule, []string{name}, "udp_setup_failed")
 		}
@@ -109,7 +108,7 @@ func (a *udpAssociation) sendProxyFastBatch(name string, dst Address, payloads [
 	}
 	if e != nil {
 		a.rcValid.Store(false)
-	a.rcSnap.Store(nil)
+		a.rcSnap.Store(nil)
 		a.flow.udpFailure(target, rule, ses.chain, dialResult(e), e)
 		s.counters.Dropped.Add(int64(len(payloads) - sent))
 		switch {

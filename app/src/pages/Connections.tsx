@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useVirtualRows } from '../lib/virtualRows';
+import { createEpochGuard } from '../lib/epochGuard';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { tip } from '../components/Tooltip';
 import { RuleEditor } from './Rules';
 import { flowRuleDraft, processCounts, type FlowRuleSource } from '../client/flowRule';
@@ -77,14 +79,21 @@ export function Connections({
     });
   };
 
+  const pollEpoch = useRef(createEpochGuard());
+
   async function closeCaptured(target: { connection_instance: string; ids: number[] } | null) {
     if (!target || !target.connection_instance || !target.ids.length) return;
+    pollEpoch.current.bump();
     setClosing(true);
     try {
       await core('connections.close', { connection_instance: target.connection_instance, ids: target.ids });
+      const myEpoch = pollEpoch.current.bump();
       const r = normalizeConnections(await core<unknown>('connections.list', { closed_limit: 500 }));
-      setData(r);
-      setError('');
+      if (pollEpoch.current.isCurrent(myEpoch)) {
+        prevSnap.current = { at: Date.now(), map: new Map(r.active.map((x) => [x.id, x])) };
+        setData(r);
+        setError('');
+      }
       setConfirmation(null);
     } catch (e) {
       c.setError(errorText(e));
@@ -95,6 +104,7 @@ export function Connections({
 
   useEffect(() => {
     if (!running) {
+      pollEpoch.current.bump();
       setData(null);
       setLocalRates({});
       prevSnap.current = null;
@@ -103,8 +113,10 @@ export function Connections({
   }, [running]);
 
   useWindowPoll(c.hasHost && running && !paused, POLL_MS, async () => {
+    const myEpoch = pollEpoch.current.capture();
     try {
       const r = normalizeConnections(await core<unknown>('connections.list', { closed_limit: 500 }));
+      if (!pollEpoch.current.isCurrent(myEpoch)) return;
       const now = Date.now();
       const prev = prevSnap.current;
       const dt = prev ? (now - prev.at) / 1000 : 0;
@@ -121,6 +133,7 @@ export function Connections({
       setData(r);
       setError('');
     } catch (e) {
+      if (!pollEpoch.current.isCurrent(myEpoch)) return;
       setError(errorText(e));
     }
   });
@@ -212,20 +225,64 @@ export function Connections({
     });
   }
 
+  const prevViewRef = useRef({ tab, groupByProc });
+  useLayoutEffect(() => {
+    if (prevViewRef.current.tab !== tab || prevViewRef.current.groupByProc !== groupByProc) {
+      prevViewRef.current = { tab, groupByProc };
+      if (tableRef.current) tableRef.current.scrollTop = 0;
+    }
+  }, [tab, groupByProc]);
+
+  const scrolledKeyRef = useRef<string | null>(null);
+  const hasLoadedList = data !== null;
   useEffect(() => {
-    if (selectedId == null) return;
+    if (selectedId == null) {
+      scrolledKeyRef.current = null;
+      return;
+    }
+    const targetKey = `${tab}:${groupByProc ? 'proc' : 'flat'}:${selectedId}:${hasLoadedList ? '1' : '0'}`;
+    if (scrolledKeyRef.current === targetKey) return;
+    const selector = `[data-conn-id="${CSS.escape(String(selectedId))}"]`;
     if (groupByProc) {
       const hit = list.find((x) => x.id === selectedId);
       if (hit) {
         const key = (hit.process_name || '').trim().toLowerCase() || '__unknown__';
         setOpenProcs((prev) => (prev.has(key) ? prev : new Set(prev).add(key)));
+        scrolledKeyRef.current = targetKey;
       }
+      requestAnimationFrame(() => {
+        tableRef.current?.querySelector<HTMLElement>(selector)?.scrollIntoView({ block: 'nearest' });
+      });
+      return;
     }
+    const idx = sorted.findIndex((x) => x.id === selectedId);
+    if (idx < 0) return;
+    scrolledKeyRef.current = targetKey;
+    const sc = tableRef.current;
+    if (!sc) return;
+    const existing = sc.querySelector<HTMLElement>(selector);
+    if (existing) {
+      const scRect = sc.getBoundingClientRect();
+      const rowRect = existing.getBoundingClientRect();
+      if (rowRect.top < scRect.top + 36 || rowRect.bottom > scRect.bottom) {
+        existing.scrollIntoView({ block: 'nearest' });
+      }
+      return;
+    }
+    sc.scrollTop = Math.max(0, idx * 54 - Math.max(0, (sc.clientHeight - 54) / 2));
     requestAnimationFrame(() => {
-      const el = tableRef.current?.querySelector<HTMLElement>(`[data-conn-id="${selectedId}"]`);
-      el?.scrollIntoView({ block: 'nearest' });
+      requestAnimationFrame(() => {
+        const mounted = tableRef.current?.querySelector<HTMLElement>(selector);
+        if (mounted) {
+          mounted.scrollIntoView({ block: 'nearest' });
+        } else {
+          requestAnimationFrame(() => {
+            tableRef.current?.querySelector<HTMLElement>(selector)?.scrollIntoView({ block: 'nearest' });
+          });
+        }
+      });
     });
-  }, [selectedId, tab, groupByProc]);
+  }, [selectedId, tab, groupByProc, hasLoadedList, sorted, list]);
 
   const nodeProtoMap = useNodeProtoMap(c);
 
@@ -407,15 +464,7 @@ export function Connections({
           aria-label={tab === 'active' ? '活跃连接' : '已关闭连接'}
         >
           {!groupByProc ? (
-            <>
-              <div className="conn-grid-row conn-grid-head" role="row">
-                <span />
-                <span>目标 · 进程 · 规则</span>
-                <span>落地节点 · 策略</span>
-                <span className="r">{tab === 'active' ? '速率 / 总量' : '结束 / 总量'}</span>
-              </div>
-              {sorted.map((x) => renderConnRow(x, false))}
-            </>
+            <FlatConnRows tableRef={tableRef} sorted={sorted} tab={tab} renderConnRow={renderConnRow} />
           ) : (
             <>
               <div className={'conn-proc-group-grid conn-grid-head' + (tab === 'active' ? ' has-action' : '')} role="row">
@@ -548,5 +597,33 @@ export function Connections({
         </Modal>
       )}
     </div>
+  );
+}
+
+function FlatConnRows<T>({
+  tableRef,
+  sorted,
+  tab,
+  renderConnRow,
+}: {
+  tableRef: React.RefObject<HTMLDivElement | null>;
+  sorted: T[];
+  tab: 'active' | 'closed';
+  renderConnRow: (x: T, compact: boolean) => React.ReactNode;
+}) {
+  const vRows = useVirtualRows(tableRef, sorted.length, 54);
+  const slice = vRows.virtual ? sorted.slice(vRows.start, vRows.end) : sorted;
+  return (
+    <>
+      <div className="conn-grid-row conn-grid-head" role="row">
+        <span />
+        <span>目标 · 进程 · 规则</span>
+        <span>落地节点 · 策略</span>
+        <span className="r">{tab === 'active' ? '速率 / 总量' : '结束 / 总量'}</span>
+      </div>
+      {vRows.topPad > 0 && <div style={{ height: vRows.topPad }} aria-hidden="true" />}
+      {slice.map((x) => renderConnRow(x, false))}
+      {vRows.bottomPad > 0 && <div style={{ height: vRows.bottomPad }} aria-hidden="true" />}
+    </>
   );
 }

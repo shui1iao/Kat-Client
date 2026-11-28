@@ -1,3 +1,4 @@
+import { formatHostPort } from '../lib/netAddr';
 import { SoftwareUpdateCard, type SoftwareUpdateController } from '../components/SoftwareUpdates';
 import { showBytes, showUptime } from '../client/display';
 import { useEffect, useRef, useState } from 'react';
@@ -80,7 +81,7 @@ function KernelCard({ c }: { c: Client }) {
           <div key={k}>
             <span>{k.toUpperCase()} 本地监听入口</span>
             <span className="kernel-entry-value">
-              <b className="num">{s?.local?.[k] ? `${s.local[k].host}:${s.local[k].port}` : '—'}</b>
+              <b className="num">{s?.local?.[k] ? formatHostPort(s.local[k].host, s.local[k].port) || '—' : '—'}</b>
               <KState tone={s?.local?.[k]?.ready ? 'ok' : 'muted'} label={s?.local?.[k]?.ready ? '就绪' : '未就绪'} />
             </span>
           </div>

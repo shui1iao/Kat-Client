@@ -454,7 +454,7 @@ func (h *Host) applyContext(ctx context.Context, text string, formats ...Documen
 		}
 		tx.accept()
 		h.doc = d
-	h.publishFastSnapshotLocked()
+		h.publishFastSnapshotLocked()
 		if len(ids) > 0 {
 			h.server.ClientCloseConnections(ids)
 		}

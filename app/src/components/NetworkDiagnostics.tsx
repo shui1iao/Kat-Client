@@ -41,7 +41,7 @@ export function NetworkDiagnostics({ c }: { c: Client }) {
   const [url, setURL] = useState('');
   const [error, setError] = useState('');
 
-  const urls = c.desktop?.preferences.diagnostic_urls ?? [];
+  const urls = Array.isArray(c.desktop?.preferences?.diagnostic_urls) ? c.desktop.preferences.diagnostic_urls : [];
   const running = c.status?.runtime.state === 'running';
 
   useEffect(() => {

@@ -255,7 +255,10 @@ func (c *conn) CloseWrite() error {
 	if e := c.ensureSent(); e != nil {
 		return e
 	}
-	return c.Conn.(interface{ CloseWrite() error }).CloseWrite()
+	if cw, ok := c.Conn.(interface{ CloseWrite() error }); ok {
+		return cw.CloseWrite()
+	}
+	return fmt.Errorf("trojan: transport does not support CloseWrite: %w", errors.ErrUnsupported)
 }
 
 // ListenPacket opens a UDP ASSOCIATE over a new TLS stream. The request

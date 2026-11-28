@@ -182,6 +182,26 @@ const (
 	maxSniffTimeout      = 2 * time.Second
 )
 
+// ValidateSniffPortSpec reports whether s is a valid sniff port specification
+// (empty default, "none", or comma-separated ports/ranges accepted by route.ParsePorts).
+func ValidateSniffPortSpec(s string) bool {
+	if s == "" || s == "none" {
+		return true
+	}
+	_, ok := route.ParsePorts(s)
+	return ok
+}
+
+// ValidateSniffTimeout reports whether d is a valid client/kernel sniff timeout
+// (0 for default, or within [1ms, 2s]).
+func ValidateSniffTimeout(d Duration) bool {
+	if d == 0 {
+		return true
+	}
+	v := d.value()
+	return v >= time.Millisecond && v <= maxSniffTimeout
+}
+
 func (o *SniffOptions) normalize() error {
 	parse := func(s *string, def string, dst *route.PortList) error {
 		if *s == "" {

@@ -11,13 +11,34 @@ import (
 	"golang.org/x/sys/windows"
 	"net/netip"
 	"reflect"
+	"runtime"
 	"strings"
 	"syscall"
 	"unsafe"
 )
 
-var ipDLL = windows.NewLazySystemDLL("iphlpapi.dll")
-var cfgmgrDLL = windows.NewLazySystemDLL("cfgmgr32.dll")
+var (
+	ipDLL     = windows.NewLazySystemDLL("iphlpapi.dll")
+	cfgmgrDLL = windows.NewLazySystemDLL("cfgmgr32.dll")
+
+	procCMLocateDevNodeW                = cfgmgrDLL.NewProc("CM_Locate_DevNodeW")
+	procInitializeIpForwardEntry        = ipDLL.NewProc("InitializeIpForwardEntry")
+	procInitializeUnicastIpAddressEntry = ipDLL.NewProc("InitializeUnicastIpAddressEntry")
+	procConvertInterfaceLuidToGuid      = ipDLL.NewProc("ConvertInterfaceLuidToGuid")
+	procGetCurrentThreadCompartmentId   = ipDLL.NewProc("GetCurrentThreadCompartmentId")
+	procGetIfTable2                     = ipDLL.NewProc("GetIfTable2")
+	procGetInterfaceDnsSettings         = ipDLL.NewProc("GetInterfaceDnsSettings")
+	procFreeInterfaceDnsSettings        = ipDLL.NewProc("FreeInterfaceDnsSettings")
+	procSetInterfaceDnsSettings         = ipDLL.NewProc("SetInterfaceDnsSettings")
+	procCreateIpForwardEntry2           = ipDLL.NewProc("CreateIpForwardEntry2")
+	procDeleteIpForwardEntry2           = ipDLL.NewProc("DeleteIpForwardEntry2")
+	procCreateUnicastIpAddressEntry     = ipDLL.NewProc("CreateUnicastIpAddressEntry")
+	procDeleteUnicastIpAddressEntry     = ipDLL.NewProc("DeleteUnicastIpAddressEntry")
+	procSetIpInterfaceEntry             = ipDLL.NewProc("SetIpInterfaceEntry")
+	procNotifyRouteChange2              = ipDLL.NewProc("NotifyRouteChange2")
+	procNotifyIpInterfaceChange         = ipDLL.NewProc("NotifyIpInterfaceChange")
+	procNotifyUnicastIpAddressChange    = ipDLL.NewProc("NotifyUnicastIpAddressChange")
+)
 
 const (
 	cmLocateDevnodePhantom = 1
@@ -52,11 +73,12 @@ func isUninstalledTombstone(r windows.MibIfRow2, guid string) bool {
 		return false
 	}
 	var devInst uint32
-	cr, _, _ := cfgmgrDLL.NewProc("CM_Locate_DevNodeW").Call(
+	cr, _, _ := procCMLocateDevNodeW.Call(
 		uintptr(unsafe.Pointer(&devInst)),
 		uintptr(unsafe.Pointer(instance)),
 		cmLocateDevnodePhantom,
 	)
+	runtime.KeepAlive(instance)
 	if uint32(cr) != crNoSuchDevnode {
 		return false
 	}
@@ -69,8 +91,7 @@ func isUninstalledTombstone(r windows.MibIfRow2, guid string) bool {
 	return true
 }
 
-func ipCall(name string, args ...uintptr) error {
-	r, _, _ := ipDLL.NewProc(name).Call(args...)
+func ipStatus(name string, r uintptr) error {
 	if r != 0 {
 		return fmt.Errorf("%s: %w", name, syscall.Errno(r))
 	}
@@ -104,7 +125,7 @@ func sockaddrIP(p unsafe.Pointer) (netip.Addr, uint32, error) {
 }
 func routeRow(a Adapter, v *RouteValue) windows.MibIpForwardRow2 {
 	var r windows.MibIpForwardRow2
-	ipDLL.NewProc("InitializeIpForwardEntry").Call(uintptr(unsafe.Pointer(&r))) // void; initialized values below are explicit
+	procInitializeIpForwardEntry.Call(uintptr(unsafe.Pointer(&r))) // void; initialized values below are explicit
 	r.InterfaceLuid = a.LUID
 	r.DestinationPrefix.Prefix = rawIP(v.Destination)
 	r.DestinationPrefix.PrefixLength = v.Prefix
@@ -128,7 +149,7 @@ func flag(v bool) uint8 {
 }
 func addressRow(a Adapter, v *AddressValue) windows.MibUnicastIpAddressRow {
 	var r windows.MibUnicastIpAddressRow
-	ipDLL.NewProc("InitializeUnicastIpAddressEntry").Call(uintptr(unsafe.Pointer(&r)))
+	procInitializeUnicastIpAddressEntry.Call(uintptr(unsafe.Pointer(&r)))
 	r.InterfaceLuid = a.LUID
 	raw := rawIP(v.Address)
 	r.Address = *(*windows.RawSockaddrInet6)(unsafe.Pointer(&raw))
@@ -150,8 +171,8 @@ type dnsSettings struct {
 
 func guidOf(luid uint64) (windows.GUID, error) {
 	var g windows.GUID
-	e := ipCall("ConvertInterfaceLuidToGuid", uintptr(unsafe.Pointer(&luid)), uintptr(unsafe.Pointer(&g)))
-	return g, e
+	r, _, _ := procConvertInterfaceLuidToGuid.Call(uintptr(unsafe.Pointer(&luid)), uintptr(unsafe.Pointer(&g)))
+	return g, ipStatus("ConvertInterfaceLuidToGuid", r)
 }
 
 type nativeOS struct{ launch Launch }
@@ -196,7 +217,7 @@ func (n *nativeOS) InspectGone(ctx context.Context, a Adapter) (GoneRead, error)
 	if e := ctx.Err(); e != nil {
 		return out, e
 	}
-	comp, _, _ := ipDLL.NewProc("GetCurrentThreadCompartmentId").Call()
+	comp, _, _ := procGetCurrentThreadCompartmentId.Call()
 	out.Compartment = uint32(comp)
 	if a.Compartment != 1 || out.Compartment != a.Compartment {
 		return out, errors.New("RECOVERY_COMPARTMENT")
@@ -231,7 +252,7 @@ func ifRows() ([]windows.MibIfRow2, *uint32, error) {
 	var p *windows.MibIfTable2
 	// Convert at the annotated native Call boundary, not through a variadic
 	// uintptr wrapper: keep the output pointer tracked for the whole syscall.
-	rc, _, _ := ipDLL.NewProc("GetIfTable2").Call(uintptr(unsafe.Pointer(&p)))
+	rc, _, _ := procGetIfTable2.Call(uintptr(unsafe.Pointer(&p)))
 	result := uint32(rc)
 	if rc != 0 {
 		return nil, &result, syscall.Errno(rc)
@@ -250,7 +271,7 @@ func (n *nativeOS) Read(ctx context.Context, a Adapter, c Change) (*Value, error
 		return nil, e
 	}
 	var compartment uint32
-	v, _, _ := ipDLL.NewProc("GetCurrentThreadCompartmentId").Call()
+	v, _, _ := procGetCurrentThreadCompartmentId.Call()
 	compartment = uint32(v)
 	if compartment != 1 || a.Compartment != 1 {
 		return nil, errors.New("RECOVERY_COMPARTMENT")
@@ -305,10 +326,14 @@ func (n *nativeOS) Read(ctx context.Context, a Adapter, c Change) (*Value, error
 			return nil, e
 		}
 		s := dnsSettings{Version: 1}
-		if e = ipCall("GetInterfaceDnsSettings", uintptr(unsafe.Pointer(&g)), uintptr(unsafe.Pointer(&s))); e != nil {
+		rc, _, _ := procGetInterfaceDnsSettings.Call(uintptr(unsafe.Pointer(&g)), uintptr(unsafe.Pointer(&s)))
+		if e = ipStatus("GetInterfaceDnsSettings", rc); e != nil {
 			return nil, e
 		}
-		defer ipDLL.NewProc("FreeInterfaceDnsSettings").Call(uintptr(unsafe.Pointer(&s)))
+		defer func() {
+			procFreeInterfaceDnsSettings.Call(uintptr(unsafe.Pointer(&s)))
+			runtime.KeepAlive(&s)
+		}()
 		text := ""
 		if s.NameServer != nil {
 			b := unsafe.Slice(s.NameServer, 32768)
@@ -346,19 +371,25 @@ func (n *nativeOS) Apply(ctx context.Context, a Adapter, c Change) error {
 	}
 	if c.Installed.Route != nil {
 		r := routeRow(a, c.Installed.Route)
-		name := "DeleteIpForwardEntry2"
 		if c.Desired {
-			name = "CreateIpForwardEntry2"
+			rc, _, _ := procCreateIpForwardEntry2.Call(uintptr(unsafe.Pointer(&r)))
+			e = ipStatus("CreateIpForwardEntry2", rc)
+		} else {
+			rc, _, _ := procDeleteIpForwardEntry2.Call(uintptr(unsafe.Pointer(&r)))
+			e = ipStatus("DeleteIpForwardEntry2", rc)
 		}
-		e = ipCall(name, uintptr(unsafe.Pointer(&r)))
+		runtime.KeepAlive(&r)
 	}
 	if c.Installed.Address != nil {
 		r := addressRow(a, c.Installed.Address)
-		name := "DeleteUnicastIpAddressEntry"
 		if c.Desired {
-			name = "CreateUnicastIpAddressEntry"
+			rc, _, _ := procCreateUnicastIpAddressEntry.Call(uintptr(unsafe.Pointer(&r)))
+			e = ipStatus("CreateUnicastIpAddressEntry", rc)
+		} else {
+			rc, _, _ := procDeleteUnicastIpAddressEntry.Call(uintptr(unsafe.Pointer(&r)))
+			e = ipStatus("DeleteUnicastIpAddressEntry", rc)
 		}
-		e = ipCall(name, uintptr(unsafe.Pointer(&r)))
+		runtime.KeepAlive(&r)
 	}
 	if c.Installed.Interface != nil {
 		v := target.Interface
@@ -371,7 +402,9 @@ func (n *nativeOS) Apply(ctx context.Context, a Adapter, c Change) error {
 		r.UseAutomaticMetric = flag(v.AutomaticMetric)
 		r.DadTransmits = v.DADTransmits
 		r.SitePrefixLength = 0
-		e = ipCall("SetIpInterfaceEntry", uintptr(unsafe.Pointer(&r)))
+		rc, _, _ := procSetIpInterfaceEntry.Call(uintptr(unsafe.Pointer(&r)))
+		e = ipStatus("SetIpInterfaceEntry", rc)
+		runtime.KeepAlive(&r)
 	}
 	if c.Installed.DNS != nil {
 		g, ge := guidOf(a.LUID)
@@ -383,7 +416,11 @@ func (n *nativeOS) Apply(ctx context.Context, a Adapter, c Change) error {
 			return ge
 		}
 		s := dnsSettings{Version: 1, Flags: 2, NameServer: text}
-		e = ipCall("SetInterfaceDnsSettings", uintptr(unsafe.Pointer(&g)), uintptr(unsafe.Pointer(&s)))
+		rc, _, _ := procSetInterfaceDnsSettings.Call(uintptr(unsafe.Pointer(&g)), uintptr(unsafe.Pointer(&s)))
+		runtime.KeepAlive(text)
+		runtime.KeepAlive(&s)
+		runtime.KeepAlive(&g)
+		e = ipStatus("SetInterfaceDnsSettings", rc)
 	}
 	if e != nil {
 		return e

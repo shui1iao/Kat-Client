@@ -31,7 +31,7 @@ type udpTupleEntry struct {
 
 var udpTupleCache struct {
 	sync.RWMutex
-	m  map[netip.AddrPort]udpTupleEntry
+	m map[netip.AddrPort]udpTupleEntry
 }
 
 func cachedUDPTuple(q Query) (Identity, bool) {

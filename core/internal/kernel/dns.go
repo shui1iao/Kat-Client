@@ -14,6 +14,7 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -24,6 +25,76 @@ type dnsCacheEntry struct {
 	epoch   uint64
 }
 type dnsDial func(context.Context, string, string) (net.Conn, error)
+
+type dnsFlightKey struct {
+	name  string
+	epoch uint64
+	seq   uint64
+}
+
+type dnsFlight struct {
+	done      chan struct{}
+	ips       []netip.Addr
+	server    string
+	err       error
+	waiters   int
+	canceled  bool
+	cancel    context.CancelFunc
+	maxDLNano atomic.Int64 // 0 means unbounded; otherwise latest joined caller deadline UnixNano
+}
+
+func withDynamicDeadline(parent context.Context, targetFn func() time.Time) (context.Context, context.CancelFunc) {
+	sub, cancel := context.WithCancel(parent)
+	rem := time.Until(targetFn())
+	if rem <= 0 {
+		cancel()
+		return sub, cancel
+	}
+	var mu sync.Mutex
+	var tm *time.Timer
+	var fire func()
+	fire = func() {
+		mu.Lock()
+		defer mu.Unlock()
+		if sub.Err() != nil {
+			return
+		}
+		if wait := time.Until(targetFn()); wait > 0 {
+			tm.Reset(wait)
+			return
+		}
+		cancel()
+	}
+	mu.Lock()
+	tm = time.AfterFunc(rem, fire)
+	mu.Unlock()
+	return sub, func() {
+		mu.Lock()
+		tm.Stop()
+		mu.Unlock()
+		cancel()
+	}
+}
+
+func (r *internalDNS) releaseFlightWaiter(fkey dnsFlightKey, fl *dnsFlight) {
+	r.mu.Lock()
+	fl.waiters--
+	stop := fl.waiters <= 0 && !fl.canceled
+	if stop {
+		fl.canceled = true
+		if r.inflight[fkey] == fl {
+			delete(r.inflight, fkey)
+		}
+	}
+	cancel := fl.cancel
+	r.mu.Unlock()
+	if stop {
+		if cancel != nil {
+			cancel()
+		}
+		<-fl.done
+	}
+}
 
 type internalDNS struct {
 	diagnostic   func(context.Context, outbound.Diagnostic)
@@ -41,12 +112,13 @@ type internalDNS struct {
 	wireCache    map[string]dnsWireEntry
 	upstreams    []*dnsUpstream
 	// Instance-local I/O seam; production always uses the ordinary direct dialer.
-	dial         func(context.Context, string, string) (net.Conn, error)
-	capacity     int
-	slots        chan struct{}
+	dial      func(context.Context, string, string) (net.Conn, error)
+	capacity  int
+	slots     chan struct{}
 	mu        sync.Mutex
 	clearSeq  uint64
 	cache     map[string]dnsCacheEntry
+	inflight  map[dnsFlightKey]*dnsFlight
 	now       func() time.Time
 	bootstrap func(context.Context, string, string) ([]netip.Addr, error)
 	owner     *Server
@@ -64,7 +136,7 @@ func newInternalDNS(o *DNSOptions) (*internalDNS, error) {
 	if e != nil {
 		return nil, e
 	}
-	r := &internalDNS{capacity: 256, slots: make(chan struct{}, 64), cache: make(map[string]dnsCacheEntry), now: time.Now, bootstrap: net.DefaultResolver.LookupNetIP, dial: (&net.Dialer{}).DialContext}
+	r := &internalDNS{capacity: 256, slots: make(chan struct{}, 64), cache: make(map[string]dnsCacheEntry), inflight: make(map[dnsFlightKey]*dnsFlight), now: time.Now, bootstrap: net.DefaultResolver.LookupNetIP, dial: (&net.Dialer{}).DialContext}
 	if o != nil && o.CacheEntries != nil {
 		r.capacity = *o.CacheEntries
 	}
@@ -287,96 +359,246 @@ func (r *internalDNS) lookupAnswer(ctx context.Context, name string) (answer []n
 			return ips, server, true, nil
 		}
 	}
+	if len(r.upstreams) > 0 {
+		deadline, ok := ctx.Deadline()
+		if !ok {
+			return nil, "", false, errDNS
+		}
+		if time.Until(deadline) <= 0 {
+			return nil, "", false, context.DeadlineExceeded
+		}
+	}
+	fkey := dnsFlightKey{name: name, epoch: epoch, seq: startSeq}
+	r.mu.Lock()
+	if r.inflight == nil {
+		r.inflight = make(map[dnsFlightKey]*dnsFlight)
+	}
+	if fl, exists := r.inflight[fkey]; exists && !fl.canceled {
+		fl.waiters++
+		if dl, ok := ctx.Deadline(); ok {
+			if ns := dl.UnixNano(); ns > 0 {
+				for {
+					cur := fl.maxDLNano.Load()
+					if cur == 0 || ns <= cur || fl.maxDLNano.CompareAndSwap(cur, ns) {
+						break
+					}
+				}
+			}
+		} else {
+			fl.maxDLNano.Store(0)
+		}
+		r.mu.Unlock()
+		select {
+		case <-fl.done:
+			if epoch != r.dnsEpoch() {
+				return nil, "", false, context.Canceled
+			}
+			if fl.err != nil {
+				if ctx.Err() != nil {
+					return nil, "", false, ctx.Err()
+				}
+				return nil, "", false, fl.err
+			}
+			return append([]netip.Addr(nil), fl.ips...), fl.server, false, nil
+		case <-ctx.Done():
+			r.releaseFlightWaiter(fkey, fl)
+			return nil, "", false, ctx.Err()
+		}
+	}
+	baseCtx, cancelScope, scopeEpoch := r.dnsScope(context.WithoutCancel(ctx))
+	if scopeEpoch != epoch {
+		cancelScope()
+		r.mu.Unlock()
+		return nil, "", false, context.Canceled
+	}
+	var fctx context.Context
+	var fcancel context.CancelFunc
+	var initDLNano int64
+	if dl, ok := ctx.Deadline(); ok {
+		initDLNano = dl.UnixNano()
+		fctx, fcancel = context.WithTimeout(baseCtx, max(time.Until(dl), 5*time.Second))
+	} else {
+		fctx, fcancel = context.WithCancel(baseCtx)
+	}
+	stopFlight := func() {
+		fcancel()
+		cancelScope()
+	}
+	fl := &dnsFlight{
+		done:    make(chan struct{}),
+		waiters: 1,
+		cancel:  stopFlight,
+	}
+	fl.maxDLNano.Store(initDLNano)
+	r.inflight[fkey] = fl
+	r.mu.Unlock()
+
+	go func() {
+		defer stopFlight()
+		for {
+			usedMaxDL := fl.maxDLNano.Load()
+			ips, srv, err := r.lookupCold(fctx, fl, name, startSeq, epoch, hostScope)
+			r.mu.Lock()
+			curMaxDL := fl.maxDLNano.Load()
+			// If a longer-deadline waiter joined right as the short-budget attempt ended,
+			// retry seamlessly under the extended budget before completing the flight.
+			if err != nil && fctx.Err() == nil && !fl.canceled && fl.waiters > 0 &&
+				usedMaxDL > 0 && (curMaxDL == 0 || curMaxDL > usedMaxDL) && time.Now().UnixNano() < curMaxDL {
+				r.mu.Unlock()
+				continue
+			}
+			fl.ips = ips
+			fl.server = srv
+			fl.err = err
+			if r.inflight[fkey] == fl {
+				delete(r.inflight, fkey)
+			}
+			r.mu.Unlock()
+			close(fl.done)
+			return
+		}
+	}()
+
+	select {
+	case <-fl.done:
+		if epoch != r.dnsEpoch() {
+			return nil, "", false, context.Canceled
+		}
+		if fl.err != nil {
+			if ctx.Err() != nil {
+				return nil, "", false, ctx.Err()
+			}
+			return nil, "", false, fl.err
+		}
+		return append([]netip.Addr(nil), fl.ips...), fl.server, false, nil
+	case <-ctx.Done():
+		r.releaseFlightWaiter(fkey, fl)
+		return nil, "", false, ctx.Err()
+	}
+}
+
+func (r *internalDNS) lookupCold(ctx context.Context, fl *dnsFlight, name string, startSeq, epoch uint64, hostScope dnsHostScope) ([]netip.Addr, string, error) {
 	if len(r.upstreams) == 0 {
 		ips, err := r.bootstrap(ctx, "ip", name)
 		if epoch != r.dnsEpoch() {
-			return nil, "", false, context.Canceled
+			return nil, "", context.Canceled
 		}
 		if err == nil && len(ips) > 0 {
 			r.cachePutScoped(name, ips, 45*time.Second, "system", startSeq, epoch)
 			r.recordHosts(name, ips, 45*time.Second, false, hostScope)
 		}
-		return ips, "system", false, err
+		return ips, "system", err
 	}
 	// Acquire BEFORE spawning the two family workers. No unbounded per-query workers.
 	select {
 	case r.slots <- struct{}{}:
 	case <-ctx.Done():
-		return nil, "", false, ctx.Err()
+		return nil, "", ctx.Err()
 	}
 	defer func() { <-r.slots }()
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		return nil, "", false, errDNS
+	startedAt := time.Now()
+	effectiveDL := func() (time.Time, bool) {
+		if fl != nil {
+			if ns := fl.maxDLNano.Load(); ns > 0 {
+				dl := time.Unix(0, ns)
+				if fdl, ok := ctx.Deadline(); ok && dl.After(fdl) {
+					return fdl, true
+				}
+				return dl, true
+			}
+		}
+		return ctx.Deadline()
 	}
-	remaining := time.Until(deadline)
-	if remaining <= 0 {
-		return nil, "", false, context.DeadlineExceeded
+	initDL, ok := effectiveDL()
+	if !ok {
+		return nil, "", errDNS
+	}
+	if !initDL.After(startedAt) {
+		return nil, "", context.DeadlineExceeded
 	}
 	// The complete chain (including system) gets half the remaining caller
-	// budget. Divide the current remainder equally among untried upstreams
-	// plus system, reusing time saved by fast failures. Never reset dial_timeout.
-	qctx, cancel := context.WithTimeout(ctx, remaining/2)
+	// budget, dynamically extended if a longer-deadline waiter joins fl.
+	// Divide the current remainder equally among untried upstreams plus system,
+	// reusing time saved by fast failures. Never reset dial_timeout.
+	chainEnd := func() time.Time {
+		dl, ok := effectiveDL()
+		if !ok {
+			return startedAt
+		}
+		rem := dl.Sub(startedAt)
+		if rem <= 0 {
+			return startedAt
+		}
+		return startedAt.Add(rem / 2)
+	}
+	qctx, cancel := withDynamicDeadline(ctx, chainEnd)
 	defer cancel()
-	end, _ := qctx.Deadline()
 	chainError := func() error {
 		if e := ctx.Err(); e != nil {
 			return e
 		}
-		if qctx.Err() != nil || !time.Now().Before(end) {
+		if qctx.Err() != nil || !time.Now().Before(chainEnd()) {
 			return errDNS
 		}
 		return nil
 	}
 	for i, u := range r.upstreams {
 		if e := chainError(); e != nil {
-			return nil, "", false, e
+			return nil, "", e
 		}
-		uctx, stop := context.WithTimeout(qctx, time.Until(end)/time.Duration(len(r.upstreams)-i+1))
+		stepStart := time.Now()
+		stepsLeft := time.Duration(len(r.upstreams) - i + 1)
+		uctx, stop := withDynamicDeadline(qctx, func() time.Time {
+			rem := chainEnd().Sub(stepStart)
+			if rem <= 0 {
+				return stepStart
+			}
+			return stepStart.Add(rem / stepsLeft)
+		})
 		ips, ttl, complete, terminal := u.lookup(uctx, name)
 		stop()
 		if ctx.Err() != nil {
-			return nil, "", false, ctx.Err()
+			return nil, "", ctx.Err()
 		}
 		if epoch != r.dnsEpoch() {
-			return nil, "", false, context.Canceled
+			return nil, "", context.Canceled
 		}
 		if len(ips) > 0 {
 			if complete {
 				r.cachePutScoped(name, ips, ttl, u.ep.label(), startSeq, epoch)
 			}
 			r.recordHosts(name, ips, ttl, false, hostScope)
-			return ips, u.ep.label(), false, nil
+			return ips, u.ep.label(), nil
 		}
 		if terminal {
-			return nil, "", false, errDNS
+			return nil, "", errDNS
 		}
 	}
 	if e := chainError(); e != nil {
-		return nil, "", false, e
+		return nil, "", e
 	}
 	if r.policyOnly {
-		return nil, "", false, errDNS
+		return nil, "", errDNS
 	}
 	// System answers have no known TTL and must never enter our cache.
 	ips, e := r.bootstrap(qctx, "ip", name)
 	if e := chainError(); e != nil {
-		return nil, "", false, e
+		return nil, "", e
 	}
 	if len(ips) > maxDNSAddresses {
 		ips = ips[:maxDNSAddresses]
 	}
 	if e != nil {
-		return nil, "", false, e
+		return nil, "", e
 	}
 	if len(ips) == 0 {
-		return nil, "", false, errDNS
+		return nil, "", errDNS
 	}
 	if epoch != r.dnsEpoch() {
-		return nil, "", false, context.Canceled
+		return nil, "", context.Canceled
 	}
 	r.recordHosts(name, ips, 45*time.Second, false, hostScope)
-	return ips, "system", false, nil
+	return ips, "system", nil
 }
 
 // Families run concurrently, but results from different upstreams never mix.

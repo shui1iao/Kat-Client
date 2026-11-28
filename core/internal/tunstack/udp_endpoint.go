@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -28,20 +29,43 @@ type sourceKey struct {
 type udpMessage struct {
 	target netip.AddrPort
 	data   []byte
+	pooled *[]byte
+}
+
+const (
+	udpPoolSlotCap     = 1536
+	udpIdleEvictThresh = 2 * time.Second
+	maxUDPEvicting     = 256
+)
+
+var udpPayloadPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, udpPoolSlotCap)
+		return &b
+	},
+}
+
+func releaseUDPPooled(p *[]byte) {
+	if p != nil {
+		*p = (*p)[:udpPoolSlotCap]
+		udpPayloadPool.Put(p)
+	}
 }
 
 type sourceConn struct {
-	r        *Runtime
-	cancel   context.CancelFunc
-	key      sourceKey
-	first    netip.AddrPort
-	mu       sync.Mutex
-	queue    chan udpMessage
-	closed   chan struct{}
-	changed  chan struct{}
-	deadline time.Time
-	waiters  int
-	once     sync.Once
+	r               *Runtime
+	cancel          context.CancelFunc
+	key             sourceKey
+	first           netip.AddrPort
+	lastActive      atomic.Int64
+	quotaHandedOver bool
+	mu              sync.Mutex
+	queue           chan udpMessage
+	closed          chan struct{}
+	changed         chan struct{}
+	deadline        time.Time
+	waiters         int
+	once            sync.Once
 }
 
 const udpQueuedByteLimit = 8 << 20
@@ -97,6 +121,8 @@ func (r *Runtime) handleUDP(pkt ipPacket) {
 		}
 	}
 
+	nowNano := time.Now().UnixNano()
+	var evictedVictim *sourceConn
 	r.mu.Lock()
 	if r.stopping || r.paused || !r.cfg.Admitting() || r.ctx.Err() != nil {
 		r.dropped.Add(1)
@@ -117,10 +143,31 @@ func (r *Runtime) handleUDP(pkt ipPacket) {
 	k := sourceKey{f.Source, f.Epoch}
 	c := r.udpSources[k]
 	if c == nil {
-		if r.pending >= maxHandlers {
-			r.dropped.Add(1)
-			r.mu.Unlock()
-			return
+		transferredQuota := false
+		if r.pending >= maxHandlers || len(r.udpSources) >= maxHandlers {
+			if r.udpEvicting < maxUDPEvicting {
+				cutoff := nowNano - int64(udpIdleEvictThresh)
+				var oldestNano int64
+				for _, sc := range r.udpSources {
+					la := sc.lastActive.Load()
+					if la <= cutoff && (evictedVictim == nil || la < oldestNano) {
+						evictedVictim = sc
+						oldestNano = la
+					}
+				}
+			}
+			if evictedVictim == nil {
+				r.dropped.Add(1)
+				r.mu.Unlock()
+				return
+			}
+			delete(r.udpSources, evictedVictim.key)
+			evictedVictim.quotaHandedOver = true
+			r.udpEvicting++
+			transferredQuota = true
+			if evictedVictim.cancel != nil {
+				evictedVictim.cancel()
+			}
 		}
 		life, cancel := context.WithCancel(r.ctx)
 		c = &sourceConn{
@@ -132,24 +179,45 @@ func (r *Runtime) handleUDP(pkt ipPacket) {
 			closed:  make(chan struct{}),
 			changed: make(chan struct{}),
 		}
+		c.lastActive.Store(nowNano)
 		r.udpSources[k] = c
 		r.active[c] = struct{}{}
-		r.pending++
+		if !transferredQuota {
+			r.pending++
+		}
 		r.wg.Add(1)
 		if r.udpHandlers == 0 {
 			r.udpDrained = make(chan struct{})
 		}
 		r.udpHandlers++
 		go func() { defer r.release(c); _ = r.cfg.Ingress.HandleUDP(life, f, c) }()
+	} else {
+		c.lastActive.Store(nowNano)
 	}
-	data := append([]byte(nil), body...)
+	var msg udpMessage
+	msg.target = f.Destination
+	if n > 0 {
+		if n <= udpPoolSlotCap {
+			bp := udpPayloadPool.Get().(*[]byte)
+			buf := (*bp)[:n]
+			copy(buf, body)
+			msg.data = buf
+			msg.pooled = bp
+		} else {
+			msg.data = append([]byte(nil), body...)
+		}
+	}
 	select {
-	case c.queue <- udpMessage{f.Destination, data}:
+	case c.queue <- msg:
 		r.udpQueuedBytes += int64(n)
 	default:
+		releaseUDPPooled(msg.pooled)
 		r.dropped.Add(1)
 	}
 	r.mu.Unlock()
+	if evictedVictim != nil {
+		_ = evictedVictim.Close()
+	}
 }
 
 // DatagramCurrent fences a second queue (the kernel sender) as well as DNS.
@@ -169,10 +237,13 @@ func (c *sourceConn) takeDatagram(b []byte, p udpMessage) (int, netip.AddrPort, 
 	valid := c.currentLocked()
 	c.r.mu.Unlock()
 	if !valid {
+		releaseUDPPooled(p.pooled)
 		c.r.dropped.Add(1)
 		return 0, netip.AddrPort{}, net.ErrClosed
 	}
-	return copy(b, p.data), p.target, nil
+	copied := copy(b, p.data)
+	releaseUDPPooled(p.pooled)
+	return copied, p.target, nil
 }
 
 func (c *sourceConn) ReadDatagram(b []byte) (int, netip.AddrPort, error) {
@@ -276,6 +347,7 @@ func (c *sourceConn) WriteFrom(b []byte, peer netip.AddrPort) (int, error) {
 	if !valid {
 		return 0, net.ErrClosed
 	}
+	c.lastActive.Store(time.Now().UnixNano())
 	packets, e := UDPReply(peer, c.key.source, b, c.r.packetID.Add(1))
 	if e != nil {
 		return 0, e
@@ -307,6 +379,7 @@ func (c *sourceConn) Close() error {
 			select {
 			case p := <-c.queue:
 				c.r.udpQueuedBytes -= int64(len(p.data))
+				releaseUDPPooled(p.pooled)
 			default:
 				c.r.mu.Unlock()
 				return

@@ -10,8 +10,8 @@ export function durationMS(v:unknown):number {
  if(parts.map(p=>p[0]).join('')!==value||!parts.length)return NaN;
  return sign*parts.reduce((sum,p)=>sum+Number(p[1])*units[p[2]],0);
 }
-interface ProbeDraft {probe_url:string;probe_timeout:string;probe_round_timeout:string;probe_concurrency:string;unified_delay:boolean}
-export function probeDraft(d:DocumentSource):ProbeDraft {return {unified_delay:d.client.unified_delay??true,probe_url:d.client.probe_url??'',probe_timeout:d.client.probe_timeout??'',probe_round_timeout:d.client.probe_round_timeout??'',probe_concurrency:d.client.probe_concurrency===undefined?'':String(d.client.probe_concurrency)};}
+interface ProbeDraft {probe_url:string;probe_timeout:string;probe_round_timeout:string;probe_concurrency:string;unified_delay:boolean;close_on_switch:boolean}
+export function probeDraft(d:DocumentSource):ProbeDraft {return {close_on_switch:d.client.close_on_switch!==false,unified_delay:d.client.unified_delay??true,probe_url:d.client.probe_url??'',probe_timeout:d.client.probe_timeout??'',probe_round_timeout:d.client.probe_round_timeout??'',probe_concurrency:d.client.probe_concurrency===undefined?'':String(d.client.probe_concurrency)};}
 export function patchProbe(d:DocumentSource,v:ProbeDraft,changed:ReadonlySet<keyof ProbeDraft>){
  const next={...d.client};
  for(const k of changed){const val=v[k];setField(next,k,val===''?undefined:k==='probe_concurrency'?Number(val):val);}

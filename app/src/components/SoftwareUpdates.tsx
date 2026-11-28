@@ -3,6 +3,7 @@ import { useTopNoticeAnchor } from '../lib/floating';
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { host } from '../client/ipc';
+import { normalizeUpdateState } from '../client/normalize';
 import { errorText } from '../lib/errors';
 import type { Client } from '../client/useClient';
 import { Card, Empty, SettingSwitch, StableText } from './ui';
@@ -139,7 +140,7 @@ export function useSoftwareUpdates(c: Client) {
 
   const refresh = useCallback(async () => {
     try {
-      const next = await host<State>('update_state');
+      const next = normalizeUpdateState(await host<unknown>('update_state'));
       if (alive.current) setData(next);
     } catch (e) {
       if (alive.current) setError(errorText(e));
@@ -310,7 +311,7 @@ export function SoftwareUpdateCard({ u }: { u: SoftwareUpdateController }) {
       <p className="update-help update-last num">
         {d?.last_check ? `上次检查 ${fullDateTimeStr(d.last_check * 1000)}` : '尚未检查更新'}
       </p>
-      <LocalError text={u.error || d?.error || ''} />
+      <LocalError text={u.error || (d?.error ? errorText(d.error) : '')} />
     </Card>
   );
 }
@@ -326,11 +327,11 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
     ? (d?.rows ?? []).find((r) => r.kind === u.dialogKind && (r.offer || r.notes)) ?? null
     : null;
   const firstOfferRow = availableRows[0] ?? null;
-  const noticePos = useTopNoticeAnchor(Boolean(d?.confirmation.pending || (d?.notice && firstOfferRow)));
+  const noticePos = useTopNoticeAnchor(Boolean(d?.confirmation?.pending || (d?.notice && firstOfferRow)));
 
   return (
     <>
-      {d?.confirmation.pending && noticePos && createPortal(
+      {d?.confirmation?.pending && noticePos && createPortal(
         <div className="toast show update-notice" style={{ top: noticePos.top, left: noticePos.left, maxWidth: noticePos.maxWidth }} role="status">
           <Icon name="info" size={16} />
           <span>
@@ -441,7 +442,7 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
           </div>
 
           {dialogRow.downloaded && u.blocked && <LocalError text="请先保存或取消当前未保存的配置草稿，再安装更新。" />}
-          <LocalError text={u.error || d?.error || ''} />
+          <LocalError text={u.error || (d?.error ? errorText(d.error) : '')} />
         </Modal>
       )}
 
@@ -471,7 +472,7 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
               '恢复本次更新前的程序版本'
             ) : (
               <>
-                {p ? (d?.rows.find((r) => r.kind === p.kind)?.current ?? '—') : confirm!.current} → {p?.version ?? confirm?.latest ?? '—'}
+                {p ? ((d?.rows ?? []).find((r) => r.kind === p.kind)?.current ?? '—') : confirm!.current} → {p?.version ?? confirm?.latest ?? '—'}
               </>
             )}
           </p>
@@ -491,7 +492,7 @@ export function SoftwareUpdateLayer({ u, onOpen }: { u: SoftwareUpdateController
           <p>正在保存状态并退出内核，请稍候…</p>
           {d.error && (
             <>
-              <LocalError text={d.error} />
+              <LocalError text={errorText(d.error)} />
               <button type="button" className="btn" disabled={u.working} onClick={() => void u.action('update_recover')}>
                 重试恢复
               </button>

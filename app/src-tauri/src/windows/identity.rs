@@ -2,8 +2,10 @@ use crate::error::{Error,Result};
 use std::{ffi::OsString, os::windows::ffi::OsStringExt, path::PathBuf};
 use windows_sys::Win32::{Foundation::*, Security::*,Security::Authorization::*,System::Threading::*};
 pub fn wide(s:&str)->Vec<u16>{s.encode_utf16().chain(Some(0)).collect()}
+pub fn wide_os(s:&std::ffi::OsStr)->Vec<u16>{use std::os::windows::ffi::OsStrExt;s.encode_wide().chain(Some(0)).collect()}
 pub unsafe fn string(p:*const u16)->String {if p.is_null(){return String::new();}let mut n=0;while n<32768 && *p.add(n)!=0 {n+=1;}String::from_utf16_lossy(std::slice::from_raw_parts(p,n))}
 pub struct Handle(pub HANDLE);
+impl Handle { pub fn raw(&self) -> HANDLE { self.0 } }
 unsafe impl Send for Handle {}
 unsafe impl Sync for Handle {}
 impl Drop for Handle{fn drop(&mut self){if !self.0.is_null() && self.0!=INVALID_HANDLE_VALUE{unsafe{CloseHandle(self.0);}}}}

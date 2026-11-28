@@ -59,7 +59,7 @@ func newManager(c Config, backend osBackend) *Manager {
 	}
 	return m
 }
-func (m *Manager) Status() Status       { m.mu.Lock(); defer m.mu.Unlock(); return m.state }
+func (m *Manager) Status() Status { m.mu.Lock(); defer m.mu.Unlock(); return m.state }
 
 // DataPlaneMemoryStats queries optional numeric memory metrics from the active
 // data plane without coupling tunplatform to tunstack internals.

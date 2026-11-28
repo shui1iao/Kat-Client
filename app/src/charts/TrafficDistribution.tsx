@@ -93,8 +93,11 @@ export function DomainRankList({ items }: { items: DomainRankItem[] }) {
     <div className="rank-wrap">
       <ul className="rank-list" role="list" aria-label="域名流量排行">
         {top.map((d) => {
-          const widthPct = Math.max(4, (d.total / maxVal) * 100);
-          const proxyRatio = d.total > 0 ? (d.proxy / d.total) * 100 : 100;
+          const safeTotal = Number.isFinite(d.total) && d.total > 0 ? d.total : 0;
+          const safeProxy = Number.isFinite(d.proxy) && d.proxy > 0 ? Math.min(safeTotal, d.proxy) : 0;
+          const safeMax = Number.isFinite(maxVal) && maxVal > 0 ? maxVal : 1;
+          const widthPct = safeTotal > 0 ? Math.min(100, Math.max(4, (safeTotal / safeMax) * 100)) : 0;
+          const proxyRatio = safeTotal > 0 ? Math.min(100, Math.max(0, (safeProxy / safeTotal) * 100)) : 0;
           const directRatio = Math.max(0, 100 - proxyRatio);
           const detail = `代理 ${showBytes(d.proxy)} · 直连 ${showBytes(d.direct)} · ↓ ${showBytes(d.down)} · ↑ ${showBytes(d.up)} (${trafficPercent(d.total, totalAll)})`;
           return (

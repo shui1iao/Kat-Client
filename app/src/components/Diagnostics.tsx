@@ -5,6 +5,8 @@ import { KTag } from './labels';
 import { Card, Empty, SearchInput, Segmented } from './ui';
 import { LocalError } from './Editors';
 import { host } from '../client/ipc';
+import { normalizeDiagnostics } from '../client/normalize';
+import { formatHostPort } from '../lib/netAddr';
 import { errorText } from '../lib/errors';
 import { fullDateTimeStr, showUptime } from '../client/display';
 import { stateLabel, type DiagnosticReply, type SaveReply } from '../client/types';
@@ -25,12 +27,12 @@ export function Diagnostics({
   const [error, setError] = useState('');
   const [level, setLevel] = useState('all');
   const [search, setSearch] = useState('');
-  const [days, setDays] = useState<1 | 7 | 30>(c.desktop?.preferences.log_retention_days ?? 7);
+  const [days, setDays] = useState<1 | 7 | 30>(c.desktop?.preferences?.log_retention_days ?? 7);
   const [retentionError, setRetentionError] = useState('');
 
   useEffect(() => {
-    setDays(c.desktop?.preferences.log_retention_days ?? 7);
-  }, [c.desktop?.preferences.log_retention_days]);
+    setDays(c.desktop?.preferences?.log_retention_days ?? 7);
+  }, [c.desktop?.preferences?.log_retention_days]);
 
   const saveRetention = async (nextDays: 1 | 7 | 30) => {
     setDays(nextDays);
@@ -50,7 +52,7 @@ export function Diagnostics({
       async () => {
         setError('');
         try {
-          setData(await host<DiagnosticReply>('diagnostics_get'));
+          setData(normalizeDiagnostics(await host<unknown>('diagnostics_get')));
         } catch (e) {
           setData(null);
           setError(errorText(e));
@@ -199,20 +201,20 @@ export function Diagnostics({
                 <span>系统代理 / TUN</span>
                 <b>
                   {data.network
-                    ? stateLabel(data.network.system_proxy.state) + ' / ' + stateLabel(data.network.tun.state)
+                    ? stateLabel(data.network.system_proxy?.state) + ' / ' + stateLabel(data.network.tun?.state)
                     : '—'}
                 </b>
               </div>
               <div>
                 <span>服务</span>
-                <b>{stateLabel(data.network?.service.state)}</b>
+                <b>{stateLabel(data.network?.service?.state)}</b>
               </div>
               {(['http', 'socks'] as const).map((k) => (
                 <div key={k}>
                   <span>{k.toUpperCase()}</span>
                   <b>
-                    {data.local?.[k]
-                      ? `${data.local[k].host}:${data.local[k].port} · ${data.local[k].ready ? '就绪' : '未就绪'}`
+                    {data.local?.[k] && formatHostPort(data.local[k].host, data.local[k].port)
+                      ? `${formatHostPort(data.local[k].host, data.local[k].port)} · ${data.local[k].ready ? '就绪' : '未就绪'}`
                       : '—'}
                   </b>
                 </div>
@@ -227,7 +229,7 @@ export function Diagnostics({
               </div>
             </div>
           )}
-          {data.errors.length > 0 && <LocalError text={data.errors.map((code) => errorText(code)).join(' ')} spaced raw />}
+          {(data.errors ?? []).length > 0 && <LocalError text={(data.errors ?? []).map((code) => errorText(code)).join(' ')} spaced raw />}
           {showEvents && (
             <div className="events-table">
               <div className="safe-log-list">

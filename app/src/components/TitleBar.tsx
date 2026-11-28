@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { tip } from './Tooltip';
 import { host } from '../client/ipc';
 import type { Client } from '../client/useClient';
@@ -47,7 +48,7 @@ export function WindowButtons({
   );
 }
 
-export function TitleBar({
+export const TitleBar = memo(function TitleBar({
   c,
   title,
   meta,
@@ -68,11 +69,11 @@ export function TitleBar({
       <div className="titlebar-spacer" />
       <WindowButtons
         disabled={!c.hasHost || c.busy.has('window')}
-        closeLabel={c.desktop?.preferences.close_action === 'quit' ? '恢复网络并退出' : '关闭到托盘'}
+        closeLabel={c.desktop?.preferences?.close_action === 'quit' ? '恢复网络并退出' : '关闭到托盘'}
         onMinimize={() => action('minimize')}
         onMaximize={() => action('maximize')}
         onClose={() => action('close')}
       />
     </header>
   );
-}
+});

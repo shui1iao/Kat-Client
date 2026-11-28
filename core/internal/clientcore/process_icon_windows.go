@@ -36,10 +36,26 @@ var (
 	procGetDIBits           = modGdi32.NewProc("GetDIBits")
 	procDeleteObject        = modGdi32.NewProc("DeleteObject")
 
-	procIconCache      sync.Map
-	procIconCacheCount atomic.Int32
-	procNamePathCache  sync.Map
+	procIconCache          sync.Map
+	procIconCacheCount     atomic.Int32
+	procNamePathCache      sync.Map
+	procNamePathCacheCount atomic.Int32
 )
+
+const (
+	maxProcIconCacheEntries     = 512
+	maxProcNamePathCacheEntries = 1024
+)
+
+func storeProcNamePath(key, val string) {
+	if procNamePathCacheCount.Load() >= maxProcNamePathCacheEntries {
+		procNamePathCache.Clear()
+		procNamePathCacheCount.Store(0)
+	}
+	if _, loaded := procNamePathCache.LoadOrStore(key, val); !loaded {
+		procNamePathCacheCount.Add(1)
+	}
+}
 
 const (
 	coinitApartmentThreaded = 0x2
@@ -221,20 +237,20 @@ func resolveProcessByName(procName string) string {
 	}
 
 	if sysCarrier := resolveSystemIconCarrier(stem); sysCarrier != "" {
-		procNamePathCache.Store(lower, sysCarrier)
+		storeProcNamePath(lower, sysCarrier)
 		return sysCarrier
 	}
 
 	if parentExe, isHelper := helperSubprocessParentName[stem]; isHelper {
 		if resolved := resolveProcessByName(parentExe); resolved != "" {
-			procNamePathCache.Store(lower, resolved)
+			storeProcNamePath(lower, resolved)
 			return resolved
 		}
 	}
 
 	if p, ok := lookupObservedPathByName(lower); ok {
 		if cp := cleanLocalWindowsFile(p); cp != "" {
-			procNamePathCache.Store(lower, cp)
+			storeProcNamePath(lower, cp)
 			return cp
 		}
 	}
@@ -256,7 +272,7 @@ func resolveProcessByName(procName string) string {
 			k.Close()
 			if verr == nil {
 				if cp := cleanLocalWindowsFile(val); cp != "" {
-					procNamePathCache.Store(lower, cp)
+					storeProcNamePath(lower, cp)
 					return cp
 				}
 			}
@@ -329,7 +345,7 @@ func resolveProcessByName(procName string) string {
 	}
 	for _, cand := range knownRel {
 		if cp := cleanLocalWindowsFile(cand); cp != "" {
-			procNamePathCache.Store(lower, cp)
+			storeProcNamePath(lower, cp)
 			return cp
 		}
 	}
@@ -341,7 +357,7 @@ func resolveProcessByName(procName string) string {
 		filepath.Join(sysRoot, exeName),
 	} {
 		if cp := cleanLocalWindowsFile(cand); cp != "" {
-			procNamePathCache.Store(lower, cp)
+			storeProcNamePath(lower, cp)
 			return cp
 		}
 	}
@@ -583,12 +599,17 @@ func extractProcessIconDataURI(exePath string, procName string) string {
 		}
 	}
 
-	if uri != "" && procIconCacheCount.Load() < 512 {
+	if uri != "" && procIconCacheCount.Load() < maxProcIconCacheEntries {
 		if _, loaded := procIconCache.LoadOrStore(cacheKey, uri); !loaded {
 			procIconCacheCount.Add(1)
 		}
-		if stem != "" {
-			procIconCache.LoadOrStore("name:"+stem+".exe", uri)
+		if stem != "" && procIconCacheCount.Load() < maxProcIconCacheEntries {
+			aliasKey := "name:" + stem + ".exe"
+			if aliasKey != cacheKey {
+				if _, loaded := procIconCache.LoadOrStore(aliasKey, uri); !loaded {
+					procIconCacheCount.Add(1)
+				}
+			}
 		}
 	}
 	return uri

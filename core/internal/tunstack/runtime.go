@@ -100,6 +100,7 @@ type Runtime struct {
 	udpSources       map[sourceKey]*sourceConn
 	udpQueuedBytes   int64
 	udpHandlers      int
+	udpEvicting      int
 	udpDrained       chan struct{}
 	writeMu          sync.Mutex
 	packetID         atomic.Uint32
@@ -326,13 +327,19 @@ func (r *Runtime) release(c net.Conn) {
 	}
 	r.mu.Lock()
 	delete(r.active, c)
-	if _, udp := c.(*sourceConn); udp {
+	if sc, udp := c.(*sourceConn); udp {
 		r.udpHandlers--
 		if r.udpHandlers == 0 {
 			close(r.udpDrained)
 		}
+		if sc.quotaHandedOver {
+			r.udpEvicting--
+		} else {
+			r.pending--
+		}
+	} else {
+		r.pending--
 	}
-	r.pending--
 	r.mu.Unlock()
 	r.wg.Done()
 }

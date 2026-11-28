@@ -652,11 +652,7 @@ fn verify_spawned_helper_handle(helper_process: HANDLE, own_sid: &str, uninstall
     let Ok(image) = security::image(helper_process) else {
         return (false, false);
     };
-    let expected_leaf = if uninstall {
-        "kat-network-service.exe"
-    } else {
-        "kat-install-helper.exe"
-    };
+    let expected_leaf = "kat-install-helper.exe";
     if image
         .file_name()
         .is_none_or(|n| !n.eq_ignore_ascii_case(expected_leaf))
@@ -684,17 +680,18 @@ fn verify_spawned_helper_handle(helper_process: HANDLE, own_sid: &str, uninstall
                         .and_then(|m| m.get(expected_leaf))
                         .is_some_and(|h| verify_hash_unpinned(&image, h).is_ok())
                 } else {
-                    super::install_location::service_root()
+                    let installed = Path::new(&r.root).join(expected_leaf);
+                    security::verify_protected(&installed).is_ok()
+                        && crate::crypto_io::sha256_path(
+                            &installed,
+                            128 * 1024 * 1024,
+                            false,
+                            "INSTALL_PACKAGE",
+                            "UNTRUSTED_PATH",
+                            "INSTALL_PACKAGE",
+                        )
                         .ok()
-                        .is_some_and(|sr| {
-                            let sp = sr.join(expected_leaf);
-                            security::verify_protected(&sp).is_ok()
-                                && bounded(&sp, 128 * 1024 * 1024).ok().is_some_and(|b| {
-                                    use sha2::{Digest, Sha256};
-                                    verify_hash_unpinned(&image, &hex::encode(Sha256::digest(b)))
-                                        .is_ok()
-                                })
-                        })
+                        .is_some_and(|(h, _)| verify_hash_unpinned(&image, &h).is_ok())
                 }
         });
         return (true, hash_ok);

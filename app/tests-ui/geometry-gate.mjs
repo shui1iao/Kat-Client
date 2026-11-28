@@ -169,8 +169,8 @@ try {
             last_check: nowS - 1800,
             checking: false,
             rows: [
-              { kind: "client", current: "0.2.37", latest: "0.2.37", phase: "idle", message: "", offer: null, received: 0, total: null, downloaded: false },
-              { kind: "core", current: "0.8.22", latest: "0.8.22", phase: "idle", message: "", offer: null, received: 0, total: null, downloaded: false },
+              { kind: "client", current: "0.2.38", latest: "0.2.38", phase: "idle", message: "", offer: null, received: 0, total: null, downloaded: false },
+              { kind: "core", current: "0.8.23", latest: "0.8.23", phase: "idle", message: "", offer: null, received: 0, total: null, downloaded: false },
             ],
             proposal: null,
             notice: false,
@@ -367,6 +367,152 @@ try {
 
     await ctx.close();
   }
+
+  // --- PART 4: PolicyReveal zero hidden DOM, exitGhost rapid Escape, and 5000-rule / 2000-conn virtual scroll gate ---
+  {
+    const vCtx = await browser.newContext({ viewport: { width: 1280, height: 860 }, colorScheme: 'dark' });
+    await vCtx.addInitScript(installTransport, { empty: false });
+    await vCtx.addInitScript(installDailyTransport);
+    await vCtx.addInitScript(() => {
+      const d = JSON.parse(window.__TEST.text);
+      d.kernel.routing ??= { final: 'direct', rules: [] };
+      d.kernel.routing.rules = Array.from({ length: 5000 }, (_, i) => ({
+        domain_suffix: `virtual-rule-${i}.example.com`,
+        action: i % 2 === 0 ? 'direct' : 'route',
+        ...(i % 2 === 1 ? { outbound: d.kernel.groups?.[0]?.name ?? 'direct' } : {}),
+      }));
+      window.__TEST.text = JSON.stringify(d);
+
+      const bigConns = Array.from({ length: 2000 }, (_, i) => ({
+        id: i + 1,
+        network: i % 3 === 0 ? 'udp' : 'tcp',
+        source: `127.0.0.1:${30000 + i}`,
+        target: `conn-host-${i}.example.com:443`,
+        process: i % 2 === 0 ? 'chrome.exe' : 'curl.exe',
+        rule: 'DOMAIN-SUFFIX,example.com',
+        chain: ['direct'],
+        up: 1024 * (i + 1),
+        down: 4096 * (i + 1),
+        start: new Date(Date.now() - i * 1000).toISOString(),
+      }));
+
+      const inv = window.__TAURI_INTERNALS__.invoke;
+      window.__TAURI_INTERNALS__.invoke = async (cmd, args = {}) => {
+        if (cmd === 'tray_sync' || cmd === 'window_action') return null;
+        if (cmd === 'update_state') {
+          return { confirmation: { pending: false, running: false, message: '' }, auto_check: true, last_check: 0, checking: false, rows: [], proposal: null, notice: false, preparing: false, error: '' };
+        }
+        if (cmd === 'core_request') {
+          const m = args.method;
+          if (m === 'icon.cached') return {};
+          if (m === 'icon.get') return { data_uri: '' };
+          if (m === 'subscription.status') return {};
+          if (m === 'connections.list') {
+            return { connection_instance: 'v-inst-1', active: bigConns, closed: [], total: bigConns.length };
+          }
+          if (m === 'status') {
+            const s = await inv(cmd, args);
+            s.traffic.daily = [{ date: '2026-11-27', up: NaN, down: Infinity, direct: -500, proxy: NaN }, { date: '2026-11-28', up: 4096, down: 8192 }];
+            s.connections = { active: bigConns.length, total: bigConns.length, tcp: 1334, udp: 666, items: bigConns.slice(0, 20) };
+            s.rules = d.kernel.routing.rules.map((r, idx) => ({
+              index: idx,
+              type: 'domain_suffix',
+              value: r.domain_suffix,
+              action: r.action,
+              outbound: r.outbound,
+              hits: idx % 7,
+            }));
+            return s;
+          }
+        }
+        return inv(cmd, args);
+      };
+    });
+
+    const vp = await vCtx.newPage();
+    vp.on('pageerror', (e) => consoleIssues.push(`virtual-gate: ${e.message}`));
+
+    // 4a-pre. Overview WeekBars/TrafficDistribution NaN/Infinity resilience
+    await vp.goto(`${base}/#overview`, { waitUntil: 'networkidle' });
+    const badSvgCount = await vp.evaluate(() =>
+      [...document.querySelectorAll('svg *')].filter((el) =>
+        [...el.attributes].some((a) => a.value.includes('NaN') || a.value.includes('Infinity')),
+      ).length,
+    );
+    if (badSvgCount !== 0) failures.push(`Overview SVG had ${badSvgCount} NaN/Infinity attributes`);
+
+    // 4a. PolicyReveal collapsed child DOM count === 0
+    await vp.goto(`${base}/#policies`, { waitUntil: 'networkidle' });
+    await vp.waitForSelector('.pol-stream');
+    const collapseBtn = vp.locator('.pol-topbar button').filter({ hasText: '全部收起' }).first();
+    if (await collapseBtn.count()) {
+      await collapseBtn.click();
+      await vp.waitForTimeout(280);
+    }
+    const collapsedChildDom = await vp.evaluate(() => document.querySelectorAll('.pc-reveal:not(.open) *').length);
+    if (collapsedChildDom !== 0) {
+      failures.push(`PolicyReveal(open=false) mounted child DOM=${collapsedChildDom}, expected 0`);
+    }
+
+    // 4b. exitGhost rapid double-Escape (20ms interval): SelectPopover + Modal both close cleanly
+    await vp.click('[data-page="rules"]');
+    await vp.getByRole('tab', { name: /^规则/ }).click();
+    await vp.click('[data-action="add-rule"]');
+    await vp.waitForSelector('[role="dialog"]');
+    const firstSelect = vp.locator('[role="dialog"] select.inp').first();
+    await firstSelect.focus();
+    await vp.keyboard.press('Space');
+    await vp.waitForSelector('.kat-pop:not(.kat-leaving)');
+    await vp.keyboard.press('Escape');
+    await vp.waitForTimeout(20);
+    await vp.keyboard.press('Escape');
+    await vp.waitForTimeout(260);
+    const activeDialogCount = await vp.evaluate(
+      () => document.querySelectorAll('[role="dialog"]:not(.kat-leaving *), [role="alertdialog"]:not(.kat-leaving *)').length,
+    );
+    if (activeDialogCount !== 0) {
+      failures.push(`exitGhost rapid 20ms double-Escape left active dialog count=${activeDialogCount}, expected 0`);
+    }
+
+    // 4c. 5,000 Rules virtual scroll & search < 150ms
+    const rulesDom = await vp.evaluate(() => document.querySelectorAll('*').length);
+    const ruleSearch = vp.getByLabel('搜索规则', { exact: true });
+    await ruleSearch.focus();
+    const rSearchMs = await vp.evaluate(async () => {
+      const inp = document.querySelector('input[aria-label="搜索规则"]');
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      const t0 = performance.now();
+      setter.call(inp, 'virtual-rule-4999');
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((r) => requestAnimationFrame(r));
+      return Math.round(performance.now() - t0);
+    });
+    if (rulesDom >= 5000) failures.push(`5000-rules virtual scroll DOM=${rulesDom}, expected < 5000`);
+    if (rSearchMs >= 150) failures.push(`5000-rules search filter=${rSearchMs}ms, expected < 150ms`);
+    await ruleSearch.fill('');
+
+    // 4d. 2,000 Connections virtual scroll & search < 150ms
+    await vp.click('[data-page="connections"]');
+    await vp.waitForSelector('.conn-entry');
+    const connsDom = await vp.evaluate(() => document.querySelectorAll('*').length);
+    const connSearch = vp.getByLabel('搜索连接', { exact: true });
+    await connSearch.focus();
+    const cSearchMs = await vp.evaluate(async () => {
+      const inp = document.querySelector('input[aria-label="搜索连接"]');
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      const t0 = performance.now();
+      setter.call(inp, 'conn-host-1999');
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((r) => requestAnimationFrame(r));
+      return Math.round(performance.now() - t0);
+    });
+    if (connsDom >= 5000) failures.push(`2000-conns virtual scroll DOM=${connsDom}, expected < 5000`);
+    if (cSearchMs >= 150) failures.push(`2000-conns search filter=${cSearchMs}ms, expected < 150ms`);
+
+    console.log(`VIRTUAL_AND_GHOST_GATE_METRICS: collapsedRevealDom=${collapsedChildDom}, rapidEscActiveDialogs=${activeDialogCount}, rules5000={dom:${rulesDom},searchMs:${rSearchMs}}, conns2000={dom:${connsDom},searchMs:${cSearchMs}}`);
+    await vCtx.close();
+  }
+
 } finally {
   await browser.close();
   server.close();

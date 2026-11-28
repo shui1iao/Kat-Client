@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	tunReadBatchSize  = 16
-	tunBatchSlotSize  = 65536
+	tunReadBatchSize = 16
+	tunBatchSlotSize = 65536
 )
 
 type wintunRingFullError interface {

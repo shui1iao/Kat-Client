@@ -18,6 +18,62 @@ func (c *Config) previewRouteOptions(override *RoutingOptions) route.Options {
 	return cp.routeOptions()
 }
 
+func validateConfigGroupDepth(groups []GroupConfig) error {
+	if len(groups) == 0 {
+		return nil
+	}
+	byName := make(map[string]GroupConfig, len(groups))
+	for _, g := range groups {
+		byName[g.Name] = g
+	}
+	color := make(map[string]uint8, len(groups))
+	depth := make(map[string]int, len(groups))
+	var visit func(string) error
+	visit = func(name string) error {
+		switch color[name] {
+		case 1:
+			return group.ErrGroupDepthExceeded
+		case 2:
+			return nil
+		}
+		g, ok := byName[name]
+		if !ok {
+			return nil
+		}
+		color[name] = 1
+		d := 0
+		if g.IncludeGroup != "" {
+			if _, isGrp := byName[g.IncludeGroup]; isGrp {
+				if err := visit(g.IncludeGroup); err != nil {
+					return err
+				}
+				d = max(d, depth[g.IncludeGroup])
+			}
+		}
+		for _, m := range g.Members {
+			if _, isGrp := byName[m]; isGrp {
+				if err := visit(m); err != nil {
+					return err
+				}
+				d = max(d, depth[m])
+			}
+		}
+		d++
+		if d > group.MaxGroupDepth {
+			return group.ErrGroupDepthExceeded
+		}
+		depth[name] = d
+		color[name] = 2
+		return nil
+	}
+	for _, g := range groups {
+		if err := visit(g.Name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // PreviewTarget evaluates target against the running generation using target-only
 // rule projection, live loaded resource snapshots, kernel DNS when an IP rule
 // requires resolution, and read-only policy group chain expansion.
@@ -31,6 +87,9 @@ func (s *Server) PreviewTarget(ctx context.Context, routing *RoutingOptions, tar
 			return route.TargetPreview{}, ErrCoreNotRunning
 		}
 		defer g.unref()
+	}
+	if err := validateConfigGroupDepth(g.cfg.Groups); err != nil {
+		return route.TargetPreview{}, &route.TargetPreviewError{Code: "invalid_rules", Message: "当前策略组嵌套层级超过上限"}
 	}
 	opts := g.cfg.previewRouteOptions(routing)
 	eng, err := g.router()
@@ -57,7 +116,11 @@ func (s *Server) PreviewTarget(ctx context.Context, routing *RoutingOptions, tar
 	if err != nil {
 		return route.TargetPreview{}, err
 	}
-	res.Chain = g.previewPolicyChain(res.Matched.Policy)
+	chain, err := g.expandPolicyChainChecked(res.Matched.Policy)
+	if err != nil {
+		return route.TargetPreview{}, &route.TargetPreviewError{Code: "invalid_rules", Message: "当前策略组配置无效"}
+	}
+	res.Chain = chain
 	return res, nil
 }
 
@@ -66,6 +129,9 @@ func (s *Server) PreviewTarget(ctx context.Context, routing *RoutingOptions, tar
 func PreviewStoppedTarget(ctx context.Context, cfg Config, routing *RoutingOptions, target string) (route.TargetPreview, error) {
 	if _, _, err := route.ParsePreviewTarget(target); err != nil {
 		return route.TargetPreview{}, err
+	}
+	if err := validateConfigGroupDepth(cfg.Groups); err != nil {
+		return route.TargetPreview{}, &route.TargetPreviewError{Code: "invalid_rules", Message: "当前策略组嵌套层级超过上限"}
 	}
 	opts := cfg.previewRouteOptions(routing)
 	eng, err := route.NewReadOnlyEngine(opts)
@@ -77,78 +143,64 @@ func PreviewStoppedTarget(ctx context.Context, cfg Config, routing *RoutingOptio
 	if err != nil {
 		return route.TargetPreview{}, err
 	}
-	res.Chain = PreviewConfigPolicyChain(cfg, res.Matched.Policy)
+	chain, err := expandConfigPolicyChainChecked(cfg, res.Matched.Policy)
+	if err != nil {
+		return route.TargetPreview{}, &route.TargetPreviewError{Code: "invalid_rules", Message: "当前策略组配置无效"}
+	}
+	res.Chain = chain
 	return res, nil
 }
 
-func (s *Server) previewPolicyChain(policy string) []string {
-	if policy == "" {
-		return []string{}
-	}
-	if policy == "direct" || policy == "reject" {
-		return []string{policy}
-	}
+func (s *Server) expandPolicyChainChecked(policy string) ([]string, error) {
 	if s.rt == nil {
-		return PreviewConfigPolicyChain(s.cfg, policy)
+		return expandConfigPolicyChainChecked(s.cfg, policy)
 	}
 	byName := make(map[string]group.Group, len(s.rt.groups))
 	for _, gr := range s.rt.groups {
 		byName[gr.Name()] = gr
 	}
-	chain := []string{policy}
-	seen := map[string]bool{policy: true}
-	curr := policy
-	for len(chain) <= len(s.rt.groups)+2 {
-		gr, ok := byName[curr]
+	return group.ExpandPolicyChain(policy, func(name string) (string, bool) {
+		gr, ok := byName[name]
 		if !ok {
-			break
+			return "", false
 		}
-		next := group.PreviewMember(gr)
-		if next == "" || seen[next] {
-			break
+		return group.PreviewMember(gr), true
+	})
+}
+
+func (s *Server) previewPolicyChain(policy string) []string {
+	chain, err := s.expandPolicyChainChecked(policy)
+	if err != nil {
+		if policy == "" {
+			return []string{}
 		}
-		seen[next] = true
-		chain = append(chain, next)
-		curr = next
+		return []string{policy}
 	}
 	return chain
 }
 
-// PreviewConfigPolicyChain expands reliable static group selections from cfg.
-func PreviewConfigPolicyChain(cfg Config, policy string) []string {
-	if policy == "" {
-		return []string{}
-	}
-	if policy == "direct" || policy == "reject" {
-		return []string{policy}
-	}
+func expandConfigPolicyChainChecked(cfg Config, policy string) ([]string, error) {
 	groups := make(map[string]GroupConfig, len(cfg.Groups))
 	for _, g := range cfg.Groups {
 		groups[g.Name] = g
 	}
-	chain := []string{policy}
-	seen := map[string]bool{policy: true}
-	curr := policy
-	for len(chain) <= len(cfg.Groups)+2 {
-		g, ok := groups[curr]
+	return group.ExpandPolicyChain(policy, func(name string) (string, bool) {
+		g, ok := groups[name]
 		if !ok {
-			break
+			return "", false
 		}
-		next := ""
-		switch g.Type {
-		case group.TypeSelect:
-			next = configuredDefault(g)
-		case group.TypeURLTest, group.TypeFallback, group.TypeSmart, group.TypeLoadBalance:
-			if g.Fixed != "" && contains(g.Members, g.Fixed) {
-				next = g.Fixed
-			}
+		return group.PreviewStaticMember(group.Options(g)), true
+	})
+}
+
+// PreviewConfigPolicyChain expands reliable static group selections from cfg.
+func PreviewConfigPolicyChain(cfg Config, policy string) []string {
+	chain, err := expandConfigPolicyChainChecked(cfg, policy)
+	if err != nil {
+		if policy == "" {
+			return []string{}
 		}
-		if next == "" || seen[next] {
-			break
-		}
-		seen[next] = true
-		chain = append(chain, next)
-		curr = next
+		return []string{policy}
 	}
 	return chain
 }

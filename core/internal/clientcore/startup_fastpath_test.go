@@ -67,7 +67,6 @@ func TestFastUniqueJSONAndEscapedKeyFallback(t *testing.T) {
 	}
 }
 
-
 func TestHostStartingNonBlockingSnapshotAndNonNilJSONArrays(t *testing.T) {
 	ws := t.TempDir()
 	h, err := Open(ws)

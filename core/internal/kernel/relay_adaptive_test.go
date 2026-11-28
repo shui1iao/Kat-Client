@@ -11,10 +11,10 @@ import (
 
 func TestCopyAdaptiveDemotesAndPromotes(t *testing.T) {
 	chunks := [][]byte{
-		bytes.Repeat([]byte("a"), 512),     // small read -> demotes 64KiB -> 8KiB
-		bytes.Repeat([]byte("b"), 256),     // stays 8KiB
-		bytes.Repeat([]byte("c"), 16384),   // fills 8KiB -> promotes back to 64KiB
-		bytes.Repeat([]byte("d"), 65535),   // delivered in 1 large write
+		bytes.Repeat([]byte("a"), 512),   // small read -> demotes 64KiB -> 8KiB
+		bytes.Repeat([]byte("b"), 256),   // stays 8KiB
+		bytes.Repeat([]byte("c"), 16384), // fills 8KiB -> promotes back to 64KiB
+		bytes.Repeat([]byte("d"), 65535), // delivered in 1 large write
 	}
 	var want bytes.Buffer
 	for _, c := range chunks {

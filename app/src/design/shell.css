@@ -159,14 +159,26 @@
   transition: opacity 120ms var(--ease), color 120ms var(--ease);
 }
 
-/* Collapsed: titles keep their height (no vertical jump) and turn into a divider. */
+/* Collapsed: compact section dividers so all 9 nav items + settings dot fit cleanly at 600px min height. */
+.sidebar-collapsed .nav-list {
+  padding-block: 4px;
+}
+
+.sidebar-collapsed .nav-sec + .nav-sec {
+  margin-top: 6px;
+}
+
 .sidebar-collapsed .nav-sec-title {
+  height: 9px;
+  padding: 0;
+  font-size: 0;
+  line-height: 0;
   color: transparent;
   background: var(--sep-fade) center / 100% 1px no-repeat;
 }
 
 .sidebar-collapsed .nav-sec:first-child .nav-sec-title {
-  background: none;
+  display: none;
 }
 
 /* Navigation row: rounded control pill selection, semantic line icons */
@@ -542,7 +554,6 @@
 }
 .workspace.is-capped .titlebar-heading {
   margin-left: max(0px, calc((100cqw - var(--cap-gutter) - 1120px) / 2));
-  transition: margin-left 200ms var(--ease);
 }
 
 .titlebar {
@@ -736,6 +747,7 @@
 }
 
 .rail-btn {
+  position: relative;
   width: 40px;
   height: 34px;
   border-radius: var(--r-ctl);
@@ -774,6 +786,25 @@
 
 .rail-btn.has-error {
   color: var(--bad);
+}
+
+.rail-btn.has-error::after,
+.rail-btn.is-transition::after {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  content: "";
+}
+
+.rail-btn.has-error::after {
+  background: var(--bad);
+}
+
+.rail-btn.is-transition::after {
+  background: var(--warn);
 }
 
 .rail-mode-pop {
@@ -816,10 +847,6 @@
 .net-switch:hover:not(:disabled) {
   background: var(--hover);
   color: var(--text);
-}
-
-.sidebar-collapsed .side-controls {
-  display: none;
 }
 
 .net-switch .ns-label {
@@ -936,6 +963,17 @@
   border-radius: var(--r-ctl);
   background: var(--bad-soft);
   font-size: var(--fs-body);
+}
+.workspace.is-capped .core-fault {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+}
+.workspace.is-capped.is-flush .core-fault {
+  width: calc(100% - 44px);
+  max-width: 1076px;
+  margin-left: max(14px, calc((100% - 1120px) / 2 + 14px));
+  margin-right: max(30px, calc((100% - 1120px) / 2 + 30px));
 }
 .core-fault-dot {
   width: 7.5px;

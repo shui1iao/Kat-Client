@@ -83,24 +83,24 @@ type autoGroup struct {
 	firstReady       chan struct{} // URLTest: full round; Smart: successful full bootstrap
 	firstReadyClosed bool
 	fastReady        chan struct{} // Desktop streaming first healthy member signal
-	roundDone       chan struct{} // current automatic round terminal, even if incomplete/down
-	completeRound   bool
-	hasRound        bool
-	lastRound       time.Time
-	fallbackRoundAt time.Time // end of last independent full fallback evidence set
-	probing         bool
-	started         bool
-	closed          bool
-	ctx             context.Context
-	cancel          context.CancelFunc
-	stopCtx         func() bool
-	lastUse         time.Time
-	startupDone     bool        // first automatic round only; manual rounds do not consume it
-	retryStop       func() bool // client-only one-shot startup recovery
-	tickStop        func() bool // pending periodic tick
-	lb              *lbState    // load-balance
-	wg              sync.WaitGroup
-	roundsRun       atomic.Int64 // completed probe rounds (tests)
+	roundDone        chan struct{} // current automatic round terminal, even if incomplete/down
+	completeRound    bool
+	hasRound         bool
+	lastRound        time.Time
+	fallbackRoundAt  time.Time // end of last independent full fallback evidence set
+	probing          bool
+	started          bool
+	closed           bool
+	ctx              context.Context
+	cancel           context.CancelFunc
+	stopCtx          func() bool
+	lastUse          time.Time
+	startupDone      bool        // first automatic round only; manual rounds do not consume it
+	retryStop        func() bool // client-only one-shot startup recovery
+	tickStop         func() bool // pending periodic tick
+	lb               *lbState    // load-balance
+	wg               sync.WaitGroup
+	roundsRun        atomic.Int64 // completed probe rounds (tests)
 }
 
 func newAutoGroup(c config, ms []outbound.Outbound, events outbound.EventSink, h hooks) *autoGroup {
@@ -1203,7 +1203,6 @@ func (g *autoGroup) RecordURLProbe(url string, sample ProbeSample) {
 		g.RecordProbeRound([]ProbeSample{sample})
 	}
 }
-
 
 // Runtime group graph is acyclic (validated by the kernel). Unknown health is
 // optimistic for ordinary leaves, but an empty or wholly failed group is down.

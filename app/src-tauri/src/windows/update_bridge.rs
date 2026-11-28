@@ -51,13 +51,21 @@ fn verified_helper_path(action: &str) -> Result<std::path::PathBuf> {
     if security::same_path(&helper, &root.join("kat-install-helper.exe")) {
         security::verify_approved(&r, &helper, "kat-install-helper.exe")?;
     } else {
-        let b = crate::user_store::read_selected(&helper, 128 * 1024 * 1024)?;
-        use sha2::{Digest, Sha256};
-        if r.hashes.as_ref().and_then(|m| m.get("kat-install-helper.exe"))
-            != Some(&hex::encode(Sha256::digest(b)))
-        {
-            return Err(bad());
-        }
+        let expected = r
+            .hashes
+            .as_ref()
+            .and_then(|m| m.get("kat-install-helper.exe"))
+            .ok_or_else(bad)?;
+        crate::crypto_io::verify_path_sha256(
+            &helper,
+            128 * 1024 * 1024,
+            expected,
+            true,
+            "UPDATE_BRIDGE",
+            "UPDATE_BRIDGE",
+            "安装辅助程序哈希校验失败",
+        )
+        .map_err(|_| bad())?;
     }
     Ok(helper)
 }
@@ -129,14 +137,26 @@ fn spawn_helper_uac(action: &str, id: &str, report: &std::path::Path) -> Result<
     Ok(process)
 }
 
+const MAX_HELPER_WAIT_ROUNDS: usize = 5;
+
 fn finish_helper_process(process: Handle, report: &std::path::Path) -> Result<()> {
-    // Keep the per-SID gate and original caller alive while helper status is unknown.
-    loop {
-        match unsafe { WaitForSingleObject(process.0, 120000) } {
-            WAIT_OBJECT_0 => break,
+    // Bounded wait (max 5 * 120s = 10 min) prevents hung helper processes from leaking threads forever.
+    let mut finished = false;
+    for _ in 0..MAX_HELPER_WAIT_ROUNDS {
+        match unsafe { WaitForSingleObject(process.0, 120_000) } {
+            WAIT_OBJECT_0 => {
+                finished = true;
+                break;
+            }
             WAIT_TIMEOUT => continue,
             _ => return Err(bad()),
         }
+    }
+    if !finished {
+        return Err(Error::new(
+            "INSTALL_TIMEOUT",
+            "更新辅助进程等待超时（超过 10 分钟），恢复材料已保留，请勿并发重试",
+        ));
     }
     crate::safe_log::component(
         "host.startup",

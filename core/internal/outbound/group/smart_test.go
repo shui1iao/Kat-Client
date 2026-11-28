@@ -2,15 +2,21 @@ package group
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/shui1iao/Kat/internal/outbound"
 	"math"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
-
-	"github.com/shui1iao/Kat/internal/outbound"
 )
 
 // long interval: no periodic rounds unless a test advances that far
@@ -180,4 +186,302 @@ func TestSmartPausesProbingWhenIdle(t *testing.T) {
 	waitRounds(t, g, 6)
 	clk.Advance(5 * time.Minute)
 	waitRounds(t, g, 7)
+}
+
+func TestRestoredSmartOptionsPreserveExplicitAndDynamic(t *testing.T) {
+	const old = `{"name":"same","type":"smart","members":["a","b"],"use":["p"],"include_group":"source","include_all":true,"include_all_proxies":true,"include_all_providers":true,"filter":"a|b","exclude_filter":"gone","exclude_type":"socks5","fixed":"a","priority":{"a":1.5,"temporarily-absent":0.5},"probe":{"url":"https://probe.invalid/custom","timeout":"9s","expected_status":"204"},"tolerance":0,"damping":{"relative_improvement":0,"confirm_rounds":3,"min_dwell":"0s"},"smart":{"scope":"site","exploration_rate":0.02,"adaptive_dial":false}}`
+	var o Options
+	if e := json.Unmarshal([]byte(old), &o); e != nil {
+		t.Fatal(e)
+	}
+	if o.Type != TypeSmart || o.Name != "same" || o.Fixed != "a" || o.Priority["temporarily-absent"] != .5 {
+		t.Fatal(o)
+	}
+	c, e := normalize(o)
+	if e != nil || c.interval != 5*time.Minute || c.timeout != 9*time.Second || c.tolerance != 0 || c.relative != 0 || c.dwell != 0 || c.confirms != 3 {
+		t.Fatal(c, e)
+	}
+	out, e := json.Marshal(o)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var a, b map[string]json.RawMessage
+	_ = json.Unmarshal([]byte(old), &a)
+	_ = json.Unmarshal(out, &b)
+	// Numeric zero and explicit duration zero have identical preserved semantics.
+	delete(a, "tolerance")
+	delete(b, "tolerance")
+	var va, vb any
+	_ = json.Unmarshal(mustJSON(a), &va)
+	_ = json.Unmarshal(mustJSON(b), &vb)
+	if !reflect.DeepEqual(va, vb) {
+		t.Fatal("non-Smart fields changed", string(out))
+	}
+	o.Members = []string{"b", "temporarily-absent", "a"}
+	o.Expanded = true
+	c, e = normalize(o)
+	if e != nil || !reflect.DeepEqual(c.priority, []float64{1, .5, 1.5}) {
+		t.Fatal(c.priority, e)
+	}
+	o.Members = []string{"a", "b"}
+	g := newAuto(t, o, members(newFake("a"), newFake("b")), newFakeClock(), nil, nil)
+	if g.Type() != TypeSmart || g.Snapshot().Type != TypeSmart {
+		t.Fatal("Smart runtime missing")
+	}
+	// A directly constructed runtime type is not a new/alternate Smart entry.
+	if Validate(Options{Name: "g", Type: "smart", Members: []string{"a"}, Probe: probeOpts()}) != nil {
+		t.Fatal("native Smart runtime rejected")
+	}
+	for _, interval := range []string{"0s", "7m"} {
+		var v Options
+		input := strings.Replace(old, `"timeout":"9s"`, `"interval":"`+interval+`","timeout":"9s"`, 1)
+		if e := json.Unmarshal([]byte(input), &v); e != nil {
+			t.Fatal(e)
+		}
+		cc, e := normalize(v)
+		want := 5 * time.Minute
+		if interval == "7m" {
+			want = 7 * time.Minute
+		}
+		if e != nil || cc.interval != want {
+			t.Fatal(interval, cc, e)
+		}
+	}
+}
+func mustJSON(v any) []byte { b, _ := json.Marshal(v); return b }
+func TestRestoredSmartInvalidStillRejected(t *testing.T) {
+	base := `{"name":"g","type":"smart","members":["a"],"probe":{"url":"http://probe.invalid/"}}`
+	for _, extra := range []string{`,"smart":{"unknown":true}`, `,"smart":{"scope":"other"}`, `,"smart":{"exploration_rate":0.1}`, `,"smart":{"adaptive_dial":"yes"}`, `,"unknown":true`, `,"max_failed_times":3`, `,"priority":{"a":0}`} {
+		var o Options
+		e := json.Unmarshal([]byte(strings.TrimSuffix(base, "}")+extra+"}"), &o)
+		if e == nil {
+			e = Validate(o)
+		}
+		if e == nil {
+			t.Fatal("invalid accepted", extra)
+		}
+	}
+	var o Options
+	if json.Unmarshal([]byte(strings.Replace(base, `"smart"`, `"url-test"`, 1)[:len(base)-3]), &o) == nil {
+		t.Fatal("invalid JSON accepted")
+	}
+}
+func TestNoSmartFallbackFixedRemainsHealthyFirst(t *testing.T) {
+	c := newFakeClock()
+	g := newAuto(t, Options{Type: TypeFallback, Fixed: "b"}, members(newFake("a"), newFake("b")), c, nil, nil)
+	v2Round(g, c, 10*time.Millisecond, 30*time.Millisecond)
+	if g.Current() != "b" || g.Snapshot().Current != "b" {
+		t.Fatal("healthy fixed ignored")
+	}
+	c.Advance(time.Second)
+	g.RecordProbe("b", 0, c.Now(), errors.New("down"))
+	if g.Current() != "a" || g.Snapshot().Fixed != "b" {
+		t.Fatal("soft fixed lost")
+	}
+	c.Advance(time.Second)
+	g.RecordProbe("b", 30*time.Millisecond, c.Now(), nil)
+	if g.Current() != "b" {
+		t.Fatal("fixed did not recover")
+	}
+	if e := g.SetFixed(""); e != nil {
+		t.Fatal(e)
+	}
+	if g.Current() != "a" {
+		t.Fatal("automatic fallback order changed")
+	}
+}
+
+func TestClientSmartManualRoundOrder(t *testing.T) {
+	for _, reverse := range []bool{false, true} {
+		name := "a-first"
+		if reverse {
+			name = "b-first"
+		}
+		t.Run(name, func(t *testing.T) {
+			clk := newFakeClock()
+			g := newAuto(t, Options{Type: TypeSmart, Priority: map[string]float64{"a": 4}}, members(newFake("a"), newFake("b")), clk, nil, nil)
+			results := []ProbeSample{{Name: "a", Latency: 100 * time.Millisecond, At: clk.Now()}, {Name: "b", Latency: 200 * time.Millisecond, At: clk.Now()}}
+			if reverse {
+				results[0], results[1] = results[1], results[0]
+			}
+			g.RecordProbeRound(results)
+			for _, m := range g.Snapshot().Members {
+				want := time.Duration(100) * time.Millisecond
+				if m.Name == "b" {
+					want = 200 * time.Millisecond
+				}
+				if !m.Probed || !m.ProbeOK || m.ProbeLatency != want || m.Latency != 0 || m.ScoreParts.ProbeMS == nil || *m.ScoreParts.ProbeMS != ms(want) {
+					t.Fatalf("sample/EWMA not retained: %+v", m)
+				}
+			}
+			if got := g.Current(); got != "b" {
+				t.Fatalf("same full round: a=100ms*4, b=200ms*1: current=%s, want b", got)
+			}
+		})
+	}
+}
+
+// V2 does not mix probe and real EWMA. Atomic manual order is retained;
+// median/maturity and repeated rounds are exercised in TestV2StableMedianAndIndependentRounds.
+func TestClientManualRoundFailuresFixedAndStale(t *testing.T) {
+	for _, kind := range []string{TypeSmart, TypeURLTest} {
+		t.Run(kind, func(t *testing.T) {
+			clk := newFakeClock()
+			g := newAuto(t, Options{Type: kind, Fixed: "a", Priority: map[string]float64{"a": 100}}, members(newFake("a"), newFake("b")), clk, nil, nil)
+			failed := errors.New("HTTP probe failed")
+			g.RecordProbeRound([]ProbeSample{{Name: "a", At: clk.Now(), Err: failed}, {Name: "b", Latency: time.Millisecond, At: clk.Now()}})
+			s := g.Snapshot()
+			if s.Current != "b" || s.Fixed != "a" || s.Members[0].ProbeOK || !s.Members[1].ProbeOK || s.Members[1].Priority != 1 {
+				t.Fatal("fixed/failed/default weight changed")
+			}
+			g.RecordProbeRound(nil)
+			g.RecordProbeRound([]ProbeSample{{Name: "a", Latency: time.Millisecond, At: clk.Now().Add(-time.Second)}})
+			if !reflect.DeepEqual(s, g.Snapshot()) {
+				t.Fatal("empty/stale round changed state")
+			}
+			g.Close()
+			g.RecordProbeRound([]ProbeSample{{Name: "a", Latency: time.Millisecond, At: clk.Now().Add(time.Second)}})
+			if !reflect.DeepEqual(s, g.Snapshot()) {
+				t.Fatal("closed group accepted late round")
+			}
+			all := newAuto(t, Options{Type: kind}, members(newFake("a"), newFake("b")), clk, nil, nil)
+			all.RecordProbeRound([]ProbeSample{{Name: "b", At: clk.Now(), Err: failed}, {Name: "a", At: clk.Now(), Err: failed}})
+			for _, m := range all.Snapshot().Members {
+				if !m.Probed || m.ProbeOK || m.ProbeLatency != 0 {
+					t.Fatal("failed round fabricated success")
+				}
+			}
+		})
+	}
+}
+
+func TestClientConcurrentManualRounds(t *testing.T) {
+	clk := newFakeClock()
+	g := newAuto(t, Options{Type: TypeSmart, Fixed: "a"}, members(newFake("a"), newFake("b")), clk, nil, nil)
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 100 {
+				g.RecordProbeRound([]ProbeSample{{Name: "a", Latency: time.Millisecond, At: clk.Now()}, {Name: "b", Latency: 2 * time.Millisecond, At: clk.Now()}})
+				_ = g.Snapshot()
+			}
+		}()
+	}
+	wg.Wait()
+	if g.Current() != "a" {
+		t.Fatal("fixed changed under concurrent rounds")
+	}
+}
+
+func TestClientManualPriorityValidation(t *testing.T) {
+	for _, kind := range []string{TypeSmart, TypeURLTest} {
+		for _, v := range []float64{0, -1, 101, math.NaN(), math.Inf(1), math.Inf(-1)} {
+			if Validate(Options{Name: "g", Type: kind, Members: []string{"a"}, Probe: probeOpts(), Priority: map[string]float64{"a": v}}) == nil {
+				t.Fatalf("accepted %s priority %v", kind, v)
+			}
+		}
+		for _, v := range []float64{0.01, 1, 100} {
+			if e := Validate(Options{Name: "g", Type: kind, Members: []string{"a"}, Probe: probeOpts(), Priority: map[string]float64{"a": v}}); e != nil {
+				t.Fatal(e)
+			}
+		}
+	}
+}
+
+type r9SlowDial struct{ calls atomic.Int32 }
+
+func (s *r9SlowDial) Name() string { return "member" }
+func (s *r9SlowDial) Type() string { return "direct" }
+func (s *r9SlowDial) Close() error { return nil }
+func (s *r9SlowDial) UDP() bool    { return false }
+func (s *r9SlowDial) ListenPacket(context.Context) (outbound.PacketConn, error) {
+	return nil, outbound.ErrUDPUnsupported
+}
+func (s *r9SlowDial) DialTCP(ctx context.Context, a outbound.Addr) (net.Conn, error) {
+	s.calls.Add(1)
+	select {
+	case <-time.After(80 * time.Millisecond):
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	return (&net.Dialer{}).DialContext(ctx, "tcp", a.String())
+}
+func TestR9UnifiedReusesOneSocketAndExcludesHandshake(t *testing.T) {
+	var calls atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "HEAD" {
+			t.Error("not HEAD")
+		}
+		calls.Add(1)
+		time.Sleep(15 * time.Millisecond)
+		w.WriteHeader(204)
+	}))
+	defer target.Close()
+	out := &r9SlowDial{}
+	lat, e := ProbeOutboundDelay(context.Background(), out, target.URL, true)
+	if e != nil || lat < 10*time.Millisecond || lat > 70*time.Millisecond || out.calls.Load() != 1 || calls.Load() != 2 {
+		t.Fatal("not warm RTT", lat, e, out.calls.Load(), calls.Load())
+	}
+	out = &r9SlowDial{}
+	lat, e = ProbeOutboundDelay(context.Background(), out, target.URL, false)
+	if e != nil || lat < 90*time.Millisecond || out.calls.Load() != 1 || calls.Load() != 3 {
+		t.Fatal("full mode changed", lat, e)
+	}
+}
+func TestR9UnifiedSecondFailureRetainsFirstSampleWithoutRedial(t *testing.T) {
+	var calls atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := calls.Add(1)
+		if n == 2 {
+			c, _, _ := w.(http.Hijacker).Hijack()
+			c.Close()
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+		w.WriteHeader(204)
+	}))
+	defer target.Close()
+	out := &r9SlowDial{}
+	lat, e := ProbeOutboundDelay(context.Background(), out, target.URL, true)
+	if e != nil || lat < 85*time.Millisecond || out.calls.Load() != 1 || calls.Load() != 2 {
+		t.Fatal("fallback must keep first full sample", lat, e, out.calls.Load(), calls.Load())
+	}
+}
+func TestR9UnifiedClosingServerDoesNotStartAnotherConnection(t *testing.T) {
+	var calls atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Connection", "close")
+		w.WriteHeader(204)
+	}))
+	defer target.Close()
+	out := &r9SlowDial{}
+	lat, e := ProbeOutboundDelay(context.Background(), out, target.URL, true)
+	if e != nil || lat < 75*time.Millisecond || out.calls.Load() != 1 || calls.Load() != 1 {
+		t.Fatal(lat, e, out.calls.Load(), calls.Load())
+	}
+}
+func TestR9UnifiedSameDeadlineAndExpectedStatus(t *testing.T) {
+	var calls atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 2 {
+			select {
+			case <-r.Context().Done():
+				return
+			case <-time.After(time.Second):
+			}
+		}
+		w.WriteHeader(204)
+	}))
+	defer target.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 140*time.Millisecond)
+	defer cancel()
+	out := &r9SlowDial{}
+	before := time.Now()
+	lat, e := ProbeOutboundDelay(ctx, out, target.URL, true)
+	if e != nil || lat < 75*time.Millisecond || time.Since(before) > 300*time.Millisecond || out.calls.Load() != 1 {
+		t.Fatal("deadline extended or first lost", lat, e)
+	}
 }

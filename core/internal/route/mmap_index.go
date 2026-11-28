@@ -441,7 +441,6 @@ func readIPSetMeta(mr *kidxMetaReader, flat []byte) (ipSet, bool) {
 	return ipSet{v4: v4, v6: v6}, true
 }
 
-
 func writeCondMeta(mw *kidxMetaWriter, fb *kidxFlatBuilder, c *cond) bool {
 	if c == nil || c.set != nil {
 		return false

@@ -1,6 +1,7 @@
 package procattr
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -28,11 +29,7 @@ func TestRuntimeAndProtectedGrantPolicy(t *testing.T) {
 }
 
 func TestRuntimePolicyAndWindowsChecksParity(t *testing.T) {
-	raw, e := os.ReadFile("../../../app/src-tauri/src/service_self_read.rs")
-	if e != nil || !strings.Contains(string(raw), "mask & 0x500d0040 == 0") {
-		t.Fatal("runtime ancestor policy drift")
-	}
-	raw, e = os.ReadFile("authority_windows.go")
+	raw, e := os.ReadFile("authority_windows.go")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -46,5 +43,12 @@ func TestRuntimePolicyAndWindowsChecksParity(t *testing.T) {
 		if strings.Contains(s, forbidden) {
 			t.Fatal("extra capability", forbidden)
 		}
+	}
+	rustRaw, e := os.ReadFile("../../../app/src-tauri/src/service_self_read.rs")
+	if errors.Is(e, os.ErrNotExist) {
+		t.Skip("sibling Rust directory absent in standalone core checkout")
+	}
+	if e != nil || !strings.Contains(string(rustRaw), "mask & 0x500d0040 == 0") {
+		t.Fatal("runtime ancestor policy drift")
 	}
 }

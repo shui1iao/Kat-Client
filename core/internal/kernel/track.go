@@ -702,7 +702,9 @@ func (w meterWriter) Write(p []byte) (int, error) {
 func (w meterWriter) WriteBuffers(b *net.Buffers) (int64, error) {
 	var n int64
 	var e error
-	if bw, ok := w.w.(interface{ WriteBuffers(*net.Buffers) (int64, error) }); ok {
+	if bw, ok := w.w.(interface {
+		WriteBuffers(*net.Buffers) (int64, error)
+	}); ok {
 		n, e = bw.WriteBuffers(b)
 	} else {
 		n, e = b.WriteTo(w.w)

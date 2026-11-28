@@ -429,6 +429,27 @@ func IsProxyFailure(err error) bool {
 }
 
 func SafeFailure(e error) string {
+	if e == nil {
+		return ""
+	}
+	if _, ok := e.(ReplyError); ok {
+		return "rejected"
+	}
+	if u := errors.Unwrap(e); u == nil {
+		switch e {
+		case errAuthRejected:
+			return "authentication_rejected"
+		case errNoMethod, errProtocol, errAddress:
+			return "protocol"
+		}
+		if _, multi := e.(interface{ Unwrap() []error }); !multi {
+			return ""
+		}
+	}
+	return safeFailureSlow(e)
+}
+
+func safeFailureSlow(e error) string {
 	var reply ReplyError
 	switch {
 	case errors.Is(e, errAuthRejected):

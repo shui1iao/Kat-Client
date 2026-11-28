@@ -56,10 +56,44 @@ const messages: Record<string, string> = {
   DUPLICATE_KEY: 'YAML 配置含重复键', BAD_INDENT: 'YAML 缩进无效', BAD_SCALAR_START: 'YAML 标量起始字符无效',
   MULTILINE_IMPLICIT_KEY: 'YAML 隐式键不能跨行', MISSING_CHAR: 'YAML 缺少必要的分隔符',
   UNEXPECTED_TOKEN: 'YAML 存在意外的语法符号', TAB_AS_INDENT: 'YAML 缩进不能使用制表符', TAG_RESOLVE_FAILED: 'YAML 标签不受支持',
+  MANIFEST_SCHEMA: '更新清单格式无效，已忽略本次更新结果',
+  MANIFEST_SIGNATURE: '更新清单签名校验失败，已拒绝不受信任的更新',
+  MANIFEST_EXPIRED: '更新清单已过期，请稍后重新检查更新',
+  MANIFEST_DOWNGRADE: '更新版本低于当前版本，已拒绝降级更新',
+  MANIFEST_KIND: '更新组件类型不匹配',
+  MANIFEST_CHANNEL: '更新通道不匹配',
+  MANIFEST_PLATFORM: '更新平台架构不匹配',
+  MANIFEST_CAPABILITY: '当前宿主版本不支持此更新包要求的能力，请下载完整安装包升级',
+  UPDATE_UNSUPPORTED: '当前运行环境缺少受保护的安装元数据，请使用完整安装包完成安装',
+  UPDATE_BUSY: '已有安装或更新正在进行，请等待当前操作结束',
+  UPDATE_UAC: 'Windows 管理员确认未能启动，恢复材料已保留，可稍后重试确认',
+  UPDATE_UAC_CANCELLED: '已取消管理员确认，当前版本保持不变',
+  UPDATE_CANCELLED: '更新已取消，当前版本保持不变',
+  UPDATE_OFFER: '待安装的更新候选不匹配或已过期，请重新检查更新',
+  UPDATE_VERIFY: '更新包签名或清单校验失败，未执行安装',
+  UPDATE_HASH: '更新包完整性校验失败，未执行安装',
+  UPDATE_ARCH: '更新包架构不兼容（需要 AMD64 可执行文件）',
+  UPDATE_COMMITTED: '更新已完成提交，无需重复回滚',
+  UPDATE_TRANSACTION: '更新事务标识不匹配，请重新发起操作',
+  UPDATE_NO_TRANSACTION: '当前没有需要恢复的更新事务',
+  UPDATE_RECOVERY_PENDING: '存在未完成的更新恢复事务，请先完成恢复确认',
+  UPDATE_RECOVERY_COMPLETED: '前次未完成的更新事务已安全恢复，请重试操作',
+  UPDATE_HANDOFF: '更新进程交接未完成，当前运行状态已保留',
+  UPDATE_BRIDGE: '更新桥接通信未完成，未强制终止任何进程',
+  UPDATE_HEALTH: '更新后服务健康核验未通过，请查看诊断记录',
+  UPDATE_DOWNGRADE: '不允许安装旧版本更新包',
+  UPDATE_NETWORK: '检查或下载更新时网络连接失败',
+  UPDATE_DOWNLOAD: '下载更新包失败，请稍后重试',
+  CORE_UPDATE_IN_PROGRESS: '正在更新内核组件，请等待更新完成后再操作网络',
 };
-// Lowercase is allowed only for these frozen Go categories, not arbitrary native text.
+// Lowercase is allowed only for these frozen Go/Rust categories, not arbitrary native text.
 const importCodes = new Set(['diagnostic_cache_failed','diagnostic_busy','not_running','probe_busy','legacy_provider_unsupported','legacy_migration_failed','legacy_migration_fetch','legacy_migration_options','subscription_native_config','subscription_format_unsupported','subscription_failed','subscription_fetch_failed','subscription_resource_failed','subscription_conflict','subscription_stale','request_canceled','invalid_params','import_fetch_failed','import_failed','import_dependency_failed','import_canceled','import_too_large']);
-const safeCode = (s: unknown) => typeof s === 'string' && (/^[A-Z][A-Z0-9_]{1,63}$/.test(s) || importCodes.has(s)) ? s : '';
+const safeCode = (s: unknown) => {
+  if (typeof s !== 'string') return '';
+  if (/^[A-Z][A-Z0-9_]{1,63}$/.test(s) || importCodes.has(s)) return s;
+  if (/^(?:manifest|update|core_update)_[a-z0-9_]{1,55}$/.test(s) && Object.hasOwn(messages, s.toUpperCase())) return s.toUpperCase();
+  return '';
+};
 const safePath = (s: unknown) => typeof s === 'string' && /^(?:document|schema_version|client|kernel)(?:\.[A-Za-z_][A-Za-z0-9_]*|\[\d+\])*$/.test(s) ? s : '';
 function redact(s: string) {
   return s.replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi, '[链接已隐藏]')

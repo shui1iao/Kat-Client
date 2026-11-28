@@ -24,7 +24,6 @@ type Stream struct {
 	readDeadline, writeDeadline                                           time.Time
 	// Protected by session.mu, one write operation at a time under wMu.
 	writeActive, writeExpired bool
-	writeEpoch                uint64
 	writeTimer                *time.Timer
 	writeFrame                *outbound
 }
@@ -59,19 +58,21 @@ func (st *Stream) SetWriteDeadline(t time.Time) error {
 // be withdrawn atomically; once transport I/O owns the frame it may already
 // have emitted a prefix, so synchronization requires terminating the carrier.
 func (st *Stream) armWriteDeadlineLocked() {
-	st.writeEpoch++
-	if st.writeTimer != nil {
-		st.writeTimer.Stop()
-		st.writeTimer = nil
-	}
-	if !st.writeActive || st.writeDeadline.IsZero() || st.writeExpired {
+	if st.closed || !st.writeActive || st.writeDeadline.IsZero() || st.writeExpired {
+		if st.writeTimer != nil {
+			st.writeTimer.Stop()
+		}
 		return
 	}
-	epoch := st.writeEpoch
-	st.writeTimer = time.AfterFunc(time.Until(st.writeDeadline), func() {
+	d := time.Until(st.writeDeadline)
+	if st.writeTimer != nil {
+		st.writeTimer.Reset(d)
+		return
+	}
+	st.writeTimer = time.AfterFunc(d, func() {
 		s := st.session
 		s.mu.Lock()
-		if epoch != st.writeEpoch || !st.writeActive {
+		if s.ctx.Err() != nil || st.closed || !st.writeActive || st.writeExpired || st.writeDeadline.IsZero() || time.Now().Before(st.writeDeadline) {
 			s.mu.Unlock()
 			return
 		}
@@ -246,6 +247,10 @@ func (st *Stream) closeLocked(err error, remote, discard bool) {
 	}
 	if st.closed {
 		return
+	}
+	if st.writeTimer != nil {
+		st.writeTimer.Stop()
+		st.writeTimer = nil
 	}
 	st.closed = true
 	st.remote = remote

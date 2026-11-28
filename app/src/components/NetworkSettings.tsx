@@ -1,16 +1,18 @@
 import { Icon } from './Icon';
 import { tip } from './Tooltip';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useFormDraft } from '../lib/formDraft';
 import { Card, Empty, MoveButtons, SettingSwitch, StableText } from './ui';
 import { LocalError } from './Editors';
 import { networkDraft, patchNetwork, dnsCacheError, type DNSMode } from '../client/daily';
+import { canClearDnsCache, useClearDnsCache } from '../client/dnsCacheAction';
+import { moveItem } from '../client/presentation';
 import { errorText } from '../lib/errors';
 import type { Client } from '../client/useClient';
-import { core } from '../client/ipc';
 
-// Two cards share one draft model: 'ports' (HTTP/SOCKS) and 'dns' (servers/cache). Each saves only its own changed fields.
+// Two cards share one draft model: 'ports' (HTTP/SOCKS/IPv6) and 'dns' (servers/cache). Each saves only its own changed fields.
 export function NetworkSettings({ c, section = 'ports', bare = false, children }: { c: Client; section?: 'ports' | 'dns'; bare?: boolean; children?: ReactNode }) {
+  const { cleared, clearCache } = useClearDnsCache(c);
   if (bare) {
     return (
       <div className="dns-bare-form">
@@ -19,21 +21,7 @@ export function NetworkSettings({ c, section = 'ports', bare = false, children }
       </div>
     );
   }
-  const [cleared, setCleared] = useState<{ count: number } | null>(null);
-  useEffect(() => {
-    if (cleared === null) return;
-    const t = setTimeout(() => setCleared(null), 2000);
-    return () => clearTimeout(t);
-  }, [cleared]);
-  const clear = () =>
-    c.run(
-      'dns-clear',
-      async () => {
-        const r = await core<{ cleared: number }>('dns.cache.clear');
-        setCleared({ count: r.cleared });
-      },
-      c.reportOperationError,
-    );
+  const running = c.status?.runtime.state === 'running';
   return (
     <Card
       extra={
@@ -42,11 +30,11 @@ export function NetworkSettings({ c, section = 'ports', bare = false, children }
             <button
               type="button"
               className="btn sm"
-              disabled={c.status?.runtime.state !== 'running' || c.busy.has('dns-clear')}
-              onClick={() => void clear()}
+              disabled={!canClearDnsCache(running, c.busy)}
+              onClick={() => void clearCache()}
             >
               <StableText
-                current={cleared !== null ? `已清除 ${cleared.count} 条` : '清除缓存'}
+                current={cleared !== null ? `已清除 ${cleared} 条` : '清除缓存'}
                 items={['清除缓存', '已清除 4096 条']}
               />
             </button>
@@ -75,10 +63,8 @@ function NetworkForm({ c, section }: { c: Client; section: 'ports' | 'dns' }) {
       setError(errorText(e));
     }
   };
-  const move = (i: number, dir: number) => {
-    const a = [...value.servers];
-    [a[i], a[i + dir]] = [a[i + dir], a[i]];
-    set('servers', a);
+  const move = (i: number, dir: -1 | 1) => {
+    set('servers', moveItem(value.servers, i, dir));
   };
 
   return (
@@ -128,13 +114,9 @@ function NetworkForm({ c, section }: { c: Client; section: 'ports' | 'dns' }) {
             </div>
             <SettingSwitch
               ariaLabel="IPv6"
-              on={c.source?.client.ipv6 ?? false}
-              locked={c.doc.dirty || !c.connected}
-              onToggle={(next) =>
-                c.edit((d) => {
-                  d.client.ipv6 = next;
-                }, c.reportOperationError)
-              }
+              on={value.ipv6}
+              locked={!c.connected}
+              onToggle={(next) => set('ipv6', next)}
             />
           </div>
         </>
@@ -166,7 +148,7 @@ function NetworkForm({ c, section }: { c: Client; section: 'ports' | 'dns' }) {
             </select>
           </label>
 
-{value.advanced_dns && <LocalError text="此配置包含已停用的高级 DNS，请选择系统 DNS 或自定义 DNS 后保存" raw />}
+          {value.advanced_dns && <LocalError text="此配置包含已停用的高级 DNS，请选择系统 DNS 或自定义 DNS 后保存" raw />}
 
           {value.dns_mode === 'custom' && (
             <div className="set-block">

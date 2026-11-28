@@ -60,6 +60,14 @@ func InstallMedium(t windows.Token) error {
 	}
 	return nil
 }
+
+// ReleaseMedium atomically detaches and closes the installed Medium-IL token
+// during bootstrap rollback before elevated session handover completes.
+func ReleaseMedium() {
+	if t := medium.Swap(0); t != 0 {
+		_ = windows.Token(t).Close()
+	}
+}
 func Check() error {
 	if Required() && medium.Load() == 0 {
 		return ErrMedium

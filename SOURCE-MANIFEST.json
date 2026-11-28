@@ -1,33 +1,33 @@
 {
   "schema": 1,
-  "app_version": "0.2.37",
-  "core_version": "0.8.22",
-  "sequence": 1795793000,
-  "client_sequence": 1795793000,
-  "core_sequence": 1795722000,
+  "app_version": "0.2.38",
+  "core_version": "0.8.23",
+  "sequence": 1795859000,
+  "client_sequence": 1795859000,
+  "core_sequence": 1795858000,
   "excludes": [
     "BUILD-IDENTITY.json",
     "SOURCE-MANIFEST.json"
   ],
-  "core_source_fingerprint": "940bdd151404c4ecf8fbdc3b3fd6101bb063a12c0042e3594e9fdc6555ed8726",
+  "core_source_fingerprint": "7d92dba98d7133990b51b134e1fd509b7e9e2645041ac0c4549f7f4951a04720",
   "files": [
     {
       "path": "BUILDING.md",
       "bytes": 808,
       "mode": "0644",
-      "sha256": "c3f1b455ecc78a2a4b22f4e443e1c23cc266c1e8c20f51f2c64a6db18275b26a"
+      "sha256": "28faf0d7e9c1ab56f3edb2cc33a5913e945cf8b1307939233713cacbc9daf36c"
     },
     {
       "path": "README.md",
-      "bytes": 752,
+      "bytes": 597,
       "mode": "0644",
-      "sha256": "10a9456d2c99c147fd09fcc2f79925adff36333056438b6fc2c813db189804b3"
+      "sha256": "05a4d4d17503c9975ec9dbc2ee2238084921025c3eaf3f83f2efccf1e5a1c753"
     },
     {
       "path": "RELEASE_NOTES.md",
-      "bytes": 3865,
+      "bytes": 4216,
       "mode": "0644",
-      "sha256": "f07c9688cf04a4e0b32005226b41104425286aab81249f6e56ba9ff6e68dadb6"
+      "sha256": "4548ad745fa1e1c94bc729225f7df81a2c382e937b751722a468b4980a171d7c"
     },
     {
       "path": "RIGHTS.md",
@@ -37,9 +37,9 @@
     },
     {
       "path": "VALIDATION.md",
-      "bytes": 1957,
+      "bytes": 1910,
       "mode": "0644",
-      "sha256": "3a88bfe0d752143e61931924edf5f3b26a64b355c53a5b59638e7477987c5f64"
+      "sha256": "52ece69b6391a05961703952b17a407e5d2161be97f75fe9ccf7d8a289e91f19"
     },
     {
       "path": "app/build.mjs",
@@ -63,7 +63,7 @@
       "path": "app/package.json",
       "bytes": 647,
       "mode": "0644",
-      "sha256": "37c750a267a59eec60ab647624917c5776e55b2e913e00b0ccab3f35fe9e2fcd"
+      "sha256": "4414fb5d383873c1853293b21c465050359028d638e05b17c2814bc3801517fc"
     },
     {
       "path": "app/public/fonts/NOTICE.txt",
@@ -93,13 +93,13 @@
       "path": "app/src-tauri/Cargo.lock",
       "bytes": 116752,
       "mode": "0644",
-      "sha256": "11587b279993e5f6d87146a16ae8e1f58a4a59cccefc7bee258571c141e14a53"
+      "sha256": "bad496e4157ad0857d6fe14052a101782c3caaafd700945e0bbc12973106e628"
     },
     {
       "path": "app/src-tauri/Cargo.toml",
-      "bytes": 2421,
+      "bytes": 2689,
       "mode": "0644",
-      "sha256": "005e30d76a5dc90f7ccc918e98ed3399b355c524541d909deba0a0d0f4479afb"
+      "sha256": "a9f266b2c907f82d294c82b4bcbeeb83c93edca8619d06212a4d1a27237a6a0c"
     },
     {
       "path": "app/src-tauri/build.rs",
@@ -135,7 +135,7 @@
       "path": "app/src-tauri/distribution/README-WINDOWS.txt",
       "bytes": 268,
       "mode": "0644",
-      "sha256": "a17d19b339ad1d07d2c0d1be8feaaed8139994acc555f5d29382494d7fd2c057"
+      "sha256": "9c6eb44f2320822b6d4e240e84b3dfbfd98b23139fca853e5f1bf4865e000bc6"
     },
     {
       "path": "app/src-tauri/distribution/RUST-THIRD-PARTY-NOTICES.txt",
@@ -4693,9 +4693,9 @@
     },
     {
       "path": "app/src-tauri/scripts/Kat-Setup.nsi",
-      "bytes": 8937,
+      "bytes": 8864,
       "mode": "0644",
-      "sha256": "0505539160fecd5c3012bde68c8a4813cbdaf4be7a5bfb2fe4f9d67222695acb"
+      "sha256": "a42a9d58f9ee5f811f5cc21564f3c1361d5adbcad4a02e096cb0d4129a995474"
     },
     {
       "path": "app/src-tauri/scripts/build-setup.py",
@@ -4770,6 +4770,12 @@
       "sha256": "d92bd2801d7add9db00daa30940c1698af269cdf691f38fee43905c409b2d52f"
     },
     {
+      "path": "app/src-tauri/src/acl_grant.rs",
+      "bytes": 5210,
+      "mode": "0644",
+      "sha256": "128d5216738401f0530529903627236dcca3a97df899e30172f83360ccdf4fdc"
+    },
+    {
       "path": "app/src-tauri/src/acrylic.rs",
       "bytes": 15847,
       "mode": "0644",
@@ -4789,9 +4795,9 @@
     },
     {
       "path": "app/src-tauri/src/bin/install-helper.rs",
-      "bytes": 1771,
+      "bytes": 2089,
       "mode": "0644",
-      "sha256": "a6a4031c6862f92d822c18d07dd59327d0c74a9583c626545ed44987e01c63c8"
+      "sha256": "2d7bbfbacd32155a34913deaa74418e86072f39ed3b8822812965109766bda82"
     },
     {
       "path": "app/src-tauri/src/bin/kat-bootstrap-wininet-check.rs",
@@ -4801,9 +4807,9 @@
     },
     {
       "path": "app/src-tauri/src/bin/network-service.rs",
-      "bytes": 1558,
+      "bytes": 1892,
       "mode": "0644",
-      "sha256": "4d09d5a7efcf32dacd88dac267678e86859121d3a9db7567f6baa3206798c871"
+      "sha256": "f4151c59e4f8bf41e2b5e1e9d14ec2c1ee742bec238f097a246b8fb72be57652"
     },
     {
       "path": "app/src-tauri/src/bin/proxy-watchdog.rs",
@@ -4818,22 +4824,22 @@
       "sha256": "14fd1887072a1d15452b7d57c20cfc3866a228605b64a51ef405fef6b31a2984"
     },
     {
-      "path": "app/src-tauri/src/command_acl_tests.rs",
-      "bytes": 3552,
+      "path": "app/src-tauri/src/cli_parse.rs",
+      "bytes": 13812,
       "mode": "0644",
-      "sha256": "b8dfae6f30b451861bc126c281ac22d56be53ed3dd36bbb512864a3b2744558e"
+      "sha256": "5c8d9a61c2337494217606dc8959872e1f081a88eeba701f91877d907c0e5280"
     },
     {
       "path": "app/src-tauri/src/core_process.rs",
-      "bytes": 13277,
+      "bytes": 18476,
       "mode": "0644",
-      "sha256": "2ccd0138bce238964285224e7520c9e3580433e888f8f6049bfa43efcdd637e3"
+      "sha256": "22ff14e2858f5444755c6cf4ba3452a3a154e0ba2ea0ae6b276ca7d289a790c5"
     },
     {
-      "path": "app/src-tauri/src/core_process_elevated.rs",
-      "bytes": 5480,
+      "path": "app/src-tauri/src/core_tun_journal.rs",
+      "bytes": 31389,
       "mode": "0644",
-      "sha256": "fd70d650a50a8ba0f27d97cfa133c1b8804d4165940c8b36115cefbd16eeac62"
+      "sha256": "cf8f1edaed6aff60688245313e863ed7392bee0659ddbb0904cb7dcdbfa819e0"
     },
     {
       "path": "app/src-tauri/src/crash_private.rs",
@@ -4842,16 +4848,22 @@
       "sha256": "c25e9ef2c2d6b8efa3fcd5f813cae2604ea5a83d4ab509105a6719080adf1914"
     },
     {
-      "path": "app/src-tauri/src/desktop.rs",
-      "bytes": 55043,
+      "path": "app/src-tauri/src/crypto_io.rs",
+      "bytes": 8268,
       "mode": "0644",
-      "sha256": "a5f271615c65f72e5961e26882320f23e4b5dc7ac72f655f77f25657496fa8e9"
+      "sha256": "9b19e283d2bcd2d6e8615e1419271d2625fae6ddb30e3f7848e88b48d6352067"
+    },
+    {
+      "path": "app/src-tauri/src/desktop.rs",
+      "bytes": 76740,
+      "mode": "0644",
+      "sha256": "98a176188042e9033bd5e168b69105164ef6f4ab79a74f797d5722cd0d92679b"
     },
     {
       "path": "app/src-tauri/src/desktop_update.rs",
-      "bytes": 27994,
+      "bytes": 39738,
       "mode": "0644",
-      "sha256": "357e048ecef1bd55fe2af4d954c03fe01f0b1b9492090d2ba162656b8a009ee1"
+      "sha256": "df933889443c2edf3f37a24d9e892a1c108f6295e6b32df848c0829bd5701a43"
     },
     {
       "path": "app/src-tauri/src/diagnostics.rs",
@@ -4861,9 +4873,9 @@
     },
     {
       "path": "app/src-tauri/src/document.rs",
-      "bytes": 7881,
+      "bytes": 7030,
       "mode": "0644",
-      "sha256": "a9caf1c8f300a14fd536fdd0dbffda4094a656811f3e932181423ab7a4ec203a"
+      "sha256": "42cae73f801e3961978f60c9c41f129f3e15fa8fc67dd9d9580b585262f1eabc"
     },
     {
       "path": "app/src-tauri/src/document_files.rs",
@@ -4885,39 +4897,45 @@
     },
     {
       "path": "app/src-tauri/src/error.rs",
-      "bytes": 6044,
+      "bytes": 8842,
       "mode": "0644",
-      "sha256": "1e0c21322c18f3ecc163b87b5b5acb39e661fbb386d6b0d7a038b66cf4b9a67b"
+      "sha256": "3f68e6298283d74fb6ded6743333cc5c3236fb23e6da7b68829a40d2d79d27d6"
     },
     {
       "path": "app/src-tauri/src/firewall_rule.rs",
-      "bytes": 23835,
+      "bytes": 17999,
       "mode": "0644",
-      "sha256": "22f7c08bd38c485aa65266b7c3c895a219f66032c985bca1a15fe84476a3b697"
+      "sha256": "d7765aec63f970126b9c91c16e97a25dbce14da3c1f4c7223cfdeb55e4ea3ae0"
+    },
+    {
+      "path": "app/src-tauri/src/fs_atomic.rs",
+      "bytes": 10030,
+      "mode": "0644",
+      "sha256": "9e34283b368aaf80824c07935408b9666ee4f8360c0b0a958fd865a5f9b98daa"
     },
     {
       "path": "app/src-tauri/src/install_location.rs",
-      "bytes": 17174,
+      "bytes": 16502,
       "mode": "0644",
-      "sha256": "987d966142c5f710f8ad0c76ec74f615157d74d7464631db29291baba9adbd33"
+      "sha256": "d61f3c53bac04acd4a75d0fe997532699df85411ffe45b4c921b3e192d0c4051"
     },
     {
       "path": "app/src-tauri/src/installed_handoff.rs",
-      "bytes": 7864,
+      "bytes": 7325,
       "mode": "0644",
-      "sha256": "a291c897716b63a4aa6984e1463c25b8b1119926361f3aa644153f8a3ba9b214"
+      "sha256": "231fbce30b1d827bfd439b2c2f4ebe919532970915c6527bed3324bf6705a07b"
     },
     {
       "path": "app/src-tauri/src/installer_files.rs",
-      "bytes": 43155,
+      "bytes": 41727,
       "mode": "0644",
-      "sha256": "a74e0d4b6b772f2a2f0fa8def47ae889cb14eb16a6e369dfd03ac51b8128261b"
+      "sha256": "8b3712ff7247de2fe5f1586d37459c1f0c0a8f044f8db18a0143c7fb0b238f11"
     },
     {
       "path": "app/src-tauri/src/installer_result.rs",
-      "bytes": 21393,
+      "bytes": 16176,
       "mode": "0644",
-      "sha256": "1cc427f99e39220454767febd4324251480c8149b227df58b3e7f586efb7d1ae"
+      "sha256": "3010fad992397fabeb98f75bc95be3b3a93ab1166d9edfd142757fee8005206e"
     },
     {
       "path": "app/src-tauri/src/installer_update.rs",
@@ -4927,15 +4945,15 @@
     },
     {
       "path": "app/src-tauri/src/lib.rs",
-      "bytes": 1480,
+      "bytes": 1262,
       "mode": "0644",
-      "sha256": "fbd105959aa633494eada698b5ef886a18609a0a76ea36232478f06e37f7d1a5"
+      "sha256": "552018887c6efb7da4dcdc5026abe007c1b01996b3d2d2c6ca9c88749c2a8ae1"
     },
     {
       "path": "app/src-tauri/src/lifecycle.rs",
-      "bytes": 18318,
+      "bytes": 27909,
       "mode": "0644",
-      "sha256": "aaba54a9975645b9b4c4d0ddb5bb5f0eeccdb5a50b20d33c02aebd17155a877f"
+      "sha256": "27ea3264e3faaf86066f8732b60cc0b009c659e24299a62d4231ae6b5706a8d3"
     },
     {
       "path": "app/src-tauri/src/log_context.rs",
@@ -4951,39 +4969,33 @@
     },
     {
       "path": "app/src-tauri/src/ownership.rs",
-      "bytes": 10678,
+      "bytes": 9770,
       "mode": "0644",
-      "sha256": "cf5c0b12b765a3faedaa957575496d06451a0d2dca900036931103a61953a0ca"
+      "sha256": "2f928ce2bf1ed9cf975615d9f11aab0c5e6c8b6ff8532357894570e3d77948e1"
     },
     {
       "path": "app/src-tauri/src/preferences.rs",
-      "bytes": 18648,
+      "bytes": 17869,
       "mode": "0644",
-      "sha256": "3caa64779c6671fad1284b39b5a025c226884cd2815c925590aa5876320b2f9d"
+      "sha256": "b1ba818e3ed885ee11739068900fc9e3d7e4a7f21142198a41d0d21b1276701d"
     },
     {
       "path": "app/src-tauri/src/protocol.rs",
-      "bytes": 17307,
+      "bytes": 17146,
       "mode": "0644",
-      "sha256": "7644913536fc254d799e31278cf006bc60218cda084b76dec891183fc859d32c"
-    },
-    {
-      "path": "app/src-tauri/src/r1_r2_regression_tests.rs",
-      "bytes": 31123,
-      "mode": "0644",
-      "sha256": "221decb61d20516110437f38d72ad9835d00e3a69512d6415b26c2036d2a6817"
+      "sha256": "e0e0d58413f6cbb453a65b17962ee9820e9e2eba314fc91db68bd8e4edb2152e"
     },
     {
       "path": "app/src-tauri/src/safe_archive.rs",
-      "bytes": 13523,
+      "bytes": 20587,
       "mode": "0644",
-      "sha256": "23cd4602cd1220f20ba7e2a3f55b0bc751c3c3d13d1dfb5cbbec93e0c72e9e59"
+      "sha256": "787b6c7487df38901f5d5fd5c78f083b20240c55a1f5a2766e98ec8afc44d5e7"
     },
     {
       "path": "app/src-tauri/src/safe_log.rs",
-      "bytes": 39508,
+      "bytes": 37274,
       "mode": "0644",
-      "sha256": "344092fa1311a92ca1d4e02fa0de0ad0174f080d5b00a868bc9e8855ae0ec6df"
+      "sha256": "ad5faa7e14fa01b53ee7af934937de98548387f58affd21a104bbaa37383179a"
     },
     {
       "path": "app/src-tauri/src/service_protocol.rs",
@@ -4993,15 +5005,15 @@
     },
     {
       "path": "app/src-tauri/src/service_read_acl.rs",
-      "bytes": 18006,
+      "bytes": 18129,
       "mode": "0644",
-      "sha256": "c04d8eeca4fcdad64abb602b123d8a88131df11bea45a2bafdf770912154df14"
+      "sha256": "c80d9988ea47cefb287de5eaeb27e7962fa1eb4e3221316493006a038634c80c"
     },
     {
       "path": "app/src-tauri/src/service_self_read.rs",
-      "bytes": 12508,
+      "bytes": 10063,
       "mode": "0644",
-      "sha256": "02b3885f7ac75bb68e720b183cc87fe369272c552d0f9aa05c01da8e3594cbd1"
+      "sha256": "cecfbbc0124257faa08ca4e06f87a700e100582d259345f7b44914b52576686d"
     },
     {
       "path": "app/src-tauri/src/setup_feedback.rs",
@@ -5011,15 +5023,15 @@
     },
     {
       "path": "app/src-tauri/src/supervisor.rs",
-      "bytes": 40015,
+      "bytes": 41175,
       "mode": "0644",
-      "sha256": "cf7858d682bd661bbccfdb84d8f0badddb1eca2e2089d50ae7ee0b5d6852d48c"
+      "sha256": "8225970e0eb3097aff0bf4cfcf9c70592743110142e11201633cbc730cd79849"
     },
     {
       "path": "app/src-tauri/src/supervisor_pipe.rs",
-      "bytes": 4761,
+      "bytes": 11651,
       "mode": "0644",
-      "sha256": "3249910918b308c9ee1eaea919cf117c7b2a0201fd7684dfb87c76bf9bef0d33"
+      "sha256": "733c2a582488349e7085e556bb8b42d3a11e5145025c817c7cc025ff89e500ad"
     },
     {
       "path": "app/src-tauri/src/transaction.rs",
@@ -5035,21 +5047,21 @@
     },
     {
       "path": "app/src-tauri/src/tray_controls.rs",
-      "bytes": 16823,
+      "bytes": 16863,
       "mode": "0644",
-      "sha256": "ff79f5f345f4c19a490915e7fe4a8b8e37a8692c86e801d3537ebe46b24dcf65"
+      "sha256": "882a327d3e6b620a1b985723977b772e21ac83c2126632dd698458f33f183762"
     },
     {
       "path": "app/src-tauri/src/tray_lifecycle.rs",
-      "bytes": 2969,
+      "bytes": 1842,
       "mode": "0644",
-      "sha256": "961dc97e61d09773cab75a00c4516e4604f29bfa9dd6f18ba106397fcb31834c"
+      "sha256": "d18cf7e59c87efe9ab4d980c9d2f643dd4e5dfd1560c51cccb12d8d4614490a7"
     },
     {
       "path": "app/src-tauri/src/tray_popup.rs",
-      "bytes": 13705,
+      "bytes": 40679,
       "mode": "0644",
-      "sha256": "94b552cf83d66c28e3f3a6c5df28ed2529696df15d0636c59ff0bca996942413"
+      "sha256": "25e8542ef6303213b7540520880fd7a2e1db2e5dd579e997f4ff61f8e2339c80"
     },
     {
       "path": "app/src-tauri/src/tun_diagnostics.rs",
@@ -5058,16 +5070,10 @@
       "sha256": "f185a637796aabb44ca3eef1c1d6d0cf4f98d42fd7d06e2a9787b863fd5d4701"
     },
     {
-      "path": "app/src-tauri/src/tun_monitor_tests.rs",
-      "bytes": 14576,
-      "mode": "0644",
-      "sha256": "3e3e59ccab9990d9455fc5a8e6ebe1b5947e4f3cfd9969813e2bee2899e73fc5"
-    },
-    {
       "path": "app/src-tauri/src/update_check.rs",
-      "bytes": 76257,
+      "bytes": 76442,
       "mode": "0644",
-      "sha256": "efd871eff75071f0258a08652b1b02d1b883e971304bf1b47a87eb925cdf944f"
+      "sha256": "bf14053f72ff3f376ca930eee6c070a13779f690b43256ce6e7d44b9a4a8068b"
     },
     {
       "path": "app/src-tauri/src/update_handoff_protocol.rs",
@@ -5083,15 +5089,15 @@
     },
     {
       "path": "app/src-tauri/src/update_manifest.rs",
-      "bytes": 19351,
+      "bytes": 23015,
       "mode": "0644",
-      "sha256": "47d344643c614dd9d07aed0ca291af19ce02f2193db06803c6472f2906690f8c"
+      "sha256": "e4c9c511354b284e917780ba9cf901975dbfc75a98ab360736a074565443bd7c"
     },
     {
       "path": "app/src-tauri/src/user_store.rs",
-      "bytes": 10044,
+      "bytes": 12348,
       "mode": "0644",
-      "sha256": "7bec2f213171a5a163c8c224eadd91cfec1176bf3ce6422622bac76456486f70"
+      "sha256": "1ec694cf05a583815e395f72046f93c08642e4a2ee417150592a48c281c75ad5"
     },
     {
       "path": "app/src-tauri/src/watchdog_control.rs",
@@ -5101,21 +5107,15 @@
     },
     {
       "path": "app/src-tauri/src/window_geometry.rs",
-      "bytes": 9058,
+      "bytes": 13072,
       "mode": "0644",
-      "sha256": "d19956d2f33119fb667ad502fac3c2d51508075b37317d8b4134a7063d62ae0d"
+      "sha256": "a4bb25b0d13b326474cf803cbbbf6a424bfbb5a869b3bd1f1f38471fcc2219fb"
     },
     {
       "path": "app/src-tauri/src/windows/autostart.rs",
       "bytes": 6445,
       "mode": "0644",
       "sha256": "26da9772b9ce4e3e0549896881d790bf4849291c4dc9c42c8b4286683617bc23"
-    },
-    {
-      "path": "app/src-tauri/src/windows/core_tun_journal.rs",
-      "bytes": 38151,
-      "mode": "0644",
-      "sha256": "f218021d8205b882f8aebf3fbab0cc52fb281641419e81e1bce0f7d590292867"
     },
     {
       "path": "app/src-tauri/src/windows/core_tun_os.rs",
@@ -5125,9 +5125,9 @@
     },
     {
       "path": "app/src-tauri/src/windows/core_tun_recovery.rs",
-      "bytes": 19340,
+      "bytes": 30935,
       "mode": "0644",
-      "sha256": "084a7e857b0b52dbff870a652d2e05c893c2145c007adb047749a9a67c63421c"
+      "sha256": "9b81d53dc1357c6cea85e3189b7453e9bc333203552fea598e6c16def90be7fe"
     },
     {
       "path": "app/src-tauri/src/windows/dialogs.rs",
@@ -5137,9 +5137,9 @@
     },
     {
       "path": "app/src-tauri/src/windows/elevated.rs",
-      "bytes": 32405,
+      "bytes": 32480,
       "mode": "0644",
-      "sha256": "0c36abe35c61a6d69ef56cf992392265137f7128a0a9bce45284f4b84ff94aab"
+      "sha256": "20ed8d5c419a5c0273a21ce454a8f05272d6a8cd47f7c92561f0a0512d56a500"
     },
     {
       "path": "app/src-tauri/src/windows/elevated_stderr.rs",
@@ -5155,9 +5155,9 @@
     },
     {
       "path": "app/src-tauri/src/windows/identity.rs",
-      "bytes": 9228,
+      "bytes": 9406,
       "mode": "0644",
-      "sha256": "550cf760c06a2cd0363fb7e61e5910840426300a1dd418b1cde0a71894a2906d"
+      "sha256": "0eaaab89a918e3e5aca28102e6e0fb270dce975efd4aa49a9f5f273a5676e0fd"
     },
     {
       "path": "app/src-tauri/src/windows/install_location.rs",
@@ -5167,9 +5167,9 @@
     },
     {
       "path": "app/src-tauri/src/windows/installed_app.rs",
-      "bytes": 5498,
+      "bytes": 5556,
       "mode": "0644",
-      "sha256": "7a4d2553edac2d44ec89528bc0755b2462e3602c283a5329d7932f9b1496e4d7"
+      "sha256": "cac6267856c54f533166e664a257f044c92e5e1d6da8086fa12027dec71b7b92"
     },
     {
       "path": "app/src-tauri/src/windows/installed_handoff.rs",
@@ -5179,9 +5179,9 @@
     },
     {
       "path": "app/src-tauri/src/windows/installer.rs",
-      "bytes": 41163,
+      "bytes": 54654,
       "mode": "0644",
-      "sha256": "7090e6e1754957815c8c91f889212c41131ca450ab446260a57240f832f72cff"
+      "sha256": "c8d6587d7c974b4ea5ea44cecd6b53f3744915d434234a6323707c39244c2eee"
     },
     {
       "path": "app/src-tauri/src/windows/installer_result.rs",
@@ -5215,9 +5215,9 @@
     },
     {
       "path": "app/src-tauri/src/windows/network.rs",
-      "bytes": 23595,
+      "bytes": 37094,
       "mode": "0644",
-      "sha256": "1cf322c252d3f638fba7b432046e9ef6e150c6b5e33277c1bfbb86fd2351bae5"
+      "sha256": "00854b5f31100f409895758b1d704b84c375df051c9ebdf93761b5fc0bf7f677"
     },
     {
       "path": "app/src-tauri/src/windows/pipe.rs",
@@ -5239,33 +5239,33 @@
     },
     {
       "path": "app/src-tauri/src/windows/security.rs",
-      "bytes": 13047,
+      "bytes": 11906,
       "mode": "0644",
-      "sha256": "7b79a3a530f349e4317c911e6ad6f3d94b6b72dcbce5830df72425c832ad8141"
+      "sha256": "5e06937fc99873d61604107de18ef2d0f518d8c86e65a6c925868ab59344a78a"
     },
     {
       "path": "app/src-tauri/src/windows/self_read.rs",
-      "bytes": 9143,
+      "bytes": 10882,
       "mode": "0644",
-      "sha256": "b73932750265c305e474ec9bb4c77b972cc93856bb4e3c7e7c283fa82bd73676"
+      "sha256": "d4c2ecd9aaa8949f50c880e2d3fcaf23e6cf81227bb83c91e1809bb86d86ff19"
     },
     {
       "path": "app/src-tauri/src/windows/service.rs",
-      "bytes": 7654,
+      "bytes": 14143,
       "mode": "0644",
-      "sha256": "47c3f46476bb70a2a1c3a42ef047cceeadb2e11cbf66780f48426aa76dbeaae4"
+      "sha256": "5bd1e3f9372c2d1dc4b1be17a1580bdf17d70644ea2ce92ddbf71300d9e577b8"
     },
     {
       "path": "app/src-tauri/src/windows/service_acl.rs",
-      "bytes": 8421,
+      "bytes": 12448,
       "mode": "0644",
-      "sha256": "0b040f465cab48eb63df10c903119cbde6c30f5d9a5aa887a16db34108fad8d5"
+      "sha256": "59499e9fd92dc419c67227ad408b787839808d2b7b1affd9ae614a2fae0213eb"
     },
     {
       "path": "app/src-tauri/src/windows/service_client.rs",
-      "bytes": 20466,
+      "bytes": 20699,
       "mode": "0644",
-      "sha256": "b23c6637c88cc8541362332043040a740b410cdf73ba8a82daae695fbd10500a"
+      "sha256": "74ae4297af153136a2dfe65ada6e780a42124a69acc1ecc9eb40b832a7338479"
     },
     {
       "path": "app/src-tauri/src/windows/setup_bridge.rs",
@@ -5287,21 +5287,21 @@
     },
     {
       "path": "app/src-tauri/src/windows/tun_operation.rs",
-      "bytes": 11138,
+      "bytes": 11362,
       "mode": "0644",
-      "sha256": "ef9a723344bdb4871872317e54a579c1f794bf49e567eede932e07e12f870038"
+      "sha256": "a9a684b7ef67b1e5059b84fe096593dbfb25831ee635267e783ee69f23ef77cf"
     },
     {
       "path": "app/src-tauri/src/windows/update_bridge.rs",
-      "bytes": 12433,
+      "bytes": 12982,
       "mode": "0644",
-      "sha256": "8ee8933bee1e9b1fc2aa88bf110a415b5189d8780927a28f284b810a69e45a6d"
+      "sha256": "a5f44aea7032621584f62b64d5e7ef1544c2581bed79c7bce5729d589a59b34e"
     },
     {
       "path": "app/src-tauri/src/windows/update_handoff.rs",
-      "bytes": 41187,
+      "bytes": 41092,
       "mode": "0644",
-      "sha256": "70b2c471b109462e0184f3eeab032302c6b61052130a9236f52d76e08bfa29e9"
+      "sha256": "20efa40f88570f9e6b7d675a4adef0cdbe8cada8eb55333102f3c6d8c2f6b4aa"
     },
     {
       "path": "app/src-tauri/src/windows/update_install.rs",
@@ -5311,9 +5311,9 @@
     },
     {
       "path": "app/src-tauri/src/windows/watchdog.rs",
-      "bytes": 5047,
+      "bytes": 7632,
       "mode": "0644",
-      "sha256": "51507d7c61e99e7a29c0e579c3b87915333a5ac080503947d7052e1043ab20c3"
+      "sha256": "cff2725c5cbe05a585bcb907b909c14bd389edd44e21cd5a99347e7f7e4a4323"
     },
     {
       "path": "app/src-tauri/src/windows/window_state.rs",
@@ -5323,21 +5323,27 @@
     },
     {
       "path": "app/src-tauri/src/wintun_query.rs",
-      "bytes": 2311,
+      "bytes": 2297,
       "mode": "0644",
-      "sha256": "19caf2f116d45a518b711eea096d8ff5787afe7b505e3c488289f968c562bce0"
+      "sha256": "dc9975696de3a760acafa4b541381fe0c9067703f9273d23621d5f6e24e04481"
     },
     {
       "path": "app/src-tauri/tauri.conf.json",
       "bytes": 862,
       "mode": "0644",
-      "sha256": "4e06c453202dd3bc18622cf450e91d82c873c19e6e12259024e1d02d1d67434a"
+      "sha256": "c725386b59cd96ec0b2c881178b4b4cadee4bda8c396bab739f9e577cde5781a"
+    },
+    {
+      "path": "app/src-tauri/tests/command_acl.rs",
+      "bytes": 4039,
+      "mode": "0644",
+      "sha256": "c12fa6f12aed588a69d22ad4d6f50661a1618fab0b71c98af5bc91d288fc0ce8"
     },
     {
       "path": "app/src-tauri/tests/control_contract.rs",
-      "bytes": 38835,
+      "bytes": 31472,
       "mode": "0644",
-      "sha256": "9f40852301782064a637d967f2f70e0eaadf459f96716c198fcf2788e122920e"
+      "sha256": "51f52d503f0f8dcd27e968fd1b00424ebf9c0ebb722b19fb73e633b5aa636f4d"
     },
     {
       "path": "app/src-tauri/tests/elevation_launch.rs",
@@ -5346,10 +5352,22 @@
       "sha256": "f641d91d929e090c0252b14f228d1e42ceb0c405abaa633ee5d14430751e2fb7"
     },
     {
+      "path": "app/src-tauri/tests/fault_injection_regression.rs",
+      "bytes": 25273,
+      "mode": "0644",
+      "sha256": "ee119fe7a8c7a7de0050e4c365f60ec38f4dd47b016997ff4c42a826fe377eb9"
+    },
+    {
       "path": "app/src-tauri/tests/fixtures/hklm-software-parent-20261029.json",
       "bytes": 1161,
       "mode": "0644",
       "sha256": "e9e97de51c8be97684ebeee29e87b337638fe05553ae1046da497fa58ca846d7"
+    },
+    {
+      "path": "app/src-tauri/tests/r1_r2_regression.rs",
+      "bytes": 31126,
+      "mode": "0644",
+      "sha256": "2000bcb0ee7f8ae6b6fb3d806e84eee9422a21611a169e28ea43173bc459aaac"
     },
     {
       "path": "app/src-tauri/tests/real_core.rs",
@@ -5364,16 +5382,16 @@
       "sha256": "78704e0129c3c7f15378befaace868eef4a1612014f6f2b0ecb7b953bf76f03c"
     },
     {
-      "path": "app/src-tauri/tests/support/c46-crash/main.go",
-      "bytes": 585,
-      "mode": "0644",
-      "sha256": "6b947b3dc5dc856fa84901b13d31d08909da2744323ca3836da76e895381f7e4"
-    },
-    {
       "path": "app/src-tauri/tests/support/peer.rs",
       "bytes": 6635,
       "mode": "0644",
       "sha256": "bfe0ae294e5d2b0e1e4e14bcfb8c278f323be66c4dc2364548fa25e4f4363ceb"
+    },
+    {
+      "path": "app/src-tauri/tests/tun_monitor.rs",
+      "bytes": 17727,
+      "mode": "0644",
+      "sha256": "dd0f07015fd67c5580f03e2b8b1d8ed29ffb207486a66660712763fffcf3c3a4"
     },
     {
       "path": "app/src-tauri/tools/package-validator/Cargo.lock",
@@ -5623,9 +5641,9 @@
     },
     {
       "path": "app/src/App.tsx",
-      "bytes": 10403,
+      "bytes": 10413,
       "mode": "0644",
-      "sha256": "b5795165200f7b832ecfa889fd9b13e7f73c880fe65021689e96831ede8201cb"
+      "sha256": "36f6023257e02ff74e3b6c51393c5aee7f058b554d0af45e04bdbf8ebe4f5727"
     },
     {
       "path": "app/src/assets/google-g-gradient.SOURCE.md",
@@ -5653,15 +5671,15 @@
     },
     {
       "path": "app/src/charts/TrafficDistribution.tsx",
-      "bytes": 4738,
+      "bytes": 5073,
       "mode": "0644",
-      "sha256": "2bf919178e037a16e919b6fca9663d0e1f4dd30ed0525be60837aa8ed81affa3"
+      "sha256": "7ad3dba01ce286710a4490ca4b3a3de4005163eac0e1c893d6c10cb87f7b05fc"
     },
     {
       "path": "app/src/charts/WeekBars.tsx",
-      "bytes": 8474,
+      "bytes": 8661,
       "mode": "0644",
-      "sha256": "1bb5a34b434f9af5795b34807368e6e17f5e83517533a3b197561a975222c666"
+      "sha256": "1ac408c356da77e71ec5dbc29a2d17d7826703bc5678f6724c36a0a09e6e6c82"
     },
     {
       "path": "app/src/charts/scale.ts",
@@ -5683,9 +5701,9 @@
     },
     {
       "path": "app/src/client/daily.ts",
-      "bytes": 7581,
+      "bytes": 7757,
       "mode": "0644",
-      "sha256": "d44259b8dd879cd246d51551049419667bc1474297ae9b4544d43d737c3600bb"
+      "sha256": "316de4499cb3fb14807c066ad587dac274237301d01954d21e264de641a9a5df"
     },
     {
       "path": "app/src/client/diagnostics.ts",
@@ -5695,21 +5713,33 @@
     },
     {
       "path": "app/src/client/display.ts",
-      "bytes": 5011,
+      "bytes": 5384,
       "mode": "0644",
-      "sha256": "52b966ba8994c62f32943ac3165accbd670c3a1727c3972c010305841fb854a4"
+      "sha256": "a4ff6945099c44df33ddea6fe697ef63b49a375874459f5ff049d84c5f6e845f"
+    },
+    {
+      "path": "app/src/client/dnsCacheAction.ts",
+      "bytes": 1084,
+      "mode": "0644",
+      "sha256": "8b641ddef1bdc56677a02772924e1a2923a5748a0275e3210b9a2651ee359c21"
     },
     {
       "path": "app/src/client/dnsInput.ts",
-      "bytes": 3839,
+      "bytes": 3582,
       "mode": "0644",
-      "sha256": "12eaa2ad96e33c6af269539cb417784a6068b01747ba7a00ef22e2c173480b15"
+      "sha256": "2e1036cfe1adcde994c0f82185d847f58b1d0cc16e9140d3028b76fb77a3d15b"
     },
     {
       "path": "app/src/client/document.ts",
-      "bytes": 10159,
+      "bytes": 17457,
       "mode": "0644",
-      "sha256": "e6251a12cfa9dff2b38fa5d99c345512d062fea7e41f61dd05857b0c2755599b"
+      "sha256": "977ffc6453b44aa0f3fadad5365a9eb8c9400254d6464ae82f79ea8a509a318f"
+    },
+    {
+      "path": "app/src/client/entityRawToggle.ts",
+      "bytes": 3243,
+      "mode": "0644",
+      "sha256": "1db0678e5cf72b81fa65d4ab8e161b2111748572196e841618f7616efc97b849"
     },
     {
       "path": "app/src/client/entityValidation.ts",
@@ -5719,9 +5749,9 @@
     },
     {
       "path": "app/src/client/flowRule.ts",
-      "bytes": 1203,
+      "bytes": 1729,
       "mode": "0644",
-      "sha256": "76f8d5d9c6ad05b8215323a064b63e004839b1525bc7c6a98b6c8005739800d7"
+      "sha256": "943a5e5e3e38473aa0a24392b395c6c15a756e27f6c3d5cfd6988c61a9ebf24e"
     },
     {
       "path": "app/src/client/groupDisplay.ts",
@@ -5737,9 +5767,9 @@
     },
     {
       "path": "app/src/client/groupSource.ts",
-      "bytes": 2373,
+      "bytes": 2472,
       "mode": "0644",
-      "sha256": "6aad29b431e125091f7c6a68b6494c10ff19ad7922caed5a7ab7276bb0025d87"
+      "sha256": "77a19246d3e39037a030c3e02978007fa3b9795a3226835644b06305f6d2220d"
     },
     {
       "path": "app/src/client/iconCache.ts",
@@ -5755,9 +5785,9 @@
     },
     {
       "path": "app/src/client/logDetails.ts",
-      "bytes": 5366,
+      "bytes": 5453,
       "mode": "0644",
-      "sha256": "54a7460810d820c8b186698f6ff5b925b01fa198bdecf2205ff81e7bd47764f9"
+      "sha256": "04ca76d75877ae7f45f7ebe7ddb60fc8124f4885b5607338c53afeb10d9d8772"
     },
     {
       "path": "app/src/client/names.ts",
@@ -5767,27 +5797,27 @@
     },
     {
       "path": "app/src/client/networkEvents.ts",
-      "bytes": 1721,
+      "bytes": 1826,
       "mode": "0644",
-      "sha256": "233043e5140b3b84fe2e7a0b47e243f5fb9fb83b01f4e6a80dd1ea06b2d02dae"
+      "sha256": "f309eed51fb23b1a1ec0c21ffe0d1ca589d970fc8c9085d60f2bb7f181d3bfb4"
     },
     {
       "path": "app/src/client/nodeRows.ts",
-      "bytes": 1332,
+      "bytes": 2071,
       "mode": "0644",
-      "sha256": "54c514b54794712e491516a85a098541ae11c35c8f7a012252e6ebe9d7a7290a"
+      "sha256": "8b53cd9e670d96744c3d885611c8f4040f9b5f1f9f34bcba700d3499336b9e6a"
     },
     {
       "path": "app/src/client/normalize.ts",
-      "bytes": 7019,
+      "bytes": 14789,
       "mode": "0644",
-      "sha256": "74303b59f29f928c787545081249db68632e15ddd34219096d258f1e642d2d8b"
+      "sha256": "72d3dac689442658ab6b7f62ce55775de25cd547b4fd15466a48e3ce791d3239"
     },
     {
       "path": "app/src/client/operations.ts",
-      "bytes": 6006,
+      "bytes": 6079,
       "mode": "0644",
-      "sha256": "bfd5c0945916a718614b1c67c4d1de537301581cbcf9bcd844273fe15d76ce49"
+      "sha256": "25dcb0bfbef45c7d02204272a6e0418c6cc77f11ad6889ca8e9b959cefc21c7a"
     },
     {
       "path": "app/src/client/policyProbe.ts",
@@ -5797,9 +5827,9 @@
     },
     {
       "path": "app/src/client/presentation.ts",
-      "bytes": 3870,
+      "bytes": 4159,
       "mode": "0644",
-      "sha256": "c1069f250d742b6fbd70bd4187f0635a8cee0ba16572e54d905567918aa5cc75"
+      "sha256": "1cdc398dc3097e1b029afbba0e426ce0e927258cbe9d1cd61b78fd9cb141a6df"
     },
     {
       "path": "app/src/client/resources.ts",
@@ -5814,6 +5844,12 @@
       "sha256": "1594bd7a208e07df49c1336048126a102ed0715d381be48cbed846ab5de07ad3"
     },
     {
+      "path": "app/src/client/seqLogStream.ts",
+      "bytes": 2743,
+      "mode": "0644",
+      "sha256": "47503bb5dd9bd343e0ac7a373c7c68e5155922d1037c74fa63b7282592605e0f"
+    },
+    {
       "path": "app/src/client/session.ts",
       "bytes": 7873,
       "mode": "0644",
@@ -5821,9 +5857,9 @@
     },
     {
       "path": "app/src/client/settings.ts",
-      "bytes": 3444,
+      "bytes": 3517,
       "mode": "0644",
-      "sha256": "38583480d47f46cb8783ef308087fc3ee0bd789b33039e1f162a4301c3cfc3a1"
+      "sha256": "4b0d9f6bb2d18b9892ce7d51d75b9247a0490dd858d3988ecd90538a99da51e8"
     },
     {
       "path": "app/src/client/sniff.ts",
@@ -5845,21 +5881,21 @@
     },
     {
       "path": "app/src/client/types.ts",
-      "bytes": 18915,
+      "bytes": 19665,
       "mode": "0644",
-      "sha256": "1fda80fd744b31220d75fe88e138aa7ab038715db108e7339e55e8a3ab85b3f8"
+      "sha256": "4722cecc34aec72d0f55d3d1326991e65400275d73ac500f6fd34e915902123f"
     },
     {
       "path": "app/src/client/useClient.ts",
-      "bytes": 36025,
+      "bytes": 36883,
       "mode": "0644",
-      "sha256": "792a578e8cdfcb4bd3487d27391e9fb4abb8c2d3734ee402f4c3f6186df307b7"
+      "sha256": "4b8e5b9c0c2f02ce75bf3f5c63632a804860cd87d1fc15744326a530f546e35c"
     },
     {
       "path": "app/src/client/yaml.ts",
-      "bytes": 15779,
+      "bytes": 20015,
       "mode": "0644",
-      "sha256": "15e33e25c5b677ae2b48d8a82ad7c0120a9bd3183347c263465a6c211f95bda8"
+      "sha256": "af4570ccd481a7965d986cb785375031e533443c28be889b48bd531417e13052"
     },
     {
       "path": "app/src/components/Confirm.tsx",
@@ -5875,9 +5911,9 @@
     },
     {
       "path": "app/src/components/Diagnostics.tsx",
-      "bytes": 9600,
+      "bytes": 9817,
       "mode": "0644",
-      "sha256": "82127e63214e069ece6117ea338a3ba0e4bc4215c108fdbe73ee9c83a003b0fb"
+      "sha256": "376b8bafd46743c093f8a2ea1762c435fa60fe60886a28c51902919cdd495e75"
     },
     {
       "path": "app/src/components/DnsTools.tsx",
@@ -5887,15 +5923,15 @@
     },
     {
       "path": "app/src/components/Editors.tsx",
-      "bytes": 10857,
+      "bytes": 10950,
       "mode": "0644",
-      "sha256": "c61f57d116917d84f5257812f58fc5d381485e5c5761b7980d44197bd46ede9d"
+      "sha256": "50badf5f89da97af7ae4460a724a60b27714b6c8ed42906638b64ed6c5f78d70"
     },
     {
       "path": "app/src/components/EntityIcons.tsx",
-      "bytes": 4316,
+      "bytes": 4178,
       "mode": "0644",
-      "sha256": "909e2dad8d6bc043a9f22951a00ab94164f756c838a4b161ad21ea9f70f84621"
+      "sha256": "2a0b4a3b72e42445957aaa3a975ae2cb89dd0aa62cf3ce2ec36407e6120e40c3"
     },
     {
       "path": "app/src/components/ErrorBoundary.tsx",
@@ -5929,15 +5965,15 @@
     },
     {
       "path": "app/src/components/NetworkDiagnostics.tsx",
-      "bytes": 10452,
+      "bytes": 10507,
       "mode": "0644",
-      "sha256": "ac157a4cb4d86dbbfb914cbb1f8609390866761fb1db08b68eb662e2913c3854"
+      "sha256": "7a03c3460fd02340967f95424cf46a0dd6e94886cd4746b840d41c481ac8c500"
     },
     {
       "path": "app/src/components/NetworkSettings.tsx",
-      "bytes": 8988,
+      "bytes": 8504,
       "mode": "0644",
-      "sha256": "4bb6ac7aeec7eaffcc3837e1d9bdc399901f9ec2a3f34eff8002bc1f8346f114"
+      "sha256": "6f8d55cddce467a3042454d6aef64ec6f8ea8be753d129b0e332ef0e80cca040"
     },
     {
       "path": "app/src/components/OperationError.tsx",
@@ -5947,15 +5983,15 @@
     },
     {
       "path": "app/src/components/PolicyReveal.tsx",
-      "bytes": 771,
+      "bytes": 944,
       "mode": "0644",
-      "sha256": "57ebb81b02a37c7b9a203664376e99be50377dae60f76fdf1f592b08096c79d6"
+      "sha256": "0e7fb6be7520bee9cc82afab285528a1ff6f91d9eb1e9619ad6999239059af6e"
     },
     {
       "path": "app/src/components/ProbeSettings.tsx",
-      "bytes": 5710,
+      "bytes": 5612,
       "mode": "0644",
-      "sha256": "c6218d7433481506cd436279701b3b0559fe9da34d5d3a27254fdd2c9a8cf82e"
+      "sha256": "04930e6848e918b9671fa1821d7386f947c048df7d9ae50e53eaaf8616732ff1"
     },
     {
       "path": "app/src/components/ProtocolTag.tsx",
@@ -5983,27 +6019,27 @@
     },
     {
       "path": "app/src/components/SideControls.tsx",
-      "bytes": 13869,
+      "bytes": 14967,
       "mode": "0644",
-      "sha256": "02787a5b6112cde96c38e4e33109d69336b5a6f8abb822d99b6914bd4653bbfa"
+      "sha256": "fd957635dc38df75dccbc0fe8982cacc629449d41588378e24a8a4566f68a395"
     },
     {
       "path": "app/src/components/SideStatus.tsx",
-      "bytes": 4971,
+      "bytes": 5003,
       "mode": "0644",
-      "sha256": "51bdb73d6ca3ac1d5cfc1dcaa44fd302e8f8c66a4a224ebc7348cd61ae34baa3"
+      "sha256": "a3fd8fb81a46e5781e15345583f1543b5e78db3a71e8dd2cf29a72d32116b777"
     },
     {
       "path": "app/src/components/Sidebar.tsx",
-      "bytes": 5374,
+      "bytes": 5403,
       "mode": "0644",
-      "sha256": "6ff9f27cf234d01c67a78c350065f9de468b956cf4a1ec4b733ece0a906f2233"
+      "sha256": "67ced272d92e1a918ab25a5c2921da03d6645aa00e816a1daed736bae04ea73e"
     },
     {
       "path": "app/src/components/SoftwareUpdates.tsx",
-      "bytes": 18597,
+      "bytes": 18746,
       "mode": "0644",
-      "sha256": "eac16e290c1066b67c75a04559c17c76a62bbbf4890627b747118655f5c4f55b"
+      "sha256": "e84b121165b40c62d40e741922bfb6614d955047fdfdef939e591b1ba4886c44"
     },
     {
       "path": "app/src/components/SubscriptionCard.tsx",
@@ -6019,15 +6055,15 @@
     },
     {
       "path": "app/src/components/TitleBar.tsx",
-      "bytes": 2637,
+      "bytes": 2692,
       "mode": "0644",
-      "sha256": "15b6364dceefbba580ac5a99cbab6e058f16f2a7f73d9e228d873e0aa3692dbc"
+      "sha256": "8f463df6eee7fa27a3f4a7980617b42423b73a86b764a410f173bfacd8881015"
     },
     {
       "path": "app/src/components/ToolPopover.tsx",
-      "bytes": 5101,
+      "bytes": 5721,
       "mode": "0644",
-      "sha256": "f9c2e2fb30e2fe7bdc21c395dcf79fe8227332190aa03133e5ac4c7baef67188"
+      "sha256": "ddcf374ab1250540a42e9cb40c2dcaad7ec49cc5334b2be7b5e0a981e4488e4a"
     },
     {
       "path": "app/src/components/Tooltip.tsx",
@@ -6055,27 +6091,27 @@
     },
     {
       "path": "app/src/components/ui.tsx",
-      "bytes": 14157,
+      "bytes": 13773,
       "mode": "0644",
-      "sha256": "f6b7129915f29bd77bf9e37bd22138e4e485d3bd694a12315a3439eab7d0500c"
+      "sha256": "378db2516f5892158a0f6e232913bb7889edf49af35101d0f94b21ea5fc5695f"
     },
     {
       "path": "app/src/design/components.css",
-      "bytes": 29169,
+      "bytes": 29646,
       "mode": "0644",
-      "sha256": "bf0461ae76bdbebfc918930b99a0485572da8ed6aede4af186738bd9cd45ff21"
+      "sha256": "7d560dfb24cc3b4e1d3119936c1e04a4fd9282c71133ec31c2d3318f162756a4"
     },
     {
       "path": "app/src/design/pages.css",
-      "bytes": 89420,
+      "bytes": 89252,
       "mode": "0644",
-      "sha256": "56a9f16f370b78ced5efd5117e517b2cca29144f3bd82d80246b0202cccd0b41"
+      "sha256": "40ec98b6adc2b9c6095faeab93a8521bab4c151a4955708811a88e667d429048"
     },
     {
       "path": "app/src/design/shell.css",
-      "bytes": 19753,
+      "bytes": 20487,
       "mode": "0644",
-      "sha256": "02e2796287712f0215c6a8f21bb69b43abbcd5edf479e894d8cdbe66ef64ea4c"
+      "sha256": "2a52198e116f9f31de157f98684473a9d98fc2a78ada8da14c8b82db407d86d5"
     },
     {
       "path": "app/src/design/tokens.css",
@@ -6084,28 +6120,40 @@
       "sha256": "e25a16fb2a44e59d1480de4fcd1cb8873900b2e9385efd83489c901e33644b5c"
     },
     {
+      "path": "app/src/lib/clipboard.ts",
+      "bytes": 1012,
+      "mode": "0644",
+      "sha256": "55c0679f23e16e3996beb5c954a756786235e20d157e088fca9a972c31fb22a4"
+    },
+    {
       "path": "app/src/lib/displaySort.ts",
       "bytes": 457,
       "mode": "0644",
       "sha256": "717e2d3a61d77835f35a73d0980c2c6b5c4bd766b9c3d727f315559e09e60878"
     },
     {
-      "path": "app/src/lib/errors.ts",
-      "bytes": 29585,
+      "path": "app/src/lib/epochGuard.ts",
+      "bytes": 300,
       "mode": "0644",
-      "sha256": "1717b42411c1e5344710d28b08ea02797ff93de3a92be0aca9c4735295d51e00"
+      "sha256": "de4bdaf32c5e93c069e2e8fed791483509f164fc334bab34f4bbfbd0eb48c1b2"
+    },
+    {
+      "path": "app/src/lib/errors.ts",
+      "bytes": 32014,
+      "mode": "0644",
+      "sha256": "845aeddb99cbe6eccb059ed5d8f6566f12abca6d4c1058a785ae4c024662f048"
     },
     {
       "path": "app/src/lib/exitGhost.ts",
-      "bytes": 2275,
+      "bytes": 2352,
       "mode": "0644",
-      "sha256": "d18476f2afe0529fddb0faef84df847722e38fae3eecceef82e382f67cfaae30"
+      "sha256": "13be58e83cd8570441514264d4a3e8e5a0ce84a272f07f3da3298d696803ff10"
     },
     {
       "path": "app/src/lib/floating.ts",
-      "bytes": 6022,
+      "bytes": 6254,
       "mode": "0644",
-      "sha256": "ffc417a3d1777c7c910358445ece60f281f0773c8802c707a3b7621db3edb325"
+      "sha256": "1113eb745f3711a2ab92bb61e5c6d79aafb1ea06f38b14f63e20e36444307fcd"
     },
     {
       "path": "app/src/lib/formDraft.ts",
@@ -6115,9 +6163,9 @@
     },
     {
       "path": "app/src/lib/format.ts",
-      "bytes": 1917,
+      "bytes": 2538,
       "mode": "0644",
-      "sha256": "cb998a821129f582709c37cb34e37e01a7f4dd62589592e6460a16b886d3107b"
+      "sha256": "92b38d2f34b0bae5fa30237e0de56aef10f03ed69b6bed97b87e4b885d8bebc2"
     },
     {
       "path": "app/src/lib/inputModality.ts",
@@ -6132,10 +6180,16 @@
       "sha256": "05ebc0ba7ea0026315b2394e3bc3fcf338c09d8d8c1bdab422c10cd7c7a9da57"
     },
     {
-      "path": "app/src/lib/scrollFade.ts",
-      "bytes": 3345,
+      "path": "app/src/lib/netAddr.ts",
+      "bytes": 3477,
       "mode": "0644",
-      "sha256": "844d50a8b396f9dcb2d2504e46ba0a98c7073aed718f352d68c0d0d3b0436ae7"
+      "sha256": "daaeb232e72fd6e29271d0b46553dbad2e0bcdb943ccdcad39da73f2555f8804"
+    },
+    {
+      "path": "app/src/lib/scrollFade.ts",
+      "bytes": 3340,
+      "mode": "0644",
+      "sha256": "7d061427f3d4f6f54a6cb93fe8ce4e53bbd8eb7023d41dcbc48149cb1f38cbdd"
     },
     {
       "path": "app/src/lib/sidebar.ts",
@@ -6150,6 +6204,12 @@
       "sha256": "0c2d6cbe09ec9538ef879eaf7d725313ef077e541d5b489f0f6c3b001f6c5dee"
     },
     {
+      "path": "app/src/lib/virtualRows.ts",
+      "bytes": 2795,
+      "mode": "0644",
+      "sha256": "6f269e68c5db521e4e90f2195cadedd9a9e8628fc655bf9d3c0dce1a73c87c19"
+    },
+    {
       "path": "app/src/main.tsx",
       "bytes": 895,
       "mode": "0644",
@@ -6157,15 +6217,15 @@
     },
     {
       "path": "app/src/pages/Config.tsx",
-      "bytes": 18644,
+      "bytes": 18703,
       "mode": "0644",
-      "sha256": "d3d720d00b7994a365b68420b6cf944d8b659517ee17a6eb8338ccf3f54f8fc5"
+      "sha256": "b89ebf5a891d02ac6aff4040ecde36604cae548ffa8b7e5ca97177c3de35ce62"
     },
     {
       "path": "app/src/pages/Connections.tsx",
-      "bytes": 21614,
+      "bytes": 24618,
       "mode": "0644",
-      "sha256": "b109f8c6a91d713456849fb9c1129776cc5cac565dae5c00fdc23d2aa196ccf6"
+      "sha256": "68078ae5eb334a118fac32bd833e30dcb3c6b20793515140442ba3f4a0235e76"
     },
     {
       "path": "app/src/pages/Dashboard.tsx",
@@ -6175,45 +6235,45 @@
     },
     {
       "path": "app/src/pages/Dns.tsx",
-      "bytes": 27574,
+      "bytes": 27967,
       "mode": "0644",
-      "sha256": "ea686faa0bc7185d3528e2f70e678759aedeec7e6dfe8e99f68019f44442e210"
+      "sha256": "9f5b0973d28735769d390015206a6a9d77931c7031613207c90abc26f8d014c6"
     },
     {
       "path": "app/src/pages/Logs.tsx",
-      "bytes": 12631,
+      "bytes": 13039,
       "mode": "0644",
-      "sha256": "8c52dbd81fcc32d390c24ec3fe3ed679629a05288ef5163f19536592a34b7f62"
+      "sha256": "eb12cf731429cc2c33c2ce77118429e25a5e59d0ccefcf09d155af144a42e891"
     },
     {
       "path": "app/src/pages/Nodes.tsx",
-      "bytes": 23862,
+      "bytes": 24833,
       "mode": "0644",
-      "sha256": "092895abe28e84d53844f2555479e8f6deb3687c039ab98cb5a633325a83137d"
+      "sha256": "e1ba19f8e34a17c86ad23455dd3024a08463d8c7d4c491d047ecd26ac89ef86a"
     },
     {
       "path": "app/src/pages/Others.tsx",
-      "bytes": 17464,
+      "bytes": 17531,
       "mode": "0644",
-      "sha256": "4339623b36bad555f877ef23db33d817058b9895bc77c25daeea76e35ac96aa3"
+      "sha256": "b3fcb33aa685b15a951d46145ca570b91babb9f2d50b34d4c1ac91b6dcb2880e"
     },
     {
       "path": "app/src/pages/Policies.tsx",
-      "bytes": 44711,
+      "bytes": 44547,
       "mode": "0644",
-      "sha256": "4c623f5223012076f7233cb531acf604ebad69f2b8e2f29e843b7c82b0ff37f0"
+      "sha256": "7e81498cb000dcfe506b326f89faae277b8343a6d97d11d2e81092ce8d73aa26"
     },
     {
       "path": "app/src/pages/Rules.tsx",
-      "bytes": 37550,
+      "bytes": 42553,
       "mode": "0644",
-      "sha256": "3c824c7951b10d9634de52b0fb3e2f192a11fb03558c5ee08d5be3b6701e0983"
+      "sha256": "d9b26114063f98b13dd9559c18aea96e7272b10396ab8c58bdc7b4ad7a3b8045"
     },
     {
       "path": "app/tests-ui/architecture-gate.test.ts",
-      "bytes": 7905,
+      "bytes": 7934,
       "mode": "0644",
-      "sha256": "be40dd83290b3659ba6aa099e452703b2330b5a4fd5ab83db2acd3f32574c22a"
+      "sha256": "728b72ecfe828a5d602402378c0d6619ddccff78fd73c623737cea6f7e2db145"
     },
     {
       "path": "app/tests-ui/audit-20261123.test.ts",
@@ -6232,6 +6292,12 @@
       "bytes": 4962,
       "mode": "0644",
       "sha256": "f5c59fc99273673c531c10041fd743b4e333d69cf6c480a540c657067b62f89e"
+    },
+    {
+      "path": "app/tests-ui/controlled-input-and-race.test.ts",
+      "bytes": 5828,
+      "mode": "0644",
+      "sha256": "99ea403f2d32ecac203f2e05e7bd2f152c5aa7f63c986f9b7a1d490e82f45d8f"
     },
     {
       "path": "app/tests-ui/daily-transport.mjs",
@@ -6253,9 +6319,9 @@
     },
     {
       "path": "app/tests-ui/dns-input.test.ts",
-      "bytes": 3488,
+      "bytes": 4404,
       "mode": "0644",
-      "sha256": "7bb31d682af35e96736d55e0b5be713b985e2a4dda85c66fc5925d309343d7a9"
+      "sha256": "f7296244b6c7c89f8215bdd5644d357776ebf94742651501a83bc4e69059af36"
     },
     {
       "path": "app/tests-ui/document.test.ts",
@@ -6265,9 +6331,9 @@
     },
     {
       "path": "app/tests-ui/geometry-gate.mjs",
-      "bytes": 20580,
+      "bytes": 27947,
       "mode": "0644",
-      "sha256": "428869007687e31ea52aa1fba6d107f71568a9f0933f131ae4f912fb9e1f3c3c"
+      "sha256": "b68c1debf8849cc65d8351c4e16182a6d7327a981b6e57993569b62dc78d361d"
     },
     {
       "path": "app/tests-ui/import.test.ts",
@@ -6282,10 +6348,22 @@
       "sha256": "5622e09cc43640116ae2feda474d97bfc280a803fb5c57807b918997c2a18b57"
     },
     {
+      "path": "app/tests-ui/ipc-null-fuzz.test.ts",
+      "bytes": 6776,
+      "mode": "0644",
+      "sha256": "4d308effd0d1ad318a1133e3e2f10c043598b47b675238765caba6afcc479645"
+    },
+    {
       "path": "app/tests-ui/k3.test.ts",
       "bytes": 3613,
       "mode": "0644",
       "sha256": "2f6a81777def78512ba4fb3909f0eb6e5352b3e7775b0ea81fb6faa5c18b4ad2"
+    },
+    {
+      "path": "app/tests-ui/net-addr-format.test.ts",
+      "bytes": 4387,
+      "mode": "0644",
+      "sha256": "d35166ea0f07dab5dfcf225248d52911c9e31b7f8b8c25fcbe6cf5784b3c3341"
     },
     {
       "path": "app/tests-ui/operations.test.ts",
@@ -6303,7 +6381,7 @@
       "path": "app/tests-ui/polish.test.ts",
       "bytes": 1161,
       "mode": "0644",
-      "sha256": "dda20fd04c77e890eb663982037e54bbbb519230dfba17c6ab2a181c89f71a8b"
+      "sha256": "a179172ac3a3632057e88965c1db2f04770c3b24234f2aba2f50bfed42b7569d"
     },
     {
       "path": "app/tests-ui/quick-import-retention.test.ts",
@@ -6324,6 +6402,12 @@
       "sha256": "f393ebfe3d144985597e709cd9605119ba212dd375022ef123e3f0dadc1a7774"
     },
     {
+      "path": "app/tests-ui/round2-recheck-regressions.test.ts",
+      "bytes": 9971,
+      "mode": "0644",
+      "sha256": "755340dd796b2a38bac5577b7cf02886eddc06a46f95dc42e001b0e4f630d7c6"
+    },
+    {
       "path": "app/tests-ui/rules.test.ts",
       "bytes": 1089,
       "mode": "0644",
@@ -6331,9 +6415,9 @@
     },
     {
       "path": "app/tests-ui/run-unit.mjs",
-      "bytes": 1342,
+      "bytes": 1513,
       "mode": "0644",
-      "sha256": "c31d13870d9b20a2cd3a80f4c0c4f412239401a6cfef2eaf65a0d85dceeac23d"
+      "sha256": "653127296c4568436d5b4267c1fa09c7c3522a2667f2e7885a3809e230f4fc03"
     },
     {
       "path": "app/tests-ui/selection.test.ts",
@@ -6457,9 +6541,9 @@
     },
     {
       "path": "core/cmd/kat-client-core/main.go",
-      "bytes": 4017,
+      "bytes": 4019,
       "mode": "0644",
-      "sha256": "90eb20f504bd6cc58177d824181a54282d87c5ceb1c3001fd307d7e61cb475af"
+      "sha256": "1688c0d510812b61a0ce78ded670b8efc3e147c85ab46f6a85986a3ed3c103dd"
     },
     {
       "path": "core/cmd/kat-client-core/main_test.go",
@@ -6523,9 +6607,9 @@
     },
     {
       "path": "core/internal/anytls/address.go",
-      "bytes": 2025,
+      "bytes": 5381,
       "mode": "0644",
-      "sha256": "40ff2253e15f8f054af601a5364b8dc1f6de67b133806b3ec5373e304a236c3e"
+      "sha256": "d6a72a6c3b60587cbb3ce12bc9f071b1613c070b5de0882bd99e361e951e0d74"
     },
     {
       "path": "core/internal/anytls/budget_test.go",
@@ -6535,9 +6619,9 @@
     },
     {
       "path": "core/internal/anytls/config.go",
-      "bytes": 8390,
+      "bytes": 8413,
       "mode": "0644",
-      "sha256": "9a1cbd4baff3121baf8d4c4a7b637f4e25503e9f254db0aae065e427c96d90ad"
+      "sha256": "159aca7eef10f224b0536f1f35f0f01f03d531f5c64bd8cab8af06234d57f95d"
     },
     {
       "path": "core/internal/anytls/inbound_buffer.go",
@@ -6625,21 +6709,21 @@
     },
     {
       "path": "core/internal/anytls/session.go",
-      "bytes": 22988,
+      "bytes": 23480,
       "mode": "0644",
-      "sha256": "7b20fbcc283dc75c354df136c01478028322f7c7809583466b1b60d3466a63cd"
+      "sha256": "1ead88afcc8158ec5c0fdbe36d226ea852fc4dacda215590a50cc60f9f1df68b"
     },
     {
       "path": "core/internal/anytls/session_test.go",
-      "bytes": 11923,
+      "bytes": 12609,
       "mode": "0644",
-      "sha256": "70d8644ba19ab158af0bf67b5bbd4c38b6f07a5534bafcb892632dc8f5a1a50e"
+      "sha256": "9503808320fde34ebbcadfced7ddd01abacbf1e5e61a5136a87aec1a7051b96b"
     },
     {
       "path": "core/internal/anytls/stream.go",
-      "bytes": 8167,
+      "bytes": 8329,
       "mode": "0644",
-      "sha256": "081f1ba48635ab698383442abd306b93a93015a30e52ed04d237d481ded28f8b"
+      "sha256": "0ead93db931ade83dd358e03c6b9dd99142f1e47314a3cf1af0fcacd98c8a81e"
     },
     {
       "path": "core/internal/anytls/tcp_upload.go",
@@ -6673,9 +6757,9 @@
     },
     {
       "path": "core/internal/anytls/uot.go",
-      "bytes": 2684,
+      "bytes": 5733,
       "mode": "0644",
-      "sha256": "4040b58aad629e25f47f962791ffecbf7d0e6b4a5142ae46668520e4ba07696b"
+      "sha256": "e5862e511852520e55f51c7f0b78f93e0c589c2ce0385130363872f50bb724a2"
     },
     {
       "path": "core/internal/anytls/uot_test.go",
@@ -6691,57 +6775,21 @@
     },
     {
       "path": "core/internal/clientcore/airport_clash_subscription_test.go",
-      "bytes": 2271,
+      "bytes": 2274,
       "mode": "0644",
-      "sha256": "db8818c715a89af7f942900af1ff7a93b4573547bc90259f5338fce3c6c4e825"
+      "sha256": "5b3d52d1b227d2333ecafc03c6481e5f94948c2c9fdba79d16ec73a61ef412ce"
+    },
+    {
+      "path": "core/internal/clientcore/boundary_regression_test.go",
+      "bytes": 10241,
+      "mode": "0644",
+      "sha256": "07c35d8231445586fe10509d39198dc2772cc46a66935480f8add22084603abe"
     },
     {
       "path": "core/internal/clientcore/brand_resolve.go",
       "bytes": 22850,
       "mode": "0644",
       "sha256": "8651888910f58c6efcc805fbd6daa6c616b1c215f4d511761b9d5f88d91b51a0"
-    },
-    {
-      "path": "core/internal/clientcore/c15_sniff_test.go",
-      "bytes": 7282,
-      "mode": "0644",
-      "sha256": "da7cf1fc7e03674d39e498bf45e5ff0dc869d69efb484c4e77e645fbec8928e1"
-    },
-    {
-      "path": "core/internal/clientcore/c16_network_test.go",
-      "bytes": 6513,
-      "mode": "0644",
-      "sha256": "bf1fe4c4136de0dd1afcc78efc30c965f4b6115522759f4a58902e93bdf06939"
-    },
-    {
-      "path": "core/internal/clientcore/c46_http_halfclose_test.go",
-      "bytes": 4334,
-      "mode": "0644",
-      "sha256": "c8786db40794e16b300ab071d252257a1c3f9c5cb8335153e4f5f7ac99c80642"
-    },
-    {
-      "path": "core/internal/clientcore/c50_control_host_test.go",
-      "bytes": 5621,
-      "mode": "0644",
-      "sha256": "49696c1ddcfe6413136bcdce6899af17fe48b8660b031428d62347e38d1c5495"
-    },
-    {
-      "path": "core/internal/clientcore/c50_logs_timing.go",
-      "bytes": 2307,
-      "mode": "0644",
-      "sha256": "4e43663a0ece542c866e1641b1a0e4c792291a5571a3ba9c2e84104cb41d1193"
-    },
-    {
-      "path": "core/internal/clientcore/c50_logs_transport_test.go",
-      "bytes": 5171,
-      "mode": "0644",
-      "sha256": "a112d1b618000bdaec50336a4339dfdd1d2c0d21e1278b180151c9e23ace41c6"
-    },
-    {
-      "path": "core/internal/clientcore/c50_logs_wait_test.go",
-      "bytes": 9263,
-      "mode": "0644",
-      "sha256": "f3c25de0f6e7a5451df5f90c5c90caa6fe2bfcda51c656edc75dea821ce9cc2c"
     },
     {
       "path": "core/internal/clientcore/cancel_commit_test.go",
@@ -6780,22 +6828,16 @@
       "sha256": "9a67d8566b18df7f1f9e7d866a83ae7b154d95f754fe9cf642a6e0ee218ebbac"
     },
     {
-      "path": "core/internal/clientcore/diagnostics_network_round5_test.go",
-      "bytes": 1884,
-      "mode": "0644",
-      "sha256": "aa2045f1f2a686a5b74a8c35bec05a31518759bc4de7c43944ed7e3aa13e4d02"
-    },
-    {
       "path": "core/internal/clientcore/diagnostics_network_test.go",
-      "bytes": 10369,
+      "bytes": 12094,
       "mode": "0644",
-      "sha256": "539f847f41ba1bd0cc002b2061abd1ce5ffd62ad70d25877dde6a7a700a5c9a0"
+      "sha256": "8313fa727beb9c4ac03899b0f83321edad0b10b1324d28fa5b42066bc0a4d12e"
     },
     {
       "path": "core/internal/clientcore/dns.go",
-      "bytes": 4033,
+      "bytes": 7528,
       "mode": "0644",
-      "sha256": "7aec8f07ebc6887353e6eb099903baf0cdb3147e118201d0ac5b8ac906fcd209"
+      "sha256": "d058ead457daba8b2959f8a00c7727d139e3b24f1aa3034523f1630a1590c0ce"
     },
     {
       "path": "core/internal/clientcore/dns_cache_persistence_test.go",
@@ -6804,34 +6846,28 @@
       "sha256": "d00e6a13f4010aa307e46c46cee611a0b3ece918862b5f08492853b93981211e"
     },
     {
-      "path": "core/internal/clientcore/dns_policy_yaml.go",
-      "bytes": 1781,
-      "mode": "0644",
-      "sha256": "a13eee60849034b97ef546ae1542839736961bd8bb5e62a2c6760b1af8a4c219"
-    },
-    {
       "path": "core/internal/clientcore/dns_records_json_test.go",
       "bytes": 1066,
       "mode": "0644",
       "sha256": "9dcad8d8615bc9240367b9c09d52087218c4fa9b4cf38592bd360ce0122a4374"
     },
     {
-      "path": "core/internal/clientcore/dns_simple.go",
-      "bytes": 1387,
-      "mode": "0644",
-      "sha256": "2373f0ff4246350b68682d42613c7963558dcee43cc760ee3318fd2b54ac7dd5"
-    },
-    {
       "path": "core/internal/clientcore/document.go",
-      "bytes": 22295,
+      "bytes": 24717,
       "mode": "0644",
-      "sha256": "fd122879c9887549f0e94ff612576c40921874b6d27a788079d5d37ed276fe15"
+      "sha256": "6475c896f84b1ec56096b80e2b728394ae3f2497c4c791eceef409087de70c5d"
     },
     {
       "path": "core/internal/clientcore/document_files.go",
       "bytes": 7813,
       "mode": "0644",
       "sha256": "9dc7398f6a4713925ae171d6589e65a6c7f51ce5eb2e58d00bdc69925e425956"
+    },
+    {
+      "path": "core/internal/clientcore/document_rules_test.go",
+      "bytes": 36886,
+      "mode": "0644",
+      "sha256": "94e5cf66cbdc20a7d139e098fcb6af7119357cd717621574e6abbfca05ee5565"
     },
     {
       "path": "core/internal/clientcore/egress.go",
@@ -6918,6 +6954,12 @@
       "sha256": "18f57d731b0436d03233a58ffd72825c73fd1320359a752fe96720d0e98a9a16"
     },
     {
+      "path": "core/internal/clientcore/icons_test.go",
+      "bytes": 19204,
+      "mode": "0644",
+      "sha256": "fb0d029f40dde5a564bffcb00884f52c760c836ecba6de933cbd8e92ac6cac9a"
+    },
+    {
       "path": "core/internal/clientcore/import.go",
       "bytes": 9284,
       "mode": "0644",
@@ -6954,64 +6996,22 @@
       "sha256": "32c28ed49831c7afc743d6ef45cf9f50c22aec163aebd60a2575532de74b056b"
     },
     {
-      "path": "core/internal/clientcore/k1_test.go",
-      "bytes": 8654,
-      "mode": "0644",
-      "sha256": "62dcc7bdf2c3a5d742897d6239da4c0c7f0ae9feff753b1fa440c16d76f17588"
-    },
-    {
-      "path": "core/internal/clientcore/k3_rules_test.go",
-      "bytes": 1791,
-      "mode": "0644",
-      "sha256": "6db761f92da90bf9ebc9ffcbe2dc8e840967e196753ccf3fbf993a2b3011bac2"
-    },
-    {
       "path": "core/internal/clientcore/kernel_logs.go",
       "bytes": 2735,
       "mode": "0644",
       "sha256": "761ad495f9798939f6b303a3c012d4bd21c1a8bffa0e1142f11131e2b5d104dc"
     },
     {
-      "path": "core/internal/clientcore/legacy_fixture_test.go",
-      "bytes": 859,
-      "mode": "0644",
-      "sha256": "060ba058e8776323aef538a6e30824133cbe3fa4c590e4a118fa2ad177917fe7"
-    },
-    {
-      "path": "core/internal/clientcore/legacy_migration.go",
-      "bytes": 8145,
-      "mode": "0644",
-      "sha256": "236cd2e5e8605af3f0219458cc64d624dd35c55bf20e495759d756ef8ad3a77e"
-    },
-    {
-      "path": "core/internal/clientcore/legacy_smart.go",
-      "bytes": 2449,
-      "mode": "0644",
-      "sha256": "3b27addf1ab2079e576d01e94ce12ec282a6cf3a7954e244a15437424fb11a48"
-    },
-    {
-      "path": "core/internal/clientcore/legacy_smart_gate_test.go",
-      "bytes": 8327,
-      "mode": "0644",
-      "sha256": "adecc8fc12b781f4dff19665d33148b29183e5f1f903700f32f42c2ffdadac2f"
-    },
-    {
-      "path": "core/internal/clientcore/legacy_smart_test.go",
-      "bytes": 13054,
-      "mode": "0644",
-      "sha256": "f538ee4216c81903581cba87aa7fa8e9aa2c15b0dd211945b22299d252e8cdc4"
-    },
-    {
       "path": "core/internal/clientcore/logs.go",
-      "bytes": 8721,
+      "bytes": 10896,
       "mode": "0644",
-      "sha256": "98b1e6e61d13b00311ecab7b4b7e548ff89da7835376e33fceae250221a5f93f"
+      "sha256": "3557b3ad970075f2858ebeb26cd6d7a1ef3e44460eec3b91b612bb77f5660639"
     },
     {
       "path": "core/internal/clientcore/logs_test.go",
-      "bytes": 8426,
+      "bytes": 23581,
       "mode": "0644",
-      "sha256": "35ed0f5309fc27f646dca00c1ac1d5b2ec8d64bafb064bd6302d3f83e25fc9ae"
+      "sha256": "ee9f7364f851f5f0f0a494c1c5700e732cb7193e1f48fb57e163517cefd4674c"
     },
     {
       "path": "core/internal/clientcore/memory_other.go",
@@ -7066,6 +7066,24 @@
       "bytes": 11107,
       "mode": "0644",
       "sha256": "5e790f4c9342588505b239cab965956a83a884e75207e24e2251213ad72c00e9"
+    },
+    {
+      "path": "core/internal/clientcore/migration_legacy.go",
+      "bytes": 10495,
+      "mode": "0644",
+      "sha256": "9c6da6048eed4078037e4fde5eb08e4940ff0266bc9ed947039407c59d695544"
+    },
+    {
+      "path": "core/internal/clientcore/migration_legacy_test.go",
+      "bytes": 44234,
+      "mode": "0644",
+      "sha256": "c41bec61e892bad2f626368be1b1c309cbcedc714568747f27d3b0138bc1f3fc"
+    },
+    {
+      "path": "core/internal/clientcore/network_egress_test.go",
+      "bytes": 35246,
+      "mode": "0644",
+      "sha256": "5566f836ec8e73355e7dd9588626455bd0150c8ed21d561b0a25fa933d7bd6ba"
     },
     {
       "path": "core/internal/clientcore/pe_icon.go",
@@ -7129,9 +7147,9 @@
     },
     {
       "path": "core/internal/clientcore/process_icon_windows.go",
-      "bytes": 17415,
+      "bytes": 17992,
       "mode": "0644",
-      "sha256": "fd62a5ec1c840b174e0dfa2ee0acc79b020002a19f2ee22d99303ca0ccc4becf"
+      "sha256": "396c92270dbdab8ed4be6383eaaf8fc725d0b0556a5becd5cf44c33e1f456368"
     },
     {
       "path": "core/internal/clientcore/replace_retry.go",
@@ -7200,88 +7218,22 @@
       "sha256": "4cef8dc7f961b693e6f1ab734bac2b40d3ff7bce4f4fa1b7c8d0736c8928bcd9"
     },
     {
-      "path": "core/internal/clientcore/round11_icons_test.go",
-      "bytes": 2818,
-      "mode": "0644",
-      "sha256": "009bace5e3a8cad7ac5646f1161b3806dc518faa47502e996d5e0033d8309707"
-    },
-    {
-      "path": "core/internal/clientcore/round11_test.go",
-      "bytes": 6354,
-      "mode": "0644",
-      "sha256": "8110879abb56e7b77dd824aa5aa82f6579d823b76d2a3cadc5e9d8b6ce169485"
-    },
-    {
-      "path": "core/internal/clientcore/round12_real_test.go",
-      "bytes": 3345,
-      "mode": "0644",
-      "sha256": "ae5a614ae092e58395e7ff7f99db796b07397f06466f1d52246dc4ba76471934"
-    },
-    {
-      "path": "core/internal/clientcore/round12_test.go",
-      "bytes": 6072,
-      "mode": "0644",
-      "sha256": "8af569b2bb7c69229c86616e1dcd5f7f01ee9e8032e227e43f98fdd0e6c67eaf"
-    },
-    {
-      "path": "core/internal/clientcore/round2_kernel_logs_test.go",
-      "bytes": 1120,
-      "mode": "0644",
-      "sha256": "125509032385f8dbf488f51710fcbe88d2740e444b034056a5c2280e6ee770bc"
-    },
-    {
-      "path": "core/internal/clientcore/round4_test.go",
-      "bytes": 15294,
-      "mode": "0644",
-      "sha256": "2454736a646b9269e969af6fb908e755d82a6c0b1524becfb42f58b5ffc49eea"
-    },
-    {
-      "path": "core/internal/clientcore/round5_test.go",
-      "bytes": 7246,
-      "mode": "0644",
-      "sha256": "7e39fd3100247204a6aa7bc111a333f63e6adc96ae35553c2cd6f889353c9896"
-    },
-    {
-      "path": "core/internal/clientcore/round6_test.go",
-      "bytes": 3640,
-      "mode": "0644",
-      "sha256": "bd498e29927dbbd50d971cc5ecbf13b449a34cc8c77f2f245d60f3949083cf16"
-    },
-    {
-      "path": "core/internal/clientcore/round7_test.go",
-      "bytes": 11066,
-      "mode": "0644",
-      "sha256": "ed926394ae3830112b424a390ed99247dab70ad21a01247e1ff466d22c08d20d"
-    },
-    {
-      "path": "core/internal/clientcore/round8_test.go",
-      "bytes": 5559,
-      "mode": "0644",
-      "sha256": "1816e45cf93f3e5f4b70cb4bcf56609f67306e21c21dba366f3e100b18c78b45"
-    },
-    {
-      "path": "core/internal/clientcore/round8_windows_test.go",
-      "bytes": 1392,
-      "mode": "0644",
-      "sha256": "2db5c3265aecd9f26f0e80eefba28c41ce9f1c3936ed37df6ee3674667895722"
-    },
-    {
-      "path": "core/internal/clientcore/round9_test.go",
-      "bytes": 12445,
-      "mode": "0644",
-      "sha256": "8d186e15e60be4da775b55bd17f0e8e9ddf671dde3c9354a4e2ef4e7490f2669"
-    },
-    {
       "path": "core/internal/clientcore/runtime.go",
-      "bytes": 22515,
+      "bytes": 22516,
       "mode": "0644",
-      "sha256": "8a267fffb0a0a042d30031300576eeec580e9a6ce8caaa9f183143b8593639aa"
+      "sha256": "52db9207b2177d94bcaf75243af7dd4ae987bec8eb59c76d546f6916c357a833"
     },
     {
       "path": "core/internal/clientcore/runtime_test.go",
       "bytes": 7616,
       "mode": "0644",
       "sha256": "c3a230a858e9e01c1705aaf0eaaf66f926e990ff5fd7960ea6c7fdad8fe6db61"
+    },
+    {
+      "path": "core/internal/clientcore/runtime_windows_test.go",
+      "bytes": 1392,
+      "mode": "0644",
+      "sha256": "2db5c3265aecd9f26f0e80eefba28c41ce9f1c3936ed37df6ee3674667895722"
     },
     {
       "path": "core/internal/clientcore/selection.go",
@@ -7302,12 +7254,6 @@
       "sha256": "3cc5549bf71d02c80530a13caa664708ad68cfad9e1b6c4a7fad9c923e77ca9f"
     },
     {
-      "path": "core/internal/clientcore/sniff.go",
-      "bytes": 2785,
-      "mode": "0644",
-      "sha256": "48d462ad9880a986f37a581f3cf93cb58a2687f6067892dadd1c25c734caeea2"
-    },
-    {
       "path": "core/internal/clientcore/source_group_test.go",
       "bytes": 10307,
       "mode": "0644",
@@ -7320,28 +7266,16 @@
       "sha256": "83500d1c4875147caffae8b55fed4d47a965f110ab5c17c266d32a7ff9b0a1f3"
     },
     {
-      "path": "core/internal/clientcore/stage5_migration_test.go",
-      "bytes": 7129,
-      "mode": "0644",
-      "sha256": "60732ebcccb014a48ad5a470ea65d44195d9535e94639009b5184c4687d94757"
-    },
-    {
       "path": "core/internal/clientcore/startup_fastpath_test.go",
-      "bytes": 3581,
+      "bytes": 3580,
       "mode": "0644",
-      "sha256": "36f304304763a306579415e58c7f5dc68593f3e15224013d21fd6c4113320074"
+      "sha256": "0f7a7ac71948e64d5763895e9aba02c054f9b43fbfef8ad0f6ada7dc9df52d5e"
     },
     {
       "path": "core/internal/clientcore/status.go",
-      "bytes": 13205,
+      "bytes": 13208,
       "mode": "0644",
-      "sha256": "3702b1a87028a10eb15d5228ac238ab2326b3df94ea9d596fd830c317e2264bb"
-    },
-    {
-      "path": "core/internal/clientcore/subscription.go",
-      "bytes": 53449,
-      "mode": "0644",
-      "sha256": "271c0b04ada3233613276111572794f11c0793960b16bb0d7931b6fb76bd5388"
+      "sha256": "c2f7bf5a424af56cf8f77da397234432d525be796d9e2f7948b9365c53bde1e6"
     },
     {
       "path": "core/internal/clientcore/subscription_atomic_test.go",
@@ -7356,12 +7290,6 @@
       "sha256": "69591f8cc02ad6b344f3e91c8d909696441ca7aebf156abb476a75df1620ab49"
     },
     {
-      "path": "core/internal/clientcore/subscription_cache.go",
-      "bytes": 9646,
-      "mode": "0644",
-      "sha256": "9a0e58f2da670bb19b6a87a257c847a7db5a835cb2cea9124db698c6f92a96e0"
-    },
-    {
       "path": "core/internal/clientcore/subscription_cache_test.go",
       "bytes": 5922,
       "mode": "0644",
@@ -7374,34 +7302,16 @@
       "sha256": "e88031e04863f23fa39d1d2e61aa421c2150b25a595cac37ee2dc95085414b6a"
     },
     {
-      "path": "core/internal/clientcore/subscription_download.go",
-      "bytes": 3973,
+      "path": "core/internal/clientcore/subscription_convert.go",
+      "bytes": 13793,
       "mode": "0644",
-      "sha256": "15b8c7a6a6de2273f5fd0fe1e8f8ebb5db6f6564e88d49a9d4eef2560c35f56c"
+      "sha256": "9cc188b40107512ac2ee44665f041af3c933d119dc86ac2dd1831dc8cbfcfffc"
     },
     {
-      "path": "core/internal/clientcore/subscription_errors.go",
-      "bytes": 3720,
+      "path": "core/internal/clientcore/subscription_fetch.go",
+      "bytes": 14641,
       "mode": "0644",
-      "sha256": "72f61a2c26de593503af7b3bcfab7f539b0b9c8e71a12392a61e6f4c634be806"
-    },
-    {
-      "path": "core/internal/clientcore/subscription_fallback.go",
-      "bytes": 2311,
-      "mode": "0644",
-      "sha256": "496fb4f2e16407f1f1af61c2f1cdb1a33191d0457b35228133c64d7f5d4ffe2a"
-    },
-    {
-      "path": "core/internal/clientcore/subscription_local.go",
-      "bytes": 1492,
-      "mode": "0644",
-      "sha256": "30e8a4a082e830609a0ebff8aec515c1055ebb0d656ada7ff0b92d1762136138"
-    },
-    {
-      "path": "core/internal/clientcore/subscription_metadata.go",
-      "bytes": 3474,
-      "mode": "0644",
-      "sha256": "2c57f2b0d639281897784ffe779c677a795375bc773c6d3415b7a20ac41de4ef"
+      "sha256": "789daa07c40cd1f652d1c7676d3ea77824341bb714be70c8d3e0fd2d8eba47dd"
     },
     {
       "path": "core/internal/clientcore/subscription_overlay.go",
@@ -7416,40 +7326,22 @@
       "sha256": "c8b80caa8266b6f6f7549166d97099b12fee18002589e433e376a2822e0c7c17"
     },
     {
+      "path": "core/internal/clientcore/subscription_platform_other.go",
+      "bytes": 781,
+      "mode": "0644",
+      "sha256": "c68e4e19b32f5eb1855f8b35bbd2559991e05aaaa93f1d55d5519556ca83b49a"
+    },
+    {
+      "path": "core/internal/clientcore/subscription_platform_windows.go",
+      "bytes": 3139,
+      "mode": "0644",
+      "sha256": "2f8e6f402ff252a9c41024f1c983d3080b666d4d90506e075ea0f5da669c1cda"
+    },
+    {
       "path": "core/internal/clientcore/subscription_preservation_test.go",
       "bytes": 2830,
       "mode": "0644",
       "sha256": "c03ac982f3e097d6d0c87288fb85d36b675d509bce64a2a9f339e4cb8d1fb927"
-    },
-    {
-      "path": "core/internal/clientcore/subscription_proxy.go",
-      "bytes": 6782,
-      "mode": "0644",
-      "sha256": "7651d2656801bac2b5da621cbce351d43b7ea2797c7ccd01f651a40f5ab70595"
-    },
-    {
-      "path": "core/internal/clientcore/subscription_proxy_context.go",
-      "bytes": 1788,
-      "mode": "0644",
-      "sha256": "03105383a6a4d03b93dbd3fc23df96a1bdcf36d2e1941f3fd85636477c16b164"
-    },
-    {
-      "path": "core/internal/clientcore/subscription_proxy_other.go",
-      "bytes": 249,
-      "mode": "0644",
-      "sha256": "4cf9d3cf8835b110c40860f7105b1c9f3bec5020df303818517bff48cdc09db1"
-    },
-    {
-      "path": "core/internal/clientcore/subscription_proxy_peer.go",
-      "bytes": 1868,
-      "mode": "0644",
-      "sha256": "b7f392d5411032017cfb4bfb78688b57a7f1c0fc891dd9b8949173ed1e0a849f"
-    },
-    {
-      "path": "core/internal/clientcore/subscription_proxy_windows.go",
-      "bytes": 1791,
-      "mode": "0644",
-      "sha256": "a45c5933db35c12bcdf80d8916329112d4a09619dd24395861a7467198068018"
     },
     {
       "path": "core/internal/clientcore/subscription_proxy_windows_test.go",
@@ -7458,28 +7350,10 @@
       "sha256": "4c4f761f0408526a262a72923c6b2ce7ed3a1634c05dbc4d118f380bd9d338be"
     },
     {
-      "path": "core/internal/clientcore/subscription_resource.go",
-      "bytes": 2757,
-      "mode": "0644",
-      "sha256": "34155c4e3a6f4e9291e51481c9721977eda3c629a7b65e1c78cadc8d703393c8"
-    },
-    {
       "path": "core/internal/clientcore/subscription_resource_read_test.go",
       "bytes": 2119,
       "mode": "0644",
       "sha256": "6ad827721089cae1eed09d5bd74e5e992742fdb9b99cc53b4f2ed8e651a76a90"
-    },
-    {
-      "path": "core/internal/clientcore/subscription_resource_unix.go",
-      "bytes": 580,
-      "mode": "0644",
-      "sha256": "dd51b9f7774ec292038122f5c77b683ca720ff830398e9cd4a8ac5caa156facd"
-    },
-    {
-      "path": "core/internal/clientcore/subscription_resource_windows.go",
-      "bytes": 1434,
-      "mode": "0644",
-      "sha256": "66fdeeaf7b6dccd42a59357641017fa0eb11243ad1bf651a8858c2e7e951a152"
     },
     {
       "path": "core/internal/clientcore/subscription_resources_test.go",
@@ -7488,34 +7362,28 @@
       "sha256": "21e144a7cf686c2194bf267bdabbed879226e9cee702f5d30bc39d061e35c988"
     },
     {
-      "path": "core/internal/clientcore/subscription_round2b_test.go",
-      "bytes": 31480,
-      "mode": "0644",
-      "sha256": "287a67e252c14b7144c6ef359c177f2f4c08b698acf1b6ef4f05e24457b58808"
-    },
-    {
       "path": "core/internal/clientcore/subscription_scope_test.go",
       "bytes": 4422,
       "mode": "0644",
       "sha256": "28c8e97be73f25964c682d680f670383e1bd14e9835aefcf83e60b36b7a098b0"
     },
     {
-      "path": "core/internal/clientcore/subscription_stage.go",
-      "bytes": 371,
+      "path": "core/internal/clientcore/subscription_service.go",
+      "bytes": 47036,
       "mode": "0644",
-      "sha256": "29cf8c581e0a5afb55942bb612c785573665f043f56ad57911da3406d25e3bbd"
+      "sha256": "01cf42606464343a9fccc9c09250559eb1d6adf67d0f311a98cdaf1e391e2ecc"
     },
     {
-      "path": "core/internal/clientcore/subscription_status.go",
-      "bytes": 3984,
+      "path": "core/internal/clientcore/subscription_storage.go",
+      "bytes": 19356,
       "mode": "0644",
-      "sha256": "6fab11b8b7698e311dd4f80dab0082375b7d387570d1ad94da781b52a0a267cd"
+      "sha256": "688b4070ba90e7cb7c8e8f1233277daa1d6a18f66bc60a7d3d401d5134f4d9b0"
     },
     {
       "path": "core/internal/clientcore/subscription_test.go",
-      "bytes": 14795,
+      "bytes": 46078,
       "mode": "0644",
-      "sha256": "31152aa33d264e2536e75cd2f878ed56c579a60d9577227bf0fd43d61476c8f2"
+      "sha256": "cf553abb3e1cdc5b48848f1ef72a589dd35688b6eec66c6bb1c408faac8aff34"
     },
     {
       "path": "core/internal/clientcore/target_preview.go",
@@ -7546,12 +7414,6 @@
       "bytes": 4378,
       "mode": "0644",
       "sha256": "f9cded979775e4626304d18abb04b7a94c9a2780d7ad6a3a540c87b7f4e69f20"
-    },
-    {
-      "path": "core/internal/clientcore/tun_dns.go",
-      "bytes": 524,
-      "mode": "0644",
-      "sha256": "51dbcfffbba859fcc6b0de14b93198e895d4be3d9ae6806b0234d767a1895da2"
     },
     {
       "path": "core/internal/clientcore/ui_features_test.go",
@@ -7603,9 +7465,9 @@
     },
     {
       "path": "core/internal/clientdiag/unlock.go",
-      "bytes": 24144,
+      "bytes": 24143,
       "mode": "0644",
-      "sha256": "6aabb3c7e802f956829e9f23c7f6ca6361d8c25277434637bea4998e552f23fd"
+      "sha256": "da6525ab181072511e5e1c566bbb018c8c33e9fae5643322f08ff019a484ef67"
     },
     {
       "path": "core/internal/clientdiag/unlock_gemini_test.go",
@@ -7620,16 +7482,10 @@
       "sha256": "bd236f00a410c4b7aadba5a74d1c04850f08c0438df8b7b87fc20f0502d59b39"
     },
     {
-      "path": "core/internal/clientdiag/unlock_round5_test.go",
-      "bytes": 636,
-      "mode": "0644",
-      "sha256": "d54471d7dcfc660b674afe7aa9c505cb5afe7a1b34b069d6ebfaed60e17775ff"
-    },
-    {
       "path": "core/internal/clientdiag/unlock_test.go",
-      "bytes": 11629,
+      "bytes": 12201,
       "mode": "0644",
-      "sha256": "787cb24bd18a4fa2d6a3c706d8f5b2a1c7c6e82a13249722bc56d0b13e77b46f"
+      "sha256": "bee5884f3d4e8fd3e5b160f0d6bbf9cdfe0720934b45fa4dcdea58acbd7824ed"
     },
     {
       "path": "core/internal/clientegress/bind_health_test.go",
@@ -7704,16 +7560,10 @@
       "sha256": "037294abdcac45854c6ed0b9c4bf1a6e2bdc71e2477796895211610ef86a2103"
     },
     {
-      "path": "core/internal/clientegress/switch_m2_test.go",
-      "bytes": 827,
-      "mode": "0644",
-      "sha256": "bf33129646025a12a35eda0ebff502143eda8a0bee1c6f584ff9754977025067"
-    },
-    {
       "path": "core/internal/clientegress/switch_snapshot_test.go",
-      "bytes": 2857,
+      "bytes": 3645,
       "mode": "0644",
-      "sha256": "4152d689cc8d89581d3ad4e9ecdc89272f04a229fa816451ca2f9f4d226cf616"
+      "sha256": "80687a73aa154f3f377e8b8d477bc066488828fb4f87f011ccc637e3dce10f60"
     },
     {
       "path": "core/internal/clientegress/system_dns.go",
@@ -7759,9 +7609,9 @@
     },
     {
       "path": "core/internal/elevated/platform_windows.go",
-      "bytes": 15108,
+      "bytes": 15677,
       "mode": "0644",
-      "sha256": "ff80b081943a44e840c088615cac6efc7e4992676bf493677c1e629e814c5aef"
+      "sha256": "275140c18b6be848de76960bc1364c7a62c9ecaf1ab2e9b577ca7d66d007094b"
     },
     {
       "path": "core/internal/elevated/session.go",
@@ -7792,36 +7642,6 @@
       "bytes": 268,
       "mode": "0644",
       "sha256": "80d301ca328105acc358bf77531aea6d8771a636f5051bd9214769c4ebed5a97"
-    },
-    {
-      "path": "core/internal/kernel/c16_network_test.go",
-      "bytes": 12129,
-      "mode": "0644",
-      "sha256": "0aff97b0e88d7df73233f388e4bac33d6128276018f3c33a9aac4d380abe8238"
-    },
-    {
-      "path": "core/internal/kernel/c46_udp_outcome_test.go",
-      "bytes": 2107,
-      "mode": "0644",
-      "sha256": "7ad676364e88b59efa3121af53a5e530a2d44d4134812940df9b485726cd784d"
-    },
-    {
-      "path": "core/internal/kernel/c49_udp_dns_test.go",
-      "bytes": 8499,
-      "mode": "0644",
-      "sha256": "e3b205e1e1a612d340051365ea279cad9160428f1434a90213a4e5d16be9b5d8"
-    },
-    {
-      "path": "core/internal/kernel/c50_packet_source_test.go",
-      "bytes": 2720,
-      "mode": "0644",
-      "sha256": "e721a3aba9de0c8377f0afa448830c0963c50bdbab886aaca20def2ae6a86c92"
-    },
-    {
-      "path": "core/internal/kernel/c50_tun_test.go",
-      "bytes": 26656,
-      "mode": "0644",
-      "sha256": "759e9ccaf953cc4b05a502b894035bb0bd633799acb1b80544a36cbffa812b84"
     },
     {
       "path": "core/internal/kernel/carrier_listener.go",
@@ -7855,33 +7675,15 @@
     },
     {
       "path": "core/internal/kernel/client_control_test.go",
-      "bytes": 1469,
+      "bytes": 10852,
       "mode": "0644",
-      "sha256": "b08f514e280f75270efcfc7e605dc2ccd704a58ff2478c4759221222a8eafefa"
+      "sha256": "acd1b273c60f4610e86567d19309473cf3fede2101d8711e7b39fbc3ad14112d"
     },
     {
       "path": "core/internal/kernel/client_diagnostics.go",
       "bytes": 1528,
       "mode": "0644",
       "sha256": "17cecd7c8d85f96c31472b364d8fe0e4855582224b37b4343c60aaf7703bfe6c"
-    },
-    {
-      "path": "core/internal/kernel/client_dns.go",
-      "bytes": 2131,
-      "mode": "0644",
-      "sha256": "224acff93a6bf38a9f2f9a5a4311e9d5c426769045ff23012082bcf17c25c6c0"
-    },
-    {
-      "path": "core/internal/kernel/client_dns_gateway.go",
-      "bytes": 7994,
-      "mode": "0644",
-      "sha256": "90748d22ce7f44d9c7bcd0f7ff8e186ace42f69f5bf335e8f54765579df53f57"
-    },
-    {
-      "path": "core/internal/kernel/client_dns_policy.go",
-      "bytes": 9921,
-      "mode": "0644",
-      "sha256": "eb7fbefc9b3e0fd8d19419d756119fa2e62a384b25450928a6e26204c1c3b623"
     },
     {
       "path": "core/internal/kernel/client_egress.go",
@@ -7932,12 +7734,6 @@
       "sha256": "f90790693a5bc57220870541ca075dc41b7b9c387718af484d89e644adc85564"
     },
     {
-      "path": "core/internal/kernel/client_round_test.go",
-      "bytes": 5972,
-      "mode": "0644",
-      "sha256": "14f336de53500e4517d1053aefa8bcc43a3cf58a9321c22730cfe4e55c8107a6"
-    },
-    {
       "path": "core/internal/kernel/client_selection.go",
       "bytes": 1944,
       "mode": "0644",
@@ -7969,9 +7765,9 @@
     },
     {
       "path": "core/internal/kernel/dns.go",
-      "bytes": 16997,
+      "bytes": 22025,
       "mode": "0644",
-      "sha256": "61ec5d341b5f4d3271fe345d79bb2447cbeb57a7a03f7d648cdb747700b4422d"
+      "sha256": "b6d117e8ff174dec94e37d4bd672fb4bfa5dc7d107a9a0ec3f917f72d0ff81c3"
     },
     {
       "path": "core/internal/kernel/dns_chain_test.go",
@@ -7981,21 +7777,15 @@
     },
     {
       "path": "core/internal/kernel/dns_gateway.go",
-      "bytes": 19759,
+      "bytes": 37939,
       "mode": "0644",
-      "sha256": "e505e87d0d14b7d6c9dafe37d8517e277f26e80b65455bd18d70a43d138b7dd6"
+      "sha256": "4acf65f432f0b6c4b3ae2e3974ee2b7cc9b389b841e27e86dc859dc209477cbe"
     },
     {
       "path": "core/internal/kernel/dns_host_map.go",
       "bytes": 10889,
       "mode": "0644",
       "sha256": "cceabbbd9d8eee6b6565bac7a1dd72bb7cbe600e1ad9417587ff427f50058a1b"
-    },
-    {
-      "path": "core/internal/kernel/dns_mihomo.go",
-      "bytes": 2592,
-      "mode": "0644",
-      "sha256": "d28462e9c2a3fa99fb5e10ecb95a594a553301146c27fc7d9f4fab4fb157cca8"
     },
     {
       "path": "core/internal/kernel/dns_owner_review_test.go",
@@ -8005,27 +7795,21 @@
     },
     {
       "path": "core/internal/kernel/dns_policy.go",
-      "bytes": 4431,
+      "bytes": 16826,
       "mode": "0644",
-      "sha256": "43262a0045737b5d6d589ac5e5ad9212001d3fcd780f677d3f05725600aea357"
+      "sha256": "428f48f3cf2faf67a5218f405406f1424c844290f17ad2759ed4a56593f6d67e"
     },
     {
       "path": "core/internal/kernel/dns_records.go",
-      "bytes": 6301,
+      "bytes": 8892,
       "mode": "0644",
-      "sha256": "d378c9fe50165ea16907571a3b3c2afe3afead37b809006d6748175f997ce59d"
-    },
-    {
-      "path": "core/internal/kernel/dns_revision.go",
-      "bytes": 550,
-      "mode": "0644",
-      "sha256": "b809b3a0592858728e8b1e6067fe544c45e0a1873f4a2bfc6817c5173919e2ee"
+      "sha256": "a2519308d6eae2193cd6ad11d686f0888c3ce70f8b6896ffce8cc50c28d8f917"
     },
     {
       "path": "core/internal/kernel/dns_routing_extra_test.go",
-      "bytes": 4850,
+      "bytes": 18854,
       "mode": "0644",
-      "sha256": "eb6e5c7242f96df66d7a39bce9e0f5dd2d98f46d6b9e43ffdbbf43f7ba55c49e"
+      "sha256": "02969f322f5dd30477ba274c41111015175d29cb4a4e5ac80af44b42595fd3ef"
     },
     {
       "path": "core/internal/kernel/dns_routing_test.go",
@@ -8094,12 +7878,6 @@
       "sha256": "1d2fde2e2f3dfe79eb1d88ac09c207987cc994478c137a1796005a5d56556860"
     },
     {
-      "path": "core/internal/kernel/k3_process_test.go",
-      "bytes": 1349,
-      "mode": "0644",
-      "sha256": "590bf4e97bd55ef0f86aff922c77be9e6afca299c85e5304842fc78b4dc44ba3"
-    },
-    {
       "path": "core/internal/kernel/kernel_log.go",
       "bytes": 256,
       "mode": "0644",
@@ -8112,28 +7890,10 @@
       "sha256": "b619f002fbfd2dbfac2782132628f840898b5d0d4e845f87cdb2a456defd0aa8"
     },
     {
-      "path": "core/internal/kernel/legacy_route_reference_test.go",
-      "bytes": 534,
-      "mode": "0644",
-      "sha256": "0f39fce452a14891819c8cacbe799f42c284672ce13c0af192f33137d739df7d"
-    },
-    {
-      "path": "core/internal/kernel/legacy_smart_test.go",
-      "bytes": 1260,
-      "mode": "0644",
-      "sha256": "ed32ca253af6d50273ab2403b3107325f4fbaf5fd8687ea298e673107a0e82cb"
-    },
-    {
       "path": "core/internal/kernel/log.go",
       "bytes": 6988,
       "mode": "0644",
       "sha256": "d023dcb90d3c74dcbc8bb87632310789901d2645c297a6fde28936493ad40403"
-    },
-    {
-      "path": "core/internal/kernel/m2_udp_test.go",
-      "bytes": 17220,
-      "mode": "0644",
-      "sha256": "b8a3a83184a1c8ea508d9e4818e1f72f2f838c775d3738e2a0f71229770bc671"
     },
     {
       "path": "core/internal/kernel/network_config.go",
@@ -8143,9 +7903,9 @@
     },
     {
       "path": "core/internal/kernel/outbound_config.go",
-      "bytes": 10972,
+      "bytes": 11223,
       "mode": "0644",
-      "sha256": "ceb52ce6d7dac97c3f68c2e30fde8377404f8b19b3490411aa06555c7aa6f8b4"
+      "sha256": "dc523b4ef7b2138f9671916d862849569093c69ed270f8688af7e8e652fddb1b"
     },
     {
       "path": "core/internal/kernel/outbound_runtime.go",
@@ -8170,6 +7930,12 @@
       "bytes": 3742,
       "mode": "0644",
       "sha256": "fe781e5da3e23121561e4ff6d7f3c1d158c152d75f4083dfe9333fa91d852510"
+    },
+    {
+      "path": "core/internal/kernel/process_route_test.go",
+      "bytes": 12357,
+      "mode": "0644",
+      "sha256": "35b922babb903da08e729659b00cae43283f679d8dae187387e4e9cbd44cb334"
     },
     {
       "path": "core/internal/kernel/protocol.go",
@@ -8208,16 +7974,34 @@
       "sha256": "008ebdcf77e888352fcd77993e733dc2b999349fb59888418273104083e0ab45"
     },
     {
-      "path": "core/internal/kernel/relay.go",
-      "bytes": 7272,
+      "path": "core/internal/kernel/regression_boundary_test.go",
+      "bytes": 14990,
       "mode": "0644",
-      "sha256": "beff8da6a5776594eb6b94a8871a72bc5c1b334567d54a9e6d6d1d2021fdcd21"
+      "sha256": "d7ed139bd4c12a15bd9b6cd7f50306ec2790035f83855173d4a1c8697ce4dc25"
+    },
+    {
+      "path": "core/internal/kernel/relay.go",
+      "bytes": 7669,
+      "mode": "0644",
+      "sha256": "62a4430a1164712702d6c9e6e0da7abc88de6f898ab5ba541928453dff302558"
     },
     {
       "path": "core/internal/kernel/relay_adaptive_test.go",
-      "bytes": 1311,
+      "bytes": 1303,
       "mode": "0644",
-      "sha256": "2f498795c21e61dae84acc2f85a7502be21008eabbeac05cd6f57c9a91bfbcb0"
+      "sha256": "ee17598bd14098683f245a52c629bf2a041204d10bfe5903504bcec179c3ad63"
+    },
+    {
+      "path": "core/internal/kernel/relay_linux.go",
+      "bytes": 1081,
+      "mode": "0644",
+      "sha256": "267f0ec986be82f6a4096944ac94eae9c840c65bb405ce59a1fa58b018d52c42"
+    },
+    {
+      "path": "core/internal/kernel/relay_other.go",
+      "bytes": 121,
+      "mode": "0644",
+      "sha256": "0a8e954fd00df1208d88354865db6011bcf19633b68cbd7b7940af3fca2ee310"
     },
     {
       "path": "core/internal/kernel/relay_test.go",
@@ -8256,22 +8040,10 @@
       "sha256": "13c0357f88b457685f6a63770f2ebf47b177c527ce92de98e3f97877450d46af"
     },
     {
-      "path": "core/internal/kernel/round11_test.go",
-      "bytes": 3679,
+      "path": "core/internal/kernel/round2_dns_regression_test.go",
+      "bytes": 9827,
       "mode": "0644",
-      "sha256": "c86565c68375c3d97e498603162bf965f63f78df6fb42f8f457e39fccbab40ed"
-    },
-    {
-      "path": "core/internal/kernel/round2_details_test.go",
-      "bytes": 3750,
-      "mode": "0644",
-      "sha256": "6799fba4f793c080db4a1095633b00f3a28453323d6167d0648364e1adec72ea"
-    },
-    {
-      "path": "core/internal/kernel/round9_test.go",
-      "bytes": 2096,
-      "mode": "0644",
-      "sha256": "8ac009cd27d89be3214ad31df2266189693fea8ac73696ee07fead9693fed36e"
+      "sha256": "30df235f9829e53f3d3f4eff955a5a1821f61a282e19efb499c80c8777d0fe90"
     },
     {
       "path": "core/internal/kernel/route_check.go",
@@ -8329,9 +8101,9 @@
     },
     {
       "path": "core/internal/kernel/runtime_diagnostic.go",
-      "bytes": 2457,
+      "bytes": 4178,
       "mode": "0644",
-      "sha256": "2fc55fd3b893928c0a0c34a996664b61f3899aa20fa0472dd86a5b3dedef1e95"
+      "sha256": "394740ebb1b6938f2cb208473d34a8dc9a600453d0e47edbd6c091813489c80c"
     },
     {
       "path": "core/internal/kernel/runtime_test.go",
@@ -8347,9 +8119,9 @@
     },
     {
       "path": "core/internal/kernel/server.go",
-      "bytes": 19043,
+      "bytes": 19092,
       "mode": "0644",
-      "sha256": "54c6889e9fa93d5247fc0dc656e43a989d545b47bd121d12b11f043de271374e"
+      "sha256": "e6dc00004e9696d449d846ca02711866039d2b68b1b61ad49c517da318410314"
     },
     {
       "path": "core/internal/kernel/slots.go",
@@ -8377,9 +8149,9 @@
     },
     {
       "path": "core/internal/kernel/sniff_config.go",
-      "bytes": 10293,
+      "bytes": 10866,
       "mode": "0644",
-      "sha256": "eb907fc1b8df4962343d0f36c76134b70d6bb9f4fb0dc74adcc55c53606b2239"
+      "sha256": "582f3747c9d780530b4086bee3dda74c96e3af7b1fd6a7ea0a9f35d670505a5c"
     },
     {
       "path": "core/internal/kernel/sniff_override_perf_test.go",
@@ -8436,18 +8208,6 @@
       "sha256": "6e8c126d1cbd9596224c0cdef951d3b45b1a2a3b4bd4ab5000165b2747a65f38"
     },
     {
-      "path": "core/internal/kernel/stage4_nat_test.go",
-      "bytes": 6815,
-      "mode": "0644",
-      "sha256": "9e7ee7a3cfff283d33b58e8d7049ca2e74e0f79c4ab0130e9d7a16986d160ce2"
-    },
-    {
-      "path": "core/internal/kernel/stage4_process_test.go",
-      "bytes": 5821,
-      "mode": "0644",
-      "sha256": "e74d23c12b00c7eeb287a3f98df817de9d072fce35c2a9a0fa563df1ef7f498d"
-    },
-    {
       "path": "core/internal/kernel/startup_probe_fast_test.go",
       "bytes": 3775,
       "mode": "0644",
@@ -8455,9 +8215,9 @@
     },
     {
       "path": "core/internal/kernel/state.go",
-      "bytes": 10927,
+      "bytes": 10924,
       "mode": "0644",
-      "sha256": "6486be36c66c3424c5eef1f5a777ff1cdd17da6ffca424f47abd841b82a4bbc2"
+      "sha256": "87b27fa16f75aaaac311fc76d0d631441500401ea5d45cfee38934ae4c4a9f6a"
     },
     {
       "path": "core/internal/kernel/state_log_privacy_test.go",
@@ -8497,9 +8257,9 @@
     },
     {
       "path": "core/internal/kernel/target_preview.go",
-      "bytes": 4218,
+      "bytes": 5833,
       "mode": "0644",
-      "sha256": "dcd24e772f0f442cff51b9e71f1db14c486e25fbd3eda414023f64de2db5b020"
+      "sha256": "5eb9523221098f5e0a0eb5572088e8c468793bdff5e7699c7d5f7b9126c1b8cc"
     },
     {
       "path": "core/internal/kernel/tfo.go",
@@ -8521,15 +8281,9 @@
     },
     {
       "path": "core/internal/kernel/track.go",
-      "bytes": 22040,
+      "bytes": 22044,
       "mode": "0644",
-      "sha256": "42d6544952390c2026ae86532feaf12936f866df50eaf0beca20cb80ad5ef6a2"
-    },
-    {
-      "path": "core/internal/kernel/tun_dns.go",
-      "bytes": 3186,
-      "mode": "0644",
-      "sha256": "b5c5ccbb4ebdc64d31d3aea4124f878d0beac358b37b499764523964be7ce3f7"
+      "sha256": "34154d508610ee5cf74fed2e11d2f4e799fad3b8032c2f19f4b37e15d2296b0a"
     },
     {
       "path": "core/internal/kernel/tun_dns_sniff_enhance_test.go",
@@ -8548,6 +8302,12 @@
       "bytes": 5087,
       "mode": "0644",
       "sha256": "ae2559a10bc59ba9ae45d6ee3ac550360c271472d2321a9516bda3edc2044d80"
+    },
+    {
+      "path": "core/internal/kernel/tun_ingress_test.go",
+      "bytes": 33369,
+      "mode": "0644",
+      "sha256": "972380f6eae1333e3c3846e17a49898235ed5a31ec97f97a16a5f85988644e17"
     },
     {
       "path": "core/internal/kernel/tun_udp.go",
@@ -8569,15 +8329,21 @@
     },
     {
       "path": "core/internal/kernel/udp_proxy.go",
-      "bytes": 13318,
+      "bytes": 13321,
       "mode": "0644",
-      "sha256": "d48b5e89724d6d4e4309c8d1423819e2827801c3edf96b23f944a210f433da3b"
+      "sha256": "ffa79aa9a3f549765173365427809a01fe7395b500cdeb658fb39784d794d687"
     },
     {
       "path": "core/internal/kernel/udp_scope_review_test.go",
       "bytes": 3544,
       "mode": "0644",
       "sha256": "05349f75dfb76fa5a74a19cf4e871c79183e24f8a6bb7cac81f7b678f36080e3"
+    },
+    {
+      "path": "core/internal/kernel/udp_session_test.go",
+      "bytes": 30221,
+      "mode": "0644",
+      "sha256": "6b3c4395cddc8f0c2f554adaf865104aa309da298fbd6544eaa597f57d8e6585"
     },
     {
       "path": "core/internal/kernel/urltest_probe_test.go",
@@ -8605,21 +8371,21 @@
     },
     {
       "path": "core/internal/outbound/anytls/anytls.go",
-      "bytes": 18018,
+      "bytes": 18017,
       "mode": "0644",
-      "sha256": "83032ed6f16b88ea8d9ad8131cb1bf8a72a988c3e23bef7d9fbc6b4d7e023093"
+      "sha256": "b7fdd4621b346d448defd996ed5bf379f20f68f49686fab2158d633661da7e1e"
     },
     {
       "path": "core/internal/outbound/anytls/anytls_test.go",
-      "bytes": 27575,
+      "bytes": 28789,
       "mode": "0644",
-      "sha256": "d29dea2b3cd9fe38c71b16eb2fbd3ea38af01c60597b0f2655bcf4e3ef050eff"
+      "sha256": "904e3725992b783bc12fcc4e354378a1b30a1faeae886ee78388d5c8f5f0c866"
     },
     {
       "path": "core/internal/outbound/anytls/extreme_anytls_test.go",
-      "bytes": 4690,
+      "bytes": 4691,
       "mode": "0644",
-      "sha256": "6ce816448b0b5815f884e0208564ce8cba266757f9b87f335bff827f5784e45b"
+      "sha256": "1cdd771c6cb044b14a977c2f706b626f92591020177ec1eca8bad59ce76caf1e"
     },
     {
       "path": "core/internal/outbound/anytls/helpers_test.go",
@@ -8641,9 +8407,9 @@
     },
     {
       "path": "core/internal/outbound/anytls/packet.go",
-      "bytes": 2487,
+      "bytes": 2859,
       "mode": "0644",
-      "sha256": "d933521266d20b8578d303f3b84e340a56cf28f4d60687ce4da4fb08bbc61555"
+      "sha256": "36dbac52338bbe0913e9e67d089386ab69ce1f373689b0958cd5c5d3a0bc6f32"
     },
     {
       "path": "core/internal/outbound/anytls/padding.go",
@@ -8653,15 +8419,21 @@
     },
     {
       "path": "core/internal/outbound/anytls/review_shared_test.go",
-      "bytes": 96795,
+      "bytes": 97606,
       "mode": "0644",
-      "sha256": "fb2534e9e91da6966ee641db389cc1f68972de91241e5aaed3b5f9787d77d039"
+      "sha256": "9a7eed31714051061c62faaa93ebccb9f09fc01ae53664a414fce1ffea380bfa"
+    },
+    {
+      "path": "core/internal/outbound/anytls/round2_regression_test.go",
+      "bytes": 10237,
+      "mode": "0644",
+      "sha256": "dc4240bb6ff61456cd3a1ac8c144ee7675328077aef193edd67dd68d60a3054e"
     },
     {
       "path": "core/internal/outbound/anytls/session.go",
-      "bytes": 25084,
+      "bytes": 25112,
       "mode": "0644",
-      "sha256": "636daf839a092289fb1257b654829510322db4accf85720a652b14a496f4617c"
+      "sha256": "c3dcc91496ce464b6a8785a35c71a20b8a002a9187a265c4daa6efc6cb61055e"
     },
     {
       "path": "core/internal/outbound/anytls/session_lifecycle_test.go",
@@ -8683,33 +8455,33 @@
     },
     {
       "path": "core/internal/outbound/anytls/stream.go",
-      "bytes": 23751,
+      "bytes": 24780,
       "mode": "0644",
-      "sha256": "8f73d99c5f0cab345de64e881608517b60b35e188127e1f8af01df8d85195cb5"
+      "sha256": "f50216d6351ac4c7acc24b006c3a86733822bf6934c6d5f6410f84bcf67d2eb2"
     },
     {
       "path": "core/internal/outbound/diagnostic.go",
-      "bytes": 6260,
+      "bytes": 7523,
       "mode": "0644",
-      "sha256": "a67010d385e744e8b90b5c6329425ce4f9024ae43835ea554faa6898c91c49e1"
+      "sha256": "fdf8168ae58e7773b1302f50ed9d6b0442e0dc2da0b05a34c968628d6dffbd3b"
+    },
+    {
+      "path": "core/internal/outbound/diagnostic_test.go",
+      "bytes": 992,
+      "mode": "0644",
+      "sha256": "8f5c7df260ac6b99c4bd952e792a78c23d77122b3debdf0146ce93c8cd3e09ab"
+    },
+    {
+      "path": "core/internal/outbound/diagnostic_windows_test.go",
+      "bytes": 614,
+      "mode": "0644",
+      "sha256": "3922a8c2c8393c0fbe2eca469080515d7c88447e3da75592eddaa74b48beed55"
     },
     {
       "path": "core/internal/outbound/dial_observer.go",
       "bytes": 438,
       "mode": "0644",
       "sha256": "e281540a400afe9be7862b11efea12ea949cd95b89eacb67d7efaa73abf9e711"
-    },
-    {
-      "path": "core/internal/outbound/direct/c16_ipv6_test.go",
-      "bytes": 833,
-      "mode": "0644",
-      "sha256": "c2e066857cc7b19e5d340d2bba7513da892e1ceda5c5f78e8aecb37c64e5fa38"
-    },
-    {
-      "path": "core/internal/outbound/direct/c50_packet_source_test.go",
-      "bytes": 3810,
-      "mode": "0644",
-      "sha256": "284bc8dc88476c6bd2461022efb95af3c138196af811b0a9834b86b4ff55e626"
     },
     {
       "path": "core/internal/outbound/direct/client_egress_test.go",
@@ -8724,22 +8496,22 @@
       "sha256": "efa76456745e6ed78bafc21a204db6d504fa4c0608cbf79566369bcf3fdfbb2a"
     },
     {
+      "path": "core/internal/outbound/direct/direct_tcp_test.go",
+      "bytes": 1968,
+      "mode": "0644",
+      "sha256": "e3aa18f7a17581cf104307415ce3c323464e161825840ebab3054a719abda4fb"
+    },
+    {
       "path": "core/internal/outbound/direct/direct_test.go",
       "bytes": 5002,
       "mode": "0644",
       "sha256": "002390044cc3fea1c7113d70f55c400d405c326967128a987d75d966ee38c7a9"
     },
     {
-      "path": "core/internal/outbound/direct/m2_eif_test.go",
-      "bytes": 4837,
+      "path": "core/internal/outbound/direct/direct_udp_eif_test.go",
+      "bytes": 8514,
       "mode": "0644",
-      "sha256": "b787fffd97e960211719b31d1b1f9ae831647ce2a6af20a1fde3072069ec910c"
-    },
-    {
-      "path": "core/internal/outbound/direct/round2_observer_test.go",
-      "bytes": 1242,
-      "mode": "0644",
-      "sha256": "ef6ae00cbb488198759feccfaac78a144f3ba5b285d9bac198cb4e80f7a085b6"
+      "sha256": "54d0ebc7ac9c22a21d51942520aec071312b242aa744a9ea980d186c00fdfaa2"
     },
     {
       "path": "core/internal/outbound/direct/subscription_target_test.go",
@@ -8761,21 +8533,21 @@
     },
     {
       "path": "core/internal/outbound/group/auto.go",
-      "bytes": 34901,
+      "bytes": 34918,
       "mode": "0644",
-      "sha256": "068b596927ff8cd9d79b2e408299048f908a11c5c49dc65ea39c590e617984a2"
+      "sha256": "53e6983b3dd24f0023747caa5981776a35a083c96d88c79294921fb5631d325f"
+    },
+    {
+      "path": "core/internal/outbound/group/auto_test.go",
+      "bytes": 11966,
+      "mode": "0644",
+      "sha256": "635498d462574d4f5d6e16513e02bc3318fbc4621f35bc13fb297e131e9596cc"
     },
     {
       "path": "core/internal/outbound/group/benchmark_v2_test.go",
       "bytes": 1079,
       "mode": "0644",
       "sha256": "d99478f69e8e83f2dfd66899cf6f6d73cf215649e12fb9a40721601879383a1d"
-    },
-    {
-      "path": "core/internal/outbound/group/client_round_test.go",
-      "bytes": 4077,
-      "mode": "0644",
-      "sha256": "08df3fbbfb1301f94500d9ed5d2200574b55021ac0c432d389806269f9723ba3"
     },
     {
       "path": "core/internal/outbound/group/client_test.go",
@@ -8785,9 +8557,9 @@
     },
     {
       "path": "core/internal/outbound/group/common_test.go",
-      "bytes": 22353,
+      "bytes": 22351,
       "mode": "0644",
-      "sha256": "4626172bcaf2ddc0b59c52984b2c1ecf13f79b451735c7a83f9943a12b71aa88"
+      "sha256": "f6b1395b86275ca35ad89f4e253f541b8430ca44c6103bfb003b80b2c808885a"
     },
     {
       "path": "core/internal/outbound/group/credential_v2_test.go",
@@ -8803,9 +8575,9 @@
     },
     {
       "path": "core/internal/outbound/group/empty.go",
-      "bytes": 1588,
+      "bytes": 1617,
       "mode": "0644",
-      "sha256": "e23d54d81be6aedfef4f7141a69d53fc12dab88ecf4bb4ad0c7ccdc0dc0f4c77"
+      "sha256": "ab994f33913ec854aaa4d2f753f9ac996cfacd71892465e518a59e05016fcd4b"
     },
     {
       "path": "core/internal/outbound/group/fallback_test.go",
@@ -8856,12 +8628,6 @@
       "sha256": "e6d3d00d5cc4120a6f89aefeb394aa6dc8e323b58619401a8356cbaf959fb901"
     },
     {
-      "path": "core/internal/outbound/group/legacy_smart_test.go",
-      "bytes": 4204,
-      "mode": "0644",
-      "sha256": "5082e5a4034e3ed4a460a6245272267b56d0613e30a8bda7c619301c7fd7f2be"
-    },
-    {
       "path": "core/internal/outbound/group/observe.go",
       "bytes": 5792,
       "mode": "0644",
@@ -8875,9 +8641,9 @@
     },
     {
       "path": "core/internal/outbound/group/preview.go",
-      "bytes": 1612,
+      "bytes": 3490,
       "mode": "0644",
-      "sha256": "aa32b3e8eef340c7c0439d7aeb485ca9064c27f218b1714f2289194d2bf01d47"
+      "sha256": "a2d04dcb916d962e469e7fdafefc7d206d97a850777c6b0bf2ff2e26289a3381"
     },
     {
       "path": "core/internal/outbound/group/probe.go",
@@ -8932,30 +8698,6 @@
       "bytes": 644,
       "mode": "0644",
       "sha256": "4695e7e73fbe9c3c935f02267ddf4e058067793d3a89c82837f15f30985fd73f"
-    },
-    {
-      "path": "core/internal/outbound/group/round10_test.go",
-      "bytes": 4020,
-      "mode": "0644",
-      "sha256": "49d61d07cc3fbc3691c645b88e8f935862a9e4e30f793105c735b1ce74734dd0"
-    },
-    {
-      "path": "core/internal/outbound/group/round11_test.go",
-      "bytes": 3962,
-      "mode": "0644",
-      "sha256": "6e625f8946ba623e837f4564adae71c32d215c763de8d0a11e824d7aa419c98c"
-    },
-    {
-      "path": "core/internal/outbound/group/round2_next_test.go",
-      "bytes": 4185,
-      "mode": "0644",
-      "sha256": "0f26c4ff8f754af0e2b570d5ef763fea9e7d9c18ebf35373313ad070a00c60bd"
-    },
-    {
-      "path": "core/internal/outbound/group/round9_test.go",
-      "bytes": 3586,
-      "mode": "0644",
-      "sha256": "c680eb9b73e1a6ff88ee34bb62418fe21f5370d40eb1fec5b1043b9eb948639b"
     },
     {
       "path": "core/internal/outbound/group/select.go",
@@ -9013,9 +8755,9 @@
     },
     {
       "path": "core/internal/outbound/group/smart_test.go",
-      "bytes": 6352,
+      "bytes": 17981,
       "mode": "0644",
-      "sha256": "5c620178eaa614ec32d28685aa2d980627f7f536d598453d0b2fc9e895e7a6f0"
+      "sha256": "8aaa547134359504affdff0c4290acb01e5f5a6b205ee5b34e5bdb02ca22502f"
     },
     {
       "path": "core/internal/outbound/group/source_group_test.go",
@@ -9067,9 +8809,9 @@
     },
     {
       "path": "core/internal/outbound/outbound.go",
-      "bytes": 9699,
+      "bytes": 9741,
       "mode": "0644",
-      "sha256": "274dd1595cc145bad1a06a029f1081acdac770061f8980ba8c5f8a98170b714a"
+      "sha256": "1f379d54ad86f3ddc025906400b57f6a45008520b6c9a2a26ccc7c5b32aed9d7"
     },
     {
       "path": "core/internal/outbound/public_target.go",
@@ -9079,9 +8821,9 @@
     },
     {
       "path": "core/internal/outbound/socks5/socks5.go",
-      "bytes": 11450,
+      "bytes": 11868,
       "mode": "0644",
-      "sha256": "eebe518825e46e701ca883f8519d9aa6e86f7bd44ea1091edfd020893cb3cc99"
+      "sha256": "9ff3425482485355a9f737e0df30438169b3fc6b74342f2c0655a554f018a631"
     },
     {
       "path": "core/internal/outbound/socks5/socks5_test.go",
@@ -9091,9 +8833,9 @@
     },
     {
       "path": "core/internal/outbound/ss/obfs_http.go",
-      "bytes": 2766,
+      "bytes": 2800,
       "mode": "0644",
-      "sha256": "65e5e8670e534f9f5759077dad09a727ed645257fcc28a03bc52ad82f4b2d13e"
+      "sha256": "bb4256c3268fd79a651ab4652e2882ec3bd5af5aa17f781506cd5491f63a1cff"
     },
     {
       "path": "core/internal/outbound/ss/obfs_http_test.go",
@@ -9121,9 +8863,9 @@
     },
     {
       "path": "core/internal/outbound/ss/tcp.go",
-      "bytes": 13016,
+      "bytes": 13043,
       "mode": "0644",
-      "sha256": "130aa789e40fa38e95b5cbc360bf78f3d3cfca4d3b78ac407606cb464f833227"
+      "sha256": "fa3005612481e5c01c1b59988d695f87a8898bd2648ebe6e21b34a4b0ac21645"
     },
     {
       "path": "core/internal/outbound/ss/udp.go",
@@ -9133,9 +8875,9 @@
     },
     {
       "path": "core/internal/outbound/ss/verify_test.go",
-      "bytes": 40731,
+      "bytes": 40714,
       "mode": "0644",
-      "sha256": "f6f15483826b854cedaad3ff92ed2949d57dd3096fc7b7382607996d596eb6d0"
+      "sha256": "96121ea97083057dcd9e4ffcc69a23b55e5a255562711f927ba3949d6fbd3a87"
     },
     {
       "path": "core/internal/outbound/ss/window_test.go",
@@ -9145,9 +8887,9 @@
     },
     {
       "path": "core/internal/outbound/trojan/trojan.go",
-      "bytes": 10027,
+      "bytes": 10149,
       "mode": "0644",
-      "sha256": "f72e7d7bfebdca4dd9c00d41125d7f80795da7486e8080edbd7f76749ae58ec9"
+      "sha256": "2228abb807df39e3d6582c773165c2c82469916ea89cf88f3f40bbdf489391c6"
     },
     {
       "path": "core/internal/outbound/trojan/trojan_test.go",
@@ -9169,33 +8911,15 @@
     },
     {
       "path": "core/internal/procattr/authority_record_test.go",
-      "bytes": 1751,
+      "bytes": 1878,
       "mode": "0644",
-      "sha256": "7e172b6e3615a057f883b622e10016e6b38f692a431dd417dae07452e7191c8a"
+      "sha256": "0c4f4860ea7c2ce10a060469c65fb1e80197154bbf23d652b3227ba24b005cde"
     },
     {
       "path": "core/internal/procattr/authority_windows.go",
       "bytes": 2941,
       "mode": "0644",
       "sha256": "a5feefe610631026163f7d29a6258f1f8708db112e668ca6182d984613abdfdc"
-    },
-    {
-      "path": "core/internal/procattr/c50_retirement_json_windows_test.go",
-      "bytes": 3469,
-      "mode": "0644",
-      "sha256": "a783ee5dada099bcb433fc207726066bd7567ba908cda21bb1a904f3ea82c620"
-    },
-    {
-      "path": "core/internal/procattr/c50_retirement_test.go",
-      "bytes": 703,
-      "mode": "0644",
-      "sha256": "2ef226c3389e525247b152fce6ff09640ae33f79646063151884dee91299a647"
-    },
-    {
-      "path": "core/internal/procattr/c50_tuple_test.go",
-      "bytes": 607,
-      "mode": "0644",
-      "sha256": "e21c0a7f0a282867eaad0d46aaa19d147ae3f9d7cb3b052b1f0d5b5ac3290b9f"
     },
     {
       "path": "core/internal/procattr/cause.go",
@@ -9241,21 +8965,21 @@
     },
     {
       "path": "core/internal/procattr/lookup_test.go",
-      "bytes": 6317,
+      "bytes": 15369,
       "mode": "0644",
-      "sha256": "71541fc314d280e2fde8a0c37c1f89bb4e0b30345a0916b4187d81cd8d2656ad"
+      "sha256": "a36d604f56b6a72ebf75b8eaaa6031b472665790efe88a7fb8b576862f1a5c00"
     },
     {
       "path": "core/internal/procattr/lookup_windows.go",
-      "bytes": 9519,
+      "bytes": 9518,
       "mode": "0644",
-      "sha256": "db199102900be931915c6845b89df2a0ca2179d259e782c86d00c419946d8af2"
+      "sha256": "e61764048551ff6098d022079be14c5d0d36a283ad02f98cba7aad73c33dc151"
     },
     {
-      "path": "core/internal/procattr/round2_origin_test.go",
-      "bytes": 737,
+      "path": "core/internal/procattr/lookup_windows_test.go",
+      "bytes": 3489,
       "mode": "0644",
-      "sha256": "dd5741b71bd9f7e68b8ac086bf406903913426870387de94c15ba887d47b55d3"
+      "sha256": "7e389b4956c2b535b4bbb41d002fb9d8359223811f41d731277a7bf38875b9f5"
     },
     {
       "path": "core/internal/procattr/service_windows.go",
@@ -9274,18 +8998,6 @@
       "bytes": 326,
       "mode": "0644",
       "sha256": "a0d5d8a09c0eea7d382aa7de91d7acd3d08b800fe9b68b75d20d48d66ecc9c02"
-    },
-    {
-      "path": "core/internal/procattr/stage4_budget_test.go",
-      "bytes": 2815,
-      "mode": "0644",
-      "sha256": "e7d008c2cb87e44fcaa1749b6442f5d6617f851f8472529f5e47d8cf98383c02"
-    },
-    {
-      "path": "core/internal/procattr/stage4_owner_test.go",
-      "bytes": 4462,
-      "mode": "0644",
-      "sha256": "12d12d6c87a6c3ff894b4c36b293e7ce036bcff5bb35293687fd5f0dc8664509"
     },
     {
       "path": "core/internal/procattr/strict_json_windows.go",
@@ -9355,15 +9067,9 @@
     },
     {
       "path": "core/internal/provider/provider_test.go",
-      "bytes": 8262,
+      "bytes": 9807,
       "mode": "0644",
-      "sha256": "4c98d37dc00be70789ac3f171e3259a73c94d946320798445553b94f8a35f6fa"
-    },
-    {
-      "path": "core/internal/provider/round11_test.go",
-      "bytes": 1586,
-      "mode": "0644",
-      "sha256": "98103d5db58fccde387dafcbf37454c760f4c6745bf80f057da87ff67f78d3ed"
+      "sha256": "546f1378a56e52a974638848c923dd5b8104f24e3d7671e9fc9f921d5b1b0fd1"
     },
     {
       "path": "core/internal/provider/singbox.go",
@@ -9487,9 +9193,9 @@
     },
     {
       "path": "core/internal/route/mmap_index.go",
-      "bytes": 23377,
+      "bytes": 23376,
       "mode": "0644",
-      "sha256": "d284af0d80ca3b810e196cca103f0762853230a31c08482e173e9fa5983c689a"
+      "sha256": "1ddf623089ca79b86e65fe69068b32bcdd728887ec50a3244881d67480eb978f"
     },
     {
       "path": "core/internal/route/mmap_index_test.go",
@@ -9763,9 +9469,9 @@
     },
     {
       "path": "core/internal/ss/address.go",
-      "bytes": 2601,
+      "bytes": 2709,
       "mode": "0644",
-      "sha256": "7028e691d9116a3e6dac81e02056bd9e23b545e863bb2de0d019482d09cf3256"
+      "sha256": "488c8999d3e4b2b5cb52ddb6c838fd6f812698f302d95aff2e7818b655adc90f"
     },
     {
       "path": "core/internal/ss/compact_budget_paths_test.go",
@@ -9775,9 +9481,9 @@
     },
     {
       "path": "core/internal/ss/compact_salt.go",
-      "bytes": 5252,
+      "bytes": 7304,
       "mode": "0644",
-      "sha256": "562443abe923afe2ddef7ae263551b70c35cf99efcc8b9bd269f6b9f05bc7d2c"
+      "sha256": "59fb6beb1e18333d387fd9c6b4f7125e8f3c1404acf7d2359ac2cae697aea494"
     },
     {
       "path": "core/internal/ss/compact_salt_test.go",
@@ -9895,15 +9601,15 @@
     },
     {
       "path": "core/internal/ss/udp.go",
-      "bytes": 11075,
+      "bytes": 12425,
       "mode": "0644",
-      "sha256": "3a9fa3e7670b159e00792c4d7cc379eeaa7f7a4ec8c259111517b8a92d5e5d62"
+      "sha256": "c31b79c6af1e534b5bb89a2d90e6f3d924a7614c00b85ed1fe6ca078659036c0"
     },
     {
       "path": "core/internal/ss/udp2017_alloc_test.go",
-      "bytes": 3039,
+      "bytes": 3198,
       "mode": "0644",
-      "sha256": "8608554a92a39949b24d5b1dc18b6fa16973847c8f0e48fdd8bfca2ae082688d"
+      "sha256": "33b4f02afb03c212d132fa88ae838409fbb5b791af5327d3858de397073f0a73"
     },
     {
       "path": "core/internal/ss/udp2017_subkey.go",
@@ -9949,21 +9655,21 @@
     },
     {
       "path": "core/internal/stats/lock_flock.go",
-      "bytes": 1090,
+      "bytes": 1114,
       "mode": "0644",
-      "sha256": "7cf296abb1d20e457e51a6b47ec6c25d909b23378537373eb9ede98c12458147"
+      "sha256": "d490a4d9d9f9d0a7014c0d36368f4ef8b5a95e34be64f2a70e96c17e1fc6282d"
     },
     {
       "path": "core/internal/stats/lock_other.go",
-      "bytes": 1069,
+      "bytes": 1087,
       "mode": "0644",
-      "sha256": "02460b47622111ab297d8d07a5900a4a63bc63873612a2cf44905421e70a798b"
+      "sha256": "1e0f0cb0961d2fb2d909a253401002623373d8366f8fa3be49e1128044698f4d"
     },
     {
       "path": "core/internal/stats/stats.go",
-      "bytes": 11951,
+      "bytes": 12120,
       "mode": "0644",
-      "sha256": "4351cfaf72697369f0fc3fd76a4e7b2e4206ea3af63e6cc96707ac6fb3a524b6"
+      "sha256": "89df97cabd5543b61560e580076fec3d4f9a17584e497473dbc1534e3d870fc2"
     },
     {
       "path": "core/internal/stats/stats_test.go",
@@ -9997,21 +9703,21 @@
     },
     {
       "path": "core/internal/tunplatform/device_copy_windows_test.go",
-      "bytes": 975,
+      "bytes": 889,
       "mode": "0644",
-      "sha256": "087d99aac6f677590774200f93df18b0ad916cf4ede8ae900d31ad169f1cadcd"
+      "sha256": "862c4bba1e12f96448a7b09ff3022788c8ef070ece15eebdab32955c001effab"
     },
     {
       "path": "core/internal/tunplatform/device_windows.go",
-      "bytes": 16736,
+      "bytes": 16319,
       "mode": "0644",
-      "sha256": "b4919b57e800afae4b1540585b1b65b3fbd466109b1337c41c8141e3b4d93768"
+      "sha256": "ec6403710814c3b4a2390257a01f334268ce6fd4358187d902542a7732f45c8c"
     },
     {
       "path": "core/internal/tunplatform/diagnostic.go",
-      "bytes": 8064,
+      "bytes": 8146,
       "mode": "0644",
-      "sha256": "6a418b3a7589e970197956a7e1c52274b73ab25c80c0b333d812a320821de204"
+      "sha256": "cee6ce47fbdafccdfefef97250cc29cfca8ce8dd0b1ef037ead8a0b931e8b16d"
     },
     {
       "path": "core/internal/tunplatform/diagnostic_test.go",
@@ -10033,9 +9739,9 @@
     },
     {
       "path": "core/internal/tunplatform/manager.go",
-      "bytes": 21349,
+      "bytes": 21343,
       "mode": "0644",
-      "sha256": "f92f931f0c4b4e3604bb59dffe17cfeab64a4c9df95b0e9f5786de24868e7cc0"
+      "sha256": "94e3159a44849b12a31ba122456257f6979df782207aa75d105ec1a24963c82e"
     },
     {
       "path": "core/internal/tunplatform/manager_test.go",
@@ -10045,9 +9751,9 @@
     },
     {
       "path": "core/internal/tunplatform/netapi_windows.go",
-      "bytes": 12136,
+      "bytes": 14073,
       "mode": "0644",
-      "sha256": "ab598f1a29307d020d964165358dc9ef9c158d2dd0b67cd05cb09cddeda646aa"
+      "sha256": "a0e238b894a34ef3fbbe4f71d3fbd8b1f3a58c765b3b7a6e22f86f0c5ad8d3bc"
     },
     {
       "path": "core/internal/tunplatform/physical_lifecycle_test.go",
@@ -10063,9 +9769,9 @@
     },
     {
       "path": "core/internal/tunplatform/physical_windows.go",
-      "bytes": 15990,
+      "bytes": 17340,
       "mode": "0644",
-      "sha256": "65fb88e69038e87786e6c13cc656a7441816f8cc5c0cd48ba8ca5fce1c40e73d"
+      "sha256": "39545ea1a675f9dfcfe98338387cd07fb25da4a26464304858eb3f871278c520"
     },
     {
       "path": "core/internal/tunplatform/platform_other.go",
@@ -10092,6 +9798,12 @@
       "sha256": "796abbf6d0258a01321f88f72c1d712417acdd75342510f0796f7c567b6f05e5"
     },
     {
+      "path": "core/internal/tunstack/dataplane_regression_test.go",
+      "bytes": 5222,
+      "mode": "0644",
+      "sha256": "8b3f58302919817c6583a664b393a149254068e027d8e7b438d088218bd73d87"
+    },
+    {
       "path": "core/internal/tunstack/extreme_tun_test.go",
       "bytes": 10736,
       "mode": "0644",
@@ -10105,27 +9817,27 @@
     },
     {
       "path": "core/internal/tunstack/ip.go",
-      "bytes": 13450,
+      "bytes": 15441,
       "mode": "0644",
-      "sha256": "10f7edc1945990b0b8295649bfb07528338b4b0932bd8356f1167817858d41ce"
+      "sha256": "a4640cfdd457ade972ca694212baf234d35dcdfc481e23e1ef856b77bf721e0d"
     },
     {
       "path": "core/internal/tunstack/link.go",
-      "bytes": 3668,
+      "bytes": 3666,
       "mode": "0644",
-      "sha256": "5264f26e67469bf89dd40092a55c74390a92fb777fb2fd435a7c7063dae4bc1b"
+      "sha256": "28bdd8f638f753e4ae69e23d5fa586923759d1ef1bd0087d446f11917490c84a"
     },
     {
       "path": "core/internal/tunstack/link_test.go",
-      "bytes": 7103,
+      "bytes": 7115,
       "mode": "0644",
-      "sha256": "bac0c05bfc62653b78499ccf5338411844706e04c07bf6ad2802222868061807"
+      "sha256": "03eda69d69f5e906ecbd521886fe1c2cd02afa739f9c53d6259835b2336fba8f"
     },
     {
-      "path": "core/internal/tunstack/m2_udp_test.go",
-      "bytes": 6773,
+      "path": "core/internal/tunstack/packet_test.go",
+      "bytes": 1943,
       "mode": "0644",
-      "sha256": "f38c07c1f26e6346a8da9ece08f08d4cef7a3a2f2c1bf80434d2ec218bc7b050"
+      "sha256": "9ea1f9d84c557ba39a384fe27a361383a84d8d7358eb63cbdc83e0d70fc387b2"
     },
     {
       "path": "core/internal/tunstack/release_icmp_test.go",
@@ -10135,9 +9847,9 @@
     },
     {
       "path": "core/internal/tunstack/runtime.go",
-      "bytes": 8625,
+      "bytes": 8734,
       "mode": "0644",
-      "sha256": "c4f0a67b0edd08e0df52f8fcd3a18380cc728864350714668ea96c37cf0ff2bc"
+      "sha256": "3b171728ba0e56a6a52eb077aa3e98f03bafd463012df2a858a369df745cfc0c"
     },
     {
       "path": "core/internal/tunstack/runtime_test.go",
@@ -10146,16 +9858,10 @@
       "sha256": "52a6cc31126a7996598769e08b262038d8dc0e783199e85452e8a6812c9d4b35"
     },
     {
-      "path": "core/internal/tunstack/stage4_packet_test.go",
-      "bytes": 1943,
-      "mode": "0644",
-      "sha256": "9ea1f9d84c557ba39a384fe27a361383a84d8d7358eb63cbdc83e0d70fc387b2"
-    },
-    {
       "path": "core/internal/tunstack/tcp_system.go",
-      "bytes": 12465,
+      "bytes": 12458,
       "mode": "0644",
-      "sha256": "c552f022b313bc3f03aa65502290f6965c208a9f9af808fd112e1babf14c6ac1"
+      "sha256": "a2d3fc15899a61833dcdac533404f288f28b9887d19761c1edf6759c2b465887"
     },
     {
       "path": "core/internal/tunstack/tcp_test_dial.go",
@@ -10165,9 +9871,15 @@
     },
     {
       "path": "core/internal/tunstack/udp_endpoint.go",
-      "bytes": 7824,
+      "bytes": 9517,
       "mode": "0644",
-      "sha256": "960a2fc3394f28fef9ef5c10045f0a627ebb121c7d17d990a2e07e1a48fdf654"
+      "sha256": "5fe13fd836cd554d9ab802ebaca771855dda00b0a26a3d8db99eb4193d6c9cee"
+    },
+    {
+      "path": "core/internal/tunstack/udp_endpoint_test.go",
+      "bytes": 6772,
+      "mode": "0644",
+      "sha256": "3eb4bf652b1ad32475bc1d063fa55d7c60a36dd613b6e4af824d95d89019dfc4"
     },
     {
       "path": "core/internal/tunstack/udp_fence_test.go",
@@ -10188,22 +9900,28 @@
       "sha256": "7db4af51a2fb8da037a879878ef0dbce4a3858bab7d6e36d701358863ce23bb8"
     },
     {
-      "path": "core/internal/udpmmsg/mmsg_linux.go",
-      "bytes": 11500,
+      "path": "core/internal/udpmmsg/mmsg_common_test.go",
+      "bytes": 2090,
       "mode": "0644",
-      "sha256": "59cfd2573de00a6a4711360946964f21c1325de272b44f345ba7d42be511b771"
+      "sha256": "76f3a9a7b4b13ff9233b37762340482e528516286b915369c108433de3d532d0"
+    },
+    {
+      "path": "core/internal/udpmmsg/mmsg_linux.go",
+      "bytes": 14614,
+      "mode": "0644",
+      "sha256": "c77c68b7b05d49c11456652bb1e553ac81aa032944f7ba0432c3455737578553"
     },
     {
       "path": "core/internal/udpmmsg/mmsg_other.go",
-      "bytes": 1155,
+      "bytes": 1576,
       "mode": "0644",
-      "sha256": "db5d88762d41e71c841013fbf61ff9a817393b4ab889d4b22b76889e0dde174c"
+      "sha256": "fc0e9b8662ca0f4196715f083f22c6b8783a94f74ef4d825a1019c49fa56f0a2"
     },
     {
       "path": "core/internal/udpmmsg/mmsg_test.go",
-      "bytes": 1311,
+      "bytes": 10460,
       "mode": "0644",
-      "sha256": "1d24f5877d2bcb996bb35b31f624fdcc3712a4cdd73d572bea591b1918ddf3e6"
+      "sha256": "417b435395d99fd9d165dedba212560686501bc3f44f91b84a01536867ebc1d2"
     },
     {
       "path": "core/internal/userio/io.go",
@@ -10213,9 +9931,9 @@
     },
     {
       "path": "core/internal/userio/io_other.go",
-      "bytes": 1234,
+      "bytes": 1258,
       "mode": "0644",
-      "sha256": "dee8791d142bd34f10a61d637ec09ce90445c2f0aab76ca2c91d3a8a0dbdf8c0"
+      "sha256": "bd0be4a287bc451fcb36be92b91246b2c74ade9c3fae68c27594ee4ca27803b6"
     },
     {
       "path": "core/internal/userio/io_test.go",
@@ -10225,9 +9943,9 @@
     },
     {
       "path": "core/internal/userio/io_windows.go",
-      "bytes": 13996,
+      "bytes": 14241,
       "mode": "0644",
-      "sha256": "b4c1ad7c1617a91edb84d4b66d4d166f0f14ed09a36934c1faddc9f8a0046570"
+      "sha256": "d57084a25355eeb60603406b584da569e2b4c694de9f3b391c7541ac3dd2b989"
     },
     {
       "path": "core/release-title.txt",
@@ -10617,7 +10335,7 @@
       "path": "release-config.json",
       "bytes": 262,
       "mode": "0644",
-      "sha256": "7f24fb2fca9b17a9d3a8bfdab4b948ad9d49f42b39a4e89dffebc4ef7f304e30"
+      "sha256": "678393004ac20dc22b3d2952e5e287be69869824d5038f490e23997ed227d772"
     },
     {
       "path": "ui-evidence/dns-cache-browser-results.json",

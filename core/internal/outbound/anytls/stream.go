@@ -17,10 +17,12 @@ const (
 	// reader stops reading the TLS connection until the application reads:
 	// plain TCP backpressure on the stream's own (exclusive) session.
 	maxStreamBuffer = 1024 << 10
-	// Align per-request write chunk with the 64 KiB relay buffer so a 65536-byte
-	// write is framed in a single writeData request instead of splitting into
-	// 65535 + 1 lockstep requests; each PSH frame remains bounded by maxFrame (65535).
-	writeChunk = 64 << 10
+	tlsMaxPlaintext = 16384
+	// Align large PSH frames with 2 full TLS 1.3 records (2*16384 - 7 = 32761) so
+	// each frame + 7B header is 32768B (zero 7-byte TLS tail record), and align
+	// writeChunk (2 * 32761 = 65522) so 2 frames + headers = 65536B (4 full TLS records).
+	tlsAlignedFrame = 2*tlsMaxPlaintext - headerSize
+	writeChunk      = 2 * tlsAlignedFrame
 
 	// Minimum PSH payload size eligible for the bounded receive buffer pool.
 	// Smaller frames use exact-size allocations so tiny frames never pin larger
@@ -187,11 +189,17 @@ type stream struct {
 	sink       *directSink // non-nil while WriteTo is directly serviced by recvLoop
 	sinkActive bool        // true while recvLoop is inside sink.w.Write
 	sinkIdle   chan struct{}
+	dsink      directSink
+	dsinkDone  chan struct{}
 
-	rch     chan struct{} // capacity 1: data/state for readers and await
-	space   chan struct{} // capacity 1: buffer drained
-	closing chan struct{} // closed by local Close
-	wabort  chan struct{} // closed on async SYNACK refusal to wake blocked writes
+	wreq     writeReq
+	wdone    chan error
+	wreqBusy bool
+
+	rch        chan struct{} // capacity 1: data/state for readers and await
+	space      chan struct{} // capacity 1: buffer drained
+	closing    chan struct{} // closed by local Close
+	wabort     chan struct{} // closed on async SYNACK refusal to wake blocked writes
 	wabortOnce sync.Once
 
 	rd, wd deadline
@@ -199,7 +207,16 @@ type stream struct {
 
 func newStream(s *session, id uint32) *stream {
 	activeStreams.Add(1)
-	st := &stream{s: s, id: id, rch: make(chan struct{}, 1), space: make(chan struct{}, 1), closing: make(chan struct{}), wabort: make(chan struct{})}
+	st := &stream{
+		s:         s,
+		id:        id,
+		dsinkDone: make(chan struct{}, 1),
+		wdone:     make(chan error, 1),
+		rch:       make(chan struct{}, 1),
+		space:     make(chan struct{}, 1),
+		closing:   make(chan struct{}),
+		wabort:    make(chan struct{}),
+	}
 	st.rd.init()
 	st.wd.init()
 	return st
@@ -660,7 +677,7 @@ func (st *stream) releaseDirectSink(writeErr error) {
 	if writeErr != nil && sk != nil {
 		sk.err = writeErr
 		st.sink = nil
-		close(sk.done)
+		signal(sk.done)
 	}
 	st.mu.Unlock()
 }
@@ -669,7 +686,7 @@ func (st *stream) wakeDirectSinkLocked() {
 	if st.sink != nil {
 		sk := st.sink
 		st.sink = nil
-		close(sk.done)
+		signal(sk.done)
 	}
 }
 
@@ -789,7 +806,12 @@ func (st *stream) WriteTo(w io.Writer) (int64, error) {
 			return total, e
 		}
 		if st.s.rawWrite != nil && !st.rd.active() {
-			sk := &directSink{w: w, done: make(chan struct{})}
+			select {
+			case <-st.dsinkDone:
+			default:
+			}
+			st.dsink = directSink{w: w, done: st.dsinkDone}
+			sk := &st.dsink
 			st.sink = sk
 			st.mu.Unlock()
 			select {
@@ -812,6 +834,7 @@ func (st *stream) WriteTo(w io.Writer) (int64, error) {
 			}
 			total += sk.written
 			writeErr := sk.err
+			sk.w = nil
 			st.mu.Unlock()
 			if writeErr != nil {
 				return total, writeErr
@@ -856,6 +879,9 @@ func (st *stream) writeState() error {
 	if st.werr != nil {
 		return st.werr
 	}
+	if st.s.failed.Load() {
+		return st.s.cause()
+	}
 	if st.wd.expired() {
 		return os.ErrDeadlineExceeded
 	}
@@ -869,27 +895,22 @@ func (st *stream) writeData(data []byte) error {
 		return e
 	}
 	s := st.s
-	frames := (len(data) + maxFrame - 1) / maxFrame
+	frames := (len(data) + tlsAlignedFrame - 1) / tlsAlignedFrame
 	need := len(data) + headerSize*max(frames, 1)
 	if cap(st.wbuf) < need {
 		st.wbuf = make([]byte, 0, need)
 	}
 	wire := st.wbuf[:0]
-	if len(data) == 64<<10 {
-		// Split an exact 64 KiB relay write into two 32 KiB PSH frames rather
-		// than 65535 + 1 so neither frame is a 1-byte micro-frame while total
-		// wire overhead (2 * 7B headers) is identical.
-		const half = 32 << 10
-		wire = appendFrame(wire, cmdPSH, st.id, data[:half])
-		wire = appendFrame(wire, cmdPSH, st.id, data[half:])
-	} else {
-		for len(data) > 0 {
-			n := min(len(data), maxFrame)
-			wire = appendFrame(wire, cmdPSH, st.id, data[:n])
-			data = data[n:]
-		}
+	for len(data) > 0 {
+		n := min(len(data), tlsAlignedFrame)
+		wire = appendFrame(wire, cmdPSH, st.id, data[:n])
+		data = data[n:]
 	}
-	if !st.wd.active() {
+	_, hasDL, dlExpired := st.wd.snapshot()
+	if dlExpired {
+		return os.ErrDeadlineExceeded
+	}
+	if !hasDL {
 		ok, err := s.tryAcquireInlineWrite()
 		if err != nil {
 			return err
@@ -899,22 +920,48 @@ func (st *stream) writeData(data []byte) error {
 				s.releaseInlineWrite()
 				return e
 			}
-			if st.wd.active() {
+			_, hasDL2, dlExpired2 := st.wd.snapshot()
+			if dlExpired2 {
 				s.releaseInlineWrite()
-			} else {
+				return os.ErrDeadlineExceeded
+			}
+			if !hasDL2 {
 				return s.writeInline(wire)
 			}
+			s.releaseInlineWrite()
 		}
 	}
-	req := &writeReq{wire: wire, done: make(chan error, 1)}
+	var req *writeReq
+	reusedReq := false
+	if !st.wreqBusy {
+		select {
+		case <-st.wdone:
+		default:
+		}
+		st.wreq = writeReq{wire: wire, done: st.wdone}
+		req = &st.wreq
+		reusedReq = true
+	} else {
+		req = &writeReq{wire: wire, done: make(chan error, 1)}
+	}
 	if e := s.enqueue(req); e != nil {
+		if reusedReq {
+			st.wreq.wire = nil
+		}
 		return e
 	}
 	var stop error
 	select {
 	case e := <-req.done:
+		if reusedReq {
+			st.wreq.wire = nil
+		}
 		return e
 	case <-s.done:
+		if reusedReq {
+			st.wreqBusy = true
+		}
+		st.wbuf = nil
 		return s.cause()
 	case <-st.wd.done():
 		stop = os.ErrDeadlineExceeded
@@ -924,13 +971,23 @@ func (st *stream) writeData(data []byte) error {
 		stop = errStreamRefused
 	}
 	if s.cancel(req) {
+		if reusedReq {
+			st.wreq.wire = nil
+		}
 		return stop
 	}
 	// Already on the wire path: report the real outcome.
 	select {
 	case e := <-req.done:
+		if reusedReq {
+			st.wreq.wire = nil
+		}
 		return e
 	case <-s.done:
+		if reusedReq {
+			st.wreqBusy = true
+		}
+		st.wbuf = nil
 		return s.cause()
 	}
 }
@@ -988,6 +1045,7 @@ type deadline struct {
 	mu      sync.Mutex
 	ch      chan struct{}
 	timer   *time.Timer
+	target  time.Time
 	gen     uint64
 	hasSet  bool
 	isEnded bool
@@ -1009,9 +1067,11 @@ func (d *deadline) set(t time.Time) {
 	}
 	if t.IsZero() {
 		d.hasSet = false
+		d.target = time.Time{}
 		return
 	}
 	d.hasSet = true
+	d.target = t
 	wait := time.Until(t)
 	if wait <= 0 {
 		close(d.ch)
@@ -1055,6 +1115,13 @@ func (d *deadline) active() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.hasSet
+}
+
+func (d *deadline) snapshot() (target time.Time, hasSet bool, expired bool) {
+	d.mu.Lock()
+	target, hasSet, expired = d.target, d.hasSet, d.isEnded
+	d.mu.Unlock()
+	return
 }
 
 // RecvPoolBytes returns total bytes currently held in AnyTLS idle receive and

@@ -52,7 +52,7 @@ export function ToolPopover({
 
   const useCard = !!cardRef && !!btnRef;
   const cardPos = useCardAnchor(open && useCard, btnRef ?? dummyBtnRef, cardRef ?? dummyCardRef, width);
-  const [elemPos, setElemPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [elemPos, setElemPos] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
 
   useLayoutEffect(() => {
     if (!open || useCard || !anchorEl) {
@@ -66,24 +66,34 @@ export function ToolPopover({
       }
       const r = anchorEl.getBoundingClientRect();
       const app = getAppRect();
+      const bottomLimit = Math.min(app.bottom, window.innerHeight);
       const w = Math.min(width, Math.max(240, app.width - 28));
       const minLeft = app.left + 12;
       const maxLeft = Math.max(minLeft, app.right - w - 16);
       const left = Math.max(minLeft, Math.min(maxLeft, Math.round(r.left - 120)));
-      const spaceBelow = app.bottom - r.bottom - 12;
+      const measured = popRef.current?.getBoundingClientRect().height;
+      const actualH = measured && measured > 0 ? Math.round(measured) : estHeight;
+      const spaceBelow = bottomLimit - r.bottom - 12;
       const spaceAbove = r.top - app.top - 12;
       const top =
-        spaceBelow >= estHeight || spaceBelow >= spaceAbove
-          ? Math.round(Math.min(app.bottom - estHeight - 12, r.bottom + 8))
-          : Math.round(Math.max(app.top + 12, r.top - estHeight - 8));
+        spaceBelow >= actualH || spaceBelow >= spaceAbove
+          ? Math.round(Math.max(app.top + 12, Math.min(bottomLimit - actualH - 12, r.bottom + 8)))
+          : Math.round(Math.max(app.top + 12, r.top - actualH - 8));
+      const maxHeight = Math.max(160, Math.round(bottomLimit - top - 12));
       setElemPos((prev) =>
-        prev && prev.top === top && prev.left === left && prev.width === w ? prev : { top, left, width: w },
+        prev && prev.top === top && prev.left === left && prev.width === w && prev.maxHeight === maxHeight
+          ? prev
+          : { top, left, width: w, maxHeight },
       );
     };
     update();
+    const raf = window.requestAnimationFrame(update);
     window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  }, [open, useCard, anchorEl, width, estHeight]);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener('resize', update);
+    };
+  }, [open, useCard, anchorEl, width, estHeight, children]);
 
   useEffect(() => {
     if (!open) return;
@@ -94,7 +104,7 @@ export function ToolPopover({
       const t = e.target as Node | null;
       if (!t) return;
       if (popRef.current?.contains(t) || trigger?.contains(t)) return;
-      if (t instanceof Element && t.closest('.kat-pop')) return;
+      if (t instanceof Element && t.closest('.kat-pop:not(.kat-leaving)')) return;
       closeRef.current();
     };
     const onKey = (e: KeyboardEvent) => {
@@ -102,7 +112,7 @@ export function ToolPopover({
         e.key === 'Escape' &&
         !e.defaultPrevented &&
         !e.isComposing &&
-        !document.querySelector('[role="dialog"], [role="alertdialog"], .kat-pop')
+        !document.querySelector('[role="dialog"]:not(.kat-leaving *), [role="alertdialog"]:not(.kat-leaving *), .kat-pop:not(.kat-leaving)')
       ) {
         closeRef.current();
       }
@@ -133,7 +143,7 @@ export function ToolPopover({
       className={'rule-judge-pop' + (className ? ' ' + className : '')}
       role="region"
       aria-label={ariaLabel ?? title}
-      style={{ top: pos.top, left: pos.left, width: pos.width }}
+      style={{ top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxHeight }}
     >
       <div className="rule-judge-head">
         <div className="rule-judge-title-wrap">

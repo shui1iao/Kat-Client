@@ -28,3 +28,10 @@ function conditionKey(r:SourceObject):string{if(r.and)return 'and('+r.and.map(co
 // Same statistics identity as route.RuleKeys, not row position; no inferred hits.
 export function ruleKeys(rules:SourceObject[]){const seen=new Map<string,number>();return rules.map(r=>{const key=conditionKey(r)+'->'+targetOf(r),n=(seen.get(key)??0)+1;seen.set(key,n);return key+(n>1?'#'+n:'');});}
 export function reorderRule<T>(rules:T[],from:number,to:number){if(from<0||to<0||from>=rules.length||to>=rules.length||from===to)return;rules.splice(to,0,rules.splice(from,1)[0]);}
+export function moveItem<T>(list: readonly T[], index: number, delta: -1 | 1): T[] {
+  const next = [...list];
+  const j = index + delta;
+  if (index < 0 || index >= next.length || j < 0 || j >= next.length) return next;
+  [next[index], next[j]] = [next[j], next[index]];
+  return next;
+}

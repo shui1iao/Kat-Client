@@ -59,9 +59,9 @@ func (h *Host) Status() any {
 	if h.starting.Load() {
 		if snap := h.fastSnap.Load(); snap != nil {
 			return map[string]any{
-				"probe_round":        nil,
-				"probe_group_rounds": map[string]any{},
-				"probe_round_result": nil,
+				"probe_round":         nil,
+				"probe_group_rounds":  map[string]any{},
+				"probe_round_result":  nil,
 				"probe_group_results": map[string]probeOutcome{},
 				"runtime": map[string]any{
 					"state":        "starting",

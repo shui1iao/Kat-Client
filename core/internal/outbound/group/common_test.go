@@ -562,7 +562,7 @@ func TestValidate(t *testing.T) {
 		"no name":               {Type: TypeSelect, Members: []string{"a"}},
 		"bad type":              {Name: "g", Type: "load-balance", Members: []string{"a"}},
 		"no members":            {Name: "g", Type: TypeSelect},
-		"1025 members":            {Name: "g", Type: TypeSelect, Members: many},
+		"1025 members":          {Name: "g", Type: TypeSelect, Members: many},
 		"dup member":            {Name: "g", Type: TypeSelect, Members: []string{"a", "a"}},
 		"self member":           {Name: "g", Type: TypeSelect, Members: []string{"g"}},
 		"selected not member":   {Name: "g", Type: TypeSelect, Members: []string{"a"}, Selected: "b"},

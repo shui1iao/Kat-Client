@@ -1,3 +1,6 @@
+import { useCallback } from 'react';
+import { useSeqLogStream } from '../client/seqLogStream';
+import { useVirtualRows } from '../lib/virtualRows';
 import { FlowDetail } from '../components/FlowDetail';
 import { PolicyReveal } from '../components/PolicyReveal';
 import { DomainIcon } from '../components/EntityIcons';
@@ -12,11 +15,10 @@ import { LocalError } from '../components/Editors';
 import { Diagnostics } from '../components/Diagnostics';
 import { core } from '../client/ipc';
 import { normalizeConnLogs, normalizeConnections, normalizeKernelLogs } from '../client/normalize';
-import { errorText } from '../lib/errors';
-import { clockStr, showBytes } from '../client/display';
+import { clockMsStr, clockStr, showBytes } from '../client/display';
 import { mergeConnectionLogs, flowLog } from '../client/logDetails';
 import type { ConnLogEntry, ConnectionsReply, KernelLogEntry } from '../client/types';
-import { useWindowPoll, type Client } from '../client/useClient';
+import { type Client } from '../client/useClient';
 
 const POLL_MS = 1000;
 const KEEP = 2000;
@@ -89,39 +91,28 @@ export function Logs({
 
 function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
   const nodeProtoMap = useNodeProtoMap(c);
-  const [entries, setEntries] = useState<ConnLogEntry[]>([]);
-  const [error, setError] = useState('');
   const [q, setQ] = useState('');
   const [outcome, setOutcome] = useState('all');
-  const [paused, setPaused] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [flows, setFlows] = useState<ConnectionsReply | null>(null);
   const [ruleFlow, setRuleFlow] = useState<FlowRuleSource | null>(null);
-
-  const cursor = useRef(0);
-  const instance = useRef(0);
+  const connLogScrollRef = useRef<HTMLDivElement>(null);
   const readable = c.hasHost && c.status !== null;
 
-  useWindowPoll(readable && !paused, POLL_MS, async () => {
-    try {
-      const [r, f] = await Promise.all([
-        core<unknown>('logs.connections', {
-          instance: instance.current,
-          after: cursor.current,
-          limit: 500,
-        }).then(normalizeConnLogs),
-        core<unknown>('connections.list', { closed_limit: 500 }).then(normalizeConnections),
-      ]);
-      const reset = instance.current !== r.instance;
-      instance.current = r.instance;
-      cursor.current = r.next_seq;
-      setEntries((old) => mergeConnectionLogs(reset ? [] : old, r.entries));
-      if (reset) setExpanded(null);
-      setFlows(f);
-      setError('');
-    } catch (e) {
-      setError(errorText(e));
-    }
+  const pollFlows = useCallback(async () => {
+    const f = normalizeConnections(await core<unknown>('connections.list', { closed_limit: 500 }));
+    setFlows(f);
+  }, []);
+  const onResetConn = useCallback(() => setExpanded(null), []);
+  const { entries, error, paused, togglePause, clear } = useSeqLogStream<ConnLogEntry>({
+    method: 'logs.connections',
+    active: readable,
+    pollMs: POLL_MS,
+    keep: KEEP,
+    normalize: normalizeConnLogs,
+    merge: mergeConnectionLogs,
+    onReset: onResetConn,
+    onPollExtra: pollFlows,
   });
 
   const needle = q.trim().toLowerCase();
@@ -150,9 +141,9 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
         <span className="muted num toolbar-count">{shown.length} 条</span>
         <StreamControls
           paused={paused}
-          onTogglePause={() => setPaused((p) => !p)}
+          onTogglePause={togglePause}
           onClear={() => {
-            setEntries([]);
+            clear();
             setExpanded(null);
           }}
           clearDisabled={!entries.length}
@@ -161,16 +152,10 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
 
       <LocalError text={error} inset />
 
-      <div className="log-scroll" role="table" aria-label="连接日志">
-        <div className="conn-log-grid conn-log-head" role="row">
-          <span>时间</span>
-          <span />
-          <span>目标 · 进程 · 规则</span>
-          <span>落地节点 · 策略</span>
-          <span className="r">结果 / 流量</span>
-        </div>
-
-        {shown.map((raw) => {
+      <ConnLogTable
+        scrollRef={connLogScrollRef}
+        shown={shown}
+        renderItem={(raw) => {
             const e = flowLog(raw, flows);
             const rawChain = Array.isArray(e.chain) ? e.chain : [];
             const chain = rawChain.map(c.label);
@@ -231,10 +216,9 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
                 </PolicyReveal>
               </div>
             );
-        })}
-
-        {!shown.length && <Empty>{needle || outcome !== 'all' ? '没有匹配的记录' : '暂无连接日志'}</Empty>}
-      </div>
+          }}
+        empty={!shown.length ? <Empty>{needle || outcome !== 'all' ? '没有匹配的记录' : '暂无连接日志'}</Empty> : null}
+      />
 
       {ruleFlow && <RuleEditor c={c} draft={flowRuleDraft(ruleFlow, c.source)} close={() => setRuleFlow(null)} />}
     </section>
@@ -242,39 +226,21 @@ function ConnLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
 }
 
 function KernelLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
-  const [entries, setEntries] = useState<KernelLogEntry[]>([]);
-  const [error, setError] = useState('');
   const [q, setQ] = useState('');
   const [level, setLevel] = useState('all');
-  const [paused, setPaused] = useState(false);
   const [following, setFollowing] = useState(true);
 
-  const cursor = useRef(0);
-  const instance = useRef(0);
   const list = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   follow.current = following;
   const readable = c.hasHost && c.status !== null;
 
-  useWindowPoll(readable && !paused, POLL_MS, async () => {
-    try {
-      const r = normalizeKernelLogs(
-        await core<unknown>('logs.kernel', {
-          instance: instance.current,
-          after: cursor.current,
-          limit: 500,
-        }),
-      );
-      const reset = instance.current !== r.instance;
-      instance.current = r.instance;
-      cursor.current = r.next_seq;
-      if (reset || r.entries.length) {
-        setEntries((old) => [...(reset ? [] : old), ...r.entries].slice(-KEEP));
-      }
-      setError('');
-    } catch (e) {
-      setError(errorText(e));
-    }
+  const { entries, error, paused, togglePause, clear } = useSeqLogStream<KernelLogEntry>({
+    method: 'logs.kernel',
+    active: readable,
+    pollMs: POLL_MS,
+    keep: KEEP,
+    normalize: normalizeKernelLogs,
   });
 
   const kNeedle = q.trim().toLowerCase();
@@ -296,8 +262,8 @@ function KernelLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
         <span className="muted num toolbar-count">{shown.length} 条</span>
         <StreamControls
           paused={paused}
-          onTogglePause={() => setPaused((p) => !p)}
-          onClear={() => setEntries([])}
+          onTogglePause={togglePause}
+          onClear={clear}
           clearDisabled={!entries.length}
         />
       </header>
@@ -317,10 +283,13 @@ function KernelLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
           <span>级别</span>
           <span>消息</span>
         </div>
-        {shown.map((e) => (
+        <KernelLogRows
+          scrollRef={list}
+          shown={shown}
+          renderRow={(e) => (
           <div className="kernel-log-row" key={e.seq}>
-            <time {...tip(e.time)}>
-              {clockStr(e.time)}.{String(new Date(e.time).getMilliseconds()).padStart(3, '0')}
+            <time {...tip(e.time || '—')}>
+              {clockMsStr(e.time)}
             </time>
             <span>
               <KTag
@@ -336,7 +305,8 @@ function KernelLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
               {e.message}
             </span>
           </div>
-        ))}
+        )}
+        />
         {!shown.length && <Empty>暂无内核日志</Empty>}
       </div>
 
@@ -353,5 +323,55 @@ function KernelLog({ c, tabs }: { c: Client; tabs: ReactNode }) {
         </button>
       )}
     </section>
+  );
+}
+
+function ConnLogTable<T>({
+  scrollRef,
+  shown,
+  renderItem,
+  empty,
+}: {
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  shown: T[];
+  renderItem: (item: T) => ReactNode;
+  empty: ReactNode;
+}) {
+  const vRows = useVirtualRows(scrollRef, shown.length, 54);
+  const slice = vRows.virtual ? shown.slice(vRows.start, vRows.end) : shown;
+  return (
+    <div className="log-scroll" ref={scrollRef} role="table" aria-label="连接日志">
+      <div className="conn-log-grid conn-log-head" role="row">
+        <span>时间</span>
+        <span />
+        <span>目标 · 进程 · 规则</span>
+        <span>落地节点 · 策略</span>
+        <span className="r">结果 / 流量</span>
+      </div>
+      {vRows.topPad > 0 && <div style={{ height: vRows.topPad }} aria-hidden="true" />}
+      {slice.map(renderItem)}
+      {vRows.bottomPad > 0 && <div style={{ height: vRows.bottomPad }} aria-hidden="true" />}
+      {empty}
+    </div>
+  );
+}
+
+function KernelLogRows<T>({
+  scrollRef,
+  shown,
+  renderRow,
+}: {
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  shown: T[];
+  renderRow: (item: T) => ReactNode;
+}) {
+  const vRows = useVirtualRows(scrollRef, shown.length, 40);
+  const slice = vRows.virtual ? shown.slice(vRows.start, vRows.end) : shown;
+  return (
+    <>
+      {vRows.topPad > 0 && <div style={{ height: vRows.topPad }} aria-hidden="true" />}
+      {slice.map(renderRow)}
+      {vRows.bottomPad > 0 && <div style={{ height: vRows.bottomPad }} aria-hidden="true" />}
+    </>
   );
 }

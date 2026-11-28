@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/shui1iao/Kat/internal/provider"
 	"strings"
 	"testing"
-	"github.com/shui1iao/Kat/internal/provider"
 )
 
 func TestAirportClashLargeSubscriptionImport(t *testing.T) {
@@ -45,7 +45,9 @@ func TestAirportClashLargeSubscriptionImport(t *testing.T) {
 	}
 	b.WriteString("  - MATCH,Proxy\n")
 
-	if _, fe := provider.ParseFull([]byte(b.String()), ""); fe != nil { t.Fatalf("ParseFull err: %v", fe) }
+	if _, fe := provider.ParseFull([]byte(b.String()), ""); fe != nil {
+		t.Fatalf("ParseFull err: %v", fe)
+	}
 	h := fullHost(t)
 	raw, _ := json.Marshal(map[string]any{"text": b.String(), "full_only": true})
 	p, err := h.previewSubscription(context.Background(), raw)

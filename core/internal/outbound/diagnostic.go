@@ -90,6 +90,57 @@ func Category(e error) (string, *uint32) {
 	if e == nil {
 		return "ok", nil
 	}
+	// Zero-allocation fast path for unwrapped sentinel and concrete errors.
+	if u := errors.Unwrap(e); u == nil {
+		switch e {
+		case context.Canceled:
+			return "canceled", nil
+		case context.DeadlineExceeded:
+			return "timeout", nil
+		case io.EOF, io.ErrUnexpectedEOF:
+			return "eof", nil
+		case net.ErrClosed, io.ErrClosedPipe:
+			return "closed", nil
+		case ErrRejected:
+			return "rejected", nil
+		case ErrUDPUnsupported:
+			return "unsupported", nil
+		}
+		switch x := e.(type) {
+		case syscall.Errno:
+			n := uint32(x)
+			if x.Timeout() {
+				return "timeout", &n
+			}
+			if x.Is(context.Canceled) {
+				return "canceled", &n
+			}
+			return "os_error", &n
+		case *net.DNSError:
+			if x.IsTimeout {
+				return "timeout", nil
+			}
+			if x.IsNotFound {
+				return "nxdomain", nil
+			}
+			return "dns", nil
+		case *tls.CertificateVerificationError, x509.UnknownAuthorityError, x509.CertificateInvalidError, x509.HostnameError:
+			return "tls_certificate", nil
+		case tls.RecordHeaderError:
+			return "tls_handshake", nil
+		case net.Error:
+			if x.Timeout() {
+				return "timeout", nil
+			}
+		}
+		if _, multi := e.(interface{ Unwrap() []error }); !multi {
+			return "unknown", nil
+		}
+	}
+	return categorySlow(e)
+}
+
+func categorySlow(e error) (string, *uint32) {
 	var errno syscall.Errno
 	var native *uint32
 	if errors.As(e, &errno) {

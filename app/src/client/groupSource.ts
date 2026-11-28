@@ -28,15 +28,15 @@ export function groupPreviewParams(g:Group,previous:string|null):Record<string,u
 }
 export async function previewGroupSource(call:GroupPreviewCall,g:Group,previous:string|null):Promise<{names:string[];errors:Record<string,string>}> {
   const params=groupPreviewParams(g,previous),r=await call(params);
-  if(!r.error)return {names:r.names,errors:{}};
+  if(!r||typeof r!=='object'||!r.error)return {names:Array.isArray(r?.names)?r.names.filter((x):x is string=>typeof x==='string'):[],errors:{}};
   if(r.error===SOURCE_GROUP_ERROR)return {names:[],errors:{'来源策略组':r.error}};
   // The IPC reports a single regex error. Ask Go (never JS RegExp) which field
   // is invalid, so an invalid exclusion is not attached to the inclusion input.
   let label='包含（正则）';
   if(params.exclude_filter) {
     const include=await call({...params,exclude_filter:''});
-    if(include.error===SOURCE_GROUP_ERROR)return {names:[],errors:{'来源策略组':include.error}};
-    if(!include.error)label='排除（正则）';
+    if(include?.error===SOURCE_GROUP_ERROR)return {names:[],errors:{'来源策略组':include.error}};
+    if(!include?.error)label='排除（正则）';
   }
   return {names:[],errors:{[label]:r.error}};
 }

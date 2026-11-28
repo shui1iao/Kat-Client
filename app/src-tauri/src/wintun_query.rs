@@ -2,8 +2,8 @@
 //! Pinned vendor0.14.1 maps exhausted enumeration/no matching name to
 //! ERROR_NOT_FOUND1168 (DLL RVA3be5..3bf1), not FILE_NOT_FOUND2 alone.
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum AdapterQuery { Absent, Present, Failed }
-pub(crate) fn classify(opened: bool, error: u32) -> AdapterQuery {
+pub enum AdapterQuery { Absent, Present, Failed }
+pub fn classify(opened: bool, error: u32) -> AdapterQuery {
     if opened { AdapterQuery::Present }
     else if matches!(error, 2 | 3 | 1168) { AdapterQuery::Absent }
     else { AdapterQuery::Failed }

@@ -229,9 +229,9 @@ func (c *bufferedWriteConn) Write(p []byte) (int, error) {
 }
 
 type session struct {
-	o        *Outbound
-	conn     net.Conn // *tls.Conn over the under connection
-	rawWrite *bufferedWriteConn
+	o            *Outbound
+	conn         net.Conn // *tls.Conn over the under connection
+	rawWrite     *bufferedWriteConn
 	scheme       *paddingScheme
 	packet       int   // writer-owned padding packet counter (auth was packet 0)
 	lastDeadline int64 // writer-owned unix nanos of last SetWriteDeadline
@@ -302,13 +302,13 @@ func (s *session) fail(err error) {
 		if err == nil {
 			err = io.ErrUnexpectedEOF
 		}
-		s.failed.Store(true)
 		s.mu.Lock()
 		se := s.err
 		if se == nil {
 			se = &sessionError{err}
 			s.err = se
 		}
+		s.failed.Store(true)
 		streams := s.streams
 		s.streams = make(map[uint32]*stream)
 		queue := s.queue
@@ -943,7 +943,9 @@ func (s *session) readFramesFast() error {
 						// Opportunistically coalesce any complete follow-up cmdPSH frames for the
 						// exact same stream already sitting in slab (zero wait, zero extra copy).
 						if rem == 0 && end-start >= headerSize && len(chunk) < coalesceTarget {
-							if bw, ok := sink.w.(interface{ WriteBuffers(*net.Buffers) (int64, error) }); ok {
+							if bw, ok := sink.w.(interface {
+								WriteBuffers(*net.Buffers) (int64, error)
+							}); ok {
 								var vec [8][]byte
 								vec[0] = chunk
 								vcnt := 1

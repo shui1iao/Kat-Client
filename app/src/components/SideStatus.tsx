@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { memo, useId } from 'react';
 import { Icon } from './Icon';
 import { tip } from './Tooltip';
 import { showBytes, showUptime, showRate } from '../client/display';
@@ -35,7 +35,7 @@ function sparkPath(values: number[], maxVal: number): { line: string; area: stri
   return { line: d, area };
 }
 
-export function SideStatus({ c }: { c: Client }) {
+export const SideStatus = memo(function SideStatus({ c }: { c: Client }) {
   const gradId = 'ss-grad-' + useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const s = c.status;
   const state = s?.runtime.state;
@@ -115,4 +115,4 @@ export function SideStatus({ c }: { c: Client }) {
       </button>
     </section>
   );
-}
+});

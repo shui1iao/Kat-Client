@@ -2,12 +2,12 @@ import type { DocumentFormat, DocumentSource, DesktopSettingsReply, DesktopPrefe
 import { replyFormat, type DocumentSession } from './session';
 import { setField } from './document';
 export type DNSMode = 'default'|'system'|'custom'|'legacy';
-interface NetworkDraft { http_port:string; socks_port:string; probe_url:string; dns_mode:DNSMode; servers:string[]; cache_entries:string; advanced_dns:boolean }
+interface NetworkDraft { http_port:string; socks_port:string; ipv6:boolean; probe_url:string; dns_mode:DNSMode; servers:string[]; cache_entries:string; advanced_dns:boolean }
 export function networkDraft(d:DocumentSource):NetworkDraft {
  const dns=d.kernel.dns;
  const advanced=!!dns&&['hosts','rules','nameserver-policy'].some(k=>Object.prototype.hasOwnProperty.call(dns,k))||!!d.client.tun_dns&&['remote','fake_ip','fake_ip_filter'].some(k=>Object.prototype.hasOwnProperty.call(d.client.tun_dns,k));
  const legacy=dns?.server&&dns.server!=='system'?dns.server:undefined;
- return {http_port:String(d.client.http_port??''),socks_port:String(d.client.socks_port??''),probe_url:d.client.probe_url??'',cache_entries:String(dns?.cache_entries??''),
+ return {http_port:String(d.client.http_port??''),socks_port:String(d.client.socks_port??''),ipv6:Boolean(d.client.ipv6),probe_url:d.client.probe_url??'',cache_entries:String(dns?.cache_entries??''),
  dns_mode:dns?.servers?.length&&!(dns.servers.length===1&&dns.servers[0]==='system')||legacy?'custom':'system',servers:[...(dns?.servers??(legacy?[legacy]:[]))],advanced_dns:advanced};
 }
 export function dnsCacheError(v:NetworkDraft):string {
@@ -20,6 +20,7 @@ export function patchNetwork(d:DocumentSource,v:NetworkDraft,changed:ReadonlySet
  for(const key of ['http_port','socks_port'] as const)if(changed.has(key)){
   const n=v[key]===''?undefined:Number(v[key]);if(n!==undefined&&(!Number.isInteger(n)||n<1||n>65535))throw new Error('端口须为 1–65535');setField(d.client,key,n);
  }
+ if(changed.has('ipv6'))setField(d.client,'ipv6',v.ipv6);
  if(changed.has('probe_url'))setField(d.client,'probe_url',v.probe_url.trim());
  if(changed.has('cache_entries')){const n=v.cache_entries===''?undefined:Number(v.cache_entries);d.kernel.dns??={};setField(d.kernel.dns,'cache_entries',n);}
  if(changed.has('dns_mode')||changed.has('servers')||changed.has('advanced_dns')){
@@ -67,13 +68,13 @@ function processEvidenceText(p:LogEntry['process']):string{
 }
 export function tunDiagnosticText(e:LogEntry):string{
  const t=e.tun,d=t?.detail,m=e.meta;
- return [processEvidenceText(e.process),e.runtime?Object.entries(e.runtime).map(([k,v])=>`${k}=${(k==='elevation'||k==='transport')?JSON.stringify(v):v}`).join(" "):"",t&&d?`gui_operation=${t.attempt} phase=${t.phase} stage=${d.stage}${d.code?' code='+d.code:''} native=${d.native??'unknown'}${d.recorded===undefined?'':' recorded='+d.recorded} change=${d.changes.join(',')}${d.removal?' removal='+JSON.stringify(d.removal):''}${d.api?' api='+d.api:''}${d.win32?' win32='+d.win32:''}`:'',e.reason?'reason='+e.reason:'',e.rule?'rule='+e.rule:'',e.cause?'cause='+e.cause:'',e.win32?'win32='+e.win32:'',m?`operation=${m.operation} id=${m.operation_id} phase=${m.phase} generation=${m.generation} revision=${m.revision} result=${m.outcome} domain=${m.domain} elapsed=${m.elapsed_ms}ms${m.primary_id?' primary='+m.primary_id:''} dropped=${m.dropped} suppressed=${m.suppressed}`:''].filter(Boolean).join(' · ');
+ return [processEvidenceText(e.process),e.runtime?Object.entries(e.runtime).map(([k,v])=>`${k}=${(k==='elevation'||k==='transport')?JSON.stringify(v):v}`).join(" "):"",t&&d?`gui_operation=${t.attempt} phase=${t.phase} stage=${d.stage}${d.code?' code='+d.code:''} native=${d.native??'unknown'}${d.recorded===undefined?'':' recorded='+d.recorded} change=${(Array.isArray(d.changes)?d.changes:[]).join(',')}${d.removal?' removal='+JSON.stringify(d.removal):''}${d.api?' api='+d.api:''}${d.win32?' win32='+d.win32:''}`:'',e.reason?'reason='+e.reason:'',e.rule?'rule='+e.rule:'',e.cause?'cause='+e.cause:'',e.win32?'win32='+e.win32:'',m?`operation=${m.operation} id=${m.operation_id} phase=${m.phase} generation=${m.generation} revision=${m.revision} result=${m.outcome} domain=${m.domain} elapsed=${m.elapsed_ms}ms${m.primary_id?' primary='+m.primary_id:''} dropped=${m.dropped} suppressed=${m.suppressed}`:''].filter(Boolean).join(' · ');
 }
 export function diagnosticEvents(data:DiagnosticReply|null,level:string,search:string){
  const source=(e:LogEntry,fallback:string)=>({...e,source:({gui:'宿主',core:'内核',service:'服务',bridge:'桥'} as Record<string,string>)[e.meta?.component??'']??fallback});
  const values=[...(data?.history?.entries??[]).map(e=>source(e,'历史')),...(data?.service_history?.entries??[]).map(e=>source(e,'服务')),...(data?.host_events??[]).slice(-500).map(e=>source(e,'宿主')),...(data?.core_events??[]).slice(-500).map(e=>source(e,'内核'))];
  const seen=new Set<string>();
  return values.reverse().filter(e=>{const key=[e.meta?.component??e.source,e.meta?.instance??0,e.seq,e.event].join(':');if(seen.has(key))return false;seen.add(key);return true;})
- .sort((a,b)=>b.time.localeCompare(a.time)||b.seq-a.seq)
- .filter(e=>(level==='all'||e.level===level)&&(!search||[e.event,e.group??'',e.code??'',tunDiagnosticText(e)].some(s=>s.toLowerCase().includes(search.toLowerCase()))));
+ .sort((a,b)=>String(b.time??'').localeCompare(String(a.time??''))||(b.seq??0)-(a.seq??0))
+ .filter(e=>(level==='all'||e.level===level)&&(!search||[e.event??'',e.group??'',e.code??'',tunDiagnosticText(e)].some(s=>String(s).toLowerCase().includes(search.toLowerCase()))));
 }

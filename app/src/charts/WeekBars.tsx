@@ -91,11 +91,13 @@ export function WeekBars({
           })}
           {data.map((d, i) => {
             const cx = PAD.l + slot * i + slot / 2;
+            const fin = (v?: number | null) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
             const hasSplit = known(d.proxy) || known(d.direct);
-            const directVal = hasSplit ? (d.direct ?? 0) : (d.up ?? 0);
-            const proxyVal = hasSplit ? (d.proxy ?? 0) : (d.down ?? 0);
-            const totalVal = directVal + proxyVal;
-            const totalH = totalVal > 0 ? Math.max(4, (totalVal / yMax) * ih) : 0;
+            const directVal = hasSplit ? fin(d.direct) : fin(d.up);
+            const proxyVal = hasSplit ? fin(d.proxy) : fin(d.down);
+            const totalVal = fin(directVal + proxyVal);
+            const safeYMax = Number.isFinite(yMax) && yMax > 0 ? yMax : 1;
+            const totalH = totalVal > 0 ? Math.max(4, (totalVal / safeYMax) * ih) : 0;
             const clampedH = Math.min(ih, totalH);
             const directH = totalVal > 0 ? (directVal / totalVal) * clampedH : 0;
             const proxyH = Math.max(0, clampedH - directH);

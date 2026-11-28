@@ -10,26 +10,19 @@ import {
 } from '../client/iconCache';
 import { GroupIcon } from './GroupIcon';
 import { Icon } from './Icon';
+import { isValidIPv4, isValidIPv6, splitHostPort } from '../lib/netAddr';
 
 function normalizeHostOrIp(raw?: string): string {
   if (!raw) return '';
-  let s = raw.trim().toLowerCase();
-  if (!s || s === '—' || s === '-' || s === 'dns' || s === 'localhost') return '';
-  if (s.startsWith('[')) {
-    const end = s.indexOf(']');
-    if (end > 1) return s.slice(1, end);
-  }
-  const firstColon = s.indexOf(':');
-  const lastColon = s.lastIndexOf(':');
-  if (firstColon > 0 && firstColon === lastColon) {
-    s = s.slice(0, firstColon);
-  }
+  const trimmed = raw.trim().toLowerCase();
+  if (!trimmed || trimmed === '—' || trimmed === '-' || trimmed === 'dns' || trimmed === 'localhost') return '';
+  let s = splitHostPort(trimmed).host;
   if (s.endsWith('.')) s = s.slice(0, -1);
   return s;
 }
 
 function isIpLiteral(s: string): boolean {
-  return /^\d{1,3}(\.\d{1,3}){3}$/.test(s) || s.includes(':');
+  return isValidIPv4(s) || isValidIPv6(s);
 }
 
 export function DomainIcon({

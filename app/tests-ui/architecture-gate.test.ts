@@ -114,7 +114,7 @@ test('CSS tokens, selectors, classes and !important stay 100% deduplicated and w
     const rel = relative(srcRoot, cp);
     for (const m of txt.matchAll(/(?<![0-9a-zA-Z_-])\.([a-zA-Z_][a-zA-Z0-9_-]*)/g)) {
       const cls = m[1];
-      if (!dynamicAllowed.has(cls) && !new RegExp('\\b' + cls + '\\b').test(codeBlob)) {
+      if (!dynamicAllowed.has(cls) && !new RegExp('(?<![A-Za-z0-9_-])' + cls + '(?![A-Za-z0-9_-])').test(codeBlob)) {
         orphanCssClasses.push(`${rel}:.${cls}`);
       }
     }

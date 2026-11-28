@@ -163,7 +163,9 @@ func TestHotStandbyCloseCancelsInFlightWarmers(t *testing.T) {
 
 type dialFunc func(context.Context, outbound.Addr) (net.Conn, error)
 
-func (f dialFunc) DialTCP(ctx context.Context, dst outbound.Addr) (net.Conn, error) { return f(ctx, dst) }
+func (f dialFunc) DialTCP(ctx context.Context, dst outbound.Addr) (net.Conn, error) {
+	return f(ctx, dst)
+}
 func (f dialFunc) ListenPacket(context.Context) (outbound.PacketConn, error) {
 	return nil, outbound.ErrUDPUnsupported
 }

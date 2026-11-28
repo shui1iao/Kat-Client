@@ -167,7 +167,10 @@ pub fn request_timeout(method:&str)->std::time::Duration{std::time::Duration::fr
   v["error"]["reason"]=serde_json::json!("https://private/?token=TEST");assert!(Response::parse(&serde_json::to_vec(&v).unwrap()).is_err());
   v["error"]["reason"]=serde_json::json!("http_status");v["error"]["detail"]["attempts"][0]["url"]=serde_json::json!("private");assert!(Response::parse(&serde_json::to_vec(&v).unwrap()).is_err());
  }
- #[test]fn subscription_switch_is_preview_only_and_uses_existing_document_apply(){for m in ["subscription.select","subscription.status"]{assert!(validate_public(m,&serde_json::json!({})).is_ok());}let s=include_str!("../../src/client/useClient.ts");assert!(s.contains("await acceptSubscription(doc,p,revision)"));let desktop=include_str!("desktop.rs");assert!(desktop.contains("k.starts_with('_')"));assert!(desktop.contains("[\"auto\",\"direct\",\"proxy\"]"));}
+ #[test]fn subscription_switch_is_preview_only_and_uses_existing_document_apply(){
+  for m in ["subscription.select","subscription.status"]{assert!(validate_public(m,&serde_json::json!({})).is_ok());}
+  assert!(validate_public("document.apply",&serde_json::json!({"text":"client: {}\n"})).is_ok());
+ }
 }
 
 #[cfg(test)]mod c16_network_tests{

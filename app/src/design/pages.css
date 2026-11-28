@@ -3781,20 +3781,6 @@
 }
 
 
-.update-progress {
-  height: 5px;
-  border-radius: var(--r-xs);
-  background: var(--track);
-  overflow: hidden;
-  margin-top: 4px;
-}
-
-.update-progress i {
-  display: block;
-  height: 100%;
-  background: var(--accent);
-}
-
 .diagnostic-summary {
   margin-top: 12px;
   display: grid;
@@ -3845,8 +3831,9 @@
 /* Unified DNS Query Popover (shares .rule-judge-pop geometry, glass & motion) */
 .dns-query-pop {
   height: auto;
-  min-height: 176px;
+  min-height: 0;
   max-height: 320px;
+  overflow: hidden;
 }
 
 .dns-query-pop .dns-query-type {
@@ -4121,10 +4108,14 @@
   font-weight: 500;
 }
 
+.dns-unified-toolbar {
+  gap: 6px;
+}
+
 .dns-table-card .table-toolbar .search {
-  flex: 1 1 132px;
+  flex: 1 1 88px;
   max-width: 220px;
-  min-width: 88px;
+  min-width: 84px;
 }
 
 @container kat-workspace (max-width: 820px) {

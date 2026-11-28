@@ -1,10 +1,10 @@
 import type { CoreStatus, DocumentSource } from './types';
 import { bytesStr, rateStr } from '../lib/format';
 
-export const showRate = (v: number | null | undefined) => (v == null ? '—' : rateStr(v));
-export const showBytes = (v: number | null | undefined) => (v == null ? '—' : bytesStr(v));
+export const showRate = (v: number | null | undefined) => (v == null || !Number.isFinite(v) || v < 0 ? '—' : rateStr(v));
+export const showBytes = (v: number | null | undefined) => (v == null || !Number.isFinite(v) || v < 0 ? '—' : bytesStr(v));
 export const showUptime = (ms: number | null | undefined) =>
-  ms == null
+  ms == null || !Number.isFinite(ms) || ms < 0
     ? '—'
     : `${Math.floor(ms / 3600000)}:${String(Math.floor(ms / 60000) % 60).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
 
@@ -79,10 +79,10 @@ function toValidDate(v: string | number | Date | null | undefined): Date | null 
   return Number.isFinite(d.getTime()) ? d : null;
 }
 
-export const countStr = (v: number | null | undefined) => (v == null ? '—' : countFmt.format(v));
+export const countStr = (v: number | null | undefined) => (v == null || !Number.isFinite(v) || v < 0 ? '—' : countFmt.format(v));
 
 export const durationStr = (ms: number | null | undefined) => {
-  if (ms == null || !Number.isFinite(ms)) return '—';
+  if (ms == null || !Number.isFinite(ms) || ms < 0) return '—';
   const s = Math.floor(ms / 1000);
   if (s < 60) return `${s}s`;
   if (s < 3600) return `${Math.floor(s / 60)}m${String(s % 60).padStart(2, '0')}s`;
@@ -93,6 +93,12 @@ export const durationStr = (ms: number | null | undefined) => {
 export const clockStr = (v: string | number | Date | null | undefined) => {
   const d = toValidDate(v);
   return d ? clockFmt.format(d) : '—';
+};
+
+/** HH:mm:ss.SSS in UTC+8 */
+export const clockMsStr = (v: string | number | Date | null | undefined) => {
+  const d = toValidDate(v);
+  return d ? `${clockFmt.format(d)}.${String(d.getMilliseconds()).padStart(3, '0')}` : '—';
 };
 
 /** HH:mm in UTC+8 */

@@ -809,3 +809,38 @@ func TestDeadIdleSessionsSkipped(t *testing.T) {
 		t.Fatalf("sessions created %d, want 4", n)
 	}
 }
+
+type discardDeadlineConn struct{}
+
+func (discardDeadlineConn) Read([]byte) (int, error)         { return 0, io.EOF }
+func (discardDeadlineConn) Write(p []byte) (int, error)      { return len(p), nil }
+func (discardDeadlineConn) Close() error                     { return nil }
+func (discardDeadlineConn) LocalAddr() net.Addr              { return &net.TCPAddr{} }
+func (discardDeadlineConn) RemoteAddr() net.Addr             { return &net.TCPAddr{} }
+func (discardDeadlineConn) SetDeadline(time.Time) error      { return nil }
+func (discardDeadlineConn) SetReadDeadline(time.Time) error  { return nil }
+func (discardDeadlineConn) SetWriteDeadline(time.Time) error { return nil }
+
+func BenchmarkAnyTLSStreamWriteWithDeadline(b *testing.B) {
+	sess := &session{
+		conn: discardDeadlineConn{},
+		done: make(chan struct{}),
+		wake: make(chan struct{}, 1),
+	}
+	st := newStream(sess, 1)
+	defer func() {
+		activeStreams.Add(-1)
+		st.rd.stop()
+		st.wd.stop()
+	}()
+	payload := make([]byte, 4096)
+	b.ReportAllocs()
+	b.SetBytes(int64(len(payload)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = st.SetWriteDeadline(time.Now().Add(30 * time.Second))
+		if _, err := st.Write(payload); err != nil {
+			b.Fatal(err)
+		}
+	}
+}

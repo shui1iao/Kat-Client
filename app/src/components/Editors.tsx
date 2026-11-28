@@ -102,9 +102,9 @@ export function Modal({
         className={'modal' + (wide ? ' wide' : ' modal-' + size) + (className ? ' ' + className : '')}
         onKeyDown={(e) => {
           const el = ref.current;
-          const dialogs = [...document.querySelectorAll('[role="dialog"], [role="alertdialog"]')];
+          const dialogs = [...document.querySelectorAll('[role="dialog"]:not(.kat-leaving *), [role="alertdialog"]:not(.kat-leaving *)')];
           if (!el || el !== dialogs.at(-1) || e.nativeEvent.isComposing || e.defaultPrevented) return;
-          if (closable && e.key === 'Escape' && !el.querySelector('select:open') && !document.querySelector('.kat-pop')) {
+          if (closable && e.key === 'Escape' && !el.querySelector('select:open') && !document.querySelector('.kat-pop:not(.kat-leaving), .rule-judge-pop:not(.kat-leaving)')) {
             e.preventDefault();
             e.stopPropagation();
             if (!busy || closeWhileBusy) closeRef.current?.();

@@ -1,11 +1,13 @@
 import type {ConnLogEntry,ConnectionsReply} from './types';
+import {isValidIPv4,splitHostPort} from '../lib/netAddr';
 const mergedFlows=new WeakMap<ConnLogEntry,Map<string,{up:number;down:number}>>();
 function lanSubnetTarget(target?:string){
  if(!target)return '';
  if(target.includes('/16:'))return target;
- const m=/^(\d+)\.(\d+)\.(\d+)\.(\d+):(\d+)$/.exec(target);
- if(!m)return '';
- const a=Number(m[1]),b=Number(m[2]),port=m[5];
+ const {host,port}=splitHostPort(target);
+ if(!port||!isValidIPv4(host))return '';
+ const parts=host.split('.').map(Number);
+ const a=parts[0],b=parts[1];
  if(a===10||(a===172&&b>=16&&b<=31)||(a===192&&b===168)||(a===100&&b>=64&&b<=127)||(a===169&&b===254)){
   return `${a}.${b}.0.0/16:${port}`;
  }

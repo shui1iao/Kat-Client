@@ -24,7 +24,7 @@ func (g *emptyGroup) Members() []string               { return nil }
 func (g *emptyGroup) Current() string                 { return g.cfg.fixed }
 func (g *emptyGroup) UDP() bool                       { return false }
 func (g *emptyGroup) Snapshot() Snapshot {
-	return Snapshot{Name: g.cfg.name, Type: g.cfg.kind, Current: g.cfg.fixed, Fixed: g.cfg.fixed, SelectionMode: g.cfg.scope, Reason: "insufficient_data", ConfirmRequired: g.cfg.confirms}
+	return Snapshot{Name: g.cfg.name, Type: g.cfg.kind, Current: g.cfg.fixed, Fixed: g.cfg.fixed, Members: []MemberSnapshot{}, SelectionMode: g.cfg.scope, Reason: "insufficient_data", ConfirmRequired: g.cfg.confirms}
 }
 func (g *emptyGroup) Select(name string) error {
 	return fmt.Errorf("group %q: %q is not a member", g.cfg.name, name)

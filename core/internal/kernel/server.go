@@ -93,7 +93,8 @@ type core struct {
 	selPath    string
 
 	// Server certificates and inbound protection are process-owned.
-	frags fragmentPool
+	frags           fragmentPool
+	runtimeDiagGate [64]runtimeDiagBucket
 }
 
 // Server is one configuration generation. Connections accepted while it is

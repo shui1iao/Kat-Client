@@ -140,7 +140,7 @@ impl NetworkController {
 async fn proxy_restore_and_tun(n:&NetworkController)->Result<()>{let p=super::proxy::restore();let t=n.tun_disable_unlocked().await;p?;t}
 
 fn spawn_elevated_installer(uninstall:bool,setup:bool,root:Option<&str>,report_path:&std::path::Path)->Result<Handle>{use windows_sys::Win32::{UI::{Shell::*,WindowsAndMessaging::*},System::Threading::*,Foundation::*};use std::os::windows::ffi::OsStrExt;
- let exe=std::env::current_exe().map_err(|e|Error::io("INSTALL_PATH",&e))?;let helper=if setup{exe.parent().ok_or_else(||Error::new("INSTALL_PATH","Invalid host path"))?.join(if uninstall{"kat-network-service.exe"}else{"kat-install-helper.exe"})}else{let r=super::install_location::read()?.ok_or_else(||Error::new("INSTALL_REGISTRATION","Use Kat Setup first"))?;let p=super::install_location::service_root()?.join("kat-network-service.exe");if r.schema==2{security::verify_approved(&r,&p,"kat-network-service.exe")?;}p};
+ let exe=std::env::current_exe().map_err(|e|Error::io("INSTALL_PATH",&e))?;let helper=if setup{exe.parent().ok_or_else(||Error::new("INSTALL_PATH","无效的安装引导路径"))?.join("kat-install-helper.exe")}else{let r=super::install_location::read()?.ok_or_else(||Error::new("INSTALL_REGISTRATION","请先使用 Kat Setup 安装程序"))?;let p=super::install_location::service_root()?.join("kat-network-service.exe");if r.schema==2{security::verify_approved(&r,&p,"kat-network-service.exe")?;}p};
  let path:Vec<u16>=helper.as_os_str().encode_wide().chain(Some(0)).collect();let verb=identity::wide("runas");let action=match(setup,uninstall){(true,true)=>"--setup-uninstall",(true,false)=>"--setup-install",(false,true)=>"--uninstall",(false,false)=>"--install"};
  let suffix=if let Some(root)=root{crate::install_location::validate(root)?;format!(" --root \"{root}\"")}else{String::new()};
  let args=identity::wide(&format!("{} --gui {} --stamp {}{}",action,std::process::id(),identity::process_stamp(unsafe{GetCurrentProcess()})?,suffix));
@@ -154,13 +154,22 @@ fn spawn_elevated_installer(uninstall:bool,setup:bool,root:Option<&str>,report_p
  Ok(p)
 }
 
+const MAX_HELPER_WAIT_ROUNDS: usize = 5;
+
 fn finish_elevated_installer(p:Handle,report_path:&std::path::Path)->Result<()>{use windows_sys::Win32::{System::Threading::*,Foundation::*};
- // A deadline is not proof that the elevated transaction stopped. Retain the
- // bridge/gate and exact process handle until a terminal status is observed.
- loop{match unsafe{WaitForSingleObject(p.0,120000)}{WAIT_OBJECT_0=>break,WAIT_TIMEOUT=>continue,_=>return Err(Error::new("INSTALL_TIMEOUT","无法确认安装程序已结束，保留恢复材料，勿并发重试"))}}
- let mut code=0;if unsafe{GetExitCodeProcess(p.0,&mut code)}==0{return Err(Error::new("INSTALL_FAILED","Cannot read installer exit status; refresh service status"));}
+ // Bounded wait (max 5 * 120s = 10 min) prevents hung helper processes from leaking threads forever.
+ let mut finished=false;
+ for _ in 0..MAX_HELPER_WAIT_ROUNDS {
+  match unsafe{WaitForSingleObject(p.0,120_000)}{
+   WAIT_OBJECT_0=>{finished=true;break;},
+   WAIT_TIMEOUT=>continue,
+   _=>return Err(Error::new("INSTALL_TIMEOUT","无法确认安装程序已结束，保留恢复材料，勿并发重试")),
+  }
+ }
+ if !finished{return Err(Error::new("INSTALL_TIMEOUT","安装辅助进程等待超时（超过 10 分钟），已保留恢复材料，请勿并发重试"));}
+ let mut code=0;if unsafe{GetExitCodeProcess(p.0,&mut code)}==0{return Err(Error::new("INSTALL_FAILED","无法读取安装程序退出状态，请刷新服务状态"));}
  if code==crate::installer_result::EXIT_REPORT_FAILED||code==crate::installer_result::EXIT_REPORT_IDENTITY{return crate::installer_result::completion(code,None);}
- let report=crate::ownership::load::<crate::installer_result::InstallerOutcome>(report_path).map_err(|_|Error::new("INSTALL_RESULT_READ","Cannot read installer result; refresh service status"))?;
+ let report=crate::ownership::load::<crate::installer_result::InstallerOutcome>(report_path).map_err(|_|Error::new("INSTALL_RESULT_READ","无法读取安装程序执行结果，请刷新服务状态"))?;
  if let Some(fw)=report.as_ref().and_then(|r|r.firewall_error.as_ref()){crate::safe_log::component("host.service",crate::log_context::Component::Service,"service.start",crate::log_context::Phase::Complete,Some(&fw.code),None);}
  crate::installer_result::completion(code,report)
 }

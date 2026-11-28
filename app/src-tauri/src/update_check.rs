@@ -126,7 +126,7 @@ impl UpdateTransport {
             publication: Arc::new(Mutex::new(())),
         }
     }
-    #[cfg_attr(not(windows), allow(dead_code))]
+    #[cfg(all(windows, feature = "desktop"))]
     pub(crate) fn owned(
         port: Option<u16>,
         identity: (u64, u64),
@@ -531,11 +531,15 @@ impl UpdateChecker {
             Err(error)
                 if matches!(
                     error.code,
-                    "compatibility" | "capabilities" | "platform" | "rollback" | "same_version_hash"
+                    "UPDATE_COMPATIBILITY"
+                        | "UPDATE_CAPABILITIES"
+                        | "UPDATE_PLATFORM"
+                        | "UPDATE_ROLLBACK"
+                        | "UPDATE_SAME_VERSION_HASH"
                 ) =>
             {
                 serde_json::from_slice::<Manifest>(bytes)
-                    .map_err(|_| UpdateError::new("manifest_schema", "签名清单结构无效"))?
+                    .map_err(|_| UpdateError::new("UPDATE_MANIFEST_SCHEMA", "签名清单结构无效"))?
             }
             Err(error) => return Err(error.clone()),
         };
@@ -567,7 +571,7 @@ impl UpdateChecker {
         }
         match result {
             Ok(verified) => Ok(ReleaseCheck::Verified(verified, notes)),
-            Err(error) if kind == UpdateKind::Client && error.code == "same_version_hash" && current.app_sha256.is_none() => {
+            Err(error) if kind == UpdateKind::Client && error.code == "UPDATE_SAME_VERSION_HASH" && current.app_sha256.is_none() => {
                 if manifest.sequence == current.app_sequence {
                     return Ok(ReleaseCheck::Current(manifest.version, notes));
                 }
@@ -575,7 +579,7 @@ impl UpdateChecker {
                     "版本一致，但本机未记录安装包摘要，无法确认包身份；不提供同版本替换".into(),
                 ))
             }
-            Err(error) if matches!(error.code, "compatibility" | "capabilities" | "platform") => {
+            Err(error) if matches!(error.code, "UPDATE_COMPATIBILITY" | "UPDATE_CAPABILITIES" | "UPDATE_PLATFORM") => {
                 let reason = if error.message == "暂无兼容更新：GUI 版本不满足签名清单要求" {
                     "当前 GUI 版本不满足签名兼容范围，需先取得兼容客户端".into()
                 } else {
@@ -585,7 +589,7 @@ impl UpdateChecker {
             }
             Err(error)
                 if kind == UpdateKind::Core
-                    && error.code == "rollback"
+                    && error.code == "UPDATE_ROLLBACK"
                     && version.cmp_precedence(&signed_version(&current.core_version)?) == std::cmp::Ordering::Less =>
             {
                 Ok(ReleaseCheck::Older)
@@ -1191,11 +1195,11 @@ impl UpdateChecker {
             .map_err(|_| UpdateError::new("cache", "更新限流状态锁失败"))?;
         if let Some(wait) = backoff.get(&kind) {
             if wait.until.map(|t| Instant::now() < t).unwrap_or(true) {
-                return Err(UpdateError {
-                    code: "rate_limit",
-                    message: "GitHub API 请求频率受限，请稍后重试；当前版本状态未知".into(),
-                    retry_after: wait.header.clone(),
-                });
+                return Err(UpdateError::with_retry_after(
+                    "UPDATE_RATE_LIMIT",
+                    "GitHub API 请求频率受限，请稍后重试；当前版本状态未知",
+                    wait.header.clone(),
+                ));
             }
         }
         backoff.remove(&kind);
@@ -1432,15 +1436,15 @@ fn http_error(response: &Response) -> UpdateError {
     } else {
         format!("GitHub 返回 HTTP {status}；检查未完成，不能判断为已最新")
     };
-    UpdateError {
-        code: if status == 403 || status == 429 {
-            "rate_limit"
+    UpdateError::with_retry_after(
+        if status == 403 || status == 429 {
+            "UPDATE_RATE_LIMIT"
         } else {
-            "http_status"
+            "UPDATE_HTTP_STATUS"
         },
         message,
         retry_after,
-    }
+    )
 }
 
 /// Retry-After supports delta-seconds and the current HTTP-date (IMF-fixdate) format.

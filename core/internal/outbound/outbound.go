@@ -150,22 +150,22 @@ type SSObfsOptions struct {
 }
 
 type Options struct {
-	FilterName   string         `json:"filter_name,omitempty"` // original import name for dynamic regex only; never a dial target
-	Obfs         *SSObfsOptions `json:"obfs,omitempty"`
-	Name         string         `json:"name"`
-	Type         string         `json:"type"`
-	Server       string         `json:"server"`
-	Port         uint16         `json:"port"`
-	Via          string         `json:"via,omitempty"`
-	UDP          *bool          `json:"udp,omitempty"`
-	Username     string         `json:"username,omitempty"`
-	Password     string         `json:"password,omitempty"`
-	Method       string         `json:"method,omitempty"`
-	Key          string         `json:"key,omitempty"`
-	TLS          *TLSOptions    `json:"tls,omitempty"`
+	FilterName      string         `json:"filter_name,omitempty"` // original import name for dynamic regex only; never a dial target
+	Obfs            *SSObfsOptions `json:"obfs,omitempty"`
+	Name            string         `json:"name"`
+	Type            string         `json:"type"`
+	Server          string         `json:"server"`
+	Port            uint16         `json:"port"`
+	Via             string         `json:"via,omitempty"`
+	UDP             *bool          `json:"udp,omitempty"`
+	Username        string         `json:"username,omitempty"`
+	Password        string         `json:"password,omitempty"`
+	Method          string         `json:"method,omitempty"`
+	Key             string         `json:"key,omitempty"`
+	TLS             *TLSOptions    `json:"tls,omitempty"`
 	IdleSessions    int            `json:"idle_sessions,omitempty"`
 	MinIdleSessions int            `json:"min_idle_sessions,omitempty"`
-	IdleTimeout  Duration       `json:"idle_timeout,omitempty"`
+	IdleTimeout     Duration       `json:"idle_timeout,omitempty"`
 }
 
 // UDPEnabled reports the configured UDP switch (default true).

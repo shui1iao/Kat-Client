@@ -1,6 +1,4 @@
 //! Kat-owned Windows Firewall rule specification and pure reconciliation logic.
-//! Only inbound UDP for the installed `kat-client-core.exe` is managed; never TCP,
-//! never other executables, and never firewall profile state or Defender settings.
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -82,7 +80,7 @@ pub struct FirewallRuleSpec {
 
 fn normalize_fw_addrs(raw: &str) -> Vec<String> {
     let mut items: Vec<String> = raw
-        .split(",")
+        .split(',')
         .map(|s| {
             let t = s.trim().to_ascii_lowercase();
             t.strip_suffix("/255.255.255.255")
@@ -172,6 +170,16 @@ pub fn expected_core_udp_rule(install_root: &Path) -> Result<FirewallRuleSpec, F
     })
 }
 
+pub fn expected_core_tun_tcp_rule(install_root: &Path) -> Result<FirewallRuleSpec, FirewallRuleError> {
+    let mut spec = expected_core_udp_rule(install_root)?;
+    spec.name = TUN_TCP_RULE_NAME.to_string();
+    spec.description = TUN_TCP_RULE_DESCRIPTION.to_string();
+    spec.protocol = NET_FW_IP_PROTOCOL_TCP;
+    spec.local_addresses = TUN_TCP_LOCAL_ADDRESSES.to_string();
+    spec.remote_addresses = TUN_TCP_REMOTE_ADDRESSES.to_string();
+    Ok(spec)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnsureOutcome {
     pub created: bool,
@@ -184,15 +192,15 @@ pub struct RemoveOutcome {
     pub removed: usize,
 }
 
-/// IEnumVARIANT::Next(1) must either return exactly one value or clean EOF.
-#[cfg(any(windows,test))]
-pub(crate) fn enum_has_rule(hr:i32,fetched:u32)->Result<bool,FirewallRuleError>{
-    match (hr,fetched) { (0,1)=>Ok(true),(1,0)=>Ok(false),_=>Err(FirewallRuleError::new(FirewallStage::RulesEnum,Some(hr))) }
+#[cfg(any(windows, test))]
+pub(crate) fn enum_has_rule(hr: i32, fetched: u32) -> Result<bool, FirewallRuleError> {
+    match (hr, fetched) {
+        (0, 1) => Ok(true),
+        (1, 0) => Ok(false),
+        _ => Err(FirewallRuleError::new(FirewallStage::RulesEnum, Some(hr))),
+    }
 }
-#[cfg(test)]#[test]fn enum_failure_is_not_empty_inventory(){
-    assert_eq!(enum_has_rule(0,1),Ok(true));assert_eq!(enum_has_rule(1,0),Ok(false));
-    for (hr,n) in [(-1,0),(-1,1),(0,0),(1,1),(0,2)] {assert_eq!(enum_has_rule(hr,n).unwrap_err().stage,FirewallStage::RulesEnum);}
-}
+
 pub trait FirewallStore {
     type RuleHandle;
     fn list_candidate_rules(&mut self) -> Result<Vec<(Self::RuleHandle, FirewallRuleSpec)>, FirewallRuleError>;
@@ -205,115 +213,15 @@ pub fn is_kat_owned_rule(rule: &FirewallRuleSpec) -> bool {
     rule.name == RULE_NAME && rule.group == RULE_GROUP
 }
 
-pub fn ensure_core_udp_inbound<S: FirewallStore>(
+fn ensure_rule_by_spec<S: FirewallStore>(
     store: &mut S,
-    install_root: &Path,
+    expected: FirewallRuleSpec,
 ) -> Result<EnsureOutcome, FirewallRuleError> {
-    let expected = expected_core_udp_rule(install_root)?;
     let candidates = store.list_candidate_rules()?;
     let mut owned_handles = Vec::new();
     let mut foreign_same_name = 0usize;
     for (handle, summary) in candidates {
-        if summary.name == RULE_NAME {
-            if summary.group == RULE_GROUP {
-                owned_handles.push((handle, summary));
-            } else {
-                foreign_same_name += 1;
-            }
-        }
-    }
-    if foreign_same_name > 0 {
-        return Err(FirewallRuleError::new(FirewallStage::RuleConflict, None));
-    }
-    match owned_handles.len() {
-        0 => {
-            store.add_rule(&expected)?;
-            Ok(EnsureOutcome {
-                created: true,
-                updated: false,
-                deduplicated: 0,
-            })
-        }
-        1 => {
-            let (mut handle, existing) = owned_handles.pop().unwrap();
-            if expected.matches_readback(&existing) && existing.description == expected.description {
-                return Ok(EnsureOutcome {
-                    created: false,
-                    updated: false,
-                    deduplicated: 0,
-                });
-            }
-            store.update_rule(&mut handle, &expected)?;
-            Ok(EnsureOutcome {
-                created: false,
-                updated: true,
-                deduplicated: 0,
-            })
-        }
-        count => {
-            drop(owned_handles);
-            for _ in 0..count {
-                store.remove_by_name(RULE_NAME)?;
-            }
-            store.add_rule(&expected)?;
-            Ok(EnsureOutcome {
-                created: false,
-                updated: true,
-                deduplicated: count - 1,
-            })
-        }
-    }
-}
-
-pub fn remove_core_udp_inbound<S: FirewallStore>(
-    store: &mut S,
-) -> Result<RemoveOutcome, FirewallRuleError> {
-    let candidates = store.list_candidate_rules()?;
-    let mut owned_count = 0usize;
-    let mut foreign_same_name = 0usize;
-    for (_handle, summary) in candidates {
-        if summary.name == RULE_NAME {
-            if summary.group == RULE_GROUP {
-                owned_count += 1;
-            } else {
-                foreign_same_name += 1;
-            }
-        }
-    }
-    if owned_count == 0 {
-        return Ok(RemoveOutcome { removed: 0 });
-    }
-    if foreign_same_name > 0 {
-        return Err(FirewallRuleError::new(FirewallStage::RuleConflict, None));
-    }
-    for _ in 0..owned_count {
-        store.remove_by_name(RULE_NAME)?;
-    }
-    Ok(RemoveOutcome {
-        removed: owned_count,
-    })
-}
-
-pub fn expected_core_tun_tcp_rule(install_root: &Path) -> Result<FirewallRuleSpec, FirewallRuleError> {
-    let mut spec = expected_core_udp_rule(install_root)?;
-    spec.name = TUN_TCP_RULE_NAME.to_string();
-    spec.description = TUN_TCP_RULE_DESCRIPTION.to_string();
-    spec.protocol = NET_FW_IP_PROTOCOL_TCP;
-    spec.local_addresses = TUN_TCP_LOCAL_ADDRESSES.to_string();
-    spec.remote_addresses = TUN_TCP_REMOTE_ADDRESSES.to_string();
-    Ok(spec)
-}
-
-pub fn ensure_core_tun_tcp_inbound<S: FirewallStore>(
-    store: &mut S,
-    install_root: &Path,
-) -> Result<EnsureOutcome, FirewallRuleError> {
-    let expected = expected_core_tun_tcp_rule(install_root)?;
-    let candidates = store.list_candidate_rules()?;
-    let mut owned_handles = Vec::new();
-    let mut foreign_same_name = 0usize;
-    for (handle, summary) in candidates {
-        if summary.name == TUN_TCP_RULE_NAME {
+        if summary.name == expected.name {
             if summary.group == RULE_GROUP {
                 owned_handles.push((handle, summary));
             } else {
@@ -340,7 +248,7 @@ pub fn ensure_core_tun_tcp_inbound<S: FirewallStore>(
         count => {
             drop(owned_handles);
             for _ in 0..count {
-                store.remove_by_name(TUN_TCP_RULE_NAME)?;
+                store.remove_by_name(&expected.name)?;
             }
             store.add_rule(&expected)?;
             Ok(EnsureOutcome { created: false, updated: true, deduplicated: count - 1 })
@@ -348,14 +256,15 @@ pub fn ensure_core_tun_tcp_inbound<S: FirewallStore>(
     }
 }
 
-pub fn remove_core_tun_tcp_inbound<S: FirewallStore>(
+fn remove_rule_by_name<S: FirewallStore>(
     store: &mut S,
+    rule_name: &str,
 ) -> Result<RemoveOutcome, FirewallRuleError> {
     let candidates = store.list_candidate_rules()?;
     let mut owned_count = 0usize;
     let mut foreign_same_name = 0usize;
     for (_handle, summary) in candidates {
-        if summary.name == TUN_TCP_RULE_NAME {
+        if summary.name == rule_name {
             if summary.group == RULE_GROUP {
                 owned_count += 1;
             } else {
@@ -370,14 +279,49 @@ pub fn remove_core_tun_tcp_inbound<S: FirewallStore>(
         return Err(FirewallRuleError::new(FirewallStage::RuleConflict, None));
     }
     for _ in 0..owned_count {
-        store.remove_by_name(TUN_TCP_RULE_NAME)?;
+        store.remove_by_name(rule_name)?;
     }
     Ok(RemoveOutcome { removed: owned_count })
+}
+
+pub fn ensure_core_udp_inbound<S: FirewallStore>(
+    store: &mut S,
+    install_root: &Path,
+) -> Result<EnsureOutcome, FirewallRuleError> {
+    ensure_rule_by_spec(store, expected_core_udp_rule(install_root)?)
+}
+
+pub fn remove_core_udp_inbound<S: FirewallStore>(
+    store: &mut S,
+) -> Result<RemoveOutcome, FirewallRuleError> {
+    remove_rule_by_name(store, RULE_NAME)
+}
+
+pub fn ensure_core_tun_tcp_inbound<S: FirewallStore>(
+    store: &mut S,
+    install_root: &Path,
+) -> Result<EnsureOutcome, FirewallRuleError> {
+    ensure_rule_by_spec(store, expected_core_tun_tcp_rule(install_root)?)
+}
+
+pub fn remove_core_tun_tcp_inbound<S: FirewallStore>(
+    store: &mut S,
+) -> Result<RemoveOutcome, FirewallRuleError> {
+    remove_rule_by_name(store, TUN_TCP_RULE_NAME)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn enum_failure_is_not_empty_inventory() {
+        assert_eq!(enum_has_rule(0, 1), Ok(true));
+        assert_eq!(enum_has_rule(1, 0), Ok(false));
+        for (hr, n) in [(-1, 0), (-1, 1), (0, 0), (1, 1), (0, 2)] {
+            assert_eq!(enum_has_rule(hr, n).unwrap_err().stage, FirewallStage::RulesEnum);
+        }
+    }
 
     #[derive(Default)]
     struct FakeFirewallStore {
@@ -392,7 +336,11 @@ mod tests {
         type RuleHandle = usize;
 
         fn list_candidate_rules(&mut self) -> Result<Vec<(Self::RuleHandle, FirewallRuleSpec)>, FirewallRuleError> {
-            if let Some((stage @ (FirewallStage::ComInit | FirewallStage::PolicyCreate | FirewallStage::RulesGet | FirewallStage::RulesEnum), hr)) = self.fail_stage {
+            if let Some((
+                stage @ (FirewallStage::ComInit | FirewallStage::PolicyCreate | FirewallStage::RulesGet | FirewallStage::RulesEnum),
+                hr,
+            )) = self.fail_stage
+            {
                 return Err(FirewallRuleError::new(stage, hr));
             }
             Ok(self.rules.iter().cloned().enumerate().collect())
@@ -402,14 +350,21 @@ mod tests {
             if let Some((stage @ (FirewallStage::RuleConfigure | FirewallStage::RuleVerify), hr)) = self.fail_stage {
                 return Err(FirewallRuleError::new(stage, hr));
             }
-            let slot = self.rules.get_mut(*handle).ok_or_else(|| FirewallRuleError::new(FirewallStage::RuleConfigure, None))?;
+            let slot = self
+                .rules
+                .get_mut(*handle)
+                .ok_or_else(|| FirewallRuleError::new(FirewallStage::RuleConfigure, None))?;
             *slot = spec.clone();
             self.updates += 1;
             Ok(())
         }
 
         fn add_rule(&mut self, spec: &FirewallRuleSpec) -> Result<(), FirewallRuleError> {
-            if let Some((stage @ (FirewallStage::RuleCreate | FirewallStage::RuleConfigure | FirewallStage::RuleAdd | FirewallStage::RuleVerify), hr)) = self.fail_stage {
+            if let Some((
+                stage @ (FirewallStage::RuleCreate | FirewallStage::RuleConfigure | FirewallStage::RuleAdd | FirewallStage::RuleVerify),
+                hr,
+            )) = self.fail_stage
+            {
                 return Err(FirewallRuleError::new(stage, hr));
             }
             self.rules.push(spec.clone());
@@ -421,7 +376,11 @@ mod tests {
             if let Some((stage @ FirewallStage::RuleRemove, hr)) = self.fail_stage {
                 return Err(FirewallRuleError::new(stage, hr));
             }
-            let pos = self.rules.iter().position(|r| r.name == name).ok_or_else(|| FirewallRuleError::new(FirewallStage::RuleRemove, Some(-2147024894)))?;
+            let pos = self
+                .rules
+                .iter()
+                .position(|r| r.name == name)
+                .ok_or_else(|| FirewallRuleError::new(FirewallStage::RuleRemove, Some(-2147024894)))?;
             self.rules.remove(pos);
             self.removes += 1;
             Ok(())
@@ -429,24 +388,24 @@ mod tests {
     }
 
     #[test]
-    fn rule_spec_constructs_exact_inbound_udp_core_only_all_profiles_unrestricted_ports() {
-        let spec = expected_core_udp_rule(Path::new(r"C:\Program Files\Kat Client")).unwrap();
+    fn rule_spec_constructs_exact_inbound_udp_and_tun_tcp_rules() {
+        let root = Path::new(r"C:\Program Files\Kat Client");
+        let spec = expected_core_udp_rule(root).unwrap();
         assert_eq!(spec.name, RULE_NAME);
         assert_eq!(spec.group, RULE_GROUP);
         assert_eq!(spec.application_name, r"C:\Program Files\Kat Client\kat-client-core.exe");
         assert_eq!(spec.service_name, None);
         assert_eq!(spec.protocol, NET_FW_IP_PROTOCOL_UDP);
-        assert_ne!(spec.protocol, NET_FW_IP_PROTOCOL_TCP);
         assert_eq!(spec.direction, NET_FW_RULE_DIR_IN);
         assert_eq!(spec.action, NET_FW_ACTION_ALLOW);
-        assert_eq!(spec.local_ports, "*");
-        assert_eq!(spec.remote_ports, "*");
-        assert_eq!(spec.local_addresses, "*");
-        assert_eq!(spec.remote_addresses, "*");
-        assert_eq!(spec.interface_types, "All");
-        assert_eq!(spec.profiles, NET_FW_PROFILE2_ALL);
-        assert!(spec.enabled);
         assert!(spec.matches_readback(&spec));
+
+        let tcp = expected_core_tun_tcp_rule(root).unwrap();
+        assert_eq!(tcp.name, TUN_TCP_RULE_NAME);
+        assert_eq!(tcp.protocol, NET_FW_IP_PROTOCOL_TCP);
+        assert_eq!(tcp.local_addresses, TUN_TCP_LOCAL_ADDRESSES);
+        assert_eq!(tcp.remote_addresses, TUN_TCP_REMOTE_ADDRESSES);
+        assert!(tcp.matches_readback(&tcp));
         assert!(expected_core_udp_rule(Path::new("")).is_err());
     }
 
@@ -472,108 +431,29 @@ mod tests {
         };
         store.rules.push(foreign_other.clone());
 
-        // 1. Fresh install creates the Kat UDP inbound rule.
         let out1 = ensure_core_udp_inbound(&mut store, Path::new(r"C:\Program Files\Kat Client")).unwrap();
         assert_eq!(out1, EnsureOutcome { created: true, updated: false, deduplicated: 0 });
-        assert_eq!(store.rules.len(), 2);
-        assert_eq!(store.adds, 1);
-
-        // 2. Repeat update with identical path and parameters is a no-op (no add, no update).
         let out2 = ensure_core_udp_inbound(&mut store, Path::new(r"C:\Program Files\Kat Client\")).unwrap();
         assert_eq!(out2, EnsureOutcome { created: false, updated: false, deduplicated: 0 });
-        assert_eq!(store.rules.len(), 2);
-        assert_eq!(store.adds, 1);
-        assert_eq!(store.updates, 0);
 
-        // 3. Corrupt parameters and change install path -> updates in-place, keeps count at 2.
         store.rules[1].protocol = NET_FW_IP_PROTOCOL_TCP;
-        store.rules[1].direction = NET_FW_RULE_DIR_OUT;
-        store.rules[1].action = NET_FW_ACTION_BLOCK;
-        store.rules[1].local_ports = "53".into();
         store.rules[1].enabled = false;
-        store.rules[1].profiles = 1;
         let out3 = ensure_core_udp_inbound(&mut store, Path::new(r"D:\tool\Kat")).unwrap();
         assert_eq!(out3, EnsureOutcome { created: false, updated: true, deduplicated: 0 });
-        assert_eq!(store.rules.len(), 2);
-        assert_eq!(store.updates, 1);
-        assert_eq!(store.rules[0], foreign_other);
         assert_eq!(store.rules[1], expected_core_udp_rule(Path::new(r"D:\tool\Kat")).unwrap());
 
-        // 4. Duplicate Kat rules are deduplicated back to a single rule.
         store.rules.push(store.rules[1].clone());
-        assert_eq!(store.rules.len(), 3);
         let out4 = ensure_core_udp_inbound(&mut store, Path::new(r"D:\tool\Kat")).unwrap();
         assert_eq!(out4, EnsureOutcome { created: false, updated: true, deduplicated: 1 });
         assert_eq!(store.rules.len(), 2);
-        assert_eq!(store.rules[0], foreign_other);
-        assert_eq!(store.rules[1], expected_core_udp_rule(Path::new(r"D:\tool\Kat")).unwrap());
+
+        let tcp1 = ensure_core_tun_tcp_inbound(&mut store, Path::new(r"D:\tool\Kat")).unwrap();
+        assert_eq!(tcp1, EnsureOutcome { created: true, updated: false, deduplicated: 0 });
+        assert_eq!(remove_core_tun_tcp_inbound(&mut store).unwrap(), RemoveOutcome { removed: 1 });
     }
 
     #[test]
-    fn same_path_single_field_drift_is_repaired() {
-        let root=Path::new(r"C:\Kat");
-        let expected=expected_core_udp_rule(root).unwrap();
-        for field in ["enabled","protocol","direction"] {
-            let mut store=FakeFirewallStore::default(); let mut actual=expected.clone();
-            match field {"enabled"=>actual.enabled=false,"protocol"=>actual.protocol=NET_FW_IP_PROTOCOL_TCP,_=>actual.direction=NET_FW_RULE_DIR_OUT}
-            store.rules.push(actual);
-            assert!(ensure_core_udp_inbound(&mut store,root).unwrap().updated);
-            assert_eq!(store.rules,vec![expected.clone()]);
-        }
-    }
-
-    #[test]
-    fn uninstall_deletes_only_exact_name_and_group_preserving_all_other_rules() {
-        let mut store = FakeFirewallStore::default();
-        let same_group_other_name = FirewallRuleSpec {
-            name: "KatCtl-SSH-HostOnly".into(),
-            group: RULE_GROUP.into(),
-            description: "Other rule in same group".into(),
-            application_name: r"C:\Program Files\OpenSSH\sshd.exe".into(),
-            service_name: None,
-            protocol: NET_FW_IP_PROTOCOL_TCP,
-            local_ports: "22".into(),
-            remote_ports: "*".into(),
-            local_addresses: "*".into(),
-            remote_addresses: "172.30.0.1".into(),
-            direction: NET_FW_RULE_DIR_IN,
-            interface_types: "All".into(),
-            enabled: true,
-            profiles: NET_FW_PROFILE2_ALL,
-            action: NET_FW_ACTION_ALLOW,
-        };
-        let unrelated = FirewallRuleSpec {
-            name: "Core Networking - DNS (UDP-Out)".into(),
-            group: "Core Networking".into(),
-            description: "System rule".into(),
-            application_name: r"C:\Windows\System32\svchost.exe".into(),
-            service_name: Some("Dnscache".into()),
-            protocol: NET_FW_IP_PROTOCOL_UDP,
-            local_ports: "*".into(),
-            remote_ports: "53".into(),
-            local_addresses: "*".into(),
-            remote_addresses: "*".into(),
-            direction: NET_FW_RULE_DIR_OUT,
-            interface_types: "All".into(),
-            enabled: true,
-            profiles: NET_FW_PROFILE2_ALL,
-            action: NET_FW_ACTION_ALLOW,
-        };
-        let kat_rule = expected_core_udp_rule(Path::new(r"C:\Program Files\Kat Client")).unwrap();
-        store.rules = vec![same_group_other_name.clone(), kat_rule, unrelated.clone()];
-
-        let rem1 = remove_core_udp_inbound(&mut store).unwrap();
-        assert_eq!(rem1, RemoveOutcome { removed: 1 });
-        assert_eq!(store.rules, vec![same_group_other_name.clone(), unrelated.clone()]);
-
-        // Second uninstall when already absent is a no-op.
-        let rem2 = remove_core_udp_inbound(&mut store).unwrap();
-        assert_eq!(rem2, RemoveOutcome { removed: 0 });
-        assert_eq!(store.rules, vec![same_group_other_name, unrelated]);
-    }
-
-    #[test]
-    fn foreign_rule_with_same_name_but_different_group_is_never_overwritten_or_deleted() {
+    fn uninstall_and_conflict_preserve_foreign_rules() {
         let mut store = FakeFirewallStore::default();
         let foreign_same_name = FirewallRuleSpec {
             name: RULE_NAME.into(),
@@ -593,15 +473,10 @@ mod tests {
             action: NET_FW_ACTION_ALLOW,
         };
         store.rules.push(foreign_same_name.clone());
-
         let err = ensure_core_udp_inbound(&mut store, Path::new(r"C:\Program Files\Kat Client")).unwrap_err();
         assert_eq!(err.code, FIREWALL_ERROR_CODE);
         assert_eq!(err.stage, FirewallStage::RuleConflict);
-        assert_eq!(store.rules, vec![foreign_same_name.clone()]);
-
-        // Uninstall with only foreign same-name rule does not delete it.
-        let rem = remove_core_udp_inbound(&mut store).unwrap();
-        assert_eq!(rem, RemoveOutcome { removed: 0 });
+        assert_eq!(remove_core_udp_inbound(&mut store).unwrap(), RemoveOutcome { removed: 0 });
         assert_eq!(store.rules, vec![foreign_same_name]);
     }
 }

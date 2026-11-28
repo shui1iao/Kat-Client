@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"sync"
@@ -94,7 +95,7 @@ func (s *Server) copy(dst, src net.Conn) error { return s.copyM(dst, src, meter{
 
 // spliceChunk bounds one kernel splice while statistics are kept, so that
 // counters and rates advance during long transfers.
-const spliceChunk = 256 << 10
+const spliceChunk = 64 << 10
 
 // copyM is copy with payload metering: m counts the bytes written to dst.
 func (s *Server) copyM(dst, src net.Conn, m meter) error {
@@ -135,7 +136,9 @@ func (s *Server) copyM(dst, src net.Conn, m meter) error {
 	if wt, ok := rawSrc.(io.WriterTo); ok {
 		if _, isTCP := rawSrc.(*net.TCPConn); !isTCP {
 			w := m.writer(dst)
-			if _, ok := w.(interface{ WriteBuffers(*net.Buffers) (int64, error) }); !ok {
+			if _, ok := w.(interface {
+				WriteBuffers(*net.Buffers) (int64, error)
+			}); !ok {
 				if _, isTCPDst := dst.(*net.TCPConn); isTCPDst {
 					w = tcpBuffersWriter{dst}
 				}
@@ -154,9 +157,13 @@ func (s *Server) copyM(dst, src net.Conn, m meter) error {
 }
 func closeWrite(c net.Conn) error {
 	if v, ok := c.(interface{ CloseWrite() error }); ok {
-		return v.CloseWrite()
+		err := v.CloseWrite()
+		if errors.Is(err, errors.ErrUnsupported) {
+			return nil
+		}
+		return err
 	}
-	return c.Close()
+	return nil
 }
 
 func unwrapActivity(c net.Conn) (net.Conn, *atomic.Int64) {
@@ -220,6 +227,7 @@ func (s *Server) relayIdle(ctx context.Context, a, b net.Conn, idle time.Duratio
 		originalA, originalB := a, b
 		go func() {
 			defer close(exited)
+			prevProgress, hasProgress := tcpPairProgress(originalA, originalB)
 			timer := time.NewTimer(idle)
 			defer timer.Stop()
 			for {
@@ -229,6 +237,14 @@ func (s *Server) relayIdle(ctx context.Context, a, b net.Conn, idle time.Duratio
 				case <-timer.C:
 					remaining := idle - time.Since(time.Unix(0, last.Load()))
 					if remaining <= 0 {
+						if hasProgress {
+							if cur, ok := tcpPairProgress(originalA, originalB); ok && cur != prevProgress {
+								prevProgress = cur
+								last.Store(time.Now().UnixNano())
+								timer.Reset(idle)
+								continue
+							}
+						}
 						originalA.Close()
 						originalB.Close()
 						return

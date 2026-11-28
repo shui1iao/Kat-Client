@@ -139,8 +139,12 @@ impl NetworkController {
     self.tun_engaged.store(false,Ordering::SeqCst);*self.tun_error.lock().unwrap()=None;
     return Ok(false);
    }
-   if state.pointer("/core_tun_recovery/cleanup_pending")==Some(&Value::Bool(true)){return Ok(true);}
-   return Err(Error::new("RECOVERY_PENDING","Service must finish exact-exit core TUN recovery"));
+   let legacy_pending=state.pointer("/core_tun_recovery/conflicts").and_then(Value::as_u64)==Some(0)
+    && state.pointer("/core_tun_recovery/pending").and_then(Value::as_u64).is_some_and(|p|p>0);
+   if state.pointer("/core_tun_recovery/cleanup_pending")==Some(&Value::Bool(true)) || legacy_pending {
+    return Ok(true);
+   }
+   return Err(Error::new("RECOVERY_PENDING","网络服务尚未完成内核 TUN 退出恢复"));
   }
   super::proxy::restore()?;
   Ok(false)

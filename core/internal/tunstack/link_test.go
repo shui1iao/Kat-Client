@@ -238,8 +238,11 @@ func TestWritePacketsWintunRingFullDropContinueAndFatal(t *testing.T) {
 			},
 		}
 		rt, err := StartReady(context.Background(), Config{
-			Device:    dev,
-			Ingress:   &testIngress{udpCh: make(chan struct{ flow Flow; conn DatagramConn }, 1)},
+			Device: dev,
+			Ingress: &testIngress{udpCh: make(chan struct {
+				flow Flow
+				conn DatagramConn
+			}, 1)},
 			Admitting: func() bool { return true },
 			Epoch:     func() uint64 { return 1 },
 		})
@@ -269,8 +272,11 @@ func TestWritePacketsWintunRingFullDropContinueAndFatal(t *testing.T) {
 			},
 		}
 		rt, err := StartReady(context.Background(), Config{
-			Device:    dev,
-			Ingress:   &testIngress{udpCh: make(chan struct{ flow Flow; conn DatagramConn }, 1)},
+			Device: dev,
+			Ingress: &testIngress{udpCh: make(chan struct {
+				flow Flow
+				conn DatagramConn
+			}, 1)},
 			Admitting: func() bool { return true },
 			Epoch:     func() uint64 { return 1 },
 		})

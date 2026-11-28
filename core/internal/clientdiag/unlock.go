@@ -271,7 +271,6 @@ func googlePageRegion(body string) (string, bool) {
 	return "", true
 }
 
-
 // Explicit visible visitor messages on Gemini can also establish a denial or
 // unusual-traffic verification. Scripts/templates/hidden text are excluded.
 func geminiPageEvidence(body string) (denied, verification bool) {

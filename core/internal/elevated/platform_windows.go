@@ -394,7 +394,22 @@ func Open(ctx context.Context, lease string, pid uint32, created uint64) (opened
 		return nil, e
 	}
 	s := &Session{servicePID: pid, serviceStamp: created, serviceImage: filepath.Join(r.Runtime, "kat-network-service.exe"), pins: pins}
+	oldStdErrHandle, _ := windows.GetStdHandle(windows.STD_ERROR_HANDLE)
+	oldStderr := os.Stderr
+	var stderrFile *os.File
+	var tokenOwned windows.Token
+	tokenInstalled := false
 	fail := func(e error) (*Session, error) {
+		if tokenInstalled {
+			userio.ReleaseMedium()
+		} else if tokenOwned != 0 {
+			_ = tokenOwned.Close()
+		}
+		if stderrFile != nil {
+			os.Stderr = oldStderr
+			_ = windows.SetStdHandle(windows.STD_ERROR_HANDLE, oldStdErrHandle)
+			_ = stderrFile.Close()
+		}
 		for _, p := range s.pins {
 			p.Close()
 		}
@@ -410,11 +425,15 @@ func Open(ctx context.Context, lease string, pid uint32, created uint64) (opened
 		windows.CloseHandle(stderrHandle)
 		return fail(ErrIdentity)
 	}
-	os.Stderr = os.NewFile(uintptr(stderrHandle), "private-stderr")
+	stderrFile = os.NewFile(uintptr(stderrHandle), "private-stderr")
+	os.Stderr = stderrFile
 	phase = ExitBind
 	var b Binding
 	if e = s.service(ctx, map[string]any{"op": "bind", "lease": lease}, &b); e != nil {
 		return fail(e)
+	}
+	if b.MediumToken != 0 {
+		tokenOwned = windows.Token(b.MediumToken)
 	}
 	phase = ExitBindingIdentity
 	selfStamp, e := stamp(windows.CurrentProcess())
@@ -451,6 +470,8 @@ func Open(ctx context.Context, lease string, pid uint32, created uint64) (opened
 	if e = userio.InstallMedium(windows.Token(b.MediumToken)); e != nil {
 		return fail(e)
 	}
+	tokenInstalled = true
+	tokenOwned = 0
 	phase = ExitWorkspace
 	actual, e := windows.Token(b.MediumToken).KnownFolderPath(windows.FOLDERID_LocalAppData, 0)
 	if e != nil || !same(b.Workspace, filepath.Join(actual, "app.kat.client")) {

@@ -1,6 +1,9 @@
+import { useMemo, useRef } from 'react';
+import { useVirtualRows } from '../lib/virtualRows';
+import { useEntityRawToggle } from '../client/entityRawToggle';
 import { ProtocolTag, protocolInfo } from '../components/ProtocolTag';
 import { tip } from '../components/Tooltip';
-import { nodeRows } from '../client/nodeRows';
+import { copyNodeName, nodeRows } from '../client/nodeRows';
 import { useState } from 'react';
 import { SubscriptionCard } from '../components/SubscriptionCard';
 import { SubscriptionImport } from '../components/SubscriptionImport';
@@ -63,16 +66,30 @@ export function Nodes({ c }: { c: Client }) {
   const source = c.source;
   const subs = source?.subscriptions ?? [];
   const providers = source?.kernel.providers ?? [];
-  const runtimeByName = new Map((c.status?.nodes ?? []).map((x) => [x.name, x]));
-  const rows = nodeRows(source, c.status?.nodes);
-  const manualCount = rows.filter((n) => n.manual).length;
+  const nodeScrollRef = useRef<HTMLDivElement>(null);
+  const runtimeByName = useMemo(() => new Map((c.status?.nodes ?? []).map((x) => [x.name, x])), [c.status?.nodes]);
+  const rows = useMemo(() => nodeRows(source, c.status?.nodes), [source, c.status?.nodes]);
+  const { manualCount, sourceCounts, existingNames } = useMemo(() => {
+    let mc = 0;
+    const counts = new Map<string, number>();
+    const names = new Set<string>();
+    for (const r of rows) {
+      names.add(r.name);
+      if (r.manual) mc += 1;
+      if (r.source && r.source !== '手动') counts.set(r.source, (counts.get(r.source) ?? 0) + 1);
+    }
+    return { manualCount: mc, sourceCounts: counts, existingNames: names };
+  }, [rows]);
 
-  const subSourceNames = [...new Set([...subs.map((s) => s.name), ...rows.map((r) => r.source).filter((s): s is string => !!s && s !== '手动')])];
+  const subSourceNames = useMemo(
+    () => [...new Set([...subs.map((s) => s.name), ...sourceCounts.keys()])],
+    [subs, sourceCounts],
+  );
   const sourceOptions = [
     { value: 'all', label: `全部 ${rows.length}` },
     ...subSourceNames.map((sName) => ({
       value: 'sub:' + sName,
-      label: `${sName} ${rows.filter((r) => r.source === sName).length}`,
+      label: `${sName} ${sourceCounts.get(sName) ?? 0}`,
     })),
     ...(manualCount > 0 || subs.length > 0 ? [{ value: 'manual', label: `手动 ${manualCount}` }] : []),
   ];
@@ -96,6 +113,8 @@ export function Nodes({ c }: { c: Client }) {
     (n) => c.label(n.name),
     (n) => runtimeByName.get(n.name)?.probe_ms,
   );
+  const vNodes = useVirtualRows(nodeScrollRef, nodes.length, 40);
+  const makeCopyName = (orig: string) => copyNodeName(orig, existingNames);
   const runtimeNames = Array.from(runtimeByName.keys());
   const editable = c.connected && !c.doc.saving;
 
@@ -264,7 +283,7 @@ export function Nodes({ c }: { c: Client }) {
           </button>
         </div>
 
-        <div className="node-table-scroll">
+        <div className="node-table-scroll" ref={nodeScrollRef}>
           <div className="live-node-head">
             <span>#</span>
             <span>名称</span>
@@ -276,7 +295,9 @@ export function Nodes({ c }: { c: Client }) {
               操作
             </span>
           </div>
-          {nodes.map((n, idx) => {
+          {vNodes.topPad > 0 && <div style={{ height: vNodes.topPad }} aria-hidden="true" />}
+          {(vNodes.virtual ? nodes.slice(vNodes.start, vNodes.end) : nodes).map((n, relIdx) => {
+            const idx = vNodes.start + relIdx;
             const manual = n.manual;
             const copy = n.copy;
             const runtime = runtimeByName.get(n.name);
@@ -341,7 +362,7 @@ export function Nodes({ c }: { c: Client }) {
                       data-slot="3"
                       {...tip('复制为手动节点')}
                       disabled={!editable}
-                      onClick={() => setNode({ value: { ...structuredClone(copy), name: copy.name + '-copy' }, previous: null })}
+                      onClick={() => setNode({ value: { ...structuredClone(copy), name: makeCopyName(copy.name) }, previous: null })}
                       aria-label="复制节点"
                     >
                       <Icon name="copy" size={14} />
@@ -364,6 +385,7 @@ export function Nodes({ c }: { c: Client }) {
               </div>
             );
           })}
+          {vNodes.bottomPad > 0 && <div style={{ height: vNodes.bottomPad }} aria-hidden="true" />}
           {!nodes.length && (
             <Empty>{!c.connected ? '未连接' : rows.length ? '没有匹配的节点' : '暂无节点'}</Empty>
           )}
@@ -401,15 +423,21 @@ function NodeEditor({
   close: () => void;
 }) {
   const [n, setN] = useState<Outbound>(() => structuredClone(item));
-  const [raw, setRaw] = useState<string | null>(null);
-  const [error, setError] = useState('');
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { raw, setRaw, error, setError, fieldErrors, setFieldErrors, parseFromRaw, prepareForSave, toggleRaw } = useEntityRawToggle<Outbound>({
+    jsonLabel: '节点 JSON',
+    invalidMessage: '原文不是有效的节点配置',
+    sourceText: c.doc.saved,
+    sourceFormat: c.doc.savedFormat,
+    entityPath: previous ? ['kernel', 'outbounds', 'name:' + previous] : undefined,
+    toFormValue: () => n,
+    fromFormValue: nodeFormValue,
+    onExitRaw: (next) => setN(next),
+  });
 
   const set = (key: string, value: any) =>
     setN((old) => {
       const next = structuredClone(old);
       setField(next, key, value);
-      if (key === 'name' && next.name !== old.name) delete next.filter_name;
       return next;
     });
   const tls = (key: string, value: any) => {
@@ -423,7 +451,7 @@ function NodeEditor({
     setFieldErrors({});
     let value: Outbound;
     try {
-      value = raw === null ? n : nodeFormValue(JSON.parse(raw));
+      value = raw === null ? prepareForSave(structuredClone(n)) : parseFromRaw(raw);
     } catch {
       setFieldErrors({ '节点 JSON': '原文不是有效的节点配置' });
       return;
@@ -470,21 +498,7 @@ function NodeEditor({
       busy={c.doc.saving || c.busy.has('save')}
       wide
       headerExtra={
-        <RawJsonToggle
-          active={raw !== null}
-          onToggle={() => {
-            if (raw === null) setRaw(JSON.stringify(n, null, 2));
-            else {
-              try {
-                setN(nodeFormValue(JSON.parse(raw)));
-                setRaw(null);
-                setError('');
-              } catch {
-                setFieldErrors({ '节点 JSON': '原文不是有效的节点配置' });
-              }
-            }
-          }}
-        />
+        <RawJsonToggle active={raw !== null} onToggle={() => toggleRaw()} />
       }
     >
       {raw !== null ? (
@@ -492,7 +506,7 @@ function NodeEditor({
       ) : (
         <div className="form-grid">
           <Field label="名称">
-            <input className="inp" placeholder="例如 香港 01" value={n.name ? c.label(n.name) : ''} onChange={(e) => set('name', e.target.value)} />
+            <input className="inp" placeholder="例如 hk-01" value={n.name} onChange={(e) => set('name', e.target.value)} />
           </Field>
           <Field label="类型">
             <select

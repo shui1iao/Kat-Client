@@ -367,7 +367,7 @@ func (s *Server) SelectGroups() []SelectGroup {
 		if gc.Type != group.TypeSelect {
 			continue
 		}
-		v := SelectGroup{Name: gc.Name, Members: append([]string(nil), gc.Members...), Default: configuredDefault(gc), Source: "config"}
+		v := SelectGroup{Name: gc.Name, Members: append([]string{}, gc.Members...), Default: configuredDefault(gc), Source: "config"}
 		for _, gr := range g.rt.groups {
 			if gr.Name() == gc.Name {
 				v.Current = gr.Current()

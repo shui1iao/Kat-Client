@@ -494,7 +494,7 @@ func (c *tcpConn) CloseWrite() error {
 	if cw, ok := c.Conn.(interface{ CloseWrite() error }); ok {
 		return cw.CloseWrite()
 	}
-	return errors.New("shadowsocks: transport does not support CloseWrite")
+	return fmt.Errorf("shadowsocks: transport does not support CloseWrite: %w", errors.ErrUnsupported)
 }
 
 // appendAddr encodes SOCKS-style ATYP/ADDR/PORT.

@@ -10,9 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"golang.org/x/sys/windows"
-	"runtime"
 	"io"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -38,19 +38,19 @@ type nativeDevice struct {
 	dll                                                 *windows.DLL
 	pins                                                []windows.Handle
 	receive, release, allocate, send, end, closeAdapter uintptr
-	moveMemory                                          uintptr
 	readMu, writeMu                                     sync.Mutex
 	once                                                sync.Once
 	closed                                              atomic.Bool
 	closeErr                                            error
 }
 
-// Microsoft documents the user-mode ABI as Ntdll.dll!RtlMoveMemory
-// (VOID *, const VOID *, SIZE_T) -> VOID:
-// https://learn.microsoft.com/windows/win32/devnotes/rtlmovememory
-// Resolve before creating the adapter; do not interpret LastError from a void call.
-var ringMove = windows.NewLazySystemDLL("ntdll.dll").NewProc("RtlMoveMemory")
 var switchToThread = windows.NewLazySystemDLL("kernel32.dll").NewProc("SwitchToThread")
+var switchToThreadAddr = sync.OnceValue(func() uintptr {
+	if switchToThread.Find() == nil {
+		return switchToThread.Addr()
+	}
+	return 0
+})
 
 // Both slices are nonempty and limited to the size received/allocated by
 // Wintun. Ring pointers remain native addresses; Wintun owns them until the
@@ -105,6 +105,7 @@ func (d *nativeDevice) ReadPacket(b []byte) (int, error) {
 		}
 	}
 }
+
 // tryAllocateFast retries briefly via SwitchToThread/Gosched when the Wintun
 // send ring is momentarily full, avoiding Windows 15.6ms WaitForSingleObject
 // timer quantization stalls that collapse high-speed uploads.
@@ -113,10 +114,7 @@ func (d *nativeDevice) tryAllocateFast(b []byte) (uintptr, syscall.Errno) {
 	if p != 0 || errno != wintunErrorBufferOverflow {
 		return p, errno
 	}
-	swAddr := uintptr(0)
-	if switchToThread.Find() == nil {
-		swAddr = switchToThread.Addr()
-	}
+	swAddr := switchToThreadAddr()
 	for spin := 0; spin < 64; spin++ {
 		if d.closed.Load() {
 			return 0, syscall.Errno(windows.ERROR_BROKEN_PIPE)
@@ -479,10 +477,7 @@ func createNativeDevice(a Adapter) (dev Device, err error) {
 	d := &nativeDevice{dll: dll, pins: pins, guid: a.GUID}
 	fail := func(e error) (Device, error) { d.Close(); return nil, e }
 	stage = "dll_exports"
-	if e := ringMove.Find(); e != nil {
-		return fail(e)
-	}
-	d.moveMemory = ringMove.Addr()
+	_ = switchToThreadAddr()
 	var create, start, event, getLUID uintptr
 	for _, item := range []struct {
 		name string
@@ -508,6 +503,9 @@ func createNativeDevice(a Adapter) (dev Device, err error) {
 	stage = "adapter_create"
 	var callErr syscall.Errno
 	d.adapter, _, callErr = syscall.SyscallN(create, uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(kind)), uintptr(unsafe.Pointer(&guid)))
+	runtime.KeepAlive(name)
+	runtime.KeepAlive(kind)
+	runtime.KeepAlive(&guid)
 	if d.adapter == 0 {
 		return fail(At(stage, "WINTUN_CREATE", callErr))
 	}
@@ -517,8 +515,8 @@ func createNativeDevice(a Adapter) (dev Device, err error) {
 		return fail(errors.New("WINTUN_LUID"))
 	}
 	stage = "adapter_guid"
-	var actual windows.GUID
-	if e = ipCall("ConvertInterfaceLuidToGuid", uintptr(unsafe.Pointer(&d.luid)), uintptr(unsafe.Pointer(&actual))); e != nil {
+	actual, e := guidOf(d.luid)
+	if e != nil {
 		return fail(e)
 	}
 	if !strings.EqualFold(strings.Trim(actual.String(), "{}"), a.GUID) {

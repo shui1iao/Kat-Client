@@ -126,7 +126,8 @@ impl Broker{
  let v=view(&l);self.current=Some(l);Ok(v)
  }
  pub fn recovery_status(&self)->Value{serde_json::to_value(self.recovery.status()).unwrap_or(Value::Null)}
- pub fn poll(&mut self)->Result<()>{let mut clear=false;if let Some(l)=self.current.as_mut(){capture_exit(l);if unsafe{WaitForSingleObject(l.gui.0,0)}==WAIT_OBJECT_0||(!l.active&&Instant::now()>l.deadline){stop_exact(l)?;if !l.active||unsafe{WaitForSingleObject(l.gui.0,0)}==WAIT_OBJECT_0{clear=true;}}}if clear{self.current=None;}match self.recovery.recover_after_exit(){Ok(_)=>Ok(()),Err(e)if e.code=="CORE_STILL_ACTIVE"=>Ok(()),Err(e)=>Err(e)}}
+ pub fn is_idle(&self)->bool{self.current.is_none()&&self.recovery.is_idle()}
+ pub fn poll(&mut self)->Result<()>{let mut clear=false;if let Some(l)=self.current.as_mut(){capture_exit(l);if unsafe{WaitForSingleObject(l.gui.0,0)}==WAIT_OBJECT_0||(!l.active&&Instant::now()>l.deadline){stop_exact(l)?;if !l.active||unsafe{WaitForSingleObject(l.gui.0,0)}==WAIT_OBJECT_0{clear=true;}}}if clear{self.current=None;}match self.recovery.poll_after_exit(){Ok(_)=>Ok(()),Err(e)if e.code=="CORE_STILL_ACTIVE"=>Ok(()),Err(e)=>Err(e)}}
  pub fn shutdown(&mut self)->Result<()>{if let Some(l)=self.current.as_mut(){stop_exact(l)?;}let result=self.recovery.recover_after_exit()?;if !result.cleanup_complete{return Err(Error::new("RECOVERY_PENDING","Core TUN recovery is incomplete"));}Ok(())}
 }
 fn view(l:&Launch)->Value{let exited=l.core.as_ref().is_some_and(|p|unsafe{WaitForSingleObject(p.0,0)==WAIT_OBJECT_0});if exited{super::elevated_stderr::cancel_accept();}let stderr=if exited{super::elevated_stderr::summary(&l.lease)}else{super::elevated_stderr::snapshot_only(&l.lease)};json!({"lease":l.lease,"epoch":l.epoch,"package_sha256":l.package,"core_pid":l.core_pid,"core_stamp":l.core_stamp,"bound":l.bound,"active":l.active,"private_stderr":stderr,"launch":l.diagnostic,"control_pipe":control_name(&l.lease),"stderr_pipe":stderr_name(&l.lease)})}

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"strconv"
@@ -131,5 +132,5 @@ func (c *obfsHTTPConn) CloseWrite() error {
 	if x, ok := c.Conn.(interface{ CloseWrite() error }); ok {
 		return x.CloseWrite()
 	}
-	return errors.New("shadowsocks: transport does not support CloseWrite")
+	return fmt.Errorf("shadowsocks: transport does not support CloseWrite: %w", errors.ErrUnsupported)
 }

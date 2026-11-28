@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"unsafe"
 )
 
@@ -449,6 +450,26 @@ func openRegistryWatches(open func(string) (registry.Key, error), event func() (
 	}
 	return ws, nil
 }
+
+var (
+	mibWatchersMu sync.Mutex
+	mibWatchers   = map[uint64]func(){}
+	mibWatcherSeq uint64
+	mibCallback   = sync.OnceValue(func() uintptr {
+		return windows.NewCallback(func(callerCtx uintptr, _ uintptr, _ uint32) uintptr {
+			id := uint64(callerCtx)
+			mibWatchersMu.Lock()
+			fn := mibWatchers[id]
+			mibWatchersMu.Unlock()
+			if fn != nil {
+				fn()
+			}
+			return 0
+		})
+	})
+	procRegNotifyChangeKeyValue = windows.NewLazySystemDLL("advapi32.dll").NewProc("RegNotifyChangeKeyValue")
+)
+
 func (n *nativeOS) Watch(ctx context.Context) (<-chan struct{}, error) {
 	dirty := make(chan struct{}, 1)
 	signal := func() {
@@ -457,7 +478,19 @@ func (n *nativeOS) Watch(ctx context.Context) (<-chan struct{}, error) {
 		default:
 		}
 	}
-	callback := windows.NewCallback(func(_ uintptr, _ uintptr, _ uint32) uintptr { signal(); return 0 })
+	stopEvent, err := windows.CreateEvent(nil, 1, 0, nil)
+	if err != nil {
+		return nil, err
+	}
+	var stopEventMu sync.Mutex
+	stopEventClosed := false
+	callback := mibCallback()
+	mibWatchersMu.Lock()
+	mibWatcherSeq++
+	watcherID := mibWatcherSeq
+	mibWatchers[watcherID] = signal
+	mibWatchersMu.Unlock()
+
 	var handles []windows.Handle
 	var dns []registryWatch
 	cleanup := func() {
@@ -465,10 +498,27 @@ func (n *nativeOS) Watch(ctx context.Context) (<-chan struct{}, error) {
 		for _, h := range handles {
 			windows.CancelMibChangeNotify2(h)
 		}
+		mibWatchersMu.Lock()
+		delete(mibWatchers, watcherID)
+		mibWatchersMu.Unlock()
+		stopEventMu.Lock()
+		if !stopEventClosed {
+			stopEventClosed = true
+			windows.CloseHandle(stopEvent)
+		}
+		stopEventMu.Unlock()
 	}
-	for _, name := range []string{"NotifyRouteChange2", "NotifyIpInterfaceChange", "NotifyUnicastIpAddressChange"} {
+	for _, item := range []struct {
+		name string
+		proc *windows.LazyProc
+	}{
+		{"NotifyRouteChange2", procNotifyRouteChange2},
+		{"NotifyIpInterfaceChange", procNotifyIpInterfaceChange},
+		{"NotifyUnicastIpAddressChange", procNotifyUnicastIpAddressChange},
+	} {
 		var h windows.Handle
-		if e := ipCall(name, windows.AF_UNSPEC, callback, 0, 0, uintptr(unsafe.Pointer(&h))); e != nil {
+		rc, _, _ := item.proc.Call(windows.AF_UNSPEC, callback, uintptr(watcherID), 0, uintptr(unsafe.Pointer(&h)))
+		if e := ipStatus(item.name, rc); e != nil {
 			cleanup()
 			return nil, e
 		}
@@ -477,7 +527,6 @@ func (n *nativeOS) Watch(ctx context.Context) (<-chan struct{}, error) {
 	// DNS configuration notifications via the documented registry change API.
 	// These fixed HKLM TCP/IP subtree watchers are read-only and merely trigger
 	// GetAdaptersAddresses again. Low-frequency verification covers other writers.
-	var err error
 	dns, err = openRegistryWatches(func(path string) (registry.Key, error) {
 		return registry.OpenKey(registry.LOCAL_MACHINE, path, registry.NOTIFY|registry.QUERY_VALUE)
 	}, func() (windows.Handle, error) { return windows.CreateEvent(nil, 0, 0, nil) })
@@ -485,9 +534,8 @@ func (n *nativeOS) Watch(ctx context.Context) (<-chan struct{}, error) {
 		cleanup()
 		return nil, err
 	}
-	notify := windows.NewLazySystemDLL("advapi32.dll").NewProc("RegNotifyChangeKeyValue")
 	arm := func(w registryWatch) error {
-		r, _, _ := notify.Call(uintptr(w.k), 1, 0x1|0x4|0x10000000, uintptr(w.event), 1)
+		r, _, _ := procRegNotifyChangeKeyValue.Call(uintptr(w.k), 1, 0x1|0x4|0x10000000, uintptr(w.event), 1)
 		if r != 0 {
 			return syscallError(r)
 		}
@@ -499,28 +547,38 @@ func (n *nativeOS) Watch(ctx context.Context) (<-chan struct{}, error) {
 			return nil, e
 		}
 	}
+	stopCancel := context.AfterFunc(ctx, func() {
+		stopEventMu.Lock()
+		if !stopEventClosed {
+			_ = windows.SetEvent(stopEvent)
+		}
+		stopEventMu.Unlock()
+	})
+	waitHandles := []windows.Handle{stopEvent, dns[0].event, dns[1].event}
 	go func() {
-		defer cleanup()
+		defer func() {
+			stopCancel()
+			cleanup()
+		}()
 		for {
-			select {
-			case <-ctx.Done():
+			which, e := windows.WaitForMultipleObjects(waitHandles, false, windows.INFINITE)
+			if e != nil {
+				signal()
 				return
-			default:
 			}
-			for _, w := range dns {
-				r, e := windows.WaitForSingleObject(w.event, 250)
-				if e != nil {
-					signal()
-					return
-				}
-				if r == windows.WAIT_OBJECT_0 {
-					if arm(w) != nil {
-						signal()
-						return
-					}
-					signal()
-				}
+			if which == windows.WAIT_OBJECT_0 {
+				return
 			}
+			idx := int(which - windows.WAIT_OBJECT_0 - 1)
+			if idx < 0 || idx >= len(dns) {
+				signal()
+				return
+			}
+			if arm(dns[idx]) != nil {
+				signal()
+				return
+			}
+			signal()
 		}
 	}()
 	return dirty, nil

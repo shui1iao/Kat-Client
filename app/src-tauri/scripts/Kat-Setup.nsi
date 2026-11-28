@@ -220,10 +220,8 @@ Section "Uninstall"
  ClearErrors
  CopyFiles /SILENT "$INSTDIR\kat-desktop.exe" "$PLUGINSDIR\payload\kat-desktop.exe"
  IfErrors uninstall_error
- SetShellVarContext all
- CopyFiles /SILENT "$APPDATA\Kat Client\Runtime\kat-network-service.exe" "$PLUGINSDIR\payload\kat-network-service.exe"
+ CopyFiles /SILENT "$INSTDIR\kat-install-helper.exe" "$PLUGINSDIR\payload\kat-install-helper.exe"
  IfErrors uninstall_error
- SetShellVarContext current
  Delete "$PLUGINSDIR\payload\kat-setup-result.txt"
  ClearErrors
  ExecWait '"$PLUGINSDIR\payload\kat-desktop.exe" --setup-uninstall' $Result
